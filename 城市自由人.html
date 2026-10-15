@@ -6340,10 +6340,16 @@ var SOC = null;
   // 足球
   const bm = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), new THREE.MeshLambertMaterial({ color: 0xffffff }));
   bm.position.set(P.x, P.gy + 0.34, P.z); scene.add(bm);
+  // 【2026-10-15·修"看不到球移动、比分却在变、球永远停在中线"】
+  // 球是在脚本加载阶段创建的，会被 batchStaticScene() 当成**静态物体合并掉** ——
+  // 合并后它的网格被焊死在初始位置（场地中线），updateSoccer 再怎么改 b.mesh.position
+  // 都不会有任何位移。必须登记成动态对象，让静态合批跳过它。
+  registerDynamicObject(bm);
   SOC = {
     P: P, ball: { x: P.x, z: P.z, vx: 0, vz: 0, mesh: bm },
     players: [], active: false, phase: 'idle', score: [0, 0], wins: [0, 0], round: 0,
     t: 0, roundT: 0, sudden: false, msg: '', msgT: 0, kickCd: 0, panelOn: false, senseCd: 0,
+    passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6384,6 +6390,39 @@ function buildSoccerUi() {
   const doKick = e => { if (e && e.preventDefault) e.preventDefault(); if (SOC) SOC.kickReq = 1; };
   kick.addEventListener('touchstart', doKick, { passive: false });
   kick.addEventListener('mousedown', doKick);
+
+  // ---- 传球键：把球传给离自己最近的队友 ----
+  const pass = mk('button', 'soccerPass',
+    'position:fixed;right:118px;bottom:118px;z-index:118;display:none;width:72px;height:72px;border-radius:50%;' +
+    'border:3px solid #9fd8ff;background:radial-gradient(circle at 34% 28%,#8fd0ff,#1f6fa8 70%);' +
+    'color:#032033;font:bold 15px sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.55)');
+  pass.textContent = '传球';
+  SOC.passBtn = pass;
+  const doPass = e => { if (e && e.preventDefault) e.preventDefault(); if (SOC) SOC.passReq = 1; };
+  pass.addEventListener('touchstart', doPass, { passive: false });
+  pass.addEventListener('mousedown', doPass);
+
+  // ---- 抢断键：把球从对手脚下捅掉，带冷却（冷却中变暗 + 显示倒计时）----
+  const tackle = mk('button', 'soccerTackle',
+    'position:fixed;right:20px;bottom:214px;z-index:118;display:none;width:76px;height:76px;border-radius:50%;' +
+    'border:3px solid #ffc98d;background:radial-gradient(circle at 34% 28%,#ffcf8a,#c47a12 70%);' +
+    'color:#3a1f00;font:bold 15px sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.55)');
+  tackle.textContent = '抢断';
+  SOC.tackleBtn = tackle;
+  const doTackle = e => { if (e && e.preventDefault) e.preventDefault(); if (SOC) SOC.tackleReq = 1; };
+  tackle.addEventListener('touchstart', doTackle, { passive: false });
+  tackle.addEventListener('mousedown', doTackle);
+
+  // 比赛期间把战斗按钮全部藏起来，屏幕上只留「移动摇杆 + 踢球 / 传球 / 抢断」，
+  // 否则攻击键、跳跃键、切枪键会和足球三键挤在同一块区域（右下角）。
+  if (!document.getElementById('soccerModeCss')) {
+    const st = document.createElement('style'); st.id = 'soccerModeCss';
+    st.textContent = 'body.soccer-mode #atk,body.soccer-mode #weaponBtn,body.soccer-mode #jump,' +
+      'body.soccer-mode #kickBtn,body.soccer-mode #grappleBtn,body.soccer-mode #scopeBtn,' +
+      'body.soccer-mode #salvoBtn,body.soccer-mode #sprintBtn,body.soccer-mode #btn,' +
+      'body.soccer-mode #devBtn{display:none !important}';
+    document.head.appendChild(st);
+  }
 }
 
 function soccerMsg(t, dur) { if (SOC) { SOC.msg = t; SOC.msgT = dur || 2; } }
@@ -6449,9 +6488,13 @@ function soccerBegin() {
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   soccerResetBall();
-  if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';   // 比赛期间显示「踢球」按钮（手机）
+  if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
+  if (SOC.passBtn) SOC.passBtn.style.display = 'block';
+  if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'block';
+  SOC.tackleCd = 0;
+  document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
   soccerMsg('第 1 局 · 开始！', 1.8);
-  setHint('足球：靠近球后点右下角「踢球」（电脑用左键）· 3v3 三局两胜');
+  setHint('足球：踢球=射门 · 传球=给最近队友 · 抢断=断对手的球（有冷却）· 3v3 三局两胜');
 }
 
 function soccerEnd(playerWon) {
@@ -6461,7 +6504,10 @@ function soccerEnd(playerWon) {
     SOC.active = false; SOC.phase = 'idle';
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
-    if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';   // 收起「踢球」按钮
+    if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
+    if (SOC.passBtn) SOC.passBtn.style.display = 'none';
+    if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'none';
+    document.body.classList.remove('soccer-mode');   // 恢复战斗按钮
     if (playerWon) {
       gold += 500;
       floatText('夺冠！+500 💰', '#ffd54f');
@@ -6547,6 +6593,41 @@ function updateSoccer(dt) {
       if (pd < 2.9) { soccerKick(b, Math.sin(personAngle.v), Math.cos(personAngle.v), 15); SOC.kickCd = 0.4; try { sfx('hit'); } catch (e) {} }
     }
     SOC.kickReq = 0;   // 每帧消费掉，避免按住按钮连踢
+
+    // ---- 传球：把球送向离自己最近的队友（不用瞄准，手机上友好）----
+    if (SOC.passReq) {
+      SOC.passReq = 0;
+      const pdd = Math.hypot(person.position.x - b.x, person.position.z - b.z);
+      if (pdd < 3.2) {
+        let best = null, bdd = 1e9;
+        for (const m of SOC.players) {
+          if (m.team !== 1 || m.isPlayer) continue;
+          const dd2 = Math.hypot(m.x - person.position.x, m.z - person.position.z);
+          if (dd2 < bdd) { bdd = dd2; best = m; }
+        }
+        if (best) {
+          const dx = best.x - b.x, dz = best.z - b.z, l = Math.hypot(dx, dz) || 1;
+          soccerKick(b, dx / l, dz / l, 13);
+          try { sfx('hit'); } catch (e) {}
+        } else setHint('传球：附近没有队友');
+      } else setHint('传球：要靠近球才能传');
+    }
+
+    // ---- 抢断：把球从对手脚下捅向对方半场，带冷却 ----
+    if (SOC.tackleCd > 0) SOC.tackleCd -= dt;
+    if (SOC.tackleReq) {
+      SOC.tackleReq = 0;
+      if (SOC.tackleCd <= 0) {
+        const pdd = Math.hypot(person.position.x - b.x, person.position.z - b.z);
+        if (pdd < 3.4) {
+          const dz = (Math.random() - 0.5) * 0.6, l = Math.hypot(1, dz) || 1;
+          soccerKick(b, 1 / l, dz / l, 17);      // 朝主队进攻方向（+x）捅出去
+          SOC.tackleCd = SOC.tackleMax;
+          try { sfx('hit'); } catch (e) {}
+        } else setHint('抢断：要靠近球才能断');
+      }
+      // 冷却中点了也不响应 —— 按钮上已经显示倒计时，不用再弹提示
+    }
     // ---- 球物理 ----
     b.x += b.vx * dt; b.z += b.vz * dt;
     const fr = Math.pow(0.24, dt);
@@ -6591,6 +6672,20 @@ function soccerHud() {
   if (!SOC || !SOC.hud) return;
   if (!SOC.active) { SOC.hud.style.display = 'none'; return; }
   SOC.hud.style.display = 'block';
+  // 抢断按钮：冷却中**变暗 + 显示剩余秒数**，冷却结束恢复亮色 —— 玩家一眼知道还能不能断
+  if (SOC.tackleBtn) {
+    if (SOC.tackleCd > 0) {
+      SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#6b6b76,#3a3a42 70%)';
+      SOC.tackleBtn.style.borderColor = '#6a6a72';
+      SOC.tackleBtn.style.color = '#9a9aa2';
+      SOC.tackleBtn.textContent = SOC.tackleCd.toFixed(1);
+    } else {
+      SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#ffcf8a,#c47a12 70%)';
+      SOC.tackleBtn.style.borderColor = '#ffc98d';
+      SOC.tackleBtn.style.color = '#3a1f00';
+      SOC.tackleBtn.textContent = '抢断';
+    }
+  }
   const left = Math.max(0, 60 - Math.floor(SOC.roundT));
   SOC.hud.innerHTML =
     '<span style="color:#7fb3ff">主队 ' + SOC.score[0] + '</span>' +
@@ -11182,7 +11277,7 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   // 【2026-10-15】足球开赛面板开着时，鼠标左键不再触发攻击（否则点「开赛」会同时开枪）
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
-  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick')) return;
+  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle')) return;
   atkHeld = true; atkPointerType = 'mouse'; atkPointerId = e.pointerId;
   attack();
 });
@@ -11458,7 +11553,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle'));
 }
 addEventListener('touchstart', e => {
   if (ferrisPanelOpen || devPanelOpen || islandPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
