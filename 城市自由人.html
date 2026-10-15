@@ -6337,8 +6337,35 @@ var SOC = null;
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.4, 0.45), new THREE.MeshLambertMaterial({ color: 0xffffff })); stripe.position.y = 4.4; g.add(stripe);
     scene.add(g);
   }
-  // 足球
-  const bm = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  // 足球：黑白五边形贴图（原来是一颗纯白球，在草地上既不够显眼、也认不出是足球）
+  const ballTex = (function () {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#fdfdfd'; c.fillRect(0, 0, 256, 128);
+    const pent = (cx, cy, r, rot) => {
+      c.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = rot + i / 5 * Math.PI * 2 - Math.PI / 2;
+        const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r;
+        i ? c.lineTo(px, py) : c.moveTo(px, py);
+      }
+      c.closePath(); c.fillStyle = '#141414'; c.fill();
+    };
+    // 两行交错的黑五边形；贴到球面上就是经典的黑白足球格
+    for (let row = 0; row < 2; row++) {
+      const cy = 40 + row * 48;
+      for (let i = 0; i < 4; i++) {
+        const cx = 32 + i * 64 + (row % 2) * 32;
+        pent(cx, cy, 16, 0);
+        pent(cx - 256, cy, 16, 0);   // 左右接缝各补一个，避免出现断边
+        pent(cx + 256, cy, 16, 0);
+      }
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = THREE.RepeatWrapping;
+    return t;
+  })();
+  const bm = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 14), new THREE.MeshLambertMaterial({ map: ballTex }));
   bm.position.set(P.x, P.gy + 0.34, P.z); scene.add(bm);
   // 【2026-10-15·修"看不到球移动、比分却在变、球永远停在中线"】
   // 球是在脚本加载阶段创建的，会被 batchStaticScene() 当成**静态物体合并掉** ——
