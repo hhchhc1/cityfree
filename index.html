@@ -6377,6 +6377,7 @@ var SOC = null;
     players: [], active: false, phase: 'idle', score: [0, 0], wins: [0, 0], round: 0,
     t: 0, roundT: 0, sudden: false, msg: '', msgT: 0, kickCd: 0, panelOn: false, senseCd: 0,
     passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
+    holder: null, kickoffTeam: 1,                          // 持球者 / 开球方
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6491,30 +6492,34 @@ function soccerTryStart() {
   } catch (e) { console.error('[soccer start]', e); }
 }
 
-function soccerNewPlayer(team, x, z, isPlayer) {
+function soccerNewPlayer(team, x, z, isPlayer, role) {
   const cloth = team === 1 ? 0x2f6fe0 : 0xe0433a;   // 主队蓝 / 客队红
   const g = makeHuman(cloth, false, { clothColor: cloth });
   g.position.set(x, terrainHeight(x, z), z); g.rotation.y = team === 1 ? Math.PI / 2 : -Math.PI / 2;
   scene.add(g);
-  return { team: team, isPlayer: !!isPlayer, x: x, z: z, mesh: g, cd: 0, phase: Math.random() * 6 };
+  return { team: team, isPlayer: !!isPlayer, role: (role === undefined ? 0 : role),
+           x: x, z: z, mesh: g, cd: 0, phase: Math.random() * 6 };
 }
 
 function soccerResetBall() {
   const P = SOC.P; SOC.ball.x = P.x; SOC.ball.z = P.z; SOC.ball.vx = 0; SOC.ball.vz = 0;
+  SOC.holder = null;
 }
 
 function soccerBegin() {
   const P = SOC.P;
   SOC.players = [];
-  SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true));           // 玩家（主队）
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false));
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false));
-  SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false));          // 客队
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false));
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false));
+  SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true, 0));        // 玩家（主队前锋）
+  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false, 1));  // 主队中场
+  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false, 2));  // 主队后卫
+  SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false, 0));       // 客队前锋
+  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false, 1));  // 客队中场
+  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2));  // 客队后卫
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
+  SOC.kickoffTeam = 1;                       // 主队先开球
   soccerResetBall();
+  soccerGiveKickoff();
   if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
   if (SOC.passBtn) SOC.passBtn.style.display = 'block';
   if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'block';
@@ -6547,7 +6552,28 @@ function soccerEnd(playerWon) {
   } catch (e) { console.error('[soccer end]', e); }
 }
 
-function soccerKick(b, dx, dz, pw) { b.vx = dx * pw; b.vz = dz * pw; }
+// 出脚：球离脚（清掉持球者），转入自由飞行
+function soccerKick(b, dx, dz, pw) {
+  b.vx = dx * pw; b.vz = dz * pw;
+  if (SOC) SOC.holder = null;
+}
+// 开球：把球权交给指定一方（进球后给**失球方**），并把开球者挪到中线附近
+function soccerGiveKickoff() {
+  if (!SOC) return;
+  const t = SOC.kickoffTeam || 1;
+  let best = null, bd = 1e9;
+  for (const p of SOC.players) {
+    if (p.team !== t) continue;
+    const d = Math.hypot(p.x - SOC.P.x, p.z - SOC.P.z);
+    if (d < bd) { bd = d; best = p; }
+  }
+  SOC.holder = best || null;
+  if (best) {
+    best.x = SOC.P.x + (t === 1 ? -2.5 : 2.5);
+    best.z = SOC.P.z;
+    best.mesh.rotation.y = (t === 1) ? Math.PI / 2 : -Math.PI / 2;
+  }
+}
 
 function updateSoccer(dt) {
   if (!SOC) return;
@@ -6571,108 +6597,147 @@ function updateSoccer(dt) {
     // ---- 比赛中：状态下限 ----
     if (state !== 'walk') { soccerEnd(false); return; }
     for (const p of SOC.players) if (p.isPlayer) { p.x = person.position.x; p.z = person.position.z; }
-    // ---- AI ----
-    for (let ti = 0; ti < 2; ti++) {
-      const team = ti + 1;
-      const list = SOC.players.filter(p => p.team === team);
-      if (!list.length) continue;
-      const attackX = (team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 主队攻 +x 门
-      const ownX = (team === 1) ? (P.x - P.hw) : (P.x + P.hw);
-      const sorted = list.slice().sort((a, c) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(c.x - b.x, c.z - b.z));
-      for (let k = 0; k < sorted.length; k++) {
-        const p = sorted[k];
-        if (p.isPlayer) continue;                                   // 玩家自己控制
-        let tx, tz;
-        if (k === 0) { tx = b.x; tz = b.z; }                        // 追球
-        else if (k === 1) { tx = (b.x + attackX) / 2; tz = (b.z + P.z) / 2 + (p.z >= P.z ? 5 : -5); }   // 接应
-        else { tx = (b.x + ownX * 2) / 3; tz = P.z + (p.z >= P.z ? 6 : -6); }                            // 后卫
-        tx = Math.max(P.x - P.hw - 1, Math.min(P.x + P.hw + 1, tx));
-        tz = Math.max(P.z - P.hd - 1, Math.min(P.z + P.hd + 1, tz));
-        const dx = tx - p.x, dz = tz - p.z, dd = Math.hypot(dx, dz);
-        const spd = (k === 0 ? 5.2 : 4.4);
-        if (dd > 0.4) { const st = Math.min(spd * dt, dd); p.x += dx / dd * st; p.z += dz / dd * st; }
-        p.cd -= dt;
-        const bd = Math.hypot(p.x - b.x, p.z - b.z);
-        if (bd < 1.9 && p.cd <= 0) {
-          const gdx = attackX - b.x, gdz = P.z - b.z, gl = Math.hypot(gdx, gdz) || 1;
-          let dirx = gdx / gl, dirz = gdz / gl, pw = 13 + Math.random() * 3;
-          if (gl > 16 && Math.random() < 0.45) {                     // 太远 → 有机会传给前面队友
-            let best = null, bs = -1e9;
-            for (const q of list) { if (q === p || q.isPlayer) continue; const qg = Math.hypot(attackX - q.x, P.z - q.z); if (qg < gl - 3 && qg > bs) { bs = qg; best = q; } }
-            if (best) { const pdx = best.x - b.x, pdz = best.z - b.z, pl = Math.hypot(pdx, pdz) || 1; dirx = pdx / pl; dirz = pdz / pl; pw = 9 + Math.random() * 3; }
-          }
-          const na = Math.atan2(dirx, dirz) + (Math.random() - 0.5) * 0.22;   // 一点点瞄准误差
-          soccerKick(b, Math.sin(na), Math.cos(na), pw);
-          p.cd = 0.55;
+    // ================= 持球制 AI（2026-10-15 重做）=================
+    // 规则：球被某个人"控住"（SOC.holder）时**一直贴在他脚下**，只有被抢断 / 传球 / 射门才离脚。
+    //       进球后球权交给**失球方**（开球）。
+    // 角色：0=前锋  1=中场（接应）  2=后卫（回防）
+    for (const p of SOC.players) {
+      if (p.isPlayer) continue;
+      p.cd -= dt;
+      const isHolder = (p === SOC.holder);
+      const h = SOC.holder;
+      const oppHas = h && h.team !== p.team;
+      const myGoalX = (p.team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 我方进攻的球门
+      let tx, tz, spd;
+      if (isHolder) {
+        // 持球：朝对方球门带球，进入射程就起脚
+        tx = myGoalX; tz = P.z + (p.z - P.z) * 0.55;
+        spd = 5.0;
+        const gd = Math.hypot(myGoalX - p.x, P.z - p.z);
+        if (gd < 13 && p.cd <= 0) {
+          const dx = myGoalX - p.x, dz = P.z - p.z, l = Math.hypot(dx, dz) || 1;
+          const na = Math.atan2(dx / l, dz / l) + (Math.random() - 0.5) * 0.16;
+          soccerKick(b, Math.sin(na), Math.cos(na), 15);
+          p.cd = 1.0;
           try { sfx('hit'); } catch (e) {}
         }
-        const fx = b.x - p.x, fz = b.z - p.z;
-        if (dd > 0.4 || Math.hypot(fx, fz) > 0.1) p.mesh.rotation.y = Math.atan2(fx, fz);
-        p.phase += dt * 9;
-        p.mesh.position.set(p.x, terrainHeight(p.x, p.z), p.z);
-        animateHuman(p.mesh, p.phase, 0, 'fist', dd > 0.4);
+      } else if (oppHas) {
+        // 对方持球：贴上去抢断
+        tx = h.x; tz = h.z; spd = 5.2;
+        const d = Math.hypot(p.x - h.x, p.z - h.z);
+        if (d < 1.5 && p.cd <= 0) {
+          SOC.holder = p;                 // 断球成功，球权转移
+          p.cd = 1.1;
+          try { sfx('hit'); } catch (e) {}
+        }
+      } else {
+        // 球自由 / 己方持球：按角色跑位
+        const base = h || { x: b.x, z: b.z };
+        if (p.role === 1) { tx = (base.x + myGoalX) / 2; tz = P.z + (p.z >= P.z ? 6 : -6); spd = 4.6; }
+        else if (p.role === 2) { tx = (base.x - myGoalX) / 2 + P.x; tz = P.z + (p.z >= P.z ? 9 : -9); spd = 4.2; }
+        else { tx = base.x; tz = base.z + (p.z >= P.z ? 5 : -5); spd = 4.6; }
+      }
+      tx = Math.max(P.x - P.hw - 1, Math.min(P.x + P.hw + 1, tx));
+      tz = Math.max(P.z - P.hd - 1, Math.min(P.z + P.hd + 1, tz));
+      const dx = tx - p.x, dz = tz - p.z, dd = Math.hypot(dx, dz);
+      if (dd > 0.35) { const st = Math.min(spd * dt, dd); p.x += dx / dd * st; p.z += dz / dd * st; }
+      const fx = isHolder ? dx : (b.x - p.x), fz = isHolder ? dz : (b.z - p.z);
+      if (Math.hypot(fx, fz) > 0.1) p.mesh.rotation.y = Math.atan2(fx, fz);
+      p.phase += dt * 9;
+      p.mesh.position.set(p.x, terrainHeight(p.x, p.z), p.z);
+      animateHuman(p.mesh, p.phase, 0, 'fist', dd > 0.35);
+    }
+
+    // ---- 球权：自由球速度降下来后，离它最近的人控住 ----
+    if (!SOC.holder) {
+      if (Math.hypot(b.vx, b.vz) < 3.5) {
+        let best = null, bd = 1.4;
+        for (const p of SOC.players) {
+          const d = Math.hypot(p.x - b.x, p.z - b.z);
+          if (d < bd) { bd = d; best = p; }
+        }
+        if (best) SOC.holder = best;
       }
     }
-    // ---- 玩家踢球（手机点右下角「踢球」按钮，电脑用左键 / 攻击键）----
-    SOC.kickCd -= dt;
-    if (SOC.kickCd <= 0 && (atkHeld || SOC.kickReq)) {
-      const pd = Math.hypot(person.position.x - b.x, person.position.z - b.z);
-      if (pd < 2.9) { soccerKick(b, Math.sin(personAngle.v), Math.cos(personAngle.v), 15); SOC.kickCd = 0.4; try { sfx('hit'); } catch (e) {} }
-    }
-    SOC.kickReq = 0;   // 每帧消费掉，避免按住按钮连踢
 
-    // ---- 传球：把球送向离自己最近的队友（不用瞄准，手机上友好）----
+    // ---- 玩家操作（射门 / 传球都要求"自己持球"；抢断是抢别人的球）----
+    const me = SOC.players.find(q => q.isPlayer);
+    const iHold = !!(SOC.holder && SOC.holder.isPlayer);
+    SOC.kickCd -= dt;
+    // 射门：踢球键 / 攻击键 / 左键
+    if (SOC.kickCd <= 0 && (atkHeld || SOC.kickReq)) {
+      if (iHold) {
+        soccerKick(b, Math.sin(personAngle.v), Math.cos(personAngle.v), 16);
+        SOC.kickCd = 0.5;
+        try { sfx('hit'); } catch (e) {}
+      }
+    }
+    SOC.kickReq = 0;
+    // 传球：球直接飞向离自己最近的队友，力度按距离给足 → 能落到队友脚下
     if (SOC.passReq) {
       SOC.passReq = 0;
-      const pdd = Math.hypot(person.position.x - b.x, person.position.z - b.z);
-      if (pdd < 3.2) {
+      if (iHold) {
         let best = null, bdd = 1e9;
         for (const m of SOC.players) {
           if (m.team !== 1 || m.isPlayer) continue;
-          const dd2 = Math.hypot(m.x - person.position.x, m.z - person.position.z);
-          if (dd2 < bdd) { bdd = dd2; best = m; }
+          const d2 = Math.hypot(m.x - person.position.x, m.z - person.position.z);
+          if (d2 < bdd) { bdd = d2; best = m; }
         }
         if (best) {
           const dx = best.x - b.x, dz = best.z - b.z, l = Math.hypot(dx, dz) || 1;
-          soccerKick(b, dx / l, dz / l, 13);
+          soccerKick(b, dx / l, dz / l, Math.min(30, l * 1.5));
           try { sfx('hit'); } catch (e) {}
         } else setHint('传球：附近没有队友');
-      } else setHint('传球：要靠近球才能传');
+      } else setHint('传球：要先拿到球（靠近球，或用抢断）');
     }
-
-    // ---- 抢断：把球从对手脚下捅向对方半场，带冷却 ----
+    // 抢断：把球从对手脚下断下来（带冷却）
     if (SOC.tackleCd > 0) SOC.tackleCd -= dt;
     if (SOC.tackleReq) {
       SOC.tackleReq = 0;
       if (SOC.tackleCd <= 0) {
-        const pdd = Math.hypot(person.position.x - b.x, person.position.z - b.z);
-        if (pdd < 3.4) {
-          const dz = (Math.random() - 0.5) * 0.6, l = Math.hypot(1, dz) || 1;
-          soccerKick(b, 1 / l, dz / l, 17);      // 朝主队进攻方向（+x）捅出去
-          SOC.tackleCd = SOC.tackleMax;
-          try { sfx('hit'); } catch (e) {}
-        } else setHint('抢断：要靠近球才能断');
+        const hh = SOC.holder;
+        const px2 = person.position.x, pz2 = person.position.z;
+        if (!hh) {
+          const d = Math.hypot(px2 - b.x, pz2 - b.z);
+          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; try { sfx('hit'); } catch (e) {} }
+          else setHint('抢断：要靠近球');
+        } else if (hh.team === 2) {
+          const d = Math.hypot(px2 - hh.x, pz2 - hh.z);
+          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; try { sfx('hit'); } catch (e) {} }
+          else setHint('抢断：要贴近持球者');
+        } else setHint('抢断：球在队友脚下');
       }
-      // 冷却中点了也不响应 —— 按钮上已经显示倒计时，不用再弹提示
     }
-    // ---- 球物理 ----
-    b.x += b.vx * dt; b.z += b.vz * dt;
-    const fr = Math.pow(0.24, dt);
-    b.vx *= fr; b.vz *= fr;
-    if (Math.abs(b.vx) < 0.08) b.vx = 0;
-    if (Math.abs(b.vz) < 0.08) b.vz = 0;
-    b.mesh.position.set(b.x, P.gy + 0.34, b.z);
-    b.mesh.rotation.z -= b.vx * dt * 1.6; b.mesh.rotation.x += b.vz * dt * 1.6;
+
+    // ---- 球的位置：持球时贴脚，离脚时走物理 ----
+    if (SOC.holder) {
+      const hh = SOC.holder, hf = hh.mesh.rotation.y;
+      b.x = hh.x + Math.sin(hf) * 0.5;
+      b.z = hh.z + Math.cos(hf) * 0.5;
+      b.vx = 0; b.vz = 0;
+      b.mesh.position.set(b.x, P.gy + 0.34, b.z);
+      b.mesh.rotation.y = hf;
+    } else {
+      b.x += b.vx * dt; b.z += b.vz * dt;
+      const fr = Math.pow(0.24, dt);
+      b.vx *= fr; b.vz *= fr;
+      if (Math.abs(b.vx) < 0.08) b.vx = 0;
+      if (Math.abs(b.vz) < 0.08) b.vz = 0;
+      b.mesh.position.set(b.x, P.gy + 0.34, b.z);
+      b.mesh.rotation.z -= b.vx * dt * 1.6; b.mesh.rotation.x += b.vz * dt * 1.6;
+    }
     const inMouth = Math.abs(b.z - P.z) < P.goalZ;
-    if (Math.abs(b.z - P.z) > P.hd) { b.z = P.z + Math.sign(b.z - P.z) * P.hd; b.vz *= -0.62; }
-    if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; }
-    // ---- 进球 ----
+    if (Math.abs(b.z - P.z) > P.hd) { b.z = P.z + Math.sign(b.z - P.z) * P.hd; b.vz *= -0.62; SOC.holder = null; }
+    if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; SOC.holder = null; }
+    // ---- 进球：球权交给失球方 ----
     if (Math.abs(b.x - P.x) > P.hw + 0.7 && inMouth) {
       const scorer = (b.x > P.x) ? 0 : 1;                 // 进 +x 门 → 主队(索引0)得分
       SOC.score[scorer]++;
       soccerMsg((scorer === 0 ? '主队进球！' : '客队进球！') + '  ' + SOC.score[0] + ' : ' + SOC.score[1], 1.6);
       try { sfx('coin'); } catch (e) {}
+      SOC.kickoffTeam = (scorer === 0) ? 2 : 1;           // 失球方开球
       soccerResetBall();
+      soccerGiveKickoff();
     }
     // ---- 局 / 场 结束判定 ----
     SOC.roundT += dt;
@@ -6699,12 +6764,15 @@ function soccerHud() {
   if (!SOC || !SOC.hud) return;
   if (!SOC.active) { SOC.hud.style.display = 'none'; return; }
   SOC.hud.style.display = 'block';
-  // 抢断按钮：冷却中**变暗 + 显示剩余秒数**，冷却结束恢复亮色 —— 玩家一眼知道还能不能断
+  // 抢断按钮：冷却中画成**指针转一圈**的扇形进度（conic-gradient），
+  // 亮色部分随冷却恢复而扩大，中间显示剩余秒数；冷却结束恢复橙色的「抢断」。
   if (SOC.tackleBtn) {
     if (SOC.tackleCd > 0) {
-      SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#6b6b76,#3a3a42 70%)';
+      const pct = Math.round((1 - SOC.tackleCd / SOC.tackleMax) * 100);
+      SOC.tackleBtn.style.background =
+        'conic-gradient(from -90deg, #ffcf8a 0% ' + pct + '%, #3a3a42 ' + pct + '% 100%)';
       SOC.tackleBtn.style.borderColor = '#6a6a72';
-      SOC.tackleBtn.style.color = '#9a9aa2';
+      SOC.tackleBtn.style.color = '#d6d6de';
       SOC.tackleBtn.textContent = SOC.tackleCd.toFixed(1);
     } else {
       SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#ffcf8a,#c47a12 70%)';
