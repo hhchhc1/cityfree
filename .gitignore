@@ -1,0 +1,4 @@
+*.bak-*
+survey.txt
+备份说明.txt
+.DS_Store

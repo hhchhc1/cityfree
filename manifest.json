@@ -1,0 +1,73 @@
+{
+    "@platforms" : [ "android", "iphone", "ipad" ],
+    "id" : "H5D8118BE",
+    "name" : "城市自由人",
+    "version" : {
+        "name" : "1.0.0",
+        "code" : "100"
+    },
+    "description" : "3D第三人称城市漫游：逛街、开车、打击罪恶、躲城管追捕、商城买武器",
+    "launch_path" : "index.html",
+    "developer" : {
+        "name" : "lenovo",
+        "email" : "",
+        "url" : ""
+    },
+    "orientation" : [ "landscape-primary", "landscape-secondary" ],
+    "icons" : {},
+    "plus" : {
+        "statusbar" : {
+            "immersed" : true,
+            "style" : "dark"
+        },
+        "screenOrientation" : [ "landscape-primary", "landscape-secondary" ],
+        "fullscreen" : true,
+        "splashscreen" : {
+            "autoclose" : true,
+            "waiting" : false,
+            "delay" : 0
+        },
+        "distribute" : {
+            "google" : {
+                "targetSdkVersion" : 30
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "icon.png",
+                    "xhdpi" : "icon.png",
+                    "xxhdpi" : "icon.png",
+                    "xxxhdpi" : "icon.png"
+                },
+                "ios" : {
+                    "appstore" : "",
+                    "iphone" : {
+                        "app@2x" : "icon.png",
+                        "app@3x" : "icon.png",
+                        "spotlight@2x" : "icon.png",
+                        "spotlight@3x" : "icon.png",
+                        "settings@2x" : "icon.png",
+                        "settings@3x" : "icon.png",
+                        "notification@2x" : "icon.png",
+                        "notification@3x" : "icon.png"
+                    },
+                    "ipad" : {
+                        "app" : "icon.png",
+                        "app@2x" : "icon.png",
+                        "proapp@2x" : "icon.png",
+                        "spotlight" : "icon.png",
+                        "spotlight@2x" : "icon.png",
+                        "settings" : "icon.png",
+                        "settings@2x" : "icon.png",
+                        "notification" : "icon.png",
+                        "notification@2x" : "icon.png"
+                    }
+                }
+            },
+            "ios" : {
+                "dSYMs" : false
+            }
+        }
+    },
+    "screenOrientation" : [ "landscape-primary", "landscape-secondary" ],
+    "fullscreen" : true
+}
