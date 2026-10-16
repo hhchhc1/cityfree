@@ -6704,14 +6704,26 @@ function setPlayerJersey(team) {
 // 每局开赛前的 3 秒准备时间里显示（用户要求"每次比赛之前说明自己的进攻方向"）。
 function makeDirArrow() {
   const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.85,
+  // 【2026-10-16·fix18】用户反馈"进攻方向箭头被草地遮住了"。查出两个问题：
+  //  ① 原来只有**一层半透明黄**，压在草皮的明暗条纹上对比度太低，远看就是"被草盖住"。
+  //     → 改成 **深色描边 + 亮黄箭头** 两层（描边比黄箭头整体大 12%，绿草上一眼可辨）。
+  //  ② 原来三角头的 `rotation.z = -Math.PI/2` 把尖转到了 -y —— 平铺之后**尖指向 +z、杆却沿 x**，
+  //     头和杆互相垂直，根本不成箭头。→ 改成尖朝 +x，并把头左移到和杆接上（不再留缝）。
+  const edgeMat = new THREE.MeshBasicMaterial({ color: 0x123016, transparent: true, opacity: 0.62,
+                                                side: THREE.DoubleSide, depthWrite: false });
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 1.0,
                                             side: THREE.DoubleSide, depthWrite: false });
-  const shaft = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.3), mat);
-  shaft.position.x = -1.9; g.add(shaft);
-  const head = new THREE.Mesh(new THREE.CircleGeometry(1.7, 3), mat);
-  head.rotation.z = -Math.PI / 2; head.position.x = 1.9; g.add(head);
+  const addLayer = (m, big) => {
+    const k = big ? 1.12 : 1;                 // 描边层整体放大一点，露出边缘
+    const zOff = big ? -0.012 : 0;            // 本地 z = 平铺后的世界 y，描边垫在黄箭头下面
+    const shaft = new THREE.Mesh(new THREE.PlaneGeometry(4.6 * k, 1.3 * k), m);
+    shaft.position.set(-1.9, 0, zOff); g.add(shaft);
+    const head = new THREE.Mesh(new THREE.CircleGeometry(1.7 * k, 3), m);
+    head.position.set(1.25, 0, zOff); g.add(head);   // 尖朝 +x（三角形默认顶点就在 +x）
+  };
+  addLayer(edgeMat, true);
+  addLayer(mat, false);
   g.rotation.x = -Math.PI / 2;          // 平铺在地面上
-  g.renderOrder = 4;
   g.visible = false;
   scene.add(g);
   return g;
@@ -6743,7 +6755,10 @@ function soccerBegin() {
   // 进攻方向箭头
   if (!SOC.dirArrow) SOC.dirArrow = makeDirArrow();
   const P2 = SOC.P, inw = (SOC.playerTeam === 1) ? 1 : -1;
-  SOC.dirArrow.position.set(P2.x + inw * (P2.hw * 0.45), P2.gy + 0.2, P2.z);
+  // 【fix18】草皮 Box 中心在 P.gy、高 0.22 → 顶面 P.gy+0.11，边线顶面 P.gy+0.165。
+  // 原来箭头只放到 P.gy+0.2（离草皮顶面仅 9cm），远距离看深度精度不够会被草皮"咬"掉一块。
+  // 抬到 +0.45，稳稳浮在草皮和边线之上，俯视角下看不出悬空。
+  SOC.dirArrow.position.set(P2.x + inw * (P2.hw * 0.45), P2.gy + 0.45, P2.z);
   SOC.dirArrow.rotation.z = (SOC.playerTeam === 1) ? 0 : Math.PI;   // 红方进攻方向相反
   SOC.dirArrow.visible = true;
   soccerResetBall();
@@ -6847,6 +6862,20 @@ function soccerGiveKickoff() {
 function soccerStartCountdown() {
   if (!SOC) return;
   soccerGiveKickoff();
+  // 【2026-10-16·fix18】用户要求：每局开球前，玩家必须站在**自家大门那一侧的半场**，
+  // 并且**面向进攻方向**（视角一起转过去，免得人物背对镜头、玩家分不清该往哪踢）。
+  // 蓝方(1) 守 -x 门、往 +x 打；红方(2) 守 +x 门、往 -x 打。
+  (function placePlayerInOwnHalf() {
+    const P = SOC.P;
+    const inw = (SOC.playerTeam === 1) ? 1 : -1;        // 进攻方向：+1 = 打 +x 那侧球门
+    const px = P.x - inw * (P.hw * 0.5), pz = P.z;      // 自家半场（离中线半个半场）
+    person.position.x = px;
+    person.position.z = pz;
+    person.position.y = terrainHeight(px, pz);
+    personAngle.v = Math.atan2(inw, 0);                 // 面向进攻方向
+    person.rotation.y = personAngle.v;
+    camYaw = personAngle.v;                             // 视角同步（不改俯仰，免得突兀）
+  })();
   SOC.cd = 3.0; SOC.cdShown = 0;
   if (SOC.cdEl) { SOC.cdEl.style.display = 'block'; SOC.cdEl.textContent = '3'; }
   SOC.cdShown = 3;
@@ -7143,7 +7172,10 @@ function updateSoccer(dt) {
       if (iHold) {
         let best = null, bdd = 1e9;
         for (const m of SOC.players) {
-          if (m.team !== 1 || m.isPlayer) continue;
+          // 【2026-10-16·fix18】原来这里硬编码 `m.team !== 1`（只找蓝队）——
+          // 玩家被随机分到红方(2)时，按传球会飞向**对面蓝队**的球员，等于把球传给敌人。
+          // 改成按玩家当前所在队找队友。
+          if (m.team !== SOC.playerTeam || m.isPlayer) continue;
           const d2 = Math.hypot(m.x - person.position.x, m.z - person.position.z);
           if (d2 < bdd) { bdd = d2; best = m; }
         }
