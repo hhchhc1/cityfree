@@ -6384,6 +6384,7 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     holder: null, kickoffTeam: 1,                          // 持球者 / 开球方
     passTarget: null,                                      // 传球的目标队友（球飞到附近自动落到他脚下）
     lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
+    cd: 0, cdShown: 0, cdEl: null,                         // 开球倒计时（秒）/ 已显示到第几秒 / 大数字元素
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6410,6 +6411,12 @@ function buildSoccerUi() {
     'position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:95;display:none;background:rgba(8,16,12,0.84);' +
     'border:1px solid #3f8f5a;border-radius:10px;padding:7px 16px;color:#eafff2;font:bold 15px sans-serif;text-align:center;pointer-events:none');
   SOC.hud = hud;
+  // 【2026-10-16】开球倒计时：每局开始前 3 秒，屏幕正中一个大数字。
+  // pointer-events:none —— 它纯展示、不接收点击，所以不需要登记进 isUiTouch 白名单。
+  const cd = mk('div', 'soccerCountdown',
+    'position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:119;display:none;pointer-events:none;' +
+    'color:#ffe066;font:bold 92px/1 sans-serif;text-shadow:0 0 22px rgba(0,0,0,0.85),0 4px 10px rgba(0,0,0,0.7)');
+  SOC.cdEl = cd;
   const go = document.getElementById('soccerGo'), no = document.getElementById('soccerNo');
   if (go) go.addEventListener('click', function (e) { e.stopPropagation(); soccerTryStart(); });
   if (no) no.addEventListener('click', function (e) { e.stopPropagation(); soccerHidePanel(); });
@@ -6531,15 +6538,15 @@ function soccerBegin() {
   SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2));  // 客队后卫
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
-  SOC.kickoffTeam = 1;                       // 主队先开球
+  SOC.kickoffTeam = 1;                       // 第 1 局：主队（玩家方）开球
   soccerResetBall();
-  soccerGiveKickoff();
+  soccerStartCountdown();                    // 【2026-10-16】开局先来 3 秒倒计时
   if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
   if (SOC.passBtn) SOC.passBtn.style.display = 'block';
   if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'block';
   SOC.tackleCd = 0;
   document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
-  soccerMsg('第 1 局 · 开始！', 1.8);
+  soccerMsg('第 1 局 · 准备', 3.2);
   setHint('足球：踢球=射门 · 传球=高球吊给最近队友 · 抢断=断对手的球（有冷却）· 3v3 三局两胜');
 }
 
@@ -6548,6 +6555,7 @@ function soccerEnd(playerWon) {
     for (const p of SOC.players) { try { scene.remove(p.mesh); } catch (e) {} }
     SOC.players = [];
     SOC.active = false; SOC.phase = 'idle';
+    SOC.cd = 0; if (SOC.cdEl) SOC.cdEl.style.display = 'none';   // 收掉倒计时大数字
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
     if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
@@ -6592,18 +6600,32 @@ function soccerPass(b, target) {
 function soccerGiveKickoff() {
   if (!SOC) return;
   const t = SOC.kickoffTeam || 1;
-  let best = null, bd = 1e9;
+  let best = null, bd = 1e9, bestAi = null, bdAi = 1e9;
   for (const p of SOC.players) {
     if (p.team !== t) continue;
     const d = Math.hypot(p.x - SOC.P.x, p.z - SOC.P.z);
     if (d < bd) { bd = d; best = p; }
+    // 【2026-10-16】优先让 **AI 队友** 去开球：倒计时期间要把开球者"钉"在中线，
+    // 玩家是自由的（可以随便走），让玩家开球会出现"球跟着玩家乱跑"的观感。
+    if (!p.isPlayer && d < bdAi) { bdAi = d; bestAi = p; }
   }
+  best = bestAi || best;
   SOC.holder = best || null;
   if (best) {
     best.x = SOC.P.x + (t === 1 ? -2.5 : 2.5);
     best.z = SOC.P.z;
     best.mesh.rotation.y = (t === 1) ? Math.PI / 2 : -Math.PI / 2;
+    best.mesh.position.set(best.x, terrainHeight(best.x, best.z), best.z);
   }
+}
+// 【2026-10-16】每局开赛前 3 秒倒计时：定好开球方 → 摆好站位 → 亮大数字 3/2/1。
+// 倒计时期间 updateSoccer 会提前 return：所有人站定、球固定在开球者脚下、任何操作都不生效。
+function soccerStartCountdown() {
+  if (!SOC) return;
+  soccerGiveKickoff();
+  SOC.cd = 3.0; SOC.cdShown = 0;
+  if (SOC.cdEl) { SOC.cdEl.style.display = 'block'; SOC.cdEl.textContent = '3'; }
+  SOC.cdShown = 3;
 }
 
 function updateSoccer(dt) {
@@ -6629,6 +6651,39 @@ function updateSoccer(dt) {
     // ---- 比赛中：状态下限 ----
     if (state !== 'walk') { soccerEnd(false); return; }
     for (const p of SOC.players) if (p.isPlayer) { p.x = person.position.x; p.z = person.position.z; }
+
+    // ================= 开球倒计时（每局开始前 3 秒）=================
+    // 【2026-10-16】用户要求：每回合开赛前必须有 3 秒等待。倒计时期间：
+    //   · 所有人站定（跳过 AI 循环，也不跑球物理）
+    //   · 球固定在开球者脚下（球权此刻已经在开球那一方）
+    //   · 踢球 / 传球 / 抢断全部不生效
+    // 倒计时结束 → 正常开打，开球者脚下就已经有球。
+    if (SOC.cd > 0) {
+      SOC.cd -= dt;
+      const n = Math.ceil(SOC.cd);
+      if (n > 0 && n !== SOC.cdShown) { SOC.cdShown = n; if (SOC.cdEl) SOC.cdEl.textContent = String(n); }
+      if (SOC.cd <= 0) {
+        SOC.cd = 0;
+        if (SOC.cdEl) SOC.cdEl.style.display = 'none';
+        soccerMsg('开始！', 1.2);
+      }
+      if (SOC.holder) {
+        const hh = SOC.holder;
+        const hx = hh.isPlayer ? person.position.x : hh.x;
+        const hz = hh.isPlayer ? person.position.z : hh.z;
+        const hf = hh.isPlayer ? personAngle.v : hh.mesh.rotation.y;
+        b.x = hx + Math.sin(hf) * 0.55;
+        b.z = hz + Math.cos(hf) * 0.55;
+        b.y = P.gy + 0.34; b.vx = 0; b.vz = 0; b.vy = 0;
+        b.mesh.position.set(b.x, b.y, b.z);
+        SOC.lastHolder = null;   // 倒计时结束后第一帧不要"滚一大截"
+      }
+      SOC.kickReq = 0; SOC.passReq = 0; SOC.tackleReq = 0;   // 倒计时期间按键全部吞掉
+      if (SOC.msgT > 0) SOC.msgT -= dt;
+      soccerHud();
+      return;
+    }
+
     // ================= 持球制 AI（2026-10-15 重做）=================
     // 规则：球被某个人"控住"（SOC.holder）时**一直贴在他脚下**，只有被抢断 / 传球 / 射门才离脚。
     //       进球后球权交给**失球方**（开球）。
@@ -6836,8 +6891,12 @@ function updateSoccer(dt) {
         SOC.wins[winner - 1]++;
         if (SOC.wins[winner - 1] >= 2) { soccerEnd(winner === 1); return; }
         SOC.round++; SOC.score = [0, 0]; SOC.roundT = 0; SOC.sudden = false;
+        // 【2026-10-16】上一局的**胜方不拿球** —— 开球权交给上一局的败方
+        //（即用户说的"有一方上一把赢了，球权就在下一方脚下"）。
+        SOC.kickoffTeam = (winner === 1) ? 2 : 1;
         soccerResetBall();
-        soccerMsg('第 ' + SOC.round + ' 局 · 开始！', 1.8);
+        soccerStartCountdown();                 // 新一局同样先来 3 秒倒计时
+        soccerMsg('第 ' + SOC.round + ' 局 · ' + (SOC.kickoffTeam === 1 ? '主队' : '客队') + '开球', 3.2);
       }
     }
     soccerHud();
@@ -19326,6 +19385,9 @@ function update(dt) {
     if (keys['d'] || keys['arrowright']) mx += 1;
     if (joyActive) { mx = joyX; mz = joyY; }
     if (sprintHeld) mz = 1;   // 按住疾跑键 = 自动向前冲刺（方向由右手滑动镜头决定）
+    // 【2026-10-16】足球"开球倒计时"期间冻结玩家移动 —— 既然是 3 秒等待时间，
+    // 就该真的站住（键盘 / 摇杆 / 疾跑三种输入在这里被统一清零，人物保持原地）。
+    if (SOC && SOC.active && SOC.cd > 0) { mx = 0; mz = 0; }
     // 水中状态检测
     const m = Math.max(Math.abs(person.position.x), Math.abs(person.position.z));
     const onBridge = Math.abs(person.position.x) <= BRIDGE_HALF_WIDTH && person.position.z >= BRIDGE_START_Z && person.position.z <= BRIDGE_LIMIT_Z;
