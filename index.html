@@ -824,7 +824,11 @@ const ISLAND_X = 0, ISLAND_Z = HALF - 30, ISLAND_R = 85, ISLAND_WALK_R = 90;
 // 南岛 3v3 足球场参数（2026-10-15 加入）。岛只有半径 85，放不下标准球场，
 // 所以用 20×14 的小场（3v3 够用）；位置在西北街区内部，已避开环岛路(半径45)与 3 纵 3 横主路。
 // 常量放这里是因为 terrainHeight 要压平这块地，足球模块也要引用它。
-const PITCH = { x: -18, z: 452, hw: 10, hd: 7, gy: 1.55, goalZ: 3.0 };
+// 【2026-10-16·球场扩大】用户要求"球场扩大一点"。
+// 原来是 20×14，扩大被三面夹击：西边 x=-40 主路、东边 x=0 主路、北边 z=470 主路，
+// 再加半径 45 的环岛路（内圈 40.8）。用脚本穷举可行域后取 23×18（面积 414，比原来的 280 大 48%）。
+// 四角离岛心 40.08 < 40.8，草皮离各条主路都还有 1.5m 以上。
+const PITCH = { x: -18, z: 454, hw: 11.5, hd: 9, gy: 1.55, goalZ: 3.0 };
 const BRIDGE_HALF_WIDTH = 6, BRIDGE_START_Z = 160, BRIDGE_DECK_START_Z = 210;
 const BRIDGE_END_Z = ISLAND_Z - ISLAND_R, BRIDGE_RAMP_END_Z = BRIDGE_END_Z + 50, BRIDGE_LIMIT_Z = 520;
 const OCEAN_HALF = HALF * 1.25, WORLD_LIMIT_X = OCEAN_HALF - 10;
@@ -989,6 +993,10 @@ function isOnRoadOrBridge(x, z) {
   for (const dz of [-40, 0, 40]) {
     if (Math.abs(z - (iz + dz)) < 4 && Math.abs(x - ISLAND_X) < 45) return true;
   }
+  // 【2026-10-16】足球场（含入口牌那一片）也算"禁入区"：岛上散落的棕榈 / 礁石 / 花丛
+  // 一律避开，否则树会长在球场中间，而且棕榈还会往 treeObstacles 里塞一个看不见的碰撞体，
+  // 球员在场上会被凭空挡住。
+  if (Math.abs(x - PITCH.x) < PITCH.hw + 2.5 && Math.abs(z - PITCH.z) < PITCH.hd + 7) return true;
   // 军事基地内部（不刷阻挡物）
   if (Math.hypot(x + 280, z - 120) < 45) return true;
   return false;
@@ -6078,6 +6086,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     if (!isOnRoadOrBridge(-51, 465)) crate(-51, 465, 1);
     if (!isOnRoadOrBridge(-50, 469.6)) crate(-50, 469.6, 0.85);
     for (const p of [[-54, 432], [-45, 450]]) {   // 晾鱼架
+      if (isOnRoadOrBridge(p[0], p[1])) continue;   // 兜底：别让晾鱼架站在马路上（-54,432 正好压 z=430 主路）
       const gy = T(p[0], p[1]);
       for (const sx of [-1.6, 1.6]) {
         const po = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.4, 5), M.woodD);
@@ -6320,8 +6329,9 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     const nt = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, P.goalZ * 2), MM.net); nt.position.set(gx + s * 1.3, P.gy + 2.8, P.z); scene.add(nt);
   }
   // 两侧看台小板凳 + 四角角旗
+  // 【2026-10-16】球场扩大后，板凳从 hd+2.6 收到 hd+1.6 —— 再往外会压到 z=470 主路。
   for (const s of [-1, 1]) for (let i = 0; i < 5; i++) {
-    const bx = P.x - 7 + i * 3.5, bz = P.z + s * (P.hd + 2.6);
+    const bx = P.x - 7 + i * 3.5, bz = P.z + s * (P.hd + 1.6);
     const bench = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.3, 0.9), MM.post); bench.position.set(bx, P.gy + 0.85, bz); scene.add(bench);
     const leg = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.7, 0.6), MM.line); leg.position.set(bx, P.gy + 0.45, bz); scene.add(leg);
   }
@@ -6330,8 +6340,10 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     const flag = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.04), new THREE.MeshLambertMaterial({ color: 0xffcf33 })); flag.position.set(P.x + sx * P.hw + 0.36, P.gy + 1.8, P.z + sz * P.hd); scene.add(flag);
   }
   // 入口指示牌
+  // 【2026-10-16】原来放在北侧（P.z + P.hd + 6）——球场扩大后那个位置直接落在 z=470 主路上。
+  // 改放南侧，离 z=430 主路还有 5m 余量。
   {
-    const sz = P.z + P.hd + 6, gy = terrainHeight(P.x, sz) - 0.1;
+    const sz = P.z - P.hd - 5.5, gy = terrainHeight(P.x, sz) - 0.1;
     const g = new THREE.Group(); g.position.set(P.x, gy, sz);
     for (const sx of [-2.6, 2.6]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 0.4), MM.post); p.position.set(sx, 2.2, 0); g.add(p); }
     const board = new THREE.Mesh(new THREE.BoxGeometry(7.0, 2.6, 0.35), new THREE.MeshLambertMaterial({ color: 0x1c5f2e })); board.position.y = 4.4; g.add(board);
@@ -6385,6 +6397,7 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     passTarget: null,                                      // 传球的目标队友（球飞到附近自动落到他脚下）
     lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
     cd: 0, cdShown: 0, cdEl: null,                         // 开球倒计时（秒）/ 已显示到第几秒 / 大数字元素
+    gkRecover: 5.0,                                        // 【2026-10-16】门将扑救后的"体力恢复"秒数（期间扑不动）
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6398,10 +6411,10 @@ function buildSoccerUi() {
     'font:14px/1.6 sans-serif;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.6)');
   panel.innerHTML =
     '<div style="font-size:20px;font-weight:bold;color:#8effc0;margin-bottom:4px">南岛足球场</div>' +
-    '<div style="color:#bfe8d0;margin-bottom:6px">3 v 3 · 三局两胜</div>' +
+    '<div style="color:#bfe8d0;margin-bottom:6px">4 v 4（含门将）· 三局两胜</div>' +
     '<div style="color:#ffe066;margin-bottom:4px">入场费 100 金币 · 夺冠奖金 500 金币</div>' +
     '<div id="soccerGold" style="color:#cfe8d8;font-size:12px;margin-bottom:6px"></div>' +
-    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局先到 2 球或 60 秒结束；靠近球后按 攻击键 / 左键 踢球</div>' +
+    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局先到 2 球或 60 秒结束。门将能扑正中的球，<b style="color:#bfe8d0">打两个门柱附近</b>，或等他扑救后的体力恢复期再射。</div>' +
     '<div style="display:flex;gap:10px">' +
     '<button id="soccerGo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:linear-gradient(180deg,#5fe89a,#1f9a55);color:#fff;font:bold 16px sans-serif;cursor:pointer">开赛（100💰）</button>' +
     '<button id="soccerNo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:#2a3a30;color:#cfe8d8;font:bold 16px sans-serif;cursor:pointer">取消</button>' +
@@ -6517,7 +6530,7 @@ function soccerNewPlayer(team, x, z, isPlayer, role) {
   if (isPlayer) g.visible = false;
   scene.add(g);
   return { team: team, isPlayer: !!isPlayer, role: (role === undefined ? 0 : role),
-           x: x, z: z, mesh: g, cd: 0, phase: Math.random() * 6 };
+           x: x, z: z, mesh: g, cd: 0, gkCd: 0, phase: Math.random() * 6 };
 }
 
 function soccerResetBall() {
@@ -6533,9 +6546,12 @@ function soccerBegin() {
   SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true, 0));        // 玩家（主队前锋）
   SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false, 1));  // 主队中场
   SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false, 2));  // 主队后卫
+  // 【2026-10-16】固定门将（每队 1 个，role 3）：站在自己球门线前方 1.9m，只横向跟球，从不追球。
+  SOC.players.push(soccerNewPlayer(1, P.x - P.hw + 1.9, P.z, false, 3));   // 主队门将
   SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false, 0));       // 客队前锋
   SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false, 1));  // 客队中场
   SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2));  // 客队后卫
+  SOC.players.push(soccerNewPlayer(2, P.x + P.hw - 1.9, P.z, false, 3));   // 客队门将
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   SOC.kickoffTeam = 1;                       // 第 1 局：主队（玩家方）开球
@@ -6547,7 +6563,7 @@ function soccerBegin() {
   SOC.tackleCd = 0;
   document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
   soccerMsg('第 1 局 · 准备', 3.2);
-  setHint('足球：踢球=射门 · 传球=高球吊给最近队友 · 抢断=断对手的球（有冷却）· 3v3 三局两胜');
+  setHint('足球：踢球=射门 · 传球=高球吊给最近队友 · 抢断=断对手的球 · 门将会扑正中的球，打角度或趁他体力恢复时射');
 }
 
 function soccerEnd(playerWon) {
@@ -6603,6 +6619,7 @@ function soccerGiveKickoff() {
   let best = null, bd = 1e9, bestAi = null, bdAi = 1e9;
   for (const p of SOC.players) {
     if (p.team !== t) continue;
+    if (p.role === 3) continue;      // 门将不参与开球（他要守门，跑到中线算怎么回事）
     const d = Math.hypot(p.x - SOC.P.x, p.z - SOC.P.z);
     if (d < bd) { bd = d; best = p; }
     // 【2026-10-16】优先让 **AI 队友** 去开球：倒计时期间要把开球者"钉"在中线，
@@ -6696,13 +6713,34 @@ function updateSoccer(dt) {
       const oppHas = h && h.team !== p.team;
       const myGoalX = (p.team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 我方进攻的球门
       let tx, tz, spd;
-      if (isHolder) {
+      if (p.role === 3) {
+        // 【2026-10-16】门将：钉在自己球门线前 1.9m，只做**横向**移动跟着球，
+        // 从不追球、不参与抢断（扑救在下面的 keeperBlock 里单独处理）。
+        const ownGoalX = (p.team === 1) ? (P.x - P.hw) : (P.x + P.hw);
+        const inw = (p.team === 1) ? 1 : -1;      // 朝场内的方向
+        tx = ownGoalX + inw * 1.9;
+        tz = Math.max(P.z - (P.goalZ + 1.0), Math.min(P.z + (P.goalZ + 1.0), P.z + (b.z - P.z) * 0.75));
+        spd = 5.4;
+        // 门将万一控住了球（球慢慢滚到脚下），必须**大脚开出去** ——
+        // 否则 role 3 永远不会射门，球会一直粘在门将脚下，整场比赛卡死。
+        if (isHolder && p.cd <= 0) {
+          const fgx = (p.team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 往对面半场开
+          const dx2 = fgx - b.x, dz2 = P.z - b.z, l2 = Math.hypot(dx2, dz2) || 1;
+          const na2 = Math.atan2(dx2 / l2, dz2 / l2) + (Math.random() - 0.5) * 0.5;
+          soccerKick(b, Math.sin(na2), Math.cos(na2), 20);
+          p.cd = 1.4;
+          try { sfx('hit'); } catch (e) {}
+        }
+      } else if (isHolder) {
         // 持球：朝对方球门带球，进入射程就起脚
         tx = myGoalX; tz = P.z + (p.z - P.z) * 0.55;
         spd = 5.0;
         const gd = Math.hypot(myGoalX - p.x, P.z - p.z);
         if (gd < 13 && p.cd <= 0) {
-          const dx = myGoalX - p.x, dz = P.z - p.z, l = Math.hypot(dx, dz) || 1;
+          // 【2026-10-16】AI 射门不再一律打死角正中间 —— 有门将之后，正中必被扑。
+          // 现在在球门范围内随机挑一个落点（可能贴柱、可能正中），AI 才有进球能力。
+          const aimZ = P.z + (Math.random() * 2 - 1) * P.goalZ * 0.85;
+          const dx = myGoalX - p.x, dz = aimZ - p.z, l = Math.hypot(dx, dz) || 1;
           const na = Math.atan2(dx / l, dz / l) + (Math.random() - 0.5) * 0.16;
           soccerKick(b, Math.sin(na), Math.cos(na), 15);
           p.cd = 1.0;
@@ -6865,6 +6903,36 @@ function updateSoccer(dt) {
         b.mesh.rotateOnWorldAxis(_soccerTmp, hspd * dt / 0.34);
       }
     }
+    // ================= 门将扑救（2026-10-16 新增）=================
+    // 规则（按用户要求）：
+    //   · 门将"体力满"时，能扑出**射得太正**的球（球路落在球门中段），
+    //     扑到后球被**朝场内顶出去**（不是弹回门前），
+    //   · 然后门将进入**体力恢复期**（SOC.gkRecover 秒）—— 这期间他扑不动，
+    //     所以此时从各种角度（尤其是两个门柱附近）都能进球。
+    // 节奏就是：正中打门会被没收 → 等他刚扑完那几秒、或者打角度，才能得分。
+    for (const k of SOC.players) {
+      if (k.role !== 3) continue;
+      if (k.gkCd > 0) { k.gkCd -= dt; continue; }
+      if (SOC.holder) continue;                    // 球被带在脚下时不触发（那属于抢断）
+      const ownGoalX = (k.team === 1) ? (P.x - P.hw) : (P.x + P.hw);
+      const inw = (k.team === 1) ? 1 : -1;         // 朝场内的方向
+      const closing = (k.team === 1) ? (b.vx < -2.5) : (b.vx > 2.5);          // 球正朝这个门飞
+      const inFront = (k.team === 1) ? (b.x > ownGoalX - 0.5) : (b.x < ownGoalX + 0.5);
+      const nearLine = Math.abs(b.x - ownGoalX) < 4.0;
+      const central = Math.abs(b.z - P.z) < P.goalZ * 0.7;                    // "太正"：球门中段
+      const reachable = Math.abs(b.z - k.z) < 3.0;
+      if (closing && inFront && nearLine && central && reachable && b.y < P.gy + 1.9) {
+        const sp = Math.max(8, Math.abs(b.vx) * 0.8);
+        b.vx = inw * sp;                           // 往前（场内）飞出
+        b.vz = (b.z - P.z) * 1.8;
+        b.vy = 4.5;
+        b.y = Math.max(b.y, P.gy + 0.6);
+        SOC.holder = null; SOC.passTarget = null;
+        k.gkCd = SOC.gkRecover;                    // 进入体力恢复
+        soccerMsg('门将扑出！', 1.2);
+        try { sfx('hit'); } catch (e) {}
+      }
+    }
     const inMouth = Math.abs(b.z - P.z) < P.goalZ;
     if (Math.abs(b.z - P.z) > P.hd) { b.z = P.z + Math.sign(b.z - P.z) * P.hd; b.vz *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
     if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
@@ -6925,11 +6993,20 @@ function soccerHud() {
     }
   }
   const left = Math.max(0, 60 - Math.floor(SOC.roundT));
+  // 【2026-10-16】门将状态提示：谁的门将在"体力恢复"里、还剩几秒 ——
+  // 玩家一眼就知道现在能不能打正、还是必须打角度。
+  let gkTxt = '';
+  for (const p of SOC.players) {
+    if (p.role !== 3 || p.gkCd <= 0) continue;
+    gkTxt += '<div style="color:#ffd36e;font-size:12px;font-weight:normal;margin-top:2px">' +
+      (p.team === 1 ? '我方' : '对方') + '门将体力恢复中 ' + p.gkCd.toFixed(1) + 's（这段时间从任意角度都能射进）</div>';
+  }
   SOC.hud.innerHTML =
     '<span style="color:#7fb3ff">主队 ' + SOC.score[0] + '</span>' +
     '<span style="color:#889"> : </span>' +
     '<span style="color:#ff8f85">' + SOC.score[1] + ' 客队</span>' +
     '<span style="color:#a7c7b5;font-weight:normal;font-size:12px">　第' + SOC.round + '局　' + left + 's　(局分 ' + SOC.wins[0] + '-' + SOC.wins[1] + ')' + (SOC.sudden ? '　金球' : '') + '</span>' +
+    gkTxt +
     (SOC.msgT > 0 ? '<div style="color:#ffe066;font-size:13px;margin-top:3px">' + SOC.msg + '</div>' : '');
 }
 
