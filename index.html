@@ -6283,6 +6283,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 // AI 思路：每队"离球最近的人追球，其余按角色站位"，拿球后朝对方球门射 / 传给前面队友。
 // 全部逻辑包在 try/catch 里，任何异常都不会影响主游戏。
 var SOC = null;
+var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
 (function buildSoccerPitch() {
   const P = PITCH, w = P.hw * 2, d = P.hd * 2;
   const MM = {
@@ -6373,11 +6374,16 @@ var SOC = null;
   // 都不会有任何位移。必须登记成动态对象，让静态合批跳过它。
   registerDynamicObject(bm);
   SOC = {
-    P: P, ball: { x: P.x, z: P.z, vx: 0, vz: 0, mesh: bm },
+    // 【2026-10-16】球增加 y / vy —— 传球要吊高球（抛物线），必须让球有垂直方向的运动。
+    //   gravity 是球的"重力加速度"（单位/秒²），只用在高球飞行上，取值偏大让球落地干脆。
+    P: P, ball: { x: P.x, z: P.z, y: P.gy + 0.34, vx: 0, vz: 0, vy: 0, mesh: bm },
+    gravity: 18,
     players: [], active: false, phase: 'idle', score: [0, 0], wins: [0, 0], round: 0,
     t: 0, roundT: 0, sudden: false, msg: '', msgT: 0, kickCd: 0, panelOn: false, senseCd: 0,
     passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
     holder: null, kickoffTeam: 1,                          // 持球者 / 开球方
+    passTarget: null,                                      // 传球的目标队友（球飞到附近自动落到他脚下）
+    lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6496,14 +6502,22 @@ function soccerNewPlayer(team, x, z, isPlayer, role) {
   const cloth = team === 1 ? 0x2f6fe0 : 0xe0433a;   // 主队蓝 / 客队红
   const g = makeHuman(cloth, false, { clothColor: cloth });
   g.position.set(x, terrainHeight(x, z), z); g.rotation.y = team === 1 ? Math.PI / 2 : -Math.PI / 2;
+  // 【2026-10-16·修"蓝队多出一个站着不动的虚影"】
+  // 玩家自己已经有一个模型（person，见 makePlayer）。这里原来又给玩家造了**第二个火柴人**，
+  // 而 AI 循环开头是 `if (p.isPlayer) continue;` —— 玩家的复制体**永远不会被更新位置**，
+  // 于是它一直杵在出生点 (P.x-6, P.z)，看着就是"多出来的、虚化的、站着不动的人"。
+  // 玩家在场上用 person 本身即可，这个复制体直接隐藏。
+  if (isPlayer) g.visible = false;
   scene.add(g);
   return { team: team, isPlayer: !!isPlayer, role: (role === undefined ? 0 : role),
            x: x, z: z, mesh: g, cd: 0, phase: Math.random() * 6 };
 }
 
 function soccerResetBall() {
-  const P = SOC.P; SOC.ball.x = P.x; SOC.ball.z = P.z; SOC.ball.vx = 0; SOC.ball.vz = 0;
-  SOC.holder = null;
+  const P = SOC.P, b = SOC.ball;
+  b.x = P.x; b.z = P.z; b.y = P.gy + 0.34;
+  b.vx = 0; b.vz = 0; b.vy = 0;
+  SOC.holder = null; SOC.passTarget = null; SOC.lastHolder = null;
 }
 
 function soccerBegin() {
@@ -6526,7 +6540,7 @@ function soccerBegin() {
   SOC.tackleCd = 0;
   document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
   soccerMsg('第 1 局 · 开始！', 1.8);
-  setHint('足球：踢球=射门 · 传球=给最近队友 · 抢断=断对手的球（有冷却）· 3v3 三局两胜');
+  setHint('足球：踢球=射门 · 传球=高球吊给最近队友 · 抢断=断对手的球（有冷却）· 3v3 三局两胜');
 }
 
 function soccerEnd(playerWon) {
@@ -6552,10 +6566,27 @@ function soccerEnd(playerWon) {
   } catch (e) { console.error('[soccer end]', e); }
 }
 
-// 出脚：球离脚（清掉持球者），转入自由飞行
+// 出脚（射门）：球贴地飞出，清掉持球者与传球目标
 function soccerKick(b, dx, dz, pw) {
+  if (!SOC) return;
   b.vx = dx * pw; b.vz = dz * pw;
-  if (SOC) SOC.holder = null;
+  b.y = SOC.P.gy + 0.34; b.vy = 0;
+  SOC.holder = null; SOC.passTarget = null;
+}
+// 【2026-10-16·传球改成"高球吊传"】按用户的描述：球要先飞到高空，再落到队友脚下。
+// 做法：按水平距离 L 反推飞行时间 T，再取 vy = ½·g·T —— 这样 T 秒后球正好落回地面高度，
+//       水平方向 vx = dx/T，落点就是队友脚下。飞行途中会做抛物线运动（见 updateSoccer 的球物理）。
+function soccerPass(b, target) {
+  if (!SOC || !target) return;
+  const P = SOC.P;
+  const dx = target.x - b.x, dz = target.z - b.z;
+  const L = Math.hypot(dx, dz) || 0.001;
+  const T = Math.max(0.75, Math.min(1.7, L / 9));    // 距离越远，滞空越久（短传也保证有 1m+ 的弧线）
+  b.vx = dx / T; b.vz = dz / T;
+  b.vy = 0.5 * SOC.gravity * T;                      // T 秒后落回地面
+  b.y = P.gy + 0.34;
+  SOC.holder = null;
+  SOC.passTarget = target;                           // 标记接球人：球飞到他附近就自动落到他脚下
 }
 // 开球：把球权交给指定一方（进球后给**失球方**），并把开球者挪到中线附近
 function soccerGiveKickoff() {
@@ -6589,7 +6620,8 @@ function updateSoccer(dt) {
         if (inT && !SOC.panelOn && SOC.senseCd <= 0) { SOC.panelOn = true; soccerShowPanel(); }
         else if (!inT && SOC.panelOn) { soccerHidePanel(); }
       } else if (SOC.panelOn) { soccerHidePanel(); }
-      b.mesh.position.set(b.x, P.gy + 0.34, b.z);   // 球静置在场中央
+      b.y = P.gy + 0.34; b.vy = 0;
+      b.mesh.position.set(b.x, b.y, b.z);   // 球静置在场中央
       if (SOC.msgT > 0) SOC.msgT -= dt;
       soccerHud();
       return;
@@ -6630,6 +6662,10 @@ function updateSoccer(dt) {
           p.cd = 1.1;
           try { sfx('hit'); } catch (e) {}
         }
+      } else if (p === SOC.passTarget) {
+        // 【2026-10-16】被传球的人：**主动跑向球的落点去接**（不这样他会按角色站位站着，
+        // 球飞过来没人接，传球就白传了）。带一点提前量，跑向球的前方。
+        tx = b.x + b.vx * 0.22; tz = b.z + b.vz * 0.22; spd = 5.4;
       } else {
         // 球自由 / 己方持球：按角色跑位
         const base = h || { x: b.x, z: b.z };
@@ -6650,7 +6686,20 @@ function updateSoccer(dt) {
 
     // ---- 球权：自由球速度降下来后，离它最近的人控住 ----
     if (!SOC.holder) {
-      if (Math.hypot(b.vx, b.vz) < 3.5) {
+      // ① 传球优先：球飞到接球人附近（且高度已经降下来）就**直接落到他脚下**，
+      //    保证"按传球 = 精准传到队友脚下"，不会出现球从队友身边滚过去的尴尬。
+      if (SOC.passTarget) {
+        const t = SOC.passTarget;
+        const d = Math.hypot(t.x - b.x, t.z - b.z);
+        if (d < 1.6 && b.y < P.gy + 1.7) {
+          SOC.holder = t; SOC.passTarget = null;
+          b.vx = 0; b.vz = 0; b.vy = 0; b.y = P.gy + 0.34;
+          try { sfx('hit'); } catch (e) {}
+        } else if (b.y <= P.gy + 0.42 && Math.hypot(b.vx, b.vz) < 0.8) {
+          SOC.passTarget = null;   // 球已经落地停住、没人接到 → 放弃接球目标
+        }
+      }
+      if (!SOC.holder && Math.hypot(b.vx, b.vz) < 3.5) {
         let best = null, bd = 1.4;
         for (const p of SOC.players) {
           const d = Math.hypot(p.x - b.x, p.z - b.z);
@@ -6684,8 +6733,7 @@ function updateSoccer(dt) {
           if (d2 < bdd) { bdd = d2; best = m; }
         }
         if (best) {
-          const dx = best.x - b.x, dz = best.z - b.z, l = Math.hypot(dx, dz) || 1;
-          soccerKick(b, dx / l, dz / l, Math.min(30, l * 1.5));
+          soccerPass(b, best);      // 高球吊传：飞到空中 → 落到最近队友脚下
           try { sfx('hit'); } catch (e) {}
         } else setHint('传球：附近没有队友');
       } else setHint('传球：要先拿到球（靠近球，或用抢断）');
@@ -6709,26 +6757,62 @@ function updateSoccer(dt) {
       }
     }
 
-    // ---- 球的位置：持球时贴脚，离脚时走物理 ----
+    // ---- 球的位置：持球时贴脚（带滚动），离脚时走物理（含抛物线）----
+    const REST_Y = P.gy + 0.34;                 // 球静止时的高度（半径 0.34）
     if (SOC.holder) {
-      const hh = SOC.holder, hf = hh.mesh.rotation.y;
-      b.x = hh.x + Math.sin(hf) * 0.5;
-      b.z = hh.z + Math.cos(hf) * 0.5;
-      b.vx = 0; b.vz = 0;
-      b.mesh.position.set(b.x, P.gy + 0.34, b.z);
-      b.mesh.rotation.y = hf;
+      const hh = SOC.holder;
+      // 【2026-10-16】玩家的位置/朝向要从 person 本体取 —— 玩家那份足球模型是隐藏的、
+      // 也不会被 AI 更新，用它的 rotation 会导致球贴错方向。
+      const hx = hh.isPlayer ? person.position.x : hh.x;
+      const hz = hh.isPlayer ? person.position.z : hh.z;
+      const hf = hh.isPlayer ? personAngle.v : hh.mesh.rotation.y;
+      b.x = hx + Math.sin(hf) * 0.55;
+      b.z = hz + Math.cos(hf) * 0.55;
+      b.vx = 0; b.vz = 0; b.vy = 0; b.y = REST_Y;
+      // 【2026-10-16·带球滚动】按持球者本帧走了多远，算出球该滚多少角度，
+      // 绕"垂直于运动方向"的水平轴滚 —— 视觉上就是"人走一步、球往前滚一下"。
+      // 原来球只是被焊在脚下、完全不转，看着像粘住了。
+      if (SOC.lastHolder === hh) {
+        const mdx = hx - SOC.lastHx, mdz = hz - SOC.lastHz;
+        const mdist = Math.hypot(mdx, mdz);
+        if (mdist > 0.0008) {
+          if (!_soccerTmp) _soccerTmp = new THREE.Vector3();
+          _soccerTmp.set(mdz, 0, -mdx).normalize();
+          b.mesh.rotateOnWorldAxis(_soccerTmp, mdist / 0.34);
+        }
+      }
+      SOC.lastHolder = hh; SOC.lastHx = hx; SOC.lastHz = hz;
+      b.mesh.position.set(b.x, b.y, b.z);
     } else {
+      // 自由飞行：水平 + 垂直（高球就是一条抛物线）
+      b.vy -= SOC.gravity * dt;
+      b.y += b.vy * dt;
+      // ⚠️ 空气里**不能**加水平摩擦 —— 否则高球会在半空中减速、掉在队友前面。
+      //    摩擦只在贴地滚动时生效。
+      if (b.y <= REST_Y + 0.02) {
+        const fr = Math.pow(0.24, dt);
+        b.vx *= fr; b.vz *= fr;
+        if (Math.abs(b.vx) < 0.08) b.vx = 0;
+        if (Math.abs(b.vz) < 0.08) b.vz = 0;
+      }
       b.x += b.vx * dt; b.z += b.vz * dt;
-      const fr = Math.pow(0.24, dt);
-      b.vx *= fr; b.vz *= fr;
-      if (Math.abs(b.vx) < 0.08) b.vx = 0;
-      if (Math.abs(b.vz) < 0.08) b.vz = 0;
-      b.mesh.position.set(b.x, P.gy + 0.34, b.z);
-      b.mesh.rotation.z -= b.vx * dt * 1.6; b.mesh.rotation.x += b.vz * dt * 1.6;
+      if (b.y <= REST_Y) {
+        b.y = REST_Y;
+        if (b.vy < 0) b.vy = -b.vy * 0.42;              // 落地反弹（会很快衰减）
+        if (Math.abs(b.vy) < 1.4) b.vy = 0;
+      }
+      b.mesh.position.set(b.x, b.y, b.z);
+      // 贴地滚动（空中不滚）
+      const hspd = Math.hypot(b.vx, b.vz);
+      if (b.y <= REST_Y + 0.02 && hspd > 0.02) {
+        if (!_soccerTmp) _soccerTmp = new THREE.Vector3();
+        _soccerTmp.set(b.vz, 0, -b.vx).normalize();
+        b.mesh.rotateOnWorldAxis(_soccerTmp, hspd * dt / 0.34);
+      }
     }
     const inMouth = Math.abs(b.z - P.z) < P.goalZ;
-    if (Math.abs(b.z - P.z) > P.hd) { b.z = P.z + Math.sign(b.z - P.z) * P.hd; b.vz *= -0.62; SOC.holder = null; }
-    if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; SOC.holder = null; }
+    if (Math.abs(b.z - P.z) > P.hd) { b.z = P.z + Math.sign(b.z - P.z) * P.hd; b.vz *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
+    if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
     // ---- 进球：球权交给失球方 ----
     if (Math.abs(b.x - P.x) > P.hw + 0.7 && inMouth) {
       const scorer = (b.x > P.x) ? 0 : 1;                 // 进 +x 门 → 主队(索引0)得分
