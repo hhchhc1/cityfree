@@ -6694,8 +6694,13 @@ function setPlayerJersey(team) {
     person.traverse(o => {
       if (!o.isMesh || !o.material || !o.material.color) return;
       const hex = o.material.color.getHex();
-      if (hex === 0x2980b9) o.material.color.setHex(target);
-      else if (hex === 0x1a3a5c) o.material.color.setHex(dark);
+      // 【2026-10-16·fix19】原来只认"原始蓝 0x2980b9" —— 一旦上一场把外套刷成红色，
+      // 这一场想刷回蓝色时，遍历里**根本找不到 0x2980b9**（早就是红的了），外套就永远卡在红色。
+      // 后果：系统提示"你是蓝方"、身上却穿红衣服 → 玩家以为自己被分到红方，
+      // 于是按传球时看到球飞向蓝方队友，就以为是"传球传给蓝方"（其实代码是对的，是衣服骗了人）。
+      // 现在把**所有队服候选色**（原始蓝 + 两队的亮色）都归一到目标色，随便怎么来回切都能刷对。
+      if (hex === 0x2980b9 || hex === 0x2f6fe0 || hex === 0xe0433a) o.material.color.setHex(target);
+      else if (hex === 0x1a3a5c || hex === 0x7a1c18) o.material.color.setHex(dark);
     });
   } catch (e) {}
 }
@@ -7183,6 +7188,8 @@ function updateSoccer(dt) {
           soccerPass(b, best, me);      // 高球吊传：飞到空中 → 落到最近队友脚下
           if (me) me.anim.kick = 0.001;
           try { sfx('ballKick'); } catch (e) {}
+          // 【fix19】把"传给哪一方"直接浮在头顶 —— 队友还是对手一眼可辨，不用靠球衣颜色猜。
+          floatText('传给' + teamName(best.team), '#bfe8d0');
         } else setHint('传球：附近没有队友');
       } else setHint('传球：要先拿到球（靠近球，或用抢断）');
     }
@@ -7197,7 +7204,10 @@ function updateSoccer(dt) {
           const d = Math.hypot(px2 - b.x, pz2 - b.z);
           if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }
           else setHint('抢断：要靠近球');
-        } else if (hh.team === 2) {
+          // 【2026-10-16·fix19】这里原来写死 `hh.team === 2`（只认红方持球者）——
+          // 玩家被分到红方时，对手是蓝方(1)，于是"抢断"永远抢不到对手，反而只能抢自己队友的球。
+          // 和传球那处是同一个坑（随机分队改造时漏改的硬编码）。
+        } else if (hh.team !== SOC.playerTeam) {
           const d = Math.hypot(px2 - hh.x, pz2 - hh.z);
           if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }
           else setHint('抢断：要贴近持球者');
@@ -7411,11 +7421,14 @@ function soccerHud() {
   }
   // 【2026-10-16】不再叫主队/客队，改成 蓝方 / 红方；并明确标出玩家自己是哪一方
   const meName = teamName(SOC.playerTeam);
+  // 【fix19】"你是哪一方"原来是一行小灰字，很容易被忽略（衣服颜色一错，玩家就彻底分不清敌我）。
+  // 现在用**该队的颜色 + 加粗 + 方括号**标出来，跟比分一样醒目。
+  const meColor = (SOC.playerTeam === 1) ? '#7fb3ff' : '#ff8f85';
   SOC.hud.innerHTML =
     '<span style="color:#7fb3ff">蓝方 ' + SOC.score[0] + '</span>' +
     '<span style="color:#889"> : </span>' +
     '<span style="color:#ff8f85">' + SOC.score[1] + ' 红方</span>' +
-    '<span style="color:#ffe066;font-weight:normal;font-size:12px">　（你是' + meName + '）</span>' +
+    '<span style="color:' + meColor + ';font-weight:bold;font-size:13px">　【你是' + meName + '】</span>' +
     '<span style="color:#a7c7b5;font-weight:normal;font-size:12px">　第' + SOC.round + '局　' + el + 's　(局分 ' + SOC.wins[0] + '-' + SOC.wins[1] + ')' + (SOC.sudden ? '　加时' : '') + '</span>' +
     gkTxt +
     (SOC.msgT > 0 ? '<div style="color:#ffe066;font-size:13px;margin-top:3px">' + SOC.msg + '</div>' : '');
