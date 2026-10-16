@@ -6391,6 +6391,12 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     //   gravity 是球的"重力加速度"（单位/秒²），只用在高球飞行上，取值偏大让球落地干脆。
     P: P, ball: { x: P.x, z: P.z, y: P.gy + 0.34, vx: 0, vz: 0, vy: 0, mesh: bm },
     gravity: 18,
+    // 【2026-10-16·fix17】用户反馈"足球场球员移动速度太快了，正常速度都很快，更别说疾跑"。
+    // spdScale 是**足球场专属**的整体降速系数，同时作用于三处，保证"人 vs 球"的手感比例不变：
+    //   ① 玩家移动速度   ② AI 球员移动速度   ③ 射门球速（否则人慢了、球还是原速，像子弹一样飞出去）
+    // 只在足球场生效（场外一律乘 1），不影响南岛其他任何玩法。
+    // 传球**不乘**这个系数：传球是"高球吊传"，滞空时间与落点绑定，强行压低球速会让弧线高到飞出视野。
+    spdScale: 0.45,
     players: [], active: false, phase: 'idle', score: [0, 0], wins: [0, 0], round: 0,
     t: 0, roundT: 0, sudden: false, msg: '', msgT: 0, kickCd: 0, panelOn: false, senseCd: 0,
     passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
@@ -6791,7 +6797,8 @@ function soccerEnd(playerWon) {
 //（否则球还没离脚就被他重新"控住"，配合"碰到人就持球"的新规则会变成永远踢不出去）。
 function soccerKick(b, dx, dz, pw, kicker) {
   if (!SOC) return;
-  b.vx = dx * pw; b.vz = dz * pw;
+  // 【fix17】射门球速也乘足球场降速系数 —— 否则球员慢了、球还是原速，看上去像子弹射出去。
+  b.vx = dx * pw * SOC.spdScale; b.vz = dz * pw * SOC.spdScale;
   b.y = SOC.P.gy + 0.34; b.vy = 0;
   SOC.holder = null; SOC.passTarget = null;
   SOC.lastKicker = kicker || null; SOC.pickCd = 0.22;
@@ -7036,11 +7043,12 @@ function updateSoccer(dt) {
         p.spT = SOC.spMax;
         try { sfxNear('sprint', p.x, p.z, 34); } catch (e) {}
       }
-      const pSpd = spd * (p.spT > 0 ? 1.7 : 1);      // 疾跑中跑速 ×1.7
+      // 【fix17】再乘足球场整体降速系数 —— AI 和玩家用同一个 spdScale，两边相对快慢不变，只是整体节奏放慢。
+      const pSpd = spd * (p.spT > 0 ? 1.7 : 1) * SOC.spdScale;
       if (dd > 0.35) { const st = Math.min(pSpd * dt, dd); p.x += dx / dd * st; p.z += dz / dd * st; }
       const fx = isHolder ? dx : (b.x - p.x), fz = isHolder ? dz : (b.z - p.z);
       if (Math.hypot(fx, fz) > 0.1) p.mesh.rotation.y = Math.atan2(fx, fz);
-      p.phase += dt * (p.spT > 0 ? 13 : 9);
+      p.phase += dt * (p.spT > 0 ? 13 : 9) * 0.7;   // 【fix17】降速后步频同步放慢
       p.mesh.position.set(p.x, terrainHeight(p.x, p.z), p.z);
       // 疾跑时用 'run' 跑姿；anim.kick 走 animateHuman 内置的踢腿姿态
       animateHuman(p.mesh, p.phase, 0, (p.spT > 0 ? 'run' : 'fist'), dd > 0.35, undefined, p.anim.kick);
@@ -19930,14 +19938,16 @@ function update(dt) {
       // 所以这里把全局疾跑（双击 W / 疾跑键）关掉，两套机制不叠加，避免"双重加速"。
       const inSoccer = !!(SOC && SOC.active);
       const soccerBoost = (inSoccer && SOC.spT > 0) ? 1.7 : 1;   // 足球疾跑：跑速 ×1.7
+      // 【fix17】足球场整体降速（用户："正常速度都很快，更别说疾跑"）。场外 soccerSlow = 1，完全不受影响。
+      const soccerSlow = inSoccer ? SOC.spdScale : 1;
       const wantSprint = (sprinting || sprintHeld) && !inSoccer;   // 双击 W 或按住疾跑键快跑
       const moving = (mx !== 0 || mz !== 0);
       const canSprint = wantSprint && player.stamina > 0;   // 体力耗尽自动降回走路
       if (mx !== 0 || mz !== 0) {
         const len = Math.hypot(mx, mz);
         const nx = mx / len, nz = mz / len;
-        const spd = (canSprint ? 11 : 6) * player.runSpeed * soccerBoost;   // 前进/后退速度（跑鞋加成）
-        const strafeSpd = 6 * soccerBoost;                     // 左右横移速度（固定，不随跑鞋变快）
+        const spd = (canSprint ? 11 : 6) * player.runSpeed * soccerBoost * soccerSlow;   // 前进/后退速度（跑鞋加成）
+        const strafeSpd = 6 * soccerBoost * soccerSlow;        // 左右横移速度（固定，不随跑鞋变快）
         // 【fix15·2026-10-13 用户要求】后退就是后退：移动方向始终跟相机（拉后 = 朝相机方向走），
         // 人物身子会倒过来面朝移动方向，但相机角度一动不动——不再有"后退 0.7 秒视角自动翻转"。
         // 想转视角就滑中间屏幕（lookId 滑动直接改 camYaw/camPitch，走路时同样有效）。
@@ -19945,7 +19955,8 @@ function update(dt) {
         const vz = fwd.z * nz * spd + right.z * nx * strafeSpd;
         person.position.x += vx * dt; person.position.z += vz * dt;
         personAngle.v = approachAngle(personAngle.v, Math.atan2(vx, vz), 6 * dt);   // 平滑转向，避免瞬间甩视角
-        walkPhase += dt * ((canSprint || soccerBoost > 1) ? 13 : 9);   // 疾跑时步频也加快
+        // 疾跑时步频也加快；【fix17】足球场降速后步频同步放慢，否则会变成"腿摆得飞快、人却慢慢挪"。
+        walkPhase += dt * ((canSprint || soccerBoost > 1) ? 13 : 9) * (inSoccer ? 0.7 : 1);
       } else {
         walkPhase = 0;
       }
