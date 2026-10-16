@@ -824,11 +824,12 @@ const ISLAND_X = 0, ISLAND_Z = HALF - 30, ISLAND_R = 85, ISLAND_WALK_R = 90;
 // 南岛 3v3 足球场参数（2026-10-15 加入）。岛只有半径 85，放不下标准球场，
 // 所以用 20×14 的小场（3v3 够用）；位置在西北街区内部，已避开环岛路(半径45)与 3 纵 3 横主路。
 // 常量放这里是因为 terrainHeight 要压平这块地，足球模块也要引用它。
-// 【2026-10-16·球场扩大】用户要求"球场扩大一点"。
-// 原来是 20×14，扩大被三面夹击：西边 x=-40 主路、东边 x=0 主路、北边 z=470 主路，
-// 再加半径 45 的环岛路（内圈 40.8）。用脚本穷举可行域后取 23×18（面积 414，比原来的 280 大 48%）。
-// 四角离岛心 40.08 < 40.8，草皮离各条主路都还有 1.5m 以上。
-const PITCH = { x: -18, z: 454, hw: 11.5, hd: 9, gy: 1.55, goalZ: 3.0 };
+// 【2026-10-16·球场再扩大】用户要求"再大一点"。
+// 上一轮按**逻辑禁区**（环岛路判定带 40.8~49.2）算，只敢到 23×18。
+// 但环岛路**实际铺装**只有 7 米宽（半径 41.25~48.75，含路缘），所以草皮能推到 40.05 还没碰到路。
+// 重新穷举后取 24×20（面积 480，比 23×18 的 414 再大 16%，比最早的 20×14 大 71%）。
+// 最远草皮角离岛心 40.05 < 41.25（环岛路铺装内缘），离各条主路也都还有 0.5m 以上。
+const PITCH = { x: -17.25, z: 454.75, hw: 12, hd: 10, gy: 1.55, goalZ: 3.0 };
 const BRIDGE_HALF_WIDTH = 6, BRIDGE_START_Z = 160, BRIDGE_DECK_START_Z = 210;
 const BRIDGE_END_Z = ISLAND_Z - ISLAND_R, BRIDGE_RAMP_END_Z = BRIDGE_END_Z + 50, BRIDGE_LIMIT_Z = 520;
 const OCEAN_HALF = HALF * 1.25, WORLD_LIMIT_X = OCEAN_HALF - 10;
@@ -6286,7 +6287,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   }
 })();
 
-// ========== 南岛足球场：3v3 三局两胜（2026-10-15 加入）==========
+// ========== 南岛足球场：3v3 五局三胜（2026-10-15 加入，2026-10-16 改成五局三胜）==========
 // 从 fix42 版本移植。岛只有半径 85，放不下标准球场，所以用 20×14 的小场（3v3 够用），
 // 位置选在西北街区内部 —— 已避开环岛路(半径45)与 3 纵 3 横主路，地形也已压平到 PITCH.gy。
 // AI 思路：每队"离球最近的人追球，其余按角色站位"，拿球后朝对方球门射 / 传给前面队友。
@@ -6395,8 +6396,13 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
     // 【2026-10-16】足球专用"疾跑"：开启后 spMax 秒内跑速 ×1.7，用完进入 spCdMax 秒冷却
     sprintReq: 0, spT: 0, spCd: 0, spMax: 5, spCdMax: 15,
-    goalT: 0, goalTeam: 0,                                 // 进球庆祝倒计时 / 这球是哪队进的（1 主 2 客）
+    goalT: 0, goalTeam: 0,                                 // 进球庆祝倒计时 / 这球是哪队进的（1 蓝 2 红）
     holder: null, kickoffTeam: 1,                          // 持球者 / 开球方
+    // 【2026-10-16】每次开赛随机决定玩家是蓝方(1)还是红方(2)，不再固定"主队/客队"
+    playerTeam: 1, dirArrow: null,
+    // 【2026-10-16】球在飞行途中碰到人 → 那个人立刻持球。
+    // pickCd 是出脚后的保护时间：这段时间里**踢球的那个人**不能自己把球捡回来。
+    pickCd: 0, lastKicker: null,
     passTarget: null,                                      // 传球的目标队友（球飞到附近自动落到他脚下）
     lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
     cd: 0, cdShown: 0, cdEl: null,                         // 开球倒计时（秒）/ 已显示到第几秒 / 大数字元素
@@ -6414,10 +6420,10 @@ function buildSoccerUi() {
     'font:14px/1.6 sans-serif;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.6)');
   panel.innerHTML =
     '<div style="font-size:20px;font-weight:bold;color:#8effc0;margin-bottom:4px">南岛足球场</div>' +
-    '<div style="color:#bfe8d0;margin-bottom:6px">4 v 4（含门将）· <b style="color:#8effc0">一球定一局</b> · 三局两胜</div>' +
+    '<div style="color:#bfe8d0;margin-bottom:6px">4 v 4（含门将）· <b style="color:#8effc0">一球定一局</b> · 五局三胜</div>' +
     '<div style="color:#ffe066;margin-bottom:4px">入场费 100 金币 · 夺冠奖金 500 金币</div>' +
     '<div id="soccerGold" style="color:#cfe8d8;font-size:12px;margin-bottom:6px"></div>' +
-    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局只有进球才结束，下一局有 3 秒准备。门将能扑正中的球，<b style="color:#bfe8d0">打两个门柱附近</b>，或等他扑救后 15 秒的体力恢复期再射。<br>「疾跑」开启后 5 秒内跑得更快，用完冷却 15 秒（每个球员都能用）。</div>' +
+    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局只有进球才结束，下一局有 3 秒准备。<b style="color:#bfe8d0">开赛前会随机决定你是蓝方还是红方</b>，并用地面箭头标出你的进攻方向。<br>门将能扑正中的球，打两个门柱附近，或等他扑救后 15 秒的体力恢复期再射。「疾跑」5 秒加速 / 15 秒冷却，每个球员都能用。</div>' +
     '<div style="display:flex;gap:10px">' +
     '<button id="soccerGo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:linear-gradient(180deg,#5fe89a,#1f9a55);color:#fff;font:bold 16px sans-serif;cursor:pointer">开赛（100💰）</button>' +
     '<button id="soccerNo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:#2a3a30;color:#cfe8d8;font:bold 16px sans-serif;cursor:pointer">取消</button>' +
@@ -6553,7 +6559,7 @@ function makeSoccerNumber(num, textColor) {
 function soccerNewPlayer(team, x, z, isPlayer, role, num) {
   const isGk = (role === 3);
   // 【2026-10-16】门将球衣换成**完全不同的颜色**，一眼和本队球员分开：
-  //   主队门将 = 亮黄，客队门将 = 紫；球员仍是 主队蓝 / 客队红。
+  //   蓝方门将 = 亮黄，红方门将 = 紫；球员仍是 蓝方蓝 / 红方红。
   const cloth = isGk ? (team === 1 ? 0xffd400 : 0x8e44ad)
                      : (team === 1 ? 0x2f6fe0 : 0xe0433a);
   const g = makeHuman(cloth, false, { clothColor: cloth });
@@ -6667,22 +6673,73 @@ function soccerResetBall() {
   SOC.holder = null; SOC.passTarget = null; SOC.lastHolder = null;
 }
 
+// 【2026-10-16】队名统一叫"蓝方 / 红方"（用户要求：不要再叫主队/客队）
+function teamName(t) { return t === 1 ? '蓝方' : '红方'; }
+// 某队进攻的球门 x：蓝方(1) 打 +x，红方(2) 打 -x
+function teamAttackGoalX(t) { const P = SOC.P; return t === 1 ? (P.x + P.hw) : (P.x - P.hw); }
+
+// 【2026-10-16】玩家这次分到哪一方，就把主角模型的蓝色外套换成那一方的颜色 ——
+// 否则"你是红方"但身上还是蓝夹克，看着很矛盾。
+// makePlayer() 只造了 person 这一个模型（材质是它独有的），所以直接改颜色不会影响别人。
+function setPlayerJersey(team) {
+  const target = (team === 1) ? 0x2f6fe0 : 0xe0433a;   // 蓝方蓝 / 红方红
+  const dark = (team === 1) ? 0x1a3a5c : 0x7a1c18;
+  try {
+    person.traverse(o => {
+      if (!o.isMesh || !o.material || !o.material.color) return;
+      const hex = o.material.color.getHex();
+      if (hex === 0x2980b9) o.material.color.setHex(target);
+      else if (hex === 0x1a3a5c) o.material.color.setHex(dark);
+    });
+  } catch (e) {}
+}
+
+// 【2026-10-16】进攻方向箭头：一大块贴地的箭头，摆在玩家半场，指向玩家进攻的球门。
+// 每局开赛前的 3 秒准备时间里显示（用户要求"每次比赛之前说明自己的进攻方向"）。
+function makeDirArrow() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.85,
+                                            side: THREE.DoubleSide, depthWrite: false });
+  const shaft = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.3), mat);
+  shaft.position.x = -1.9; g.add(shaft);
+  const head = new THREE.Mesh(new THREE.CircleGeometry(1.7, 3), mat);
+  head.rotation.z = -Math.PI / 2; head.position.x = 1.9; g.add(head);
+  g.rotation.x = -Math.PI / 2;          // 平铺在地面上
+  g.renderOrder = 4;
+  g.visible = false;
+  scene.add(g);
+  return g;
+}
+
 function soccerBegin() {
   const P = SOC.P;
   SOC.players = [];
+  // 【2026-10-16】每次开赛**随机**决定玩家是蓝方还是红方（用户要求）
+  SOC.playerTeam = Math.random() < 0.5 ? 1 : 2;
+  const mt = SOC.playerTeam === 1 ? 2 : 1;      // 对手
+  setPlayerJersey(SOC.playerTeam);              // 主角外套跟着换成这一方的颜色
   // 号码：球员 1 / 2 / 3，门将 0（每队一套，靠球衣颜色区分敌我）
-  SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true, 0, 1));        // 玩家（主队前锋）1 号
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false, 1, 2));  // 主队中场 2 号
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false, 2, 3));  // 主队后卫 3 号
-  // 【2026-10-16】固定门将（每队 1 个，role 3）：站在自己球门线前方 1.9m，只横向跟球，从不追球。
-  SOC.players.push(soccerNewPlayer(1, P.x - P.hw + 1.9, P.z, false, 3, 0));   // 主队门将 0 号
-  SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false, 0, 1));       // 客队前锋 1 号
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false, 1, 2));  // 客队中场 2 号
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2, 3));  // 客队后卫 3 号
-  SOC.players.push(soccerNewPlayer(2, P.x + P.hw - 1.9, P.z, false, 3, 0));   // 客队门将 0 号
+  // 玩家所在的那一队，玩家自己站前锋位；另一队三个位置都交给 AI。
+  const put = (team, isPlayerFront) => {
+    const sgn = (team === 1) ? -1 : 1;          // 蓝方在 -x 半场，红方在 +x 半场
+    SOC.players.push(soccerNewPlayer(team, P.x + sgn * 6, P.z, isPlayerFront, 0, 1));       // 前锋 1 号
+    SOC.players.push(soccerNewPlayer(team, P.x + sgn * 10, P.z - 5, false, 1, 2));          // 中场 2 号
+    SOC.players.push(soccerNewPlayer(team, P.x + sgn * 10, P.z + 5, false, 2, 3));          // 后卫 3 号
+    // 固定门将（role 3）：站在自己球门线前方 1.9m，只横向跟球，从不追球
+    SOC.players.push(soccerNewPlayer(team, P.x + sgn * (P.hw - 1.9), P.z, false, 3, 0));    // 门将 0 号
+  };
+  put(SOC.playerTeam, true);
+  put(mt, false);
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
-  SOC.kickoffTeam = 1;                       // 第 1 局：主队（玩家方）开球
+  SOC.kickoffTeam = SOC.playerTeam;          // 第 1 局：玩家所在的队开球
+  SOC.pickCd = 0; SOC.lastKicker = null;
+  // 进攻方向箭头
+  if (!SOC.dirArrow) SOC.dirArrow = makeDirArrow();
+  const P2 = SOC.P, inw = (SOC.playerTeam === 1) ? 1 : -1;
+  SOC.dirArrow.position.set(P2.x + inw * (P2.hw * 0.45), P2.gy + 0.2, P2.z);
+  SOC.dirArrow.rotation.z = (SOC.playerTeam === 1) ? 0 : Math.PI;   // 红方进攻方向相反
+  SOC.dirArrow.visible = true;
   soccerResetBall();
   soccerStartCountdown();                    // 【2026-10-16】开局先来 3 秒倒计时
   if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
@@ -6692,8 +6749,8 @@ function soccerBegin() {
   SOC.tackleCd = 0;
   SOC.spT = 0; SOC.spCd = 0;   // 疾跑：每场从"就绪"开始
   document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
-  soccerMsg('第 1 局 · 准备', 3.2);
-  setHint('足球：一球定一局 · 踢球=射门 · 传球=高球吊传 · 抢断=铲球 · 疾跑=5秒加速 · 门将扑正中的球，打角度或趁他体力恢复时射');
+  soccerMsg('第 1 局 · 你是' + teamName(SOC.playerTeam) + '　进攻方向看箭头', 3.2);
+  setHint('足球：你是' + teamName(SOC.playerTeam) + '，朝箭头方向进攻 · 一球定一局 · 踢球=射门 · 传球=高球吊传 · 抢断=铲球 · 疾跑=5秒加速');
 }
 
 function soccerEnd(playerWon) {
@@ -6707,6 +6764,9 @@ function soccerEnd(playerWon) {
     SOC.active = false; SOC.phase = 'idle';
     SOC.cd = 0; if (SOC.cdEl) SOC.cdEl.style.display = 'none';   // 收掉倒计时大数字
     SOC.spT = 0; SOC.spCd = 0; SOC.goalT = 0; SOC.goalTeam = 0;
+    SOC.pickCd = 0; SOC.lastKicker = null;
+    if (SOC.dirArrow) SOC.dirArrow.visible = false;              // 收掉进攻方向箭头
+    setPlayerJersey(1);                                          // 外套换回原本的蓝色
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
     if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
@@ -6727,16 +6787,19 @@ function soccerEnd(playerWon) {
 }
 
 // 出脚（射门）：球贴地飞出，清掉持球者与传球目标
-function soccerKick(b, dx, dz, pw) {
+// 【2026-10-16】多一个 kicker 参数：记录是谁踢的，出脚后 0.22 秒内**他自己不能捡回来**
+//（否则球还没离脚就被他重新"控住"，配合"碰到人就持球"的新规则会变成永远踢不出去）。
+function soccerKick(b, dx, dz, pw, kicker) {
   if (!SOC) return;
   b.vx = dx * pw; b.vz = dz * pw;
   b.y = SOC.P.gy + 0.34; b.vy = 0;
   SOC.holder = null; SOC.passTarget = null;
+  SOC.lastKicker = kicker || null; SOC.pickCd = 0.22;
 }
 // 【2026-10-16·传球改成"高球吊传"】按用户的描述：球要先飞到高空，再落到队友脚下。
 // 做法：按水平距离 L 反推飞行时间 T，再取 vy = ½·g·T —— 这样 T 秒后球正好落回地面高度，
 //       水平方向 vx = dx/T，落点就是队友脚下。飞行途中会做抛物线运动（见 updateSoccer 的球物理）。
-function soccerPass(b, target) {
+function soccerPass(b, target, kicker) {
   if (!SOC || !target) return;
   const P = SOC.P;
   const dx = target.x - b.x, dz = target.z - b.z;
@@ -6747,6 +6810,7 @@ function soccerPass(b, target) {
   b.y = P.gy + 0.34;
   SOC.holder = null;
   SOC.passTarget = target;                           // 标记接球人：球飞到他附近就自动落到他脚下
+  SOC.lastKicker = kicker || null; SOC.pickCd = 0.22;
 }
 // 开球：把球权交给指定一方（进球后给**失球方**），并把开球者挪到中线附近
 function soccerGiveKickoff() {
@@ -6779,22 +6843,25 @@ function soccerStartCountdown() {
   SOC.cd = 3.0; SOC.cdShown = 0;
   if (SOC.cdEl) { SOC.cdEl.style.display = 'block'; SOC.cdEl.textContent = '3'; }
   SOC.cdShown = 3;
+  // 【2026-10-16】每局准备时间都把"进攻方向箭头"亮出来（用户要求：比赛前说明进攻方向）
+  if (SOC.dirArrow) SOC.dirArrow.visible = true;
 }
 
-// 【2026-10-16】一局结束（这一局谁进球谁赢）→ 结算局分；没到两胜就进下一局的 3 秒准备。
+// 【2026-10-16】一局结束（这一局谁进球谁赢）→ 结算局分；没到三胜就进下一局的 3 秒准备。
 // 由进球庆祝结束时调用（见 updateSoccer 的庆祝分支）。
 function soccerResolveRound() {
   if (!SOC) return;
-  const t = SOC.goalTeam || 1;                  // 这一局的胜方（1 主队 / 2 客队）
+  const t = SOC.goalTeam || 1;                  // 这一局的胜方（1 蓝方 / 2 红方）
   SOC.wins[t - 1]++;
-  if (SOC.wins[t - 1] >= 2) { soccerEnd(t === 1); return; }   // 三局两胜
+  // 【2026-10-16】用户要求：改成**五局三胜**
+  if (SOC.wins[t - 1] >= 3) { soccerEnd(t === SOC.playerTeam); return; }
   SOC.round++;
   SOC.score = [0, 0];
   SOC.roundT = 0; SOC.sudden = false;
   SOC.kickoffTeam = (t === 1) ? 2 : 1;          // 上一局的**败方**开球（胜方不拿球）
   soccerResetBall();
   soccerStartCountdown();                       // 下一局 3 秒准备
-  soccerMsg('第 ' + SOC.round + ' 局 · ' + (SOC.kickoffTeam === 1 ? '主队' : '客队') + '开球', 3.2);
+  soccerMsg('第 ' + SOC.round + ' 局 · ' + teamName(SOC.kickoffTeam) + '开球', 3.2);
 }
 
 function updateSoccer(dt) {
@@ -6834,6 +6901,7 @@ function updateSoccer(dt) {
       if (SOC.cd <= 0) {
         SOC.cd = 0;
         if (SOC.cdEl) SOC.cdEl.style.display = 'none';
+        if (SOC.dirArrow) SOC.dirArrow.visible = false;   // 开球了，收起进攻方向箭头
         soccerMsg('开始！', 1.2);
       }
       if (SOC.holder) {
@@ -6917,7 +6985,7 @@ function updateSoccer(dt) {
           const fgx = (p.team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 往对面半场开
           const dx2 = fgx - b.x, dz2 = P.z - b.z, l2 = Math.hypot(dx2, dz2) || 1;
           const na2 = Math.atan2(dx2 / l2, dz2 / l2) + (Math.random() - 0.5) * 0.5;
-          soccerKick(b, Math.sin(na2), Math.cos(na2), 20);
+          soccerKick(b, Math.sin(na2), Math.cos(na2), 20, p);
           p.anim.kick = 0.001;                                    // 大脚开球动作
           p.cd = 1.4;
           try { sfxNear('ballKick', p.x, p.z, 40); } catch (e) {}
@@ -6933,7 +7001,7 @@ function updateSoccer(dt) {
           const aimZ = P.z + (Math.random() * 2 - 1) * P.goalZ * 0.85;
           const dx = myGoalX - p.x, dz = aimZ - p.z, l = Math.hypot(dx, dz) || 1;
           const na = Math.atan2(dx / l, dz / l) + (Math.random() - 0.5) * 0.16;
-          soccerKick(b, Math.sin(na), Math.cos(na), 15);
+          soccerKick(b, Math.sin(na), Math.cos(na), 15, p);
           p.anim.kick = 0.001;                                    // 射门抬腿动作
           p.cd = 1.0;
           try { sfxNear('ballKick', p.x, p.z, 40); } catch (e) {}
@@ -7001,7 +7069,8 @@ function updateSoccer(dt) {
       p.numMesh.quaternion.copy(camera.quaternion);
     }
 
-    // ---- 球权：自由球速度降下来后，离它最近的人控住 ----
+    // ---- 球权 ----
+    if (SOC.pickCd > 0) SOC.pickCd -= dt;
     if (!SOC.holder) {
       // ① 传球优先：球飞到接球人附近（且高度已经降下来）就**直接落到他脚下**，
       //    保证"按传球 = 精准传到队友脚下"，不会出现球从队友身边滚过去的尴尬。
@@ -7011,11 +7080,31 @@ function updateSoccer(dt) {
         if (d < 1.6 && b.y < P.gy + 1.7) {
           SOC.holder = t; SOC.passTarget = null;
           b.vx = 0; b.vz = 0; b.vy = 0; b.y = P.gy + 0.34;
-          try { sfx('hit'); } catch (e) {}
+          try { sfxNear('ballKick', t.x, t.z, 30); } catch (e) {}
         } else if (b.y <= P.gy + 0.42 && Math.hypot(b.vx, b.vz) < 0.8) {
           SOC.passTarget = null;   // 球已经落地停住、没人接到 → 放弃接球目标
         }
       }
+      // ② 【2026-10-16·用户要求】球在飞行/滚动途中**碰到谁，谁就立刻持球**。
+      //    不再要求"球速降下来"——只要球在人体高度内、水平距离够近就算碰到。
+      //    ⚠️ 门将（role 3）不参与这条：否则他站在球门正中会把每一脚射门都"吸"下来，
+      //       正中球由下面的 keeperBlock 专门处理（有体力限制），打角度才进得去。
+      //    ⚠️ 出脚后 0.22 秒内，**踢球的那个人**不能自己捡回来（否则球没离脚就又被控住）。
+      if (!SOC.holder && b.y < P.gy + 2.2) {
+        let best = null, bd = 1.15;
+        for (const p of SOC.players) {
+          if (p.role === 3) continue;
+          if (p === SOC.lastKicker && SOC.pickCd > 0) continue;
+          const d = Math.hypot(p.x - b.x, p.z - b.z);
+          if (d < bd) { bd = d; best = p; }
+        }
+        if (best) {
+          SOC.holder = best; SOC.passTarget = null;
+          b.vx = 0; b.vz = 0; b.vy = 0; b.y = P.gy + 0.34;
+          try { sfxNear('ballKick', best.x, best.z, 26); } catch (e) {}
+        }
+      }
+      // ③ 兜底：慢速球滚到谁脚下（含门将）→ 那个人控住
       if (!SOC.holder && Math.hypot(b.vx, b.vz) < 3.5) {
         let best = null, bd = 1.4;
         for (const p of SOC.players) {
@@ -7033,7 +7122,7 @@ function updateSoccer(dt) {
     // 射门：踢球键 / 攻击键 / 左键
     if (SOC.kickCd <= 0 && (atkHeld || SOC.kickReq)) {
       if (iHold) {
-        soccerKick(b, Math.sin(personAngle.v), Math.cos(personAngle.v), 16);
+        soccerKick(b, Math.sin(personAngle.v), Math.cos(personAngle.v), 16, me);
         if (me) me.anim.kick = 0.001;                  // 抬腿射门动作
         SOC.kickCd = 0.5;
         try { sfx('ballKick'); } catch (e) {}
@@ -7051,7 +7140,7 @@ function updateSoccer(dt) {
           if (d2 < bdd) { bdd = d2; best = m; }
         }
         if (best) {
-          soccerPass(b, best);      // 高球吊传：飞到空中 → 落到最近队友脚下
+          soccerPass(b, best, me);      // 高球吊传：飞到空中 → 落到最近队友脚下
           if (me) me.anim.kick = 0.001;
           try { sfx('ballKick'); } catch (e) {}
         } else setHint('传球：附近没有队友');
@@ -7201,17 +7290,18 @@ function updateSoccer(dt) {
     if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
     // ---- 进球：**一球一局**（用户 2026-10-16 要求）→ 直接进入庆祝，庆祝完结算这一局 ----
     if (Math.abs(b.x - P.x) > P.hw + 0.7 && inMouth) {
-      const scorer = (b.x > P.x) ? 0 : 1;                 // 进 +x 门 → 主队(索引0)得分
+      const scorer = (b.x > P.x) ? 0 : 1;                 // 进 +x 门 → 蓝方(索引0)得分
       SOC.score[scorer]++;
-      SOC.goalTeam = scorer + 1;                          // 1 = 主队  2 = 客队
+      SOC.goalTeam = scorer + 1;                          // 1 = 蓝方  2 = 红方
       SOC.goalT = 2.8;                                    // 庆祝时长（秒）
       SOC.msgT = 0;                                       // 清掉旧提示，别盖住进球横幅
       b.vx = 0; b.vz = 0; b.vy = 0; b.y = REST_Y;
       b.mesh.position.set(b.x, b.y, b.z);
       SOC.holder = null; SOC.passTarget = null;
+      SOC.pickCd = 0; SOC.lastKicker = null;
       try { sfx('goal'); } catch (e) {}                   // 进球欢呼（不论哪边进都放）
-      floatText(scorer === 0 ? 'GOAL！主队进球' : 'GOAL！客队进球', '#ffe066');
-      soccerMsg((scorer === 0 ? '主队进球！' : '客队进球！') + '  ' + SOC.score[0] + ' : ' + SOC.score[1], 2.8);
+      floatText('GOAL！' + teamName(SOC.goalTeam) + '进球', '#ffe066');
+      soccerMsg(teamName(SOC.goalTeam) + '进球！  ' + SOC.score[0] + ' : ' + SOC.score[1], 2.8);
       soccerHud();
       return;                                             // 本帧到此为止，下一帧走庆祝分支
     }
@@ -7277,12 +7367,15 @@ function soccerHud() {
   for (const p of SOC.players) {
     if (p.role !== 3 || p.gkCd <= 0) continue;
     gkTxt += '<div style="color:#ffd36e;font-size:12px;font-weight:normal;margin-top:2px">' +
-      (p.team === 1 ? '我方' : '对方') + '门将体力恢复中 ' + p.gkCd.toFixed(1) + 's（这段时间从任意角度都能射进）</div>';
+      (p.team === SOC.playerTeam ? '我方' : '对方') + '门将体力恢复中 ' + p.gkCd.toFixed(1) + 's（这段时间从任意角度都能射进）</div>';
   }
+  // 【2026-10-16】不再叫主队/客队，改成 蓝方 / 红方；并明确标出玩家自己是哪一方
+  const meName = teamName(SOC.playerTeam);
   SOC.hud.innerHTML =
-    '<span style="color:#7fb3ff">主队 ' + SOC.score[0] + '</span>' +
+    '<span style="color:#7fb3ff">蓝方 ' + SOC.score[0] + '</span>' +
     '<span style="color:#889"> : </span>' +
-    '<span style="color:#ff8f85">' + SOC.score[1] + ' 客队</span>' +
+    '<span style="color:#ff8f85">' + SOC.score[1] + ' 红方</span>' +
+    '<span style="color:#ffe066;font-weight:normal;font-size:12px">　（你是' + meName + '）</span>' +
     '<span style="color:#a7c7b5;font-weight:normal;font-size:12px">　第' + SOC.round + '局　' + el + 's　(局分 ' + SOC.wins[0] + '-' + SOC.wins[1] + ')' + (SOC.sudden ? '　加时' : '') + '</span>' +
     gkTxt +
     (SOC.msgT > 0 ? '<div style="color:#ffe066;font-size:13px;margin-top:3px">' + SOC.msg + '</div>' : '');
