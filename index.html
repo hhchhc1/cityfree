@@ -6393,11 +6393,13 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     players: [], active: false, phase: 'idle', score: [0, 0], wins: [0, 0], round: 0,
     t: 0, roundT: 0, sudden: false, msg: '', msgT: 0, kickCd: 0, panelOn: false, senseCd: 0,
     passReq: 0, tackleReq: 0, tackleCd: 0, tackleMax: 5,   // 抢断冷却 5 秒
+    // 【2026-10-16】足球专用"疾跑"：开启后 spMax 秒内跑速 ×1.7，用完进入 spCdMax 秒冷却
+    sprintReq: 0, spT: 0, spCd: 0, spMax: 5, spCdMax: 15,
     holder: null, kickoffTeam: 1,                          // 持球者 / 开球方
     passTarget: null,                                      // 传球的目标队友（球飞到附近自动落到他脚下）
     lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
     cd: 0, cdShown: 0, cdEl: null,                         // 开球倒计时（秒）/ 已显示到第几秒 / 大数字元素
-    gkRecover: 5.0,                                        // 【2026-10-16】门将扑救后的"体力恢复"秒数（期间扑不动）
+    gkRecover: 15.0,                                       // 【2026-10-16】门将扑救后的"体力恢复"秒数（用户要求 15 秒）
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6414,7 +6416,7 @@ function buildSoccerUi() {
     '<div style="color:#bfe8d0;margin-bottom:6px">4 v 4（含门将）· 三局两胜</div>' +
     '<div style="color:#ffe066;margin-bottom:4px">入场费 100 金币 · 夺冠奖金 500 金币</div>' +
     '<div id="soccerGold" style="color:#cfe8d8;font-size:12px;margin-bottom:6px"></div>' +
-    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局先到 2 球或 60 秒结束。门将能扑正中的球，<b style="color:#bfe8d0">打两个门柱附近</b>，或等他扑救后的体力恢复期再射。</div>' +
+    '<div style="color:#9fc7b0;font-size:12px;margin-bottom:12px">每局先到 2 球或 60 秒结束。门将能扑正中的球，<b style="color:#bfe8d0">打两个门柱附近</b>，或等他扑救后 15 秒的体力恢复期再射。<br>「疾跑」开启后 5 秒内跑得更快，用完冷却 15 秒。</div>' +
     '<div style="display:flex;gap:10px">' +
     '<button id="soccerGo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:linear-gradient(180deg,#5fe89a,#1f9a55);color:#fff;font:bold 16px sans-serif;cursor:pointer">开赛（100💰）</button>' +
     '<button id="soccerNo" style="flex:1;padding:12px 0;border:none;border-radius:10px;background:#2a3a30;color:#cfe8d8;font:bold 16px sans-serif;cursor:pointer">取消</button>' +
@@ -6467,6 +6469,19 @@ function buildSoccerUi() {
   tackle.addEventListener('touchstart', doTackle, { passive: false });
   tackle.addEventListener('mousedown', doTackle);
 
+  // ---- 疾跑键（足球专用，2026-10-16 用户要求）----
+  // 开启后 5 秒内跑速 ×1.7；5 秒用完进入 15 秒冷却。
+  // 冷却中按钮画成"指针转一圈"的扇形进度环 + 中间显示剩余秒数，和抢断键一个风格。
+  const run = mk('button', 'soccerSprint',
+    'position:fixed;right:118px;bottom:214px;z-index:118;display:none;width:76px;height:76px;border-radius:50%;' +
+    'border:3px solid #a8f0ff;background:radial-gradient(circle at 34% 28%,#bff0ff,#1d7fa8 70%);' +
+    'color:#032430;font:bold 15px sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.55)');
+  run.textContent = '疾跑';
+  SOC.runBtn = run;
+  const doRun = e => { if (e && e.preventDefault) e.preventDefault(); if (SOC) SOC.sprintReq = 1; };
+  run.addEventListener('touchstart', doRun, { passive: false });
+  run.addEventListener('mousedown', doRun);
+
   // 比赛期间把战斗按钮全部藏起来，屏幕上只留「移动摇杆 + 踢球 / 传球 / 抢断」，
   // 否则攻击键、跳跃键、切枪键会和足球三键挤在同一块区域（右下角）。
   if (!document.getElementById('soccerModeCss')) {
@@ -6518,8 +6533,28 @@ function soccerTryStart() {
   } catch (e) { console.error('[soccer start]', e); }
 }
 
-function soccerNewPlayer(team, x, z, isPlayer, role) {
-  const cloth = team === 1 ? 0x2f6fe0 : 0xe0433a;   // 主队蓝 / 客队红
+// 【2026-10-16】球衣号码牌：一张写着数字的小方片，悬在头顶、永远面向相机。
+// 直接加进 scene（**不**挂在会旋转的人物 group 上），每帧只要更新位置 + 复制相机朝向就行，
+// 不需要任何父子旋转换算。depthWrite:false 避免遮挡后面的东西。
+function makeSoccerNumber(num, textColor) {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const c = cv.getContext('2d');
+  c.font = 'bold 46px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 9; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(String(num), 32, 34);
+  c.fillStyle = textColor; c.fillText(String(num), 32, 34);
+  const tex = new THREE.CanvasTexture(cv);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.66),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.renderOrder = 5;
+  return m;
+}
+
+function soccerNewPlayer(team, x, z, isPlayer, role, num) {
+  const isGk = (role === 3);
+  // 【2026-10-16】门将球衣换成**完全不同的颜色**，一眼和本队球员分开：
+  //   主队门将 = 亮黄，客队门将 = 紫；球员仍是 主队蓝 / 客队红。
+  const cloth = isGk ? (team === 1 ? 0xffd400 : 0x8e44ad)
+                     : (team === 1 ? 0x2f6fe0 : 0xe0433a);
   const g = makeHuman(cloth, false, { clothColor: cloth });
   g.position.set(x, terrainHeight(x, z), z); g.rotation.y = team === 1 ? Math.PI / 2 : -Math.PI / 2;
   // 【2026-10-16·修"蓝队多出一个站着不动的虚影"】
@@ -6529,8 +6564,18 @@ function soccerNewPlayer(team, x, z, isPlayer, role) {
   // 玩家在场上用 person 本身即可，这个复制体直接隐藏。
   if (isPlayer) g.visible = false;
   scene.add(g);
+  // 号码牌：球员 1/2/3、门将 0。黄衣门将用深色字，其余用白字，保证任何球衣上都看得清。
+  let numMesh = null;
+  if (num !== undefined && num !== null) {
+    numMesh = makeSoccerNumber(num, isGk ? '#1a1a1a' : '#ffffff');
+    // 先摆到头顶点上（开赛倒计时那 3 秒 updateSoccer 会提前 return，不更新号码牌位置，
+    // 不先摆好的话会有一瞬间所有号码堆在世界原点）
+    numMesh.position.set(x, terrainHeight(x, z) + 2.35, z);
+    numMesh.quaternion.copy(camera.quaternion);
+    scene.add(numMesh);
+  }
   return { team: team, isPlayer: !!isPlayer, role: (role === undefined ? 0 : role),
-           x: x, z: z, mesh: g, cd: 0, gkCd: 0, phase: Math.random() * 6 };
+           x: x, z: z, mesh: g, numMesh: numMesh, cd: 0, gkCd: 0, phase: Math.random() * 6 };
 }
 
 function soccerResetBall() {
@@ -6543,15 +6588,16 @@ function soccerResetBall() {
 function soccerBegin() {
   const P = SOC.P;
   SOC.players = [];
-  SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true, 0));        // 玩家（主队前锋）
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false, 1));  // 主队中场
-  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false, 2));  // 主队后卫
+  // 号码：球员 1 / 2 / 3，门将 0（每队一套，靠球衣颜色区分敌我）
+  SOC.players.push(soccerNewPlayer(1, P.x - 6, P.z, true, 0, 1));        // 玩家（主队前锋）1 号
+  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z - 5, false, 1, 2));  // 主队中场 2 号
+  SOC.players.push(soccerNewPlayer(1, P.x - 10, P.z + 5, false, 2, 3));  // 主队后卫 3 号
   // 【2026-10-16】固定门将（每队 1 个，role 3）：站在自己球门线前方 1.9m，只横向跟球，从不追球。
-  SOC.players.push(soccerNewPlayer(1, P.x - P.hw + 1.9, P.z, false, 3));   // 主队门将
-  SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false, 0));       // 客队前锋
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false, 1));  // 客队中场
-  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2));  // 客队后卫
-  SOC.players.push(soccerNewPlayer(2, P.x + P.hw - 1.9, P.z, false, 3));   // 客队门将
+  SOC.players.push(soccerNewPlayer(1, P.x - P.hw + 1.9, P.z, false, 3, 0));   // 主队门将 0 号
+  SOC.players.push(soccerNewPlayer(2, P.x + 6, P.z, false, 0, 1));       // 客队前锋 1 号
+  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z - 5, false, 1, 2));  // 客队中场 2 号
+  SOC.players.push(soccerNewPlayer(2, P.x + 10, P.z + 5, false, 2, 3));  // 客队后卫 3 号
+  SOC.players.push(soccerNewPlayer(2, P.x + P.hw - 1.9, P.z, false, 3, 0));   // 客队门将 0 号
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   SOC.kickoffTeam = 1;                       // 第 1 局：主队（玩家方）开球
@@ -6560,23 +6606,30 @@ function soccerBegin() {
   if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
   if (SOC.passBtn) SOC.passBtn.style.display = 'block';
   if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'block';
+  if (SOC.runBtn) SOC.runBtn.style.display = 'block';
   SOC.tackleCd = 0;
+  SOC.spT = 0; SOC.spCd = 0;   // 疾跑：每场从"就绪"开始
   document.body.classList.add('soccer-mode');   // 藏起战斗按钮，屏幕上只留足球三键
   soccerMsg('第 1 局 · 准备', 3.2);
-  setHint('足球：踢球=射门 · 传球=高球吊给最近队友 · 抢断=断对手的球 · 门将会扑正中的球，打角度或趁他体力恢复时射');
+  setHint('足球：踢球=射门 · 传球=高球吊传 · 抢断=断球 · 疾跑=5秒加速 · 门将扑正中的球，打角度或趁他体力恢复时射');
 }
 
 function soccerEnd(playerWon) {
   try {
-    for (const p of SOC.players) { try { scene.remove(p.mesh); } catch (e) {} }
+    for (const p of SOC.players) {
+      try { scene.remove(p.mesh); } catch (e) {}
+      try { if (p.numMesh) scene.remove(p.numMesh); } catch (e) {}   // 号码牌也要收掉
+    }
     SOC.players = [];
     SOC.active = false; SOC.phase = 'idle';
     SOC.cd = 0; if (SOC.cdEl) SOC.cdEl.style.display = 'none';   // 收掉倒计时大数字
+    SOC.spT = 0; SOC.spCd = 0;
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
     if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
     if (SOC.passBtn) SOC.passBtn.style.display = 'none';
     if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'none';
+    if (SOC.runBtn) SOC.runBtn.style.display = 'none';
     document.body.classList.remove('soccer-mode');   // 恢复战斗按钮
     if (playerWon) {
       gold += 500;
@@ -6695,7 +6748,7 @@ function updateSoccer(dt) {
         b.mesh.position.set(b.x, b.y, b.z);
         SOC.lastHolder = null;   // 倒计时结束后第一帧不要"滚一大截"
       }
-      SOC.kickReq = 0; SOC.passReq = 0; SOC.tackleReq = 0;   // 倒计时期间按键全部吞掉
+      SOC.kickReq = 0; SOC.passReq = 0; SOC.tackleReq = 0; SOC.sprintReq = 0;   // 倒计时期间按键全部吞掉
       if (SOC.msgT > 0) SOC.msgT -= dt;
       soccerHud();
       return;
@@ -6777,6 +6830,16 @@ function updateSoccer(dt) {
       animateHuman(p.mesh, p.phase, 0, 'fist', dd > 0.35);
     }
 
+    // ---- 号码牌：悬在头顶、永远面向相机（球员 1/2/3，门将 0）----
+    for (const p of SOC.players) {
+      if (!p.numMesh) continue;
+      const nx = p.isPlayer ? person.position.x : p.x;
+      const nz = p.isPlayer ? person.position.z : p.z;
+      const ny = p.isPlayer ? person.position.y : p.mesh.position.y;
+      p.numMesh.position.set(nx, ny + 2.35, nz);
+      p.numMesh.quaternion.copy(camera.quaternion);
+    }
+
     // ---- 球权：自由球速度降下来后，离它最近的人控住 ----
     if (!SOC.holder) {
       // ① 传球优先：球飞到接球人附近（且高度已经降下来）就**直接落到他脚下**，
@@ -6848,6 +6911,22 @@ function updateSoccer(dt) {
           else setHint('抢断：要贴近持球者');
         } else setHint('抢断：球在队友脚下');
       }
+    }
+
+    // ---- 疾跑（足球专用）：5 秒加速，用完 15 秒冷却 ----
+    // 【2026-10-16】用户要求："疾跑只能用 5 秒，然后进入冷却期也是 15 秒"。
+    // 注意冷却**从 5 秒用完那一刻**才开始算（不是在按下时），所以完整周期是 20 秒。
+    // 加速效果在 update() 的步行分支里生效（spT > 0 时跑速 ×1.7）。
+    if (SOC.spT > 0) {
+      SOC.spT -= dt;
+      if (SOC.spT <= 0) { SOC.spT = 0; SOC.spCd = SOC.spCdMax; }   // 5 秒跑完 → 开始 15 秒冷却
+    } else if (SOC.spCd > 0) {
+      SOC.spCd -= dt;
+      if (SOC.spCd < 0) SOC.spCd = 0;
+    }
+    if (SOC.sprintReq) {
+      SOC.sprintReq = 0;
+      if (SOC.spT <= 0 && SOC.spCd <= 0) { SOC.spT = SOC.spMax; }  // 只有"就绪"时能开
     }
 
     // ---- 球的位置：持球时贴脚（带滚动），离脚时走物理（含抛物线）----
@@ -6990,6 +7069,27 @@ function soccerHud() {
       SOC.tackleBtn.style.borderColor = '#ffc98d';
       SOC.tackleBtn.style.color = '#3a1f00';
       SOC.tackleBtn.textContent = '抢断';
+    }
+  }
+  // 疾跑按钮：疾跑中显示剩余秒数（亮青），冷却中画扇形进度环 + 剩余秒数，就绪时写"疾跑"
+  if (SOC.runBtn) {
+    if (SOC.spT > 0) {
+      SOC.runBtn.style.background = 'radial-gradient(circle at 34% 28%,#9ff4ff,#0fb4e0 70%)';
+      SOC.runBtn.style.borderColor = '#eaffff';
+      SOC.runBtn.style.color = '#00303f';
+      SOC.runBtn.textContent = SOC.spT.toFixed(1);
+    } else if (SOC.spCd > 0) {
+      const pct2 = Math.round((1 - SOC.spCd / SOC.spCdMax) * 100);
+      SOC.runBtn.style.background =
+        'conic-gradient(from -90deg, #7fd8f0 0% ' + pct2 + '%, #2a3a42 ' + pct2 + '% 100%)';
+      SOC.runBtn.style.borderColor = '#5a7a86';
+      SOC.runBtn.style.color = '#cfe8f0';
+      SOC.runBtn.textContent = SOC.spCd.toFixed(1);
+    } else {
+      SOC.runBtn.style.background = 'radial-gradient(circle at 34% 28%,#bff0ff,#1d7fa8 70%)';
+      SOC.runBtn.style.borderColor = '#a8f0ff';
+      SOC.runBtn.style.color = '#032430';
+      SOC.runBtn.textContent = '疾跑';
     }
   }
   const left = Math.max(0, 60 - Math.floor(SOC.roundT));
@@ -11592,7 +11692,7 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   // 【2026-10-15】足球开赛面板开着时，鼠标左键不再触发攻击（否则点「开赛」会同时开枪）
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
-  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle')) return;
+  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
   atkHeld = true; atkPointerType = 'mouse'; atkPointerId = e.pointerId;
   attack();
 });
@@ -11868,7 +11968,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint'));
 }
 addEventListener('touchstart', e => {
   if (ferrisPanelOpen || devPanelOpen || islandPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
@@ -19542,14 +19642,18 @@ function update(dt) {
       clampCity(p); person.position.x = p.x; person.position.z = p.z;
     } else {
       // mx / mz 已在 walk 分支开头算好（游泳要用），这里直接复用，不要重复声明
-      const wantSprint = sprinting || sprintHeld;   // 双击 W 或按住疾跑键快跑
+      // 【2026-10-16】足球模式：场上有独立的「疾跑」按钮（5 秒加速 / 15 秒冷却），
+      // 所以这里把全局疾跑（双击 W / 疾跑键）关掉，两套机制不叠加，避免"双重加速"。
+      const inSoccer = !!(SOC && SOC.active);
+      const soccerBoost = (inSoccer && SOC.spT > 0) ? 1.7 : 1;   // 足球疾跑：跑速 ×1.7
+      const wantSprint = (sprinting || sprintHeld) && !inSoccer;   // 双击 W 或按住疾跑键快跑
       const moving = (mx !== 0 || mz !== 0);
       const canSprint = wantSprint && player.stamina > 0;   // 体力耗尽自动降回走路
       if (mx !== 0 || mz !== 0) {
         const len = Math.hypot(mx, mz);
         const nx = mx / len, nz = mz / len;
-        const spd = (canSprint ? 11 : 6) * player.runSpeed;   // 前进/后退速度（跑鞋加成）
-        const strafeSpd = 6;                                   // 左右横移速度（固定，不随跑鞋变快）
+        const spd = (canSprint ? 11 : 6) * player.runSpeed * soccerBoost;   // 前进/后退速度（跑鞋加成）
+        const strafeSpd = 6 * soccerBoost;                     // 左右横移速度（固定，不随跑鞋变快）
         // 【fix15·2026-10-13 用户要求】后退就是后退：移动方向始终跟相机（拉后 = 朝相机方向走），
         // 人物身子会倒过来面朝移动方向，但相机角度一动不动——不再有"后退 0.7 秒视角自动翻转"。
         // 想转视角就滑中间屏幕（lookId 滑动直接改 camYaw/camPitch，走路时同样有效）。
@@ -19557,7 +19661,7 @@ function update(dt) {
         const vz = fwd.z * nz * spd + right.z * nx * strafeSpd;
         person.position.x += vx * dt; person.position.z += vz * dt;
         personAngle.v = approachAngle(personAngle.v, Math.atan2(vx, vz), 6 * dt);   // 平滑转向，避免瞬间甩视角
-        walkPhase += dt * (canSprint ? 13 : 9);
+        walkPhase += dt * ((canSprint || soccerBoost > 1) ? 13 : 9);   // 疾跑时步频也加快
       } else {
         walkPhase = 0;
       }
