@@ -6774,7 +6774,7 @@ function soccerBegin() {
   soccerStartCountdown();                    // 【2026-10-16】开局先来 3 秒倒计时
   if (SOC.kickBtn) SOC.kickBtn.style.display = 'block';
   if (SOC.passBtn) SOC.passBtn.style.display = 'block';
-  if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'block';
+  if (SOC.tackleBtn) SOC.tackleBtn.style.display = 'none';   // 【fix21】开赛先藏，是否显示交由 soccerHud 按"是否进入抢断范围"每帧决定
   if (SOC.runBtn) SOC.runBtn.style.display = 'block';
   SOC.tackleCd = 0;
   SOC.spT = 0; SOC.spCd = 0;   // 疾跑：每场从"就绪"开始
@@ -7408,19 +7408,37 @@ function soccerHud() {
   SOC.hud.style.display = 'block';
   // 抢断按钮：冷却中画成**指针转一圈**的扇形进度（conic-gradient），
   // 亮色部分随冷却恢复而扩大，中间显示剩余秒数；冷却结束恢复橙色的「抢断」。
+  // 【2026-10-18·fix21】抢断按钮**只在玩家进入球的抢断范围(2.4)内才显示**，走出范围自动隐藏。
+  // 之前开赛就常亮，导致"离球老远抢断键还亮着、按了却提示要靠近"的割裂感。
+  // 距离判定基准与玩家实际抢断动作(见 7219 段)完全一致：
+  //   · 球松开 → 看玩家到球的距离；
+  //   · 球被对手控着 → 看玩家到持球者的距离；
+  //   · 球被队友控着 → 不显示（抢自己人没意义，按了也只是提示）。
   if (SOC.tackleBtn) {
-    if (SOC.tackleCd > 0) {
-      const pct = Math.round((1 - SOC.tackleCd / SOC.tackleMax) * 100);
-      SOC.tackleBtn.style.background =
-        'conic-gradient(from -90deg, #ffcf8a 0% ' + pct + '%, #3a3a42 ' + pct + '% 100%)';
-      SOC.tackleBtn.style.borderColor = '#6a6a72';
-      SOC.tackleBtn.style.color = '#d6d6de';
-      SOC.tackleBtn.textContent = SOC.tackleCd.toFixed(1);
-    } else {
-      SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#ffcf8a,#c47a12 70%)';
-      SOC.tackleBtn.style.borderColor = '#ffc98d';
-      SOC.tackleBtn.style.color = '#3a1f00';
-      SOC.tackleBtn.textContent = '抢断';
+    let showTackle = false;
+    if (SOC.active && person && SOC.ball) {
+      const px = person.position.x, pz = person.position.z;
+      if (!SOC.holder) {
+        showTackle = Math.hypot(px - SOC.ball.x, pz - SOC.ball.z) < 2.4;             // 松球：靠近球
+      } else if (SOC.holder.team !== SOC.playerTeam) {
+        showTackle = Math.hypot(px - SOC.holder.x, pz - SOC.holder.z) < 2.4;         // 对手控球：贴近持球者
+      } // 队友控球：showTackle 保持 false → 不显示
+    }
+    SOC.tackleBtn.style.display = showTackle ? 'block' : 'none';
+    if (showTackle) {
+      if (SOC.tackleCd > 0) {
+        const pct = Math.round((1 - SOC.tackleCd / SOC.tackleMax) * 100);
+        SOC.tackleBtn.style.background =
+          'conic-gradient(from -90deg, #ffcf8a 0% ' + pct + '%, #3a3a42 ' + pct + '% 100%)';
+        SOC.tackleBtn.style.borderColor = '#6a6a72';
+        SOC.tackleBtn.style.color = '#d6d6de';
+        SOC.tackleBtn.textContent = SOC.tackleCd.toFixed(1);
+      } else {
+        SOC.tackleBtn.style.background = 'radial-gradient(circle at 34% 28%,#ffcf8a,#c47a12 70%)';
+        SOC.tackleBtn.style.borderColor = '#ffc98d';
+        SOC.tackleBtn.style.color = '#3a1f00';
+        SOC.tackleBtn.textContent = '抢断';
+      }
     }
   }
   // 疾跑按钮：疾跑中显示剩余秒数（亮青），冷却中画扇形进度环 + 剩余秒数，就绪时写"疾跑"
