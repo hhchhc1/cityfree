@@ -6413,6 +6413,9 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     lastHolder: null, lastHx: P.x, lastHz: P.z,            // 带球滚动用：上一帧持球者的位置
     cd: 0, cdShown: 0, cdEl: null,                         // 开球倒计时（秒）/ 已显示到第几秒 / 大数字元素
     gkRecover: 15.0,                                       // 【2026-10-16】门将扑救后的"体力恢复"秒数（用户要求 15 秒）
+    // 【2026-10-18·fix20】AI 抢断限制（用户反馈"两个 AI 一直贴在那儿轮番抢断"）
+    aiTackleCd: 3.5,                                       // 每个 AI 抢断后的独立冷却（秒）
+    holdGuard: 0,                                          // 全场护球倒计时：刚被抢断后这段时间谁都不能再抢
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6757,6 +6760,7 @@ function soccerBegin() {
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   SOC.kickoffTeam = SOC.playerTeam;          // 第 1 局：玩家所在的队开球
   SOC.pickCd = 0; SOC.lastKicker = null;
+  SOC.holdGuard = 0;                         // 【fix20】每场从"没有护球时间"开始
   // 进攻方向箭头
   if (!SOC.dirArrow) SOC.dirArrow = makeDirArrow();
   const P2 = SOC.P, inw = (SOC.playerTeam === 1) ? 1 : -1;
@@ -7000,6 +7004,7 @@ function updateSoccer(dt) {
     for (const p of SOC.players) {
       if (p.isPlayer) continue;
       p.cd -= dt;
+      if (p.tackleCd > 0) p.tackleCd -= dt;   // 【fix20】AI 自己的抢断冷却
       // 【2026-10-16】AI 球员也会疾跑：追球 / 追人的时候开启，5 秒加速、15 秒冷却。
       // 每个球员的冷却初值带随机偏移（见 soccerNewPlayer），不会全场一起冲。
       if (p.spT > 0) { p.spT -= dt; if (p.spT <= 0) { p.spT = 0; p.spCd = SOC.spCdMax; } }
@@ -7051,10 +7056,19 @@ function updateSoccer(dt) {
         // 对方持球：贴上去抢断
         tx = h.x; tz = h.z; spd = 5.2;
         const d = Math.hypot(p.x - h.x, p.z - h.z);
-        if (d < 1.5 && p.cd <= 0) {
+        // 【2026-10-18·fix20】用户反馈"那两个 AI 一直贴在那儿轮番抢断"。
+        // 原来 AI 抢断只共用 `p.cd`（1.1 秒，射门也用这个值），等于每 1.1 秒就能铲一次；
+        // 场上 6 个 AI 各自算各自的冷却，看起来就是"永远在抢、球一直在换脚"。
+        // 现在加两层限制：
+        //   ① 每个 AI 抢断后**独立冷却** SOC.aiTackleCd 秒（不能连着铲）；
+        //   ② 全场**护球时间** SOC.holdGuard 秒：刚有人被抢断后短时间内谁都不能再抢，
+        //      让抢到球的人真的能带两步、把球传出去。
+        if (d < 1.5 && p.cd <= 0 && (p.tackleCd || 0) <= 0 && SOC.holdGuard <= 0) {
           SOC.holder = p;                 // 断球成功，球权转移
           p.anim.tackle = 0.001;          // 铲抢动作
           p.cd = 1.1;
+          p.tackleCd = SOC.aiTackleCd;    // 这名球员自己的抢断冷却
+          SOC.holdGuard = 1.6;            // 全场护球：1.6 秒内谁都不能再抢
           try { sfxNear('tackle', p.x, p.z, 30); } catch (e) {}
         }
       } else if (p === SOC.passTarget) {
@@ -7113,13 +7127,16 @@ function updateSoccer(dt) {
 
     // ---- 球权 ----
     if (SOC.pickCd > 0) SOC.pickCd -= dt;
+    if (SOC.holdGuard > 0) SOC.holdGuard -= dt;   // 【fix20】全场护球倒计时
     if (!SOC.holder) {
       // ① 传球优先：球飞到接球人附近（且高度已经降下来）就**直接落到他脚下**，
       //    保证"按传球 = 精准传到队友脚下"，不会出现球从队友身边滚过去的尴尬。
       if (SOC.passTarget) {
         const t = SOC.passTarget;
         const d = Math.hypot(t.x - b.x, t.z - b.z);
-        if (d < 1.6 && b.y < P.gy + 1.7) {
+        // 【fix20】判定半径从 1.6m 放宽到 2.2m、高度从 1.7m 放宽到 2.0m ——
+        // 用户要求"传球 100% 落到队友脚下"，接球窗口给足，别让球擦着队友身边飞过去。
+        if (d < 2.2 && b.y < P.gy + 2.0) {
           SOC.holder = t; SOC.passTarget = null;
           b.vx = 0; b.vz = 0; b.vy = 0; b.y = P.gy + 0.34;
           try { sfxNear('ballKick', t.x, t.z, 30); } catch (e) {}
@@ -7132,7 +7149,11 @@ function updateSoccer(dt) {
       //    ⚠️ 门将（role 3）不参与这条：否则他站在球门正中会把每一脚射门都"吸"下来，
       //       正中球由下面的 keeperBlock 专门处理（有体力限制），打角度才进得去。
       //    ⚠️ 出脚后 0.22 秒内，**踢球的那个人**不能自己捡回来（否则球没离脚就又被控住）。
-      if (!SOC.holder && b.y < P.gy + 2.2) {
+      // 【2026-10-18·fix20】用户要求：**传球途中不能被别人截断**（100% 到队友脚下）。
+      // 所以只要 `SOC.passTarget` 还在（= 这一脚是传球、还没人接到），
+      // 就整段跳过"碰到谁谁持球"的通用判定 —— 只有目标队友能接。
+      // 射门/解围/传球落地停住（passTarget 被清空）之后，这条规则照常生效。
+      if (!SOC.holder && !SOC.passTarget && b.y < P.gy + 2.2) {
         let best = null, bd = 1.15;
         for (const p of SOC.players) {
           if (p.role === 3) continue;
@@ -7180,7 +7201,9 @@ function updateSoccer(dt) {
           // 【2026-10-16·fix18】原来这里硬编码 `m.team !== 1`（只找蓝队）——
           // 玩家被随机分到红方(2)时，按传球会飞向**对面蓝队**的球员，等于把球传给敌人。
           // 改成按玩家当前所在队找队友。
-          if (m.team !== SOC.playerTeam || m.isPlayer) continue;
+          // 【2026-10-18·fix20】用户要求：传球**不传给守门员**（role 3）。
+          // 门将拿到球只会大脚开出去，传给他是浪费一次进攻机会。
+          if (m.team !== SOC.playerTeam || m.isPlayer || m.role === 3) continue;
           const d2 = Math.hypot(m.x - person.position.x, m.z - person.position.z);
           if (d2 < bdd) { bdd = d2; best = m; }
         }
@@ -7289,6 +7312,15 @@ function updateSoccer(dt) {
         if (Math.abs(b.vx) < 0.08) b.vx = 0;
         if (Math.abs(b.vz) < 0.08) b.vz = 0;
       }
+      // 【2026-10-18·fix20】传球制导：球已经落到地面、还没人接到 → 让它**滚向接球人**。
+      // 用户要求"传球 100% 到队友脚下"：万一接球人跑动了、落点偏了一点，
+      // 球会自己滚过去找他，而不是停在半路等对面来捡。
+      if (SOC.passTarget && !SOC.holder && b.y <= REST_Y + 0.5) {
+        const gt = SOC.passTarget;
+        const gdx = gt.x - b.x, gdz = gt.z - b.z, gl = Math.hypot(gdx, gdz) || 1;
+        const gsp = Math.max(Math.hypot(b.vx, b.vz), 2.6);
+        b.vx = gdx / gl * gsp; b.vz = gdz / gl * gsp;
+      }
       b.x += b.vx * dt; b.z += b.vz * dt;
       if (b.y <= REST_Y) {
         b.y = REST_Y;
@@ -7315,6 +7347,8 @@ function updateSoccer(dt) {
       if (k.role !== 3) continue;
       if (k.gkCd > 0) { k.gkCd -= dt; continue; }
       if (SOC.holder) continue;                    // 球被带在脚下时不触发（那属于抢断）
+      // 【fix20】传球途中门将也不插手 —— 用户要求传球 100% 到队友脚下，不能半路被没收。
+      if (SOC.passTarget) continue;
       const ownGoalX = (k.team === 1) ? (P.x - P.hw) : (P.x + P.hw);
       const inw = (k.team === 1) ? 1 : -1;         // 朝场内的方向
       const closing = (k.team === 1) ? (b.vx < -2.5) : (b.vx > 2.5);          // 球正朝这个门飞
