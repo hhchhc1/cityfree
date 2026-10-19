@@ -573,6 +573,38 @@
 </style>
 </head>
 <body>
+  <!-- 【2026-10-19】开场加载画面：原来点进游戏、重活跑完前是一片黑屏。
+       这里放一个和"城市自由人"主题相关的过场加载页（城市剪影 + 马路开车 + 无限进度条），
+       全 CSS 合成层动画——即便主线程被建场景的 JS 占满，动画依旧在转，直到世界建好再淡出（见文件末尾的引导脚本）。 -->
+  <style id="__bootCss">
+    #__bootLoader{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;color:#eaf2ff;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(120% 130% at 50% 18%,#1a2b47 0%,#0c1424 55%,#060a12 100%);transition:opacity .5s ease}
+    #__bootLoader .bl-title{font-size:40px;font-weight:800;letter-spacing:8px;background:linear-gradient(180deg,#ffffff,#8fd0ff);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 26px rgba(90,170,255,.35);animation:blPulse 2.4s ease-in-out infinite}
+    #__bootLoader .bl-sub{margin-top:6px;font-size:12px;letter-spacing:6px;color:#7fa6d8}
+    #__bootLoader .bl-bar{margin-top:26px;width:220px;height:6px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+    #__bootLoader .bl-bar-fill{width:40%;height:100%;border-radius:4px;background:linear-gradient(90deg,#38bdf8,#a78bfa);animation:blSlide 1.2s ease-in-out infinite}
+    #__bootLoader .bl-tip{margin-top:16px;font-size:13px;color:#a9c6ea;min-height:18px}
+    #__bootLoader .bl-scene{position:absolute;left:0;right:0;bottom:0;height:150px;pointer-events:none}
+    #__bootLoader .bl-city{position:absolute;left:0;right:0;bottom:46px;display:flex;align-items:flex-end;justify-content:center;gap:8px;opacity:.55}
+    #__bootLoader .bl-city i{display:block;width:34px;height:var(--h);background:linear-gradient(180deg,#0f2033,#0a1626);border-top:2px solid #2b4a6b;border-radius:2px 2px 0 0;box-shadow:inset 0 -18px 0 rgba(255,214,120,.05)}
+    #__bootLoader .bl-road{position:absolute;left:0;right:0;bottom:24px;height:10px;background:#10161f;border-top:1px solid #263141}
+    #__bootLoader .bl-road::after{content:'';position:absolute;top:4px;left:0;right:0;height:2px;background:repeating-linear-gradient(90deg,#9fb4cc 0 18px,transparent 18px 36px);animation:blDash .5s linear infinite}
+    #__bootLoader .bl-car{position:absolute;bottom:20px;font-size:26px;left:-40px;animation:blDrive 2.6s linear infinite}
+    @keyframes blPulse{0%,100%{opacity:1}50%{opacity:.72}}
+    @keyframes blSlide{0%{transform:translateX(-110%)}100%{transform:translateX(340%)}}
+    @keyframes blDash{to{background-position:-36px 0}}
+    @keyframes blDrive{0%{left:-8%}100%{left:104%}}
+  </style>
+  <div id="__bootLoader">
+    <div class="bl-title">城市自由人</div>
+    <div class="bl-sub">C I T Y &nbsp; F R E E</div>
+    <div class="bl-bar"><div class="bl-bar-fill"></div></div>
+    <div class="bl-tip" id="__bootTip">正在加载城市…</div>
+    <div class="bl-scene">
+      <div class="bl-city"><i style="--h:40px"></i><i style="--h:70px"></i><i style="--h:52px"></i><i style="--h:92px"></i><i style="--h:64px"></i><i style="--h:110px"></i><i style="--h:48px"></i><i style="--h:82px"></i><i style="--h:60px"></i><i style="--h:98px"></i></div>
+      <div class="bl-road"></div>
+      <div class="bl-car">🚗</div>
+    </div>
+  </div>
   <div id="hud">
     <div class="line1">步行中</div>
     <div class="line2" id="hintText">WASD/方向键 移动　·　鼠标左键 攻击（准心跟随鼠标）　·　空格 跳跃　·　E 上车　·　B 商店　·　驾驶直升机/坦克时左键射击</div>
@@ -726,7 +758,10 @@
   </div>
 
 <script src="three.min.js"></script>
-<script>
+<!-- 【2026-10-19】主游戏脚本改成"占位块"：type 用浏览器不认识的类型，所以解析到此不会立即执行，
+     而是等文件末尾的引导脚本在"加载画面已绘制"之后，再用全局 eval 跑这里的代码。
+     目的：把原来"点进游戏先黑屏好几秒、跑完才出画面"变成"先看到加载画面、再黑屏干活、好了淡入游戏"。 -->
+<script type="text/x-gameboot" id="__gameboot">
 // ===== 运行时错误可视化：出现未捕获错误时在屏幕顶部红条显示，避免"突然黑屏/空白"无从排查 =====
 function __showErr(msg) {
   try {
@@ -21952,6 +21987,39 @@ setHint(isMobile
   ? '左侧摇杆移动　·　右侧空白处滑动转视角　·　走到车旁点「上车」　·　点「攻击」键攻击'
   : 'WASD/方向键 移动　·　鼠标左键 攻击（准心跟随鼠标）　·　空格 跳跃　·　E 上车　·　B 商店');
 window.focus();
+</script>
+<!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
+     再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
+     会挂到全局，因此内联 onclick 依赖的 toggleCarMusic / skipMusic 等仍是全局可用；
+     （⚠️ 千万别写成直接 eval 又包在函数里——那样 var/function 只会进那个函数作用域，音乐按钮会失灵。）
+     主脚本跑完（场景建好、主循环已启动）后再等两帧确保渲染出画面，随后淡出并移除加载画面。 -->
+<script>
+(function __bootGame() {
+  var loader = document.getElementById('__bootLoader');
+  var tipEl = document.getElementById('__bootTip');
+  var tips = ['正在加载城市…', '正在铺设南岛沙滩…', '正在点亮路灯和球场泛光灯…', '正在召唤球员…', '马上就好…'];
+  var ti = 0;
+  var tipTimer = setInterval(function () { ti = (ti + 1) % tips.length; if (tipEl) tipEl.textContent = tips[ti]; }, 1300);
+  function fail(msg) { try { clearInterval(tipTimer); } catch (e) {} if (tipEl) { tipEl.textContent = '⚠ ' + msg; tipEl.style.color = '#ff9a9a'; } console.error('[boot]', msg); }
+  function start() {
+    var boot = document.getElementById('__gameboot');
+    if (!boot) { fail('找不到游戏脚本'); return; }
+    try {
+      (0, eval)(boot.textContent);           // 间接 eval → 在**全局作用域**执行，var/function 正确挂到全局
+    } catch (e) {
+      fail('加载失败：' + ((e && e.message) || String(e))); return;
+    }
+    // 主循环已在 eval 里启动；再等两帧，确保至少渲染出一帧真实画面，再淡出加载层
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      try { clearInterval(tipTimer); } catch (e) {}
+      if (!loader) return;
+      loader.style.opacity = '0';
+      setTimeout(function () { if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 520);
+    }); });
+  }
+  // 双 rAF：第一帧先把加载画面绘制出来，第二帧再开始重活
+  requestAnimationFrame(function () { requestAnimationFrame(start); });
+})();
 </script>
 </body>
 </html>
