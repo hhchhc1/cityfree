@@ -2569,6 +2569,19 @@ function updateFerrisLights() {
     pl.intensity = pl.userData.base * nightF;
   }
 }
+// 【2026-10-19·fix22】南岛球场四角泛光灯：和 updateFerrisLights 同一套逻辑
+// ——夜里按 nightF 渐亮，天亮 visible=false 熄灭（不参与白天着色）。在主循环里被调用。
+function updateSoccerPitchLights() {
+  if (!socPitchLights.length) return;
+  const nightF = Math.max(0, Math.min(1, 1 - dayLightF * 1.7));
+  const on = nightF >= 0.04;
+  for (let i = 0; i < socPitchLights.length; i++) {
+    const pl = socPitchLights[i];
+    if (!on) { pl.visible = false; pl.intensity = 0; continue; }
+    pl.visible = true;
+    pl.intensity = (pl.userData.base || 10) * nightF;
+  }
+}
 
 // ---- 祝福语：粉色荧光大字，平铺在摩天轮正下方的地面上 ----
 // 【2026-10-13 用户要求】"祝福语我想在中间的这行上面和下面也展示祝福语"
@@ -6294,6 +6307,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 // 全部逻辑包在 try/catch 里，任何异常都不会影响主游戏。
 var SOC = null;
 var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
+var socPitchLights = []; // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮），必须在 buildSoccerPitch 之前声明以避免 TDZ
 (function buildSoccerPitch() {
   const P = PITCH, w = P.hw * 2, d = P.hd * 2;
   const MM = {
@@ -6351,6 +6365,30 @@ var _soccerTmp = null;   // 复用的向量（滚动轴），避免每帧 new
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.4, 0.45), new THREE.MeshLambertMaterial({ color: 0xffffff })); stripe.position.y = 4.4; g.add(stripe);
     scene.add(g);
   }
+  // 【2026-10-19·fix22】球场四角泛光灯：用户反馈"球场没灯，晚上视线模糊"。
+  // 南岛夜里本来只有城市路灯/摩天轮灯圈，球场这块是黑的。这里给四角各立一根灯杆 +
+  // 一盏点光源，夜里按 nightF 点亮（updateSoccerPitchLights，和摩天轮 LED 同一套机制），
+  // 白天 visible=false 自动熄灭——不参与当天着色，零开销。灯杆立在边线外(hw+1.5 / hd+1.5)，
+  // 不会挡球、也不会被球员（活动范围钳到 hw+1）撞到。
+  (function buildPitchFloodlights() {
+    const poleM = new THREE.MeshLambertMaterial({ color: 0x3a3f45 });
+    const headM = new THREE.MeshLambertMaterial({ color: 0x2b2f34 });
+    const bulbM = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const fx = P.x + sx * (P.hw + 1.5), fz = P.z + sz * (P.hd + 1.5);
+      const g = new THREE.Group(); g.position.set(fx, terrainHeight(fx, fz), fz);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 8.6, 8), poleM); pole.position.y = 4.3; g.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.55, 0.95), headM); head.position.y = 8.6; g.add(head);
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.16, 0.72), bulbM); bulb.position.y = 8.3; g.add(bulb);   // 灯面板，永远"发光"观感
+      const pl = new THREE.PointLight(0xffeec2, 0, 66, 1.2);   // 初值 0：白天熄灭；夜里由 updater 给到 base*nightF
+      pl.position.set(0, 7.6, 0);
+      pl.userData.base = 10;                                   // 夜间满强度
+      pl.visible = false;
+      g.add(pl);
+      scene.add(g);
+      socPitchLights.push(pl);
+    }
+  })();
   // 足球：黑白五边形贴图（原来是一颗纯白球，在草地上既不够显眼、也认不出是足球）
   const ballTex = (function () {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
@@ -7001,6 +7039,18 @@ function updateSoccer(dt) {
     // 规则：球被某个人"控住"（SOC.holder）时**一直贴在他脚下**，只有被抢断 / 传球 / 射门才离脚。
     //       进球后球权交给**失球方**（开球）。
     // 角色：0=前锋  1=中场（接应）  2=后卫（回防）
+    // 【2026-10-19·fix22】用户反馈"球卡到一个位置 AI 就也卡住不动，只有我拿球他们才动"。
+    // 根因：球没人持、也没在传（无主球）时，AI 全按角色"站位"跑——中场/后卫跑到阵型点、
+    // 只有前锋会贴近球；球要是卡在/停在远离前锋的地方，就没人去收，比赛僵住。
+    // 修法：额外挑一个"离无主球最近的队友"（每帧重算），让他**直奔球**去收，比赛自然续上。
+    let looseChaser = null, looseD = 1e9;
+    if (!SOC.holder && !SOC.passTarget) {
+      for (const q of SOC.players) {
+        if (q.isPlayer || q.role === 3) continue;              // 玩家自己动、门将守门，都不参与追无主球
+        const dq = Math.hypot(q.x - b.x, q.z - b.z);
+        if (dq < looseD) { looseD = dq; looseChaser = q; }
+      }
+    }
     for (const p of SOC.players) {
       if (p.isPlayer) continue;
       p.cd -= dt;
@@ -7027,7 +7077,7 @@ function updateSoccer(dt) {
         spd = 5.4;
         // 门将万一控住了球（球慢慢滚到脚下），必须**大脚开出去** ——
         // 否则 role 3 永远不会射门，球会一直粘在门将脚下，整场比赛卡死。
-        if (isHolder && p.cd <= 0) {
+        if (isHolder && p.cd <= 0 && (p.gkCd || 0) <= 0) {   // 【fix22】恢复中的门将不许开球，配合③的"恢复期不捡球"
           const fgx = (p.team === 1) ? (P.x + P.hw) : (P.x - P.hw);   // 往对面半场开
           const dx2 = fgx - b.x, dz2 = P.z - b.z, l2 = Math.hypot(dx2, dz2) || 1;
           const na2 = Math.atan2(dx2 / l2, dz2 / l2) + (Math.random() - 0.5) * 0.5;
@@ -7041,7 +7091,30 @@ function updateSoccer(dt) {
         tx = myGoalX; tz = P.z + (p.z - P.z) * 0.55;
         spd = 5.0;
         const gd = Math.hypot(myGoalX - p.x, P.z - p.z);
-        if (gd < 13 && p.cd <= 0) {
+        // 【2026-10-19·fix22】用户要求"AI 觉得处境危险时可以互相传球"。
+        // 之前 AI 持球只会埋头带球→进射程射门，被人一贴就把球送掉。现在：附近有对手逼近
+        // （3.4m 内）就改为把球传给"最安全"的队友——综合"离自己别太远"和"离对手最远"。
+        let pressured = false;
+        for (const q of SOC.players) {
+          if (q.team === p.team || q.role === 3) continue;
+          if (Math.hypot(q.x - p.x, q.z - p.z) < 3.4) { pressured = true; break; }
+        }
+        if (pressured && gd >= 11 && p.cd <= 0) {           // 离门还远（>=11m）优先传；近了就射
+          let bt = null, bs = -1e9;
+          for (const m of SOC.players) {
+            if (m.team !== p.team || m.isPlayer || m.role === 3) continue;   // 不传自己、不传给门将
+            let nearOpp = 99;
+            for (const q of SOC.players) if (q.team !== p.team) { const dq = Math.hypot(q.x - m.x, q.z - m.z); if (dq < nearOpp) nearOpp = dq; }
+            const score = nearOpp - Math.hypot(m.x - p.x, m.z - p.z) * 0.22; // 越空旷、越近，分越高
+            if (score > bs) { bs = score; bt = m; }
+          }
+          if (bt) {
+            soccerPass(b, bt, p);                            // 高球吊传给最安全的队友
+            p.anim.kick = 0.001;
+            p.cd = 0.9;                                      // 出脚动作 + 稍长的出球冷却
+            try { sfxNear('ballKick', p.x, p.z, 38); } catch (e) {}
+          }
+        } else if (gd < 13 && p.cd <= 0) {
           // 【2026-10-16】AI 射门不再一律打死角正中间 —— 有门将之后，正中必被扑。
           // 现在在球门范围内随机挑一个落点（可能贴柱、可能正中），AI 才有进球能力。
           const aimZ = P.z + (Math.random() * 2 - 1) * P.goalZ * 0.85;
@@ -7077,10 +7150,15 @@ function updateSoccer(dt) {
         tx = b.x + b.vx * 0.22; tz = b.z + b.vz * 0.22; spd = 5.4;
       } else {
         // 球自由 / 己方持球：按角色跑位
-        const base = h || { x: b.x, z: b.z };
-        if (p.role === 1) { tx = (base.x + myGoalX) / 2; tz = P.z + (p.z >= P.z ? 6 : -6); spd = 4.6; }
-        else if (p.role === 2) { tx = (base.x - myGoalX) / 2 + P.x; tz = P.z + (p.z >= P.z ? 9 : -9); spd = 4.2; }
-        else { tx = base.x; tz = base.z + (p.z >= P.z ? 5 : -5); spd = 4.6; }
+        if (!SOC.holder && p === looseChaser) {
+          // 【fix22】专职追球的人：直接冲向无主球（带动比赛继续，不再卡住）
+          tx = b.x; tz = b.z; spd = 5.4;
+        } else {
+          const base = h || { x: b.x, z: b.z };
+          if (p.role === 1) { tx = (base.x + myGoalX) / 2; tz = P.z + (p.z >= P.z ? 6 : -6); spd = 4.6; }
+          else if (p.role === 2) { tx = (base.x - myGoalX) / 2 + P.x; tz = P.z + (p.z >= P.z ? 9 : -9); spd = 4.2; }
+          else { tx = base.x; tz = base.z + (p.z >= P.z ? 5 : -5); spd = 4.6; }
+        }
       }
       tx = Math.max(P.x - P.hw - 1, Math.min(P.x + P.hw + 1, tx));
       tz = Math.max(P.z - P.hd - 1, Math.min(P.z + P.hd + 1, tz));
@@ -7171,6 +7249,10 @@ function updateSoccer(dt) {
       if (!SOC.holder && Math.hypot(b.vx, b.vz) < 3.5) {
         let best = null, bd = 1.4;
         for (const p of SOC.players) {
+          // 【2026-10-19·fix22】恢复体力的门将**不参与这条拾取**——
+          // 否则他刚扑完球（gkCd 还没走完）就又被这里设成持球者，然后"大脚开球"把球捅到前场，
+          // 看起来就是"门将明明在恢复期却还在挡球、还不停地续恢复"。扑救后让他老老实实躺够 gkRecover。
+          if (p.role === 3 && (p.gkCd || 0) > 0) continue;
           const d = Math.hypot(p.x - b.x, p.z - b.z);
           if (d < bd) { bd = d; best = p; }
         }
@@ -7307,7 +7389,12 @@ function updateSoccer(dt) {
       // ⚠️ 空气里**不能**加水平摩擦 —— 否则高球会在半空中减速、掉在队友前面。
       //    摩擦只在贴地滚动时生效。
       if (b.y <= REST_Y + 0.02) {
-        const fr = Math.pow(0.24, dt);
+        // 【2026-10-19·fix22】用户反馈"球踢出去滑行轨迹太短、速度太慢"。
+        // 根因：滚动摩擦系数 0.24^dt 太高——每秒只剩 24% 速度，一脚射门只滚 ~5m 就停。
+        // 提到 0.6（每秒保留 60%）：同样的初速，停止距离约 ×2.4，球又远又跟脚。
+        // （草地滚动本就比冰面衰减快，0.6 仍会明显减速，只是不至于"一踢就趴"；
+        //   空中不加摩擦，这条只在贴地时生效，不影响高球/传球抛物线。）
+        const fr = Math.pow(0.6, dt);
         b.vx *= fr; b.vz *= fr;
         if (Math.abs(b.vx) < 0.08) b.vx = 0;
         if (Math.abs(b.vz) < 0.08) b.vz = 0;
@@ -19917,6 +20004,7 @@ function updateDayNight(dt) {
   updateStreetLights();
   updateHqLights();      // Task #8：大本营夜间照明（内部按 nightF + 距离自行开关）
   updateFerrisLights();  // Task #9：摩天轮底部 LED 灯圈的上照灯
+  updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
 }
 function update(dt) {
   if (_frameCnt % 2 === 0) rebuildNpcGrid();   // 每2帧重建NPC空间网格（降低卡顿）
