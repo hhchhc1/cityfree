@@ -6489,6 +6489,10 @@ var socPitchLights = []; // 【2026-10-19·fix22】南岛球场四角泛光灯�
     // 【2026-10-18·fix20】AI 抢断限制（用户反馈"两个 AI 一直贴在那儿轮番抢断"）
     aiTackleCd: 3.5,                                       // 每个 AI 抢断后的独立冷却（秒）
     holdGuard: 0,                                          // 全场护球倒计时：刚被抢断后这段时间谁都不能再抢
+    // 【2026-10-19·fix26】技能包（随机刷新，玩家和 AI 都能捡）
+    powerups: [], puT: 5,                                  // 场上技能包列表 / 下一个刷新倒计时(秒)
+    shieldTeam: 0,                                         // 球门保护罩：0=无 1=蓝方球门有盾 2=红方球门有盾（各抵挡一次射门）
+    tackleFastT: 0,                                        // 玩家"抢断冷却包"剩余秒（此期间抢断冷却只有 10%）
     trigger: { x: P.x, z: P.z + P.hd + 6, r: 8 }, panel: null, hud: null
   };
   buildSoccerUi();
@@ -6638,6 +6642,36 @@ function makeSoccerNumber(num, textColor) {
   return m;
 }
 
+// 【2026-10-19·fix26】球衣号码贴图（只生成 canvas 纹理，供正/反面贴片复用）
+function makeSoccerNumberTexture(num, textColor) {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const c = cv.getContext('2d');
+  c.font = 'bold 46px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 9; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(String(num), 32, 34);
+  c.fillStyle = textColor; c.fillText(String(num), 32, 34);
+  return new THREE.CanvasTexture(cv);
+}
+// 【2026-10-19·fix26】把号码**直接印在球衣正/反面**：在人物 hip 组的球衣圆柱上贴两块号码片
+// （+z 是人物正面，眼睛朝 +z）。替代原来悬在头顶、永远朝向相机的 billboard 号码牌。
+function attachJerseyNumber(g, num, isGk) {
+  const u = g && g.userData; if (!u || !u.hip) return;
+  if (u.__jerseyNum) { try { u.hip.remove(u.__jerseyNum); } catch (e) {} u.__jerseyNum = null; }
+  const tex = makeSoccerNumberTexture(num, isGk ? '#1a1a1a' : '#ffffff');
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  const grp = new THREE.Group();
+  const pw = 0.14, ph = 0.16;
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
+  front.position.set(0, 0.27, 0.126); front.renderOrder = 6; grp.add(front);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
+  back.position.set(0, 0.27, -0.126); back.rotation.y = Math.PI; back.renderOrder = 6; grp.add(back);
+  u.hip.add(grp);
+  u.__jerseyNum = grp;
+}
+function detachJerseyNumber(g) {
+  const u = g && g.userData; if (!u || !u.hip) return;
+  if (u.__jerseyNum) { try { u.hip.remove(u.__jerseyNum); } catch (e) {} u.__jerseyNum = null; }
+}
+
 function soccerNewPlayer(team, x, z, isPlayer, role, num) {
   const isGk = (role === 3);
   // 【2026-10-16】门将球衣换成**完全不同的颜色**，一眼和本队球员分开：
@@ -6653,16 +6687,10 @@ function soccerNewPlayer(team, x, z, isPlayer, role, num) {
   // 玩家在场上用 person 本身即可，这个复制体直接隐藏。
   if (isPlayer) g.visible = false;
   scene.add(g);
-  // 号码牌：球员 1/2/3、门将 0。黄衣门将用深色字，其余用白字，保证任何球衣上都看得清。
+  // 【2026-10-19·fix26】号码改成**印在球衣正反面**（用户要求，不再悬在头顶）。
+  // numMesh 字段保留为 null（其它地方都有 if(p.numMesh) 守卫，不再创建头顶牌）。
   let numMesh = null;
-  if (num !== undefined && num !== null) {
-    numMesh = makeSoccerNumber(num, isGk ? '#1a1a1a' : '#ffffff');
-    // 先摆到头顶点上（开赛倒计时那 3 秒 updateSoccer 会提前 return，不更新号码牌位置，
-    // 不先摆好的话会有一瞬间所有号码堆在世界原点）
-    numMesh.position.set(x, terrainHeight(x, z) + 2.35, z);
-    numMesh.quaternion.copy(camera.quaternion);
-    scene.add(numMesh);
-  }
+  if (num !== undefined && num !== null) attachJerseyNumber(g, num, isGk);
   // 【2026-10-16】疾跑脚下光环：一圈贴着地面的发光环，开启疾跑时显示并脉动。
   const ring = makeSprintRing(team === 1 ? 0x5fd8ff : 0xffa54f);
   ring.position.set(x, terrainHeight(x, z) + 0.06, z);
@@ -6755,6 +6783,99 @@ function soccerResetBall() {
   SOC.holder = null; SOC.passTarget = null; SOC.lastHolder = null;
 }
 
+// ================= 【2026-10-19·fix26】技能包系统 =================
+// 比赛过程中在球场随机位置刷新三种技能包，玩家和 AI 都能捡：
+//   · sprint 疾跑鞋子：捡到立刻获得一次疾跑（5 秒加速）
+//   · tackle 抢断冷却包：抢断冷却变为原来的 10%（持续 8 秒）
+//   · shield 球门保护罩：给自己这一方的球门套盾，抵挡一次射门
+function soccerPuModel(type) {
+  const g = new THREE.Group();
+  const col = type === 'sprint' ? 0x66e0ff : (type === 'tackle' ? 0xffd24d : 0x9b8cff);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.5, 24),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring);
+  if (type === 'sprint') {                                   // 鞋子
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.5), new THREE.MeshLambertMaterial({ color: 0x3aa0d8 }));
+    body.position.y = 0.5; g.add(body);
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshLambertMaterial({ color: 0x3aa0d8 }));
+    toe.position.set(0, 0.46, 0.28); toe.scale.set(1, 0.7, 1.1); g.add(toe);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.56), new THREE.MeshBasicMaterial({ color: 0xeaffff }));
+    sole.position.set(0, 0.41, 0.02); g.add(sole);
+  } else if (type === 'tackle') {                            // 时钟（冷却）
+    const clock = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), new THREE.MeshLambertMaterial({ color: 0xffd24d }));
+    clock.position.y = 0.56; g.add(clock);
+    const h1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.15, 0.02), new THREE.MeshBasicMaterial({ color: 0x2a2a2a }));
+    h1.position.set(0, 0.58, 0.05); h1.rotation.z = 0.6; g.add(h1);
+    const h2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.02), new THREE.MeshBasicMaterial({ color: 0x2a2a2a }));
+    h2.position.set(0.03, 0.56, 0.05); h2.rotation.z = -1.1; g.add(h2);
+  } else {                                                   // 护盾（能量泡）
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x9b8cff, transparent: true, opacity: 0.5 }));
+    dome.position.y = 0.56; dome.scale.set(1, 1.15, 1); g.add(dome);
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshLambertMaterial({ color: 0xe6e0ff }));
+    core.position.y = 0.56; g.add(core);
+  }
+  return g;
+}
+function soccerSpawnPowerup() {
+  const P = SOC.P;
+  const types = ['sprint', 'tackle', 'shield'];
+  const type = types[(Math.random() * types.length) | 0];
+  const x = P.x + (Math.random() * 2 - 1) * (P.hw - 3);      // 离两边球门各留 3m
+  const z = P.z + (Math.random() * 2 - 1) * (P.hd - 3);
+  const g = soccerPuModel(type);
+  g.position.set(x, P.gy, z);
+  scene.add(g);
+  SOC.powerups.push({ type: type, mesh: g, x: x, z: z, seed: Math.random() * 6.28 });
+}
+function soccerClearPowerups() {
+  if (!SOC) return;
+  for (const pu of SOC.powerups) { try { scene.remove(pu.mesh); } catch (e) {} }
+  SOC.powerups = []; SOC.shieldTeam = 0;
+}
+function soccerApplyPowerup(pu, isPlayerPick, picker) {
+  if (pu.type === 'sprint') {
+    if (isPlayerPick) { SOC.spT = SOC.spMax; SOC.spCd = 0; } else { picker.spT = SOC.spMax; picker.spCd = 0; }
+    floatText('疾跑鞋！', '#8ff0ff');
+  } else if (pu.type === 'tackle') {
+    if (isPlayerPick) { SOC.tackleFastT = 8; SOC.tackleCd = SOC.tackleMax * 0.1; }
+    else { picker.tackleFastT = 8; picker.tackleCd = SOC.aiTackleCd * 0.1; }
+    floatText('抢断冷却-90%！', '#ffd24d');
+  } else {
+    const team = isPlayerPick ? SOC.playerTeam : picker.team;
+    SOC.shieldTeam = team;
+    floatText(teamName(team) + ' 球门护盾！', '#c9c0ff');
+  }
+  try { sfx('coin'); } catch (e) {}
+}
+function soccerUpdatePowerups(dt) {
+  if (!SOC || !SOC.active) return;
+  const P = SOC.P;
+  SOC.puT -= dt;                                             // 6~11 秒刷新一个，场上最多 3 个
+  if (SOC.puT <= 0) { SOC.puT = 6 + Math.random() * 5; if (SOC.powerups.length < 3) soccerSpawnPowerup(); }
+  for (const pu of SOC.powerups) {                           // 旋转 + 轻微上下浮动
+    pu.mesh.rotation.y += dt * 1.7;
+    pu.mesh.position.y = P.gy + 0.06 + Math.sin(performance.now() * 0.003 + pu.seed) * 0.07;
+  }
+  const px = person.position.x, pz = person.position.z;      // 拾取判定：玩家 / AI 都能捡
+  for (let i = SOC.powerups.length - 1; i >= 0; i--) {
+    const pu = SOC.powerups[i];
+    let picked = false, isPlayerPick = false, picker = null;
+    if (Math.hypot(px - pu.x, pz - pu.z) < 1.35) { picked = true; isPlayerPick = true; }
+    else {
+      for (const p of SOC.players) {
+        if (p.isPlayer) continue;
+        if (Math.hypot(p.x - pu.x, p.z - pu.z) < 1.2) { picked = true; picker = p; break; }
+      }
+    }
+    if (picked) {
+      soccerApplyPowerup(pu, isPlayerPick, picker);
+      try { scene.remove(pu.mesh); } catch (e) {}
+      SOC.powerups.splice(i, 1);
+    }
+  }
+}
+
 // 【2026-10-16】队名统一叫"蓝方 / 红方"（用户要求：不要再叫主队/客队）
 function teamName(t) { return t === 1 ? '蓝方' : '红方'; }
 // 某队进攻的球门 x：蓝方(1) 打 +x，红方(2) 打 -x
@@ -6829,6 +6950,8 @@ function soccerBegin() {
   };
   put(SOC.playerTeam, true);
   put(mt, false);
+  attachJerseyNumber(person, 1, false);   // 【fix26】玩家自己（1号前锋）的号码也印到球衣正反面
+  soccerClearPowerups(); SOC.puT = 5; SOC.tackleFastT = 0;   // 【fix26】每场技能包清空、重新计时
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   SOC.kickoffTeam = SOC.playerTeam;          // 第 1 局：玩家所在的队开球
@@ -6870,6 +6993,8 @@ function soccerEnd(playerWon) {
     SOC.pickCd = 0; SOC.lastKicker = null;
     if (SOC.dirArrow) SOC.dirArrow.visible = false;              // 收掉进攻方向箭头
     setPlayerJersey(1);                                          // 外套换回原本的蓝色
+    detachJerseyNumber(person);                                  // 【fix26】比赛结束把玩家球衣上的号码片卸掉（回到普通路人）
+    soccerClearPowerups(); SOC.tackleFastT = 0;                  // 【fix26】清掉场上残留技能包
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
     if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
@@ -7111,6 +7236,7 @@ function updateSoccer(dt) {
       if (p.isPlayer) { p.x = person.position.x; p.z = person.position.z; continue; }
       p.cd -= dt;
       if (p.tackleCd > 0) p.tackleCd -= dt;   // 【fix20】AI 自己的抢断冷却
+      if (p.tackleFastT > 0) p.tackleFastT -= dt;   // 【fix26】AI 抢断冷却包计时
       // 【2026-10-16】AI 球员也会疾跑：追球 / 追人的时候开启，5 秒加速、15 秒冷却。
       // 每个球员的冷却初值带随机偏移（见 soccerNewPlayer），不会全场一起冲。
       if (p.spT > 0) { p.spT -= dt; if (p.spT <= 0) { p.spT = 0; p.spCd = SOC.spCdMax; } }
@@ -7196,7 +7322,7 @@ function updateSoccer(dt) {
           SOC.holder = p;                 // 断球成功，球权转移
           p.anim.tackle = 0.001;          // 铲抢动作
           p.cd = 1.1;
-          p.tackleCd = SOC.aiTackleCd;    // 这名球员自己的抢断冷却
+          p.tackleCd = (p.tackleFastT > 0 ? SOC.aiTackleCd * 0.1 : SOC.aiTackleCd);    // 这名球员自己的抢断冷却（冷却包生效时只 10%）
           SOC.holdGuard = 1.6;            // 全场护球：1.6 秒内谁都不能再抢
           try { sfxNear('tackle', p.x, p.z, 30); } catch (e) {}
         }
@@ -7258,6 +7384,8 @@ function updateSoccer(dt) {
       p.numMesh.position.set(nx, ny + 2.35, nz);
       p.numMesh.quaternion.copy(camera.quaternion);
     }
+
+    soccerUpdatePowerups(dt);   // 【fix26】技能包：定时刷新 / 旋转浮动 / 玩家与AI拾取判定
 
     // ---- 球权 ----
     if (SOC.pickCd > 0) SOC.pickCd -= dt;
@@ -7356,6 +7484,7 @@ function updateSoccer(dt) {
     }
     // 抢断：把球从对手脚下断下来（带冷却）
     if (SOC.tackleCd > 0) SOC.tackleCd -= dt;
+    if (SOC.tackleFastT > 0) SOC.tackleFastT -= dt;   // 【fix26】玩家抢断冷却包计时
     if (SOC.tackleReq) {
       SOC.tackleReq = 0;
       if (SOC.tackleCd <= 0) {
@@ -7363,14 +7492,14 @@ function updateSoccer(dt) {
         const px2 = person.position.x, pz2 = person.position.z;
         if (!hh) {
           const d = Math.hypot(px2 - b.x, pz2 - b.z);
-          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }
+          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = ((SOC.tackleFastT || 0) > 0 ? SOC.tackleMax * 0.1 : SOC.tackleMax); SOC.holdGuard = 1.8; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }   // 【fix26】玩家断球后给1.8s护球(AI不能立刻反抢); 抢断冷却包生效时冷却只10%
           else setHint('抢断：要靠近球');
           // 【2026-10-16·fix19】这里原来写死 `hh.team === 2`（只认红方持球者）——
           // 玩家被分到红方时，对手是蓝方(1)，于是"抢断"永远抢不到对手，反而只能抢自己队友的球。
           // 和传球那处是同一个坑（随机分队改造时漏改的硬编码）。
         } else if (hh.team !== SOC.playerTeam) {
           const d = Math.hypot(px2 - hh.x, pz2 - hh.z);
-          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = SOC.tackleMax; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }
+          if (d < 2.4 && me) { SOC.holder = me; SOC.tackleCd = ((SOC.tackleFastT || 0) > 0 ? SOC.tackleMax * 0.1 : SOC.tackleMax); SOC.holdGuard = 1.8; me.anim.tackle = 0.001; try { sfx('tackle'); } catch (e) {} }   // 【fix26】玩家断球后给1.8s护球(AI不能立刻反抢); 抢断冷却包生效时冷却只10%
           else setHint('抢断：要贴近持球者');
         } else setHint('抢断：球在队友脚下');
       }
@@ -7517,6 +7646,19 @@ function updateSoccer(dt) {
     if (Math.abs(b.x - P.x) > P.hw && !inMouth) { b.x = P.x + Math.sign(b.x - P.x) * P.hw; b.vx *= -0.62; b.y = REST_Y; b.vy = 0; SOC.holder = null; SOC.passTarget = null; }
     // ---- 进球：**一球一局**（用户 2026-10-16 要求）→ 直接进入庆祝，庆祝完结算这一局 ----
     if (Math.abs(b.x - P.x) > P.hw + 0.7 && inMouth) {
+      // 【2026-10-19·fix26】球门保护罩：被射门的那一方若护罩生效 → 挡出这一球、消耗护罩、本球不算
+      const defendTeam = (b.x > P.x) ? 2 : 1;              // +x 门由红方(2)守，-x 门由蓝方(1)守
+      if (SOC.shieldTeam === defendTeam) {
+        SOC.shieldTeam = 0;
+        b.x = P.x + Math.sign(b.x - P.x) * (P.hw - 0.6);   // 拽回场内一点
+        b.vx = -b.vx * 0.6; b.vy = 3.2; b.y = Math.max(b.y, P.gy + 0.6);
+        b.mesh.position.set(b.x, b.y, b.z);
+        SOC.holder = null; SOC.passTarget = null;
+        soccerMsg(teamName(defendTeam) + ' 球门护盾挡出！', 1.4);
+        floatText('护盾挡出！', '#a8f0ff');
+        try { sfx('tackle'); } catch (e) {}
+        return;                                            // 不进球，本帧到此为止
+      }
       const scorer = (b.x > P.x) ? 0 : 1;                 // 进 +x 门 → 蓝方(索引0)得分
       SOC.score[scorer]++;
       SOC.goalTeam = scorer + 1;                          // 1 = 蓝方  2 = 红方
@@ -9565,6 +9707,16 @@ function sameClan(a, b) {
 }
 // 取一个"人行道上的点"：随机一条马路（横/竖）× 随机一侧 × 沿路随机位置
 // 传了 clanCenter 就取该族群活动中心附近（同肤色的人聚在一片）
+// 【2026-10-19·fix26】球场区域判定（含边距）：行人不能在球场里游荡（用户要求）。
+function inPitchArea(x, z, m) { const P = PITCH; m = (m == null ? 5 : m); return Math.abs(x - P.x) < P.hw + m && Math.abs(z - P.z) < P.hd + m; }
+// 人行道落点若落在球场（含边距）内，沿"各自马路方向"把它推到球场外——保持 roadC/axis/side 不变，仍是合法人行道点。
+function avoidPitch(spot) {
+  const P = PITCH, m = 5;
+  if (Math.abs(spot.x - P.x) >= P.hw + m || Math.abs(spot.z - P.z) >= P.hd + m) return spot;
+  if (spot.axis === 'h') { spot.x = (spot.x >= P.x) ? (P.x + P.hw + m + 1) : (P.x - P.hw - m - 1); }
+  else { spot.z = (spot.z >= P.z) ? (P.z + P.hd + m + 1) : (P.z - P.hd - m - 1); }
+  return spot;
+}
 function randomSidewalkSpot(clanCenter) {
   if (clanCenter) {
     const side = Math.random() < 0.5 ? 1 : -1;
@@ -9572,9 +9724,9 @@ function randomSidewalkSpot(clanCenter) {
     // 一出生就站在自己那条分流道上（靠右行走的内/外道），避免刚刷新就扎堆
     const lat = side * ((side * sign > 0) ? SIDEWALK_LANE_IN : SIDEWALK_LANE_OUT);
     const along = clanCenter.along + (Math.random() * 2 - 1) * CIVILIAN_CLAN_SPREAD;
-    return clanCenter.vertical
+    return avoidPitch(clanCenter.vertical
       ? { x: clanCenter.c + lat, z: along, axis: 'v', roadC: clanCenter.c, side: side, sign: sign }
-      : { x: along, z: clanCenter.c + lat, axis: 'h', roadC: clanCenter.c, side: side, sign: sign };
+      : { x: along, z: clanCenter.c + lat, axis: 'h', roadC: clanCenter.c, side: side, sign: sign });
   }
   const c = roads[(Math.random() * roads.length) | 0];
   const vertical = Math.random() < 0.5;
@@ -9582,9 +9734,9 @@ function randomSidewalkSpot(clanCenter) {
   const sign = Math.random() < 0.5 ? 1 : -1;
   const lat = side * ((side * sign > 0) ? SIDEWALK_LANE_IN : SIDEWALK_LANE_OUT);
   const along = (Math.random() * 2 - 1) * (CITY - 14);
-  return vertical
+  return avoidPitch(vertical
     ? { x: c + lat, z: along, axis: 'v', roadC: c, side: side, sign: sign }
-    : { x: along, z: c + lat, axis: 'h', roadC: c, side: side, sign: sign };
+    : { x: along, z: c + lat, axis: 'h', roadC: c, side: side, sign: sign });
 }
 // 沿马路方向的朝向角：v 轴 = ±z，h 轴 = ±x（fx=sin(a), fz=cos(a)）
 function sidewalkAngle(axis, sign) {
@@ -18175,6 +18327,18 @@ function recyclePedestrians(dt) {
   _pedRecycleT += dt;
   if (_pedRecycleT < 0.8) return;      // 0.8 秒一次就够，别每帧遍历
   _pedRecycleT = 0;
+  // 【2026-10-19·fix26】把误入球场的行人清出去（用户要求"球场里不能有游荡的人"）：
+  // 人行道点已尽量避开球场，但沿路行走仍可能走进球场带；这里每 0.8 秒兜底把场内的人挪到球场外的合法人行道。
+  for (const r of residents) {
+    if (!r.alive || r.down) continue;
+    if (inPitchArea(r.x, r.z, 2)) {
+      const s = randomSidewalkSpot();
+      r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
+      r.angle = sidewalkAngle(s.axis, s.sign);
+      r.walking = true; r.walkTime = 1.5 + Math.random() * 2.5; r.timer = Math.random() * 2;
+      if (r.group) { r.group.position.set(r.x, terrainHeight(r.x, r.z), r.z); r.group.rotation.y = r.angle; }
+    }
+  }
   const px = playerWorldX(), pz = playerWorldZ();
   if (!isFinite(px) || !isFinite(pz)) return;
   camera.getWorldDirection(_pedFwd);
