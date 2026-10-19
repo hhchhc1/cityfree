@@ -6851,6 +6851,14 @@ function soccerEnd(playerWon) {
       setHint('足球：这场输了，下次再来（入场费 100 金币）');
     }
     soccerMsg(playerWon ? '比赛结束 · 你赢了 +500💰' : '比赛结束 · 你输了', 3.2);
+    // 【2026-10-19·fix23】比完自动退出场地：原来只关闭足球模式、把玩家留在场内，
+    // 于是 updateSoccer 的"在球场内 且 面板未开"判定(见 soccerPanel 那段)会让开赛面板立刻又弹出来、被迫连打。
+    // 这里直接把玩家送到球场南侧入口外 —— inT 判定为 false，面板不再自动弹，比赛真正结束。
+    {
+      const P0 = PITCH, ex = P0.x, ez = P0.z - P0.hd - 4.5;   // 南侧入口外（|Δz|≈14.5 > 11，判为场外）
+      person.position.x = ex; person.position.z = ez; person.position.y = terrainHeight(ex, ez);
+      personAngle.v = 0; person.rotation.y = 0; camYaw = 0;   // 落地后面朝球场(+z)，一眼还能看到场子
+    }
   } catch (e) { console.error('[soccer end]', e); }
 }
 
@@ -6928,6 +6936,15 @@ function soccerStartCountdown() {
   SOC.cdShown = 3;
   // 【2026-10-16】每局准备时间都把"进攻方向箭头"亮出来（用户要求：比赛前说明进攻方向）
   if (SOC.dirArrow) SOC.dirArrow.visible = true;
+  // 【2026-10-19·fix23】每一局都当"全新一局"开：门将体力恢复(gkCd)、出脚/抢断冷却、动作姿态全部归零。
+  // 之前球员对象跨局复用（soccerResolveRound 不重建球员），上一局刚扑完球的门将会**带着"恢复中"进下一局**，
+  // 甚至开局因为还在恢复而扑不动。用户要求："不管上一局怎样、守门员是否在恢复，新一局都重新开始、不用恢复"。
+  SOC.tackleCd = 0; SOC.holdGuard = 0;
+  for (const p of SOC.players) {
+    if (p.role === 3) p.gkCd = 0;         // 门将体力恢复清零：新一局人人就绪
+    p.cd = 0; p.tackleCd = 0;             // 出脚 / 抢断冷却归零
+    p.anim.kick = 0; p.anim.tackle = 0;   // 铲抢 / 踢球姿势复位
+  }
 }
 
 // 【2026-10-16】一局结束（这一局谁进球谁赢）→ 结算局分；没到三胜就进下一局的 3 秒准备。
@@ -7052,7 +7069,9 @@ function updateSoccer(dt) {
       }
     }
     for (const p of SOC.players) {
-      if (p.isPlayer) continue;
+      // 【2026-10-19·fix23】玩家的足球对象坐标实时同步到 person 本体——之前 p.isPlayer 直接 continue、
+      // p.x/p.z 一直停在出生点，导致 AI "追持球的玩家 / 抢断玩家 / 传给玩家"都对着一个错位坐标。
+      if (p.isPlayer) { p.x = person.position.x; p.z = person.position.z; continue; }
       p.cd -= dt;
       if (p.tackleCd > 0) p.tackleCd -= dt;   // 【fix20】AI 自己的抢断冷却
       // 【2026-10-16】AI 球员也会疾跑：追球 / 追人的时候开启，5 秒加速、15 秒冷却。
@@ -7102,7 +7121,7 @@ function updateSoccer(dt) {
         if (pressured && gd >= 11 && p.cd <= 0) {           // 离门还远（>=11m）优先传；近了就射
           let bt = null, bs = -1e9;
           for (const m of SOC.players) {
-            if (m.team !== p.team || m.isPlayer || m.role === 3) continue;   // 不传自己、不传给门将
+            if (m.team !== p.team || m.role === 3) continue;   // 不传自己、不传给门将；【fix23】允许传给玩家（用户要求"AI 也能给玩家传球"，靠①a的坐标同步才能对准）
             let nearOpp = 99;
             for (const q of SOC.players) if (q.team !== p.team) { const dq = Math.hypot(q.x - m.x, q.z - m.z); if (dq < nearOpp) nearOpp = dq; }
             const score = nearOpp - Math.hypot(m.x - p.x, m.z - p.z) * 0.22; // 越空旷、越近，分越高
