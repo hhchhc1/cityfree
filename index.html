@@ -6855,7 +6855,7 @@ function soccerEnd(playerWon) {
     // 于是 updateSoccer 的"在球场内 且 面板未开"判定(见 soccerPanel 那段)会让开赛面板立刻又弹出来、被迫连打。
     // 这里直接把玩家送到球场南侧入口外 —— inT 判定为 false，面板不再自动弹，比赛真正结束。
     {
-      const P0 = PITCH, ex = P0.x, ez = P0.z - P0.hd - 4.5;   // 南侧入口外（|Δz|≈14.5 > 11，判为场外）
+      const P0 = PITCH, ex = P0.x, ez = P0.z - P0.hd - 6;     // 南侧入口外（|Δz|=16，稳稳在 fix24 新触发区 hd+3=13 之外，面板不会立刻又弹）
       person.position.x = ex; person.position.z = ez; person.position.y = terrainHeight(ex, ez);
       personAngle.v = 0; person.rotation.y = 0; camYaw = 0;   // 落地后面朝球场(+z)，一眼还能看到场子
     }
@@ -6972,9 +6972,11 @@ function updateSoccer(dt) {
     if (!SOC.active) {
       if (SOC.senseCd > 0) SOC.senseCd -= dt;   // 点过「取消」后的感应冷却
       if (state === 'walk') {
-        // 整个球场范围（含周边缓冲带）都算触发区 —— 站在球旁边也能开赛
+        // 【2026-10-19·fix24】触发区收紧到"球场 + 3m"。
+        // 用户反馈"走到马路上都还收到比赛邀请"：原来是 hw+9 / hd+10 的超大缓冲（球场半宽才12/10），
+        // 触发区一路盖到场外好几米、压到环岛路。现在必须基本贴着球场边线才弹开赛面板。
         const dxt = Math.abs(person.position.x - P.x), dzt = Math.abs(person.position.z - P.z);
-        const inT = dxt < P.hw + 9 && dzt < P.hd + 10;
+        const inT = dxt < P.hw + 3 && dzt < P.hd + 3;
         if (inT && !SOC.panelOn && SOC.senseCd <= 0) { SOC.panelOn = true; soccerShowPanel(); }
         else if (!inT && SOC.panelOn) { soccerHidePanel(); }
       } else if (SOC.panelOn) { soccerHidePanel(); }
