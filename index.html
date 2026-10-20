@@ -817,12 +817,15 @@ const isMobile = coarsePointer || /Android|iPhone|iPad|iPod|Mobile/i.test(naviga
 // 原来是 antialias:true + setPixelRatio(min(dpr,2))：注释写着"上限 1.5"，代码却是 2。
 // 安卓机 dpr 普遍 2.5~3.5，取 2 等于按 2 倍分辨率渲染 —— 像素总量是像素比 1 的 4 倍，
 // 手机 GPU 填充率直接被吃干，这是"一开车就卡死 / 发热 / 卡退"的头号原因。
-// 现在：手机默认像素比 1 + 关掉 MSAA（移动 GPU 上抗锯齿很贵），并交给 updateAutoQuality 动态微调。
+// 现在：手机关掉 MSAA（移动 GPU 上抗锯齿很贵），但把像素比上限从 1.0 提到 1.3 ——
+// 1.3 只比 1.0 多 ~1.7 倍像素（远不到当年 4 倍的崩溃量），却让画面明显更清晰、边缘不再狗牙；
+// 高像素比本身≈免费超采样抗锯齿，比开 MSAA 省得多。下限也从 0.7 抬到 0.85，避免一卡就糊成马赛克
+// （每次降分辨率都是一次肉眼可见的"跳变"，本身就容易被当成"又卡了一下"）。交给 updateAutoQuality 兜底。
 const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-// 像素比上下限：手机 0.7~1.0 可动态调整；桌面保持设备原始值（不降质）
-const PIXEL_RATIO_MAX = isMobile ? 1 : Math.min(devicePixelRatio, 2);
-const PIXEL_RATIO_MIN = isMobile ? 0.7 : Math.min(devicePixelRatio, 2);
+// 像素比上下限：手机 0.85~1.3 可动态调整（【2026-10-20·fix27】下限 0.7→0.85、上限 1.0→1.3，提升画质）；桌面保持设备原始值（不降质）
+const PIXEL_RATIO_MAX = isMobile ? 1.3 : Math.min(devicePixelRatio, 2);
+const PIXEL_RATIO_MIN = isMobile ? 0.85 : Math.min(devicePixelRatio, 2);
 let pixelRatio = PIXEL_RATIO_MAX;
 renderer.setPixelRatio(pixelRatio);
 document.body.appendChild(renderer.domElement);
@@ -14585,7 +14588,7 @@ function applyExplosionDamage(v) {
 function explodeCar(v) {
   if (!v || isBicycle(v)) return;   // 自行车永不爆炸
   // 炸车是重大公共事件：加通缉星、警察立刻来追
-  if (!v._countedHeat) { v._countedHeat = true; addWanted(1); addHeat(20); }   // 同一辆车只加一次星
+  if (!v._countedHeat) { v._countedHeat = true; addWanted(0.5); addHeat(20); }   // 【2026-10-20·fix27】炸车原来加整 1 星（且绕过 2 星轻罪封顶）→ 4 辆炸车就 4 星，太离谱；改为半星，且 4 星以上仍走 addWanted 的"高星半颗"抗性。同一辆车只加一次星
   if (v.exploded) return; v.exploded = true;
   // 先把驾驶中的玩家甩出来
   if (state === 'drive' && currentCar === v) { state = 'walk'; currentCar = null; person.visible = true; person.position.set(v.x, personGroundY(v.x, v.z), v.z); stopCarMusic(); }
@@ -17089,7 +17092,7 @@ function kickTarget() {
     const c = t.o;
     c.alive = false; c.respawn = 6;
     spawnBurst(c.x, c.z, 0xff5533, 12);
-    dropReward(c.x, c.z, c); addWanted(2); addXp(40);
+    dropReward(c.x, c.z, c); addKillBounty('melee'); addXp(40);   // 【2026-10-20·fix27】踢死城管原来直接 addWanted(2)（+2 整星，踢两个就 4 星，太离谱）→ 改为按击杀阶梯计 1 次（与枪杀城管一致）
     launchFly(c, dx * 13, 10, dz * 13, true);
     setHint('踢飞了！');
   } else if (t.kind === 'trash') {
@@ -21999,19 +22002,19 @@ function updateAutoQuality() {
   const fps = _qFrames * 1000 / elapsed;
   _qFrames = 0; _qWindowStart = now;
   if (now < _qCooldownUntil) return;
-  if (fps < 22) {                        // 移动端目标 30fps：低于 22 才算真的卡
-    _qBad++; _qGood = 0;
+  if (fps < 20) {                        // 【2026-10-20·fix27】移动端目标 30fps：阈值从 22 降到 20，
+    _qBad++; _qGood = 0;                 // 只有真的撑不住才降分辨率，避免偶发掉帧就"跳变"反而显得更卡
     if (_qBad >= 2 && pixelRatio > PIXEL_RATIO_MIN + 0.01) {
       pixelRatio = Math.max(PIXEL_RATIO_MIN, pixelRatio - 0.15);
       renderer.setPixelRatio(pixelRatio);
       _qBad = 0; _qCooldownUntil = now + 3000;
     }
-  } else if (fps >= 28) {                // 要稳定接近 30fps 才敢升回去，避免来回抖
+  } else if (fps >= 29) {                // 要稳定接近 30fps 才敢升回去，避免来回抖（阈值 28→29，略更稳）
     _qGood++; _qBad = 0;
-    if (_qGood >= 5 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {
+    if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回升（原 5），恢复更跟手
       pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.15);
       renderer.setPixelRatio(pixelRatio);
-      _qGood = 0; _qCooldownUntil = now + 5000;
+      _qGood = 0; _qCooldownUntil = now + 4000;
     }
   } else { _qBad = 0; _qGood = 0; }
 }
