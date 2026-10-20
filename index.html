@@ -817,20 +817,36 @@ const isMobile = coarsePointer || /Android|iPhone|iPad|iPod|Mobile/i.test(naviga
 // 原来是 antialias:true + setPixelRatio(min(dpr,2))：注释写着"上限 1.5"，代码却是 2。
 // 安卓机 dpr 普遍 2.5~3.5，取 2 等于按 2 倍分辨率渲染 —— 像素总量是像素比 1 的 4 倍，
 // 手机 GPU 填充率直接被吃干，这是"一开车就卡死 / 发热 / 卡退"的头号原因。
-// 现在：手机关掉 MSAA（移动 GPU 上抗锯齿很贵），但把像素比上限从 1.0 提到 1.3 ——
-// 1.3 只比 1.0 多 ~1.7 倍像素（远不到当年 4 倍的崩溃量），却让画面明显更清晰、边缘不再狗牙；
-// 高像素比本身≈免费超采样抗锯齿，比开 MSAA 省得多。下限也从 0.7 抬到 0.85，避免一卡就糊成马赛克
-// （每次降分辨率都是一次肉眼可见的"跳变"，本身就容易被当成"又卡了一下"）。交给 updateAutoQuality 兜底。
+// 现在：手机关掉 MSAA（移动 GPU 上抗锯齿很贵），但把像素比上限从 1.0 提到 1.25 ——
+// 1.25 只比 1.0 多 ~1.56 倍像素（远不到当年 4 倍的崩溃量），却让画面明显更清晰、边缘不再狗牙；
+// 高像素比本身≈免费超采样抗锯齿，比开 MSAA 省得多。下限放到 0.8，让撑不住的机器能自救。
+// 【2026-10-20·fix28 调整】用户反馈"画质提升了但很卡"：说明 1.3 这档填充率对这台机器太重，
+// 于是上限 1.3→1.25（像素量再省 ~8%），并把下限 0.85→0.8（多一档自救空间），
+// 真正的提速主力是同一批改动里的 draw call 优化（红绿灯 InstancedMesh）和 CPU 减负。
 const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-// 像素比上下限：手机 0.85~1.3 可动态调整（【2026-10-20·fix27】下限 0.7→0.85、上限 1.0→1.3，提升画质）；桌面保持设备原始值（不降质）
-const PIXEL_RATIO_MAX = isMobile ? 1.3 : Math.min(devicePixelRatio, 2);
-const PIXEL_RATIO_MIN = isMobile ? 0.85 : Math.min(devicePixelRatio, 2);
+// 像素比上下限：手机 0.8~1.25 可动态调整；桌面保持设备原始值（不降质）
+const PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
+const PIXEL_RATIO_MIN = isMobile ? 0.8 : Math.min(devicePixelRatio, 2);
 let pixelRatio = PIXEL_RATIO_MAX;
 renderer.setPixelRatio(pixelRatio);
 document.body.appendChild(renderer.domElement);
 // GPU 上下文被系统回收（移动端内存吃紧时常见）时：阻止默认行为，让 three.js 自动恢复，避免黑屏卡死
-renderer.domElement.addEventListener('webglcontextlost', e => e.preventDefault());
+// 【2026-10-20·fix28】原来只写了 e.preventDefault()，**没有处理 webglcontextrestored**：
+// 上下文丢失时 GPU 驱动会重置，three.js 要在 restored 时把贴图/几何体/材质**全部重新上传一遍**，
+// 这期间画面必然是黑的；而且如果这时主循环还在照常 render + 改分辨率，很容易二次丢失 → 反复黑屏。
+// 现在：丢失时暂停渲染循环（别往死上下文里反复画），恢复后立刻补一帧并自动续上。
+var _ctxLost = false;
+renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  _ctxLost = true;
+  try { setHint('显卡被系统回收，正在恢复…'); } catch (err) {}
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  _ctxLost = false;
+  try { renderer.setPixelRatio(pixelRatio); renderer.render(scene, camera); } catch (e) {}
+  try { setHint('已恢复'); } catch (err) {}
+});
 
 const hemi = new THREE.HemisphereLight(0xbcd8ff, 0x9a7f5a, 0.55);   // 天空冷光 + 地面暖反光，更有层次
 scene.add(hemi);
@@ -1732,13 +1748,28 @@ function distToAnyOuterRoad(x, z) {
 })();
 
 // 红绿灯（每个路口一个，放在东北角人行道上）
+// 【2026-10-20·fix28 手机性能】原来 121 个路口的灯泡**各自 new 一个 MeshBasicMaterial**，
+// 材质一 unique 就没法被静态合批吃掉（batchStaticScene 是按材质分组合并的），
+// 于是 121 个灯泡 = 121 次 draw call。而 draw call 正是手机端的头号瓶颈
+// （本项目自己的注释就写着"安卓机每帧超过五六百次就开始掉帧、发热，最后被系统杀进程"）。
+// 现在改成**一个 InstancedMesh + instanceColor**：1 次 draw call 画完 121 个灯泡，
+// 每个灯泡依然能按路口相位单独变红/黄/绿（instanceColor 是逐实例的，视觉完全一致）。
 const lights = [];
+var lightIJ = [];        // 每个实例对应的路口 [i, j]（InstancedMesh 的实例挂不上 userData，单独存一份）
+var lightColCache = [];  // 每个实例上一次的颜色，省掉没变化时的重复 setColorAt
+var _lightColorTmp = new THREE.Color();
 (function addLights() {
   const poleMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
   const boxMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
   const poleGeo = new THREE.CylinderGeometry(0.12, 0.16, 5.5, 6);
   const boxGeo = new THREE.BoxGeometry(0.8, 1.0, 0.8);
   const bulbGeo = new THREE.SphereGeometry(0.22, 8, 8);
+  // 材质本身是白的 —— 真实颜色全部走 instanceColor 逐实例乘上去，这样 121 个实例能共用一份材质
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const n = roads.length * roads.length;
+  const inst = new THREE.InstancedMesh(bulbGeo, bulbMat, n);
+  const dummy = new THREE.Object3D();
+  let k = 0;
   for (let i = 0; i < roads.length; i++) for (let j = 0; j < roads.length; j++) {
     const px = roads[i] + ROAD / 2 + 1, pz = roads[j] + ROAD / 2 + 1;
     const gy = terrainHeight(px, pz);   // 灯柱落在起伏地面上
@@ -1746,13 +1777,25 @@ const lights = [];
     pole.position.set(px, gy + 2.75, pz); scene.add(pole);
     const lamp = new THREE.Mesh(boxGeo, boxMat);
     lamp.position.set(px, gy + 5.6, pz); scene.add(lamp);
-    // 每个路口一个独立灯泡材质：各自按相位变红/绿/黄（原来 121 个灯泡共用一份材质）
-    const bulb = new THREE.Mesh(bulbGeo, new THREE.MeshBasicMaterial({ color: 0x44ff44 }));
-    bulb.position.set(px, gy + 5.95, pz);
-    bulb.userData.ij = [i, j];
-    scene.add(bulb);
-    lights.push(bulb);
+    dummy.position.set(px, gy + 5.95, pz);
+    dummy.updateMatrix();
+    inst.setMatrixAt(k, dummy.matrix);
+    inst.setColorAt(k, _lightColorTmp.setHex(0x44ff44));
+    lightIJ.push([i, j]);
+    lightColCache.push(0x44ff44);
+    k++;
   }
+  inst.instanceMatrix.needsUpdate = true;
+  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  // 【2026-10-20·fix28 重要】视锥剔除必须关掉。
+  // three.js r128 的 InstancedMesh **没有** boundingSphere/computeBoundingSphere，
+  // 于是 Frustum.intersectsObject 会退回去用"几何体自带的包围球"——
+  // 而几何体是以原点为中心的小球（半径 0.22），于是只要玩家开出城区（远离世界原点），
+  // 整片 121 个红绿灯会被一次性剔除掉、凭空消失。
+  // 121 个小灯泡一次 draw call 就画完，代价可以忽略，所以直接不剔除。
+  inst.frustumCulled = false;
+  scene.add(inst);
+  lights.push(inst);
 })();
 
 // 建筑（玻璃幕墙高楼，窗户用 canvas 贴图）
@@ -12389,6 +12432,10 @@ const carDurEl = document.getElementById('cardur'), carDurFillEl = document.getE
 const starsEl = document.getElementById('stars'), xpLineEl = document.getElementById('xpLine'), xpFillEl = document.getElementById('xpfill');
 const ammoHudEl = document.getElementById('ammoHud'), shopGoldEl = document.getElementById('shopGold');
 const hudCache = Object.create(null);
+// 【2026-10-20·fix28】hudRawCache 记的是"送进 hudText 的原始字符串"，
+// 用来在跑 mobileHints（20 多条正则）之前就判断出"这次根本没变" —— 开车时提示行每帧都被 set，
+// 没有这层缓存就等于每帧白跑 20 多次正则。
+const hudRawCache = Object.create(null);
 // 【2026-10-13 用户要求】狙击镜状态：按住「瞄准」→ scoping = true
 //   → 主循环把 dt 乘 0.5（全世界变慢）+ 屏幕上出现圆形瞄准镜。
 var scoping = false;
@@ -12500,6 +12547,12 @@ function mobileHints(s) {
 }
 function hudText(el, key, value) {
   if (!el) return;
+  // 【2026-10-20·fix28】先比"原始串"缓存，再决定要不要跑 mobileHints。
+  // 原来是"先跑 mobileHints（20 多条正则）→ 再比缓存" —— 而 hintText 在开车时每帧都被重新 set
+  // （updateJobGuide / 出租车 HUD 等），等于每帧白跑 20 多次正则替换，纯 CPU 浪费。
+  // 现在原始串没变就直接返回，正则一次都不跑；变了才做替换（行为与原来完全一致）。
+  if (hudRawCache[key] === value) return;
+  hudRawCache[key] = value;
   if (key === 'hint') value = mobileHints(value);   // 提示行统一过滤键盘键位
   if (hudCache[key] !== value) { el.textContent = value; hudCache[key] = value; }
 }
@@ -14426,7 +14479,9 @@ function smokeGeometry(heavy) {
   if (!_smokeGeoLightCache) _smokeGeoLightCache = new THREE.SphereGeometry(0.22, 6, 5);
   return _smokeGeoLightCache;
 }
-function smokeCap() { return isMobile ? 60 : 140; }   // 同屏烟雾上限（车辆受损会持续冒烟，不封顶会越积越多）
+function smokeCap() { return isMobile ? 40 : 140; }   // 同屏烟雾上限（车辆受损会持续冒烟，不封顶会越积越多）
+// 【2026-10-20·fix28】手机 60→40：每颗烟都是独立半透明球（一次 draw call + 一份填充率），
+// 手机上 40 颗已经够表达"车在冒烟"，再多纯属白烧 GPU。
 function emitSmoke(x, y, z, heavy) {
   const cap = smokeCap();
   if (smokes.length >= cap) {
@@ -18779,12 +18834,22 @@ for (let i = 0; i < roads.length; i++) {
   for (let j = 0; j < roads.length; j++) INTERSECTIONS[i][j] = { i, j, x: roads[i], z: roads[j], occ: null, enterAxis: 0, enterAt: 0, qV: [], qH: [] };
 }
 function updateTrafficLights() {
-  for (const b of lights) {
-    const ij = b.userData.ij; if (!ij) continue;
+  // 【2026-10-20·fix28】121 个灯泡现在是 1 个 InstancedMesh，改为逐实例写 instanceColor
+  // （颜色只在真的变了的时候写，避免每帧无谓地上传整张 instanceColor buffer）
+  const inst = lights[0];
+  if (!inst || !inst.isInstancedMesh) return;
+  let dirty = false;
+  for (let k = 0; k < lightIJ.length; k++) {
+    const ij = lightIJ[k];
     const ph = axisPhaseOf(ij[0], ij[1]).v;
     const col = ph === 'green' ? 0x44ff44 : (ph === 'yellow' ? 0xffcc22 : 0xff4444);
-    if (b.userData._c !== col) { b.material.color.setHex(col); b.userData._c = col; }
+    if (lightColCache[k] !== col) {
+      lightColCache[k] = col;
+      inst.setColorAt(k, _lightColorTmp.setHex(col));
+      dirty = true;
+    }
   }
+  if (dirty && inst.instanceColor) inst.instanceColor.needsUpdate = true;
 }
 // 本轴前方最近路口（含索引）
 function nextCrossing(t) {
@@ -19984,7 +20049,11 @@ function updateCarExhaust(dt) {
   const spd = Math.abs(v.speed || 0);
   _exhaustCd -= dt;
   if (spd < 1.2 || _exhaustCd > 0) return;
-  _exhaustCd = 0.05 + Math.random() * 0.06;
+  // 【2026-10-20·fix28】原来每 0.05~0.11 秒冒一颗 = **每秒 9~20 颗**。
+  // 每颗烟都是独立的半透明小球（自己一个 draw call + 一份填充率），
+  // 加上 1.1 秒的寿命，开车时同屏常年挂着 10~20 颗尾气 → 白白吃掉几十次 draw call。
+  // 手机上改成 0.22~0.34 秒一颗（每秒 3~4 颗，视觉上依然是连续的尾气），省掉 ~5 倍开销。
+  _exhaustCd = isMobile ? (0.22 + Math.random() * 0.12) : (0.05 + Math.random() * 0.06);
   const back = (v.isTruck || v.isCrane) ? 4.2 : 2.1;
   emitSmoke(v.x - Math.sin(v.angle) * back, 0.45, v.z - Math.cos(v.angle) * back, false);
 }
@@ -20230,7 +20299,11 @@ function updateDayNight(dt) {
   updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
 }
 function update(dt) {
-  if (_frameCnt % 2 === 0) rebuildNpcGrid();   // 每2帧重建NPC空间网格（降低卡顿）
+  // 【2026-10-20·fix28】每 2 帧 → 每 4 帧重建 NPC 空间网格。
+  // 每次重建都要把 _gridW×_gridH（约 31×30 = 930）个格子数组全部清空，
+  // 每 2 帧一次 = 每秒近 1.4 万次清空操作，纯 CPU 浪费。
+  // 网格只用来做"附近有什么"的粗筛，4 帧一次完全够用（迟滞另有 40m 兜底，不会闪烁）。
+  if (_frameCnt % 4 === 0) rebuildNpcGrid();
   tickCollisionSfx(dt);
   atkCd -= dt;
   // 全自动武器：按住左键/攻击键持续射击（加特林/冲锋枪/步枪/AK47/链锯...），不必反复点击
@@ -21906,7 +21979,10 @@ function updateDynamicVisibility() {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);   // 3D 距离，包含高度
       // 迟滞：已经可见的物体要超出阈值才隐藏；隐藏中的物体必须进入"阈值-迟滞"才显示。
       // 人和车阈值分开算：人的模型贵得多（22 个 mesh），可见半径必须更保守。
-      const base = isVehicle ? CULL_DISTANCE_CAR : CULL_DISTANCE;
+      // 【2026-10-20·fix28】开车时车辆半径再收一档（手机 400→260m）：
+      // 开车时相机拉得远、车速又快，400m 内的车会**一次性全涌进视野**，draw call 跟着暴涨
+      // ——这正是"开车时最卡"的主因之一。夜里雾 far 只有 360m，收到 260m 肉眼几乎看不出差别。
+      const base = isVehicle ? (isMobile && state === 'drive' ? 260 : CULL_DISTANCE_CAR) : CULL_DISTANCE;
       const hyst = isVehicle ? CULL_HYSTERESIS_CAR : CULL_HYSTERESIS;
       const limit = item.group.visible ? base : base - hyst;
       item.group.visible = dist <= limit;
@@ -22002,14 +22078,20 @@ function updateAutoQuality() {
   const fps = _qFrames * 1000 / elapsed;
   _qFrames = 0; _qWindowStart = now;
   if (now < _qCooldownUntil) return;
-  if (fps < 20) {                        // 【2026-10-20·fix27】移动端目标 30fps：阈值从 22 降到 20，
-    _qBad++; _qGood = 0;                 // 只有真的撑不住才降分辨率，避免偶发掉帧就"跳变"反而显得更卡
+  // 【2026-10-20·fix28 重新调阈值】
+  // 手机端主循环限 30fps，所以：接近 30 才算"流畅"，明显低于 30 就该降质。
+  //   掉帧阈值 24（fix27 改成了 20 —— 结果是"卡"的机器降不下来，只能一直卡着，必须改回来）；
+  //   回升阈值 29（要稳稳接近 30fps 才敢升回去，避免来回抖）。
+  if (fps < 24) {
+    _qBad++; _qGood = 0;
     if (_qBad >= 2 && pixelRatio > PIXEL_RATIO_MIN + 0.01) {
-      pixelRatio = Math.max(PIXEL_RATIO_MIN, pixelRatio - 0.15);
+      // 特别卡（fps < 16）时一次降两级，别让玩家先卡好几秒才看到画面变糊
+      const steps = fps < 16 ? 2 : 1;
+      pixelRatio = Math.max(PIXEL_RATIO_MIN, pixelRatio - 0.15 * steps);
       renderer.setPixelRatio(pixelRatio);
       _qBad = 0; _qCooldownUntil = now + 3000;
     }
-  } else if (fps >= 29) {                // 要稳定接近 30fps 才敢升回去，避免来回抖（阈值 28→29，略更稳）
+  } else if (fps >= 29) {                // 要稳定接近 30fps 才敢升回去，避免来回抖
     _qGood++; _qBad = 0;
     if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回升（原 5），恢复更跟手
       pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.15);
@@ -22021,6 +22103,9 @@ function updateAutoQuality() {
 let _lastFrameMs = 0;
 let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于在刚暂停那一帧清一次输入）
 const frameLoop = () => {
+  // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
+  // 既会刷一屏黑，又很容易触发二次丢失（表现为"黑屏闪个不停"）。等 restored 事件恢复后再继续。
+  if (_ctxLost) return;
   // 移动端限 ~30fps：减少 GPU 发热与主线程压力，避免热降频/ANR 导致的越玩越卡甚至被杀进程
   if (isMobile) {
     const now = performance.now();
@@ -22042,7 +22127,9 @@ const frameLoop = () => {
       if (!isFinite(currentCar.z)) currentCar.z = person.position.z;
     }
   } catch (err) {}
-  if (_frameCnt % 3 === 0) { buildVehicleGrid(); updateDynamicVisibility(); }
+  // 【2026-10-20·fix28】每 3 帧 → 每 4 帧（车辆网格 + 动态可见性一起）。
+  // 可见性判断本身带 40~50m 迟滞，4 帧一次不会看出闪烁。
+  if (_frameCnt % 4 === 0) { buildVehicleGrid(); updateDynamicVisibility(); }
   // 【2026-10-15·弹窗 = 整个游戏暂停】商店 / 地图 / 属性 / 任务 / 摩天轮 / 开发者 /
   // 工作模式 / 南岛立牌 / 足球场 这些面板一出现：update 不跑（人物、NPC、车流、任务倒计时
   // 全部冻结），并且**在刚进入暂停的那一帧清空所有按键与摇杆输入** ——
@@ -22065,8 +22152,13 @@ const frameLoop = () => {
     if (hint) hint.textContent = '⚠ Error: ' + e.message;
   }
   if (!pausedNow) { try { updateSoccer(dt); } catch (e) {} }   // 【足球】南岛 3v3（弹窗暂停时一并冻结）
-  renderer.render(scene, camera);
+  // 【2026-10-20·fix28】updateAutoQuality 必须排在 render **之前**：
+  // 它会调 renderer.setPixelRatio() → three.js 内部重新 setSize → **整个 framebuffer 被重分配**。
+  // 原来它排在 render 之后，于是这一帧刚画好的内容随旧缓冲区一起被丢掉，
+  // 浏览器紧接着合成一张**空画布** → 玩家看到的就是"闪一下黑屏"（用户反馈"有时候会闪出黑屏"）。
+  // 挪到 render 前面后：改分辨率和画这一帧在同一帧内完成，新缓冲区立刻被填满，不会出现空白帧。
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
+  renderer.render(scene, camera);
   updateDebugHud();
   updateRaceCdHud();
   // 商店预览用独立的 renderer + 自己的 rAF，主循环不碰它（省 GPU，也避免软件渲染变卡）
@@ -22135,13 +22227,28 @@ function shutdownGame() {
 addEventListener('pagehide', shutdownGame);
 addEventListener('beforeunload', shutdownGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) shutdownGame(); else resumeGameAudio(); });
+// 【2026-10-20·fix28 手机黑屏闪一下】原来的 resize 处理是"来一次就 setSize 一次"：
+//   手机上地址栏收放、键盘弹出、旋转屏幕都会**连续触发几十次** resize，
+//   而 renderer.setSize 会**重新分配整个 framebuffer** —— 于是：
+//     ① 缓冲区被换掉但这一帧还没画 → 浏览器合成一张空画布 = 闪黑屏；
+//     ② 一串 resize = 连续重分配大块显存 = 明显卡顿。
+// 现在三道处理：微小变化直接忽略 → 去抖 150ms 把一串 resize 合并成一次 → setSize 之后立刻补渲染一帧。
+let _resizeTimer = 0, _lastRsW = 0, _lastRsH = 0;
 addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
-  resizeNightVisionCanvas();   // 夜视仪的方框层跟着窗口走
-  // 大地图开着的时候转屏/改窗口：画布分辨率要跟着重算，否则又变回"扁扁的一条"
-  const mp = document.getElementById('mapPanel');
-  if (mp && mp.style.display === 'flex') { syncMapCanvasSize(); drawFullMap(); }
-  checkRotate();
+  const w = innerWidth, h = innerHeight;
+  if (Math.abs(w - _lastRsW) < 2 && Math.abs(h - _lastRsH) < 2) return;   // 地址栏抖 1~2px：不理它
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    _lastRsW = innerWidth; _lastRsH = innerHeight;
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    try { renderer.render(scene, camera); } catch (e) {}   // 立刻补一帧，别让空白缓冲区被合成出去
+    resizeNightVisionCanvas();   // 夜视仪的方框层跟着窗口走
+    // 大地图开着的时候转屏/改窗口：画布分辨率要跟着重算，否则又变回"扁扁的一条"
+    const mp = document.getElementById('mapPanel');
+    if (mp && mp.style.display === 'flex') { syncMapCanvasSize(); drawFullMap(); }
+    checkRotate();
+  }, 150);
 });
 function checkRotate() { document.getElementById('rotate').style.display = (innerWidth < innerHeight) ? 'flex' : 'none'; }
 checkRotate();
