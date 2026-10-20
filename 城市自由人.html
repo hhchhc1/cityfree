@@ -20164,8 +20164,15 @@ function updateStreetLights() {
   // 灯晕：远处唯一能看见"这盏灯亮着"的东西，所以要比原来明显；
   // 但整体压暗（0.3 上限），避免夜里一片亮黄发腻。
   if (lampHaloMat) lampHaloMat.opacity = 0.30 * nightF;
-  if (skyPoolMat) skyPoolMat.opacity = 0.045 * nightF;
-  for (let i = 0; i < skyGlowMats.length; i++) skyGlowMats[i].opacity = 0.07 * nightF;
+  // 【2026-10-20·fix29 手机性能】白天 nightF=0 时这些发光体的 opacity 被置成 0，
+  // 但**置 0 ≠ 不画** —— 透明的片元依然会跑完整套片元着色，draw call 一次不少。
+  // 全城摩天楼的发光盒 + 楼脚光斑共 60 多个 mesh（每栋楼一盒一圈），白天完全是白画：
+  // 白扔 60 多次 draw call + 60 多份填充率，正是"白天也卡"的隐形元凶。
+  // three.js 在 projectObject 里会检查 material.visible（r128 源码里就是
+  // `else if ( material.visible ) currentRenderList.push(...)`），所以直接置 false，
+  // 连 render list 都进不去，draw call 归零。夜景再置回来。
+  if (skyPoolMat) { skyPoolMat.opacity = 0.045 * nightF; skyPoolMat.visible = nightF > 0.02; }
+  for (let i = 0; i < skyGlowMats.length; i++) { const m = skyGlowMats[i]; m.opacity = 0.07 * nightF; m.visible = nightF > 0.02; }
   if (lampGlowMat) lampGlowMat.color.setHex(nightF > 0.35 ? 0xcbb98f : 0x6d6759);   // 比原来暗一点
   if (!streetLightPool.length) initStreetLightPool();
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
@@ -20292,11 +20299,17 @@ function updateDayNight(dt) {
   moon.position.set(Math.sin(mA) * 400, -Math.cos(mA) * 400, 120).add(camera.position);
   moon.material.opacity = nightF;
   moon.visible = nightF > 0.02;
-  updateHeadlights();
-  updateStreetLights();
-  updateHqLights();      // Task #8：大本营夜间照明（内部按 nightF + 距离自行开关）
-  updateFerrisLights();  // Task #9：摩天轮底部 LED 灯圈的上照灯
-  updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
+  // 【2026-10-20·fix29 手机 CPU】灯光类更新降频到每 2 帧：
+  // updateStreetLights 每帧要遍历全城 110 盏灯还要排序，updateHeadlights 每帧要收集候选车再排序。
+  // 灯光亮度/位置的 1 帧之差肉眼根本看不出来，纯白花的 CPU 在手机上就是掉帧。
+  // ⚠️ 星空/月亮仍留在上面每帧更新 —— 它们要跟着相机走，降频会看到天空"拖影"。
+  if (_frameCnt % 2 === 0) {
+    updateHeadlights();
+    updateStreetLights();
+    updateHqLights();      // Task #8：大本营夜间照明（内部按 nightF + 距离自行开关）
+    updateFerrisLights();  // Task #9：摩天轮底部 LED 灯圈的上照灯
+    updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
+  }
 }
 function update(dt) {
   // 【2026-10-20·fix28】每 2 帧 → 每 4 帧重建 NPC 空间网格。
@@ -20926,7 +20939,9 @@ function update(dt) {
 
   // 交通信号：推进全局时钟，按各路口相位点亮红绿灯
   signalTimer += dt;
-  updateTrafficLights();
+  // 【2026-10-20·fix29】红绿灯相位按"秒"变化，降到每 2 帧刷新颜色完全看不出来
+  // （每帧要跑 121 次相位计算 + 比对，纯 CPU）
+  if (_frameCnt % 2 === 0) updateTrafficLights();
   try {
     releaseClaims(performance.now() / 1000);
     for (const t of traffic) updateTraffic(t, dt);
@@ -21982,7 +21997,9 @@ function updateDynamicVisibility() {
       // 【2026-10-20·fix28】开车时车辆半径再收一档（手机 400→260m）：
       // 开车时相机拉得远、车速又快，400m 内的车会**一次性全涌进视野**，draw call 跟着暴涨
       // ——这正是"开车时最卡"的主因之一。夜里雾 far 只有 360m，收到 260m 肉眼几乎看不出差别。
-      const base = isVehicle ? (isMobile && state === 'drive' ? 260 : CULL_DISTANCE_CAR) : CULL_DISTANCE;
+      // 【2026-10-20·fix29】流畅模式：再乘一个 <1 的系数（1 → 0.82 → 0.65）。
+      const cullBase = isVehicle ? (isMobile && state === 'drive' ? 260 : CULL_DISTANCE_CAR) : CULL_DISTANCE;
+      const base = cullBase * ecoCullScale();
       const hyst = isVehicle ? CULL_HYSTERESIS_CAR : CULL_HYSTERESIS;
       const limit = item.group.visible ? base : base - hyst;
       item.group.visible = dist <= limit;
@@ -22065,6 +22082,14 @@ try { warmUpLods(); } catch (error) { console.error('[LOD warmup error]', error)
 // 【性能】自适应画质：手机端连续掉帧就自动降分辨率兜底，恢复到流畅后再慢慢升回来。
 // 安卓上的"卡死"往往是某个瞬间负载冲高（刚进新区域 / 爆炸 / 警察增援）之后连锁恶化，
 // 主动降一档分辨率能把最坏情况压住，比让玩家手动重开游戏强得多。
+// 【2026-10-20·fix29】加第二级"流畅模式"：分辨率降到底还是卡，就自动收窄远景可见半径
+// （少画人/车 = 少 draw call + 少 NPC 动画）。这才是原生游戏动态画质的做法：先降分辨率、再降远景。
+var _cpuEco = 0;   // 0=正常 / 1=流畅（远景 ×0.82）/ 2=极限（远景 ×0.65）
+// 注意：下面用 (_cpuEco|0) 而不是直接比大小 —— 启动时 updateDynamicVisibility() 会在
+// _cpuEco 赋值之前被调用一次，undefined 直接比较会得到错误的降质档位（项目 TDZ 约定的写法）。
+function ecoCullScale() { const e = (_cpuEco | 0); return e >= 2 ? 0.65 : (e === 1 ? 0.82 : 1); }
+// 流畅模式下允许像素比再往下探一截（0.8 → 0.68 → 0.62），把"撑不住"的机器彻底救回来
+function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.62, PIXEL_RATIO_MIN - e * 0.12); }
 let _qFrames = 0, _qWindowStart = 0, _qBad = 0, _qGood = 0, _qCooldownUntil = 0;
 function updateAutoQuality() {
   if (!isMobile) return;
@@ -22078,22 +22103,36 @@ function updateAutoQuality() {
   const fps = _qFrames * 1000 / elapsed;
   _qFrames = 0; _qWindowStart = now;
   if (now < _qCooldownUntil) return;
-  // 【2026-10-20·fix28 重新调阈值】
-  // 手机端主循环限 30fps，所以：接近 30 才算"流畅"，明显低于 30 就该降质。
-  //   掉帧阈值 24（fix27 改成了 20 —— 结果是"卡"的机器降不下来，只能一直卡着，必须改回来）；
-  //   回升阈值 29（要稳稳接近 30fps 才敢升回去，避免来回抖）。
-  if (fps < 24) {
+  // 【2026-10-20·fix29 重新定阈值】帧率上限已从 30 提到 60，所以“流畅”的判据也一起改：
+  //   掉帧阈值 fps < 45（明显低于 60 才动手）；回升阈值 fps >= 55（稳稳接近 60 才敢升回去）。
+  //   特别卡（fps < 25）时一次降两级，别让玩家先卡好几秒才看到画面变糊。
+  // 两级降质阶梯（先软后硬，这也是原生游戏“动态画质”的标准顺序）：
+  //   第 1 级：降像素比（分辨率）—— 最省事，副作用最小
+  //   第 2 级：进入“流畅模式”，收窄远景可见半径（少画人/车 → 少 draw call + 少 NPC 动画）
+  // 升回去要求更高（连续 8 个 1 秒窗都流畅才收回远景），避免在临界点反复抖。
+  if (fps < 45) {
     _qBad++; _qGood = 0;
-    if (_qBad >= 2 && pixelRatio > PIXEL_RATIO_MIN + 0.01) {
-      // 特别卡（fps < 16）时一次降两级，别让玩家先卡好几秒才看到画面变糊
-      const steps = fps < 16 ? 2 : 1;
-      pixelRatio = Math.max(PIXEL_RATIO_MIN, pixelRatio - 0.15 * steps);
-      renderer.setPixelRatio(pixelRatio);
-      _qBad = 0; _qCooldownUntil = now + 3000;
+    if (_qBad >= 2) {
+      const prMin = ecoPixelMin();
+      if (pixelRatio > prMin + 0.01) {
+        const steps = fps < 25 ? 2 : 1;
+        pixelRatio = Math.max(prMin, pixelRatio - 0.15 * steps);
+        renderer.setPixelRatio(pixelRatio);
+        _qBad = 0; _qCooldownUntil = now + 3000;
+      } else if (_cpuEco < 2) {
+        // 分辨率已经到底了还在卡 → 进入流畅模式：收窄远景
+        _cpuEco++;
+        _qBad = 0; _qCooldownUntil = now + 4000;
+        try { setHint(_cpuEco === 1 ? '已自动开启「流畅模式」：为保帧率收窄了远景可见范围' : '已开启「极限流畅模式」：远景进一步收窄'); } catch (e) {}
+      }
     }
-  } else if (fps >= 29) {                // 要稳定接近 30fps 才敢升回去，避免来回抖
+  } else if (fps >= 55) {                // 要稳稳接近 60fps 才敢升回去，避免来回抖
     _qGood++; _qBad = 0;
-    if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回升（原 5），恢复更跟手
+    if (_qGood >= 8 && _cpuEco > 0) {           // 连续 8 秒都流畅，才收回一档远景
+      _cpuEco--;
+      _qGood = 0; _qCooldownUntil = now + 5000;
+      try { setHint(_cpuEco === 0 ? '已恢复完整远景' : ''); } catch (e) {}
+    } else if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回调分辨率
       pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.15);
       renderer.setPixelRatio(pixelRatio);
       _qGood = 0; _qCooldownUntil = now + 4000;
@@ -22106,10 +22145,15 @@ const frameLoop = () => {
   // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
   // 既会刷一屏黑，又很容易触发二次丢失（表现为"黑屏闪个不停"）。等 restored 事件恢复后再继续。
   if (_ctxLost) return;
-  // 移动端限 ~30fps：减少 GPU 发热与主线程压力，避免热降频/ANR 导致的越玩越卡甚至被杀进程
+  // 移动端帧率上限：30fps → 60fps（2026-10-20·fix29）。
+  // **这是“感觉卡”的头号原因之一**：手游（和平精英等）普遍跑 60/90/120fps，
+  // 我们之前按 30fps 硬限，即使机器完全带得动，画面也只有原生游戏一半的流畅度。
+  // 这个上限只会**拖慢带得动的机器**（帧时间本来 ≥33ms 的慢机器根本不受它影响），
+  // 所以放开到 60fps 不会让慢机器更卡；万一哪台真扛不住，
+  // updateAutoQuality 的降质阶梯（先降像素比 → 再收窄远景）会把帧率拉回来。
   if (isMobile) {
     const now = performance.now();
-    if (now - _lastFrameMs < 33) return;
+    if (now - _lastFrameMs < 16) return;   // 60fps（原 33ms ≈ 30fps）
     _lastFrameMs = now;
   }
   // 【2026-10-13 用户要求】狙击开镜期间时间放慢到 0.5 倍 —— 人物、车流、计时全部跟着慢，
