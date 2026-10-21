@@ -227,6 +227,15 @@
     background: linear-gradient(180deg,#9d6bff,#5b2bbf); color: #fff; font: bold 16px sans-serif;
     box-shadow: 0 0 14px rgba(157,107,255,0.6);
   }
+  /* 【2026-10-21·fix31 移植】开发者模式下常驻的"退出开发者模式"按钮（手机/电脑都有，
+     不再只在光柱旁边才出现 —— 原来开了开发者模式走远就找不到退出的地方）。
+     z-index 31：在游戏内 HUD（10~25）之上、在黑幕弹窗（商店 90 / 面板 95+）之下，开着商店时自动被盖住。 */
+  #devExitBtn {
+    position: fixed; left: 12px; top: 130px; display: none;
+    padding: 9px 14px; border-radius: 18px; z-index: 31;
+    background: linear-gradient(180deg,#ff6b6b,#b52b2b); color: #fff; font: bold 13px sans-serif;
+    box-shadow: 0 0 12px rgba(255,80,80,0.6); cursor: pointer; user-select: none;
+  }
   #devPanel {
     position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 140;
     background: rgba(0,0,0,0.76);
@@ -680,6 +689,8 @@
     </div>
   </div>
   <div id="devBtn">开发者模式</div>
+  <!-- 【2026-10-21·fix31 移植】开发者模式常驻退出按钮 -->
+  <div id="devExitBtn">退出开发者模式</div>
   <div id="devPanel" style="display:none">
     <div class="dv-box">
       <div class="dv-title">开发者模式</div>
@@ -3108,11 +3119,18 @@ function buildFerrisWheel() {
   signBar.position.set(0, 8.6, -1.5); P.add(signBar);
   // 【fix16 用户要求】招牌上写"售票处"：白字霓虹发光，贴在招牌朝城区的那一面。
   // ⚠️ PlaneGeometry 默认法线朝 +Z（指向摩天轮），不转 180° 的话走过来的玩家看到的是反字。
-  const signText = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 2.5),
-    new THREE.MeshBasicMaterial({ map: ferrisSignTextTexture(), transparent: true, depthWrite: false }));
+  const _signTex = ferrisSignTextTexture();
+  const _signMat = new THREE.MeshBasicMaterial({ map: _signTex, transparent: true, depthWrite: false });
+  const signText = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 2.5), _signMat);
   signText.position.set(0, 7.0, -1.78);
   signText.rotation.y = Math.PI;
   P.add(signText);
+  // 【2026-10-21·fix31 移植·旧分支 fix33 用户要求】"两面都写售票处"——
+  // -Z 面（朝城区）和 +Z 面（朝摩天轮）各贴一块，两面**共用同一个贴图/材质**
+  // （ferrisSignTextTexture 不缓存，调两次会多生成一张 canvas 贴图）。
+  const signText2 = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 2.5), _signMat);
+  signText2.position.set(0, 7.0, -1.22);   // 招牌另一面（法线朝 +Z，不转）
+  P.add(signText2);
 
   // ===== Task #9：底部 LED 灯圈 + 向上照亮整个摩天轮 =====
   {
@@ -4320,7 +4338,7 @@ buildPlayerHome();
 // ============================================================
 var DEV_PASSWORD = 'hhc81192';
 var DEV_PILLAR = { x: -90, z: -78, r: 3.4 };
-var devMode = false, devPillar = null, devBtnEl = null, devPanelOpen = false;
+var devMode = false, devPillar = null, devBtnEl = null, devExitEl = null, devPanelOpen = false;
 // 【fix15】开发者模式的"进入前快照"：退出时把金币 / 技能点原样还回去（原来不退，等于白送）。
 var devModeGoldBackup = null, devModeSpBackup = null;
 
@@ -4385,12 +4403,13 @@ function setDevMode(on) {
     // 【fix15】进入前先记下金币和技能点（只在第一次进入时备份，退出会清空，
     // 避免重复进出把备份覆盖成"进模式后的 999999"）。
     if (devModeGoldBackup === null) devModeGoldBackup = gold;
-    if (devModeSpBackup === null) devModeSpBackup = player.skillPoints;
+    // 【2026-10-21·fix31 移植】不再灌"无限技能点"、也不再放开技能上限：
+    // 开发者模式**只给无限金币**，人物属性保持和普通模式完全一样
+    // （用户要求："就算进开发者模式，人物属性也和普通模式一样，不要 99，就 10 个就行了"）。
     gold = 999999;
-    player.skillPoints = 9999;
     recomputeStats();
     floatText('开发者模式已开启', '#c9a8ff');
-    showOverlay('开发者模式\n\n无限金币 + 无限技能点已生效。\n人物属性面板里技能可以「加」也可以「减」，用来核对每一级的属性加成是否合理。\n\n退出后会把进入前的金币 / 技能点原样还给你。', 5);
+    showOverlay('开发者模式\n\n无限金币已生效（人物属性保持普通模式不变）。\n\n退出后会把进入前的金币原样还给你。', 5);
   } else {
     // 【fix15】退出还原：金币、技能点回到进入前的数量（技能等级保留，方便继续看高等级数值）
     if (devModeGoldBackup !== null) { gold = devModeGoldBackup; devModeGoldBackup = null; }
@@ -4461,6 +4480,12 @@ function devSkillDown(key) {
   if (ok) ok.addEventListener('click', devTryUnlock);
   if (cancel) cancel.addEventListener('click', closeDevPanel);
   if (exit) exit.addEventListener('click', function () { closeDevPanel(); setDevMode(false); });
+  // 【2026-10-21·fix31 移植】常驻的"退出开发者模式"按钮（手机 tap / 电脑 click 都能用）
+  const exitBar = document.getElementById('devExitBtn');
+  if (exitBar) {
+    exitBar.addEventListener('click', function () { setDevMode(false); });
+    exitBar.addEventListener('touchstart', function (e) { e.preventDefault(); setDevMode(false); });
+  }
   if (btn) btn.addEventListener('click', function () { if (devMode) setDevMode(false); else openDevPanel(true); });
   // 点弹窗外面的黑幕 = 关闭（保险）
   if (panel) panel.addEventListener('click', function (e) { if (e.target === panel) closeDevPanel(); });
@@ -11134,6 +11159,34 @@ for (let i = 0; i < 4; i++) {
 // ========== 警察局驻点：巡逻警察 + 停车位上的空闲警车 ==========
 // 让警局"真的是个警局"：3 名警察在院里巡逻（不追捕时绕着岗点转，见 updateCop 的 postX/postZ），
 // 楼前车位停着 3 辆可开走的警车（抢警车照样会招来通缉）。
+// 【2026-10-21·fix31 移植·旧分支 fix32】修"警察局前停放的警车消失"：
+// 读档末尾会清掉"fixed 但不在存档里"的车（见 restoreSaveGame），而停放警车正是 fixed ——
+// 老存档里没记录它们，一读档就被删光，于是"警察局前的警车看不到了"。
+// 抽成函数：缺几辆补几辆（按总数判断，绝不重复生成）。IIFE 建一次，读档后再兜底一次。
+function ensureParkedCops() {
+  const spots = window.POLICE_LOT_SPOTS || [];
+  if (!spots.length) return;
+  const want = spots.length;
+  const have = cars.filter(c => c.isParkedCop && !c.exploded).length;
+  if (have >= want) return;
+  const copSh = CAR_SHAPES.cop || CAR_SHAPES.sedan;
+  for (let i = have; i < want; i++) {
+    const s = spots[i];
+    const g = makeCar('cop', COP_CAR_PAINT, false);
+    g.position.set(s.x, terrainHeight(s.x, s.z), s.z);
+    g.rotation.y = s.angle;
+    scene.add(g);
+    cars.push({
+      group: g, x: s.x, z: s.z, angle: s.angle,
+      radius: copSh.radius, rideH: copSh.rideH,
+      topSpeed: carTopSpeeds.cop || 24, accel: carAccels.cop || 12,
+      durability: 34, speed: 0,
+      saveId: nextSaveId('police-parked'), saveKind: 'cop', saveColor: COP_CAR_PAINT,
+      fixed: true,          // 固定车位：不会被"损坏车清理"回收掉
+      isParkedCop: true
+    });
+  }
+}
 (function addPoliceStationCrew() {
   const cx = POLICE_STATION.x, cz = POLICE_STATION.z;
   // ---- 驻点警察（4 名：南门左右各一、门廊正前方站岗、东侧一名）----
@@ -11154,25 +11207,8 @@ for (let i = 0; i < 4; i++) {
       postX: p.x, postZ: p.z      // 巡逻岗点：没通缉时在岗点 20m 内转悠
     });
   }
-  // ---- 空闲警车（停在楼前车位，玩家可以开走）----
-  // 注意：makeCar 返回的是 Group 本身，车辆对象要自己组装（照 spawnPoliceCar / 路边停车那一套字段）。
-  const spots = window.POLICE_LOT_SPOTS || [];
-  const copSh = CAR_SHAPES.cop || CAR_SHAPES.sedan;
-  for (const s of spots) {
-    const g = makeCar('cop', COP_CAR_PAINT, false);
-    g.position.set(s.x, terrainHeight(s.x, s.z), s.z);
-    g.rotation.y = s.angle;
-    scene.add(g);
-    cars.push({
-      group: g, x: s.x, z: s.z, angle: s.angle,
-      radius: copSh.radius, rideH: copSh.rideH,
-      topSpeed: carTopSpeeds.cop || 24, accel: carAccels.cop || 12,
-      durability: 34, speed: 0,
-      saveId: nextSaveId('police-parked'), saveKind: 'cop', saveColor: COP_CAR_PAINT,
-      fixed: true,          // 固定车位：不会被"损坏车清理"回收掉
-      isParkedCop: true
-    });
-  }
+  // ---- 空闲警车（停在楼前车位，玩家可以开走；具体逻辑见 ensureParkedCops）----
+  ensureParkedCops();
 })();
 
 // 警车（policeCars 已在文件上方 traffic 声明处提前定义）
@@ -12409,7 +12445,7 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   // 【2026-10-15】足球开赛面板开着时，鼠标左键不再触发攻击（否则点「开赛」会同时开枪）
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
-  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
+  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
   atkHeld = true; atkPointerType = 'mouse'; atkPointerId = e.pointerId;
   attack();
 });
@@ -12636,7 +12672,7 @@ function applyAimDrag(dx, dy) {
   }
 }
 var VEH_AIM_YAW_MAX = 2.2;             // ±126°，炮塔转不过去的角度就别给
-var VEH_AIM_PITCH_MIN = -0.5, VEH_AIM_PITCH_MAX = 0.9;
+var VEH_AIM_PITCH_MIN = -0.9, VEH_AIM_PITCH_MAX = 1.15;   // 【2026-10-21·fix31 移植】俯仰范围加大（原来 -0.5~0.9 太小，直升机俯射/仰射不够用）
 var aimNDC = { x: 0, y: 0 };           // 手机端载具瞄准等效的屏幕 NDC（由准星位置反推）
 function canVehicleAim() {
   return state === 'drive' && currentCar && (currentCar.isTank || currentCar.isHelicopter);
@@ -12687,15 +12723,16 @@ function hideJoy() {
   resetJoyHome();   // 松手不再隐藏，而是回到左下角默认位（常显，新手才看得见）
 }
 function driveBtnMode() {
-  // 手机驾驶汽车/坦克时用「前进/后退油门 + 左/右转」按钮（自行车/摩托/直升机仍用摇杆）
-  return isMobile && state === 'drive' && currentCar && !currentCar.isHelicopter &&
+  // 【2026-10-21·fix31 移植】坦克改用摇杆（和直升机一样左手单手就能控制），所以这里排除坦克；
+  // 汽车仍用「前进/后退 + 左右转」按钮，自行车/摩托/直升机本来就用摇杆。
+  return isMobile && state === 'drive' && currentCar && !currentCar.isHelicopter && !currentCar.isTank &&
     !(currentCar.carKey === 'bike' || currentCar.carKey === 'bicycle' || currentCar.carKey === 'motorcycle');
 }
 function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint'));
 }
 addEventListener('touchstart', e => {
   if (ferrisPanelOpen || devPanelOpen || islandPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
@@ -12765,6 +12802,33 @@ addEventListener('touchcancel', e => {
     else if (t.identifier === lookId) { lookActive = false; lookId = null; }
   }
 });
+// ===== 【2026-10-21·fix31 移植·旧分支 fix33】电脑版用「长按鼠标右键 + 拖动」旋转视角 =====
+// 这一整块在当前分支里是**完全缺失**的（不只是方向反了）：PC 没有手机的滑动屏幕转视角，
+// 之前只能用方向键转车，没法自由看四周。这里补一个右键拖拽。
+// 只动 camYaw/camPitch（与手机滑动同符号），不碰 aimCur（PC 的准星由 mouseNDC/鼠标位置决定），
+// 也不影响左键攻击（左键走 pointerdown → attack）。
+let pcLookActive = false, pcLookLX = 0, pcLookLY = 0;
+// 屏蔽右键菜单，否则右键拖动时浏览器会弹出菜单打断操作；dev 调试面板内保留右键菜单。
+addEventListener('contextmenu', e => {
+  if (e.target && e.target.closest && e.target.closest('#devPanel,#devBtn')) return;
+  e.preventDefault();
+});
+addEventListener('mousedown', e => {
+  if (e.button !== 2) return;                                  // 只处理右键
+  if (e.target && e.target.closest && isUiTouch(e.target)) return;  // 点到 UI 上（含面板）不转视角
+  pcLookActive = true; pcLookLX = e.clientX; pcLookLY = e.clientY;
+  e.preventDefault();
+});
+addEventListener('mousemove', e => {
+  if (!pcLookActive) return;
+  const dx = e.clientX - pcLookLX, dy = e.clientY - pcLookLY;
+  // 【旧分支 fix33】左右翻转：用户实测右键拖动"上下对、左右反"，改用加号（向右拖 → 视角向右转）。
+  camYaw  += dx * LOOK_SENS;                                   // 左右拖动：水平转视角
+  camPitch = THREE.MathUtils.clamp(camPitch + dy * LOOK_SENS, -0.7, 1.2);  // 上下拖动：俯仰（上拖抬头）
+  pcLookLX = e.clientX; pcLookLY = e.clientY;
+});
+addEventListener('mouseup', e => { if (e.button === 2) pcLookActive = false; });
+addEventListener('blur', () => { pcLookActive = false; });     // 窗口失焦时取消，避免一直转
 updateJoyUi();   // 开局就把左下角摇杆显示出来（手机端），不用等第一次触摸
 // 【2026-10-13 用户要求】狙击镜改成**点击切换**：点一下进入瞄准（时间 0.5 倍），再点一下退出 ——
 // 不用一直按着（长按既累手，也没法在瞄准中做别的操作）。
@@ -21037,9 +21101,15 @@ function update(dt) {
   // ===== Task #11：开发者模式入口光柱（车库后方）+ 无限资源 =====
   updateDevPillar(dt);
   if (devMode) {
-    // 无限金币 / 无限技能点：每帧补满，买枪加点随便花
+    // 【2026-10-21·fix31 移植】开发者模式**只补满金币**；技能点/属性不再干预 ——
+    // 用户要求："就算进开发者模式，人物属性也和普通模式一样，不要 99，就 10 个就行了"。
     if (gold < 999999) gold = 999999;
-    if (player.skillPoints < 9999) player.skillPoints = 9999;
+  }
+  // 【fix31】开发者模式下常驻显示"退出开发者模式"按钮（手机/电脑都显示，不再只在光柱旁边才出现）
+  if (devExitEl === null) devExitEl = document.getElementById('devExitBtn');
+  if (devExitEl) {
+    const _dw = devMode ? 'block' : 'none';
+    if (devExitEl.style.display !== _dw) devExitEl.style.display = _dw;
   }
   if (state === 'walk' && devPillar) {
     if (!devBtnEl) devBtnEl = document.getElementById('devBtn');
@@ -21128,7 +21198,11 @@ function update(dt) {
     // 驾驶：相机跟随载具朝向，同时把 camYaw 同步到车头，下车后视角自然接上
     if (state === 'drive' && currentCar) { camYaw = currentCar.angle; camPitch = 0; }
     // 【fix15】相机角度只由"滑动转视角 / 驾驶朝向"决定，后退不再自动翻转镜头
-    const camYawNow = state === 'walk' ? camYaw : (currentCar ? currentCar.angle : camYaw);
+    // 【2026-10-21·fix31 移植·可调视角】驾驶直升机/坦克时，让相机**部分跟随准星瞄准方向**：
+    // 瞄准左右时视角也跟着转（原来死死锁在车头上，坦克转得慢就完全没法看四周）。
+    // 只跟 40%，既让"视角可调"，又保证准星相对相机仍有余量（不会像全跟随时准星焊死在屏幕中心）。
+    const _vehAimCam = (state === 'drive' && currentCar && (isHeli || isTank)) ? 1 : 0;
+    const camYawNow = state === 'walk' ? camYaw : (currentCar ? currentCar.angle + (_vehAimCam ? vehAimYaw * 0.4 : 0) : camYaw);
     const camPitchNow = state === 'walk' ? camPitch : 0;
     const cp = Math.cos(camPitchNow), sp = Math.sin(camPitchNow);
     const tfx = Math.sin(camYawNow) * cp, tfz = Math.cos(camYawNow) * cp;
@@ -21145,6 +21219,27 @@ function update(dt) {
     const behindX = camTarget.position.x - tfx * dist, behindZ = camTarget.position.z - tfz * dist;
     const behindY = camTarget.position.y + height + dist * sp;
     _camTmp.set(behindX, behindY, behindZ);
+    // 【2026-10-21·fix31 移植】相机被楼体遮挡：镜头钻到楼里时把**目标位置**推到墙外。
+    // （旧分支里这段是 fix22b/fix24，防抖写法是 fix32，三者必须一起搬：
+    //   只搬"外推"不搬"防抖"会把 fix32 修的剧烈抖动重新带回来。）
+    // 原写法是先 camPos.lerp 进墙、再把 camPos 硬推出墙 → camPos 每帧在墙内外反复横跳
+    // （lerp 往里拉、外推往外推），贴着墙转视角时整屏剧烈抖动。
+    // 现在只推**目标位置** _camTmp：目标每帧都是确定值，camPos 平滑收敛到墙外点，不再抖。
+    for (let _bi = 0; _bi < buildings.length; _bi++) {
+      const _b = buildings[_bi];
+      if (_camTmp.y <= _b.bottom || _camTmp.y >= _b.top) continue;   // 高于楼顶/低于楼底不挡
+      // 【fix24·楼顶防钻模】玩家站在这栋楼的楼顶（或更高）时不挡（相机该在楼顶上空自由环绕）。
+      if (camTarget.position.y >= _b.top - 0.5) continue;
+      if (_camTmp.x > _b.minX - 0.5 && _camTmp.x < _b.maxX + 0.5 && _camTmp.z > _b.minZ - 0.5 && _camTmp.z < _b.maxZ + 0.5) {
+        let _ux = _camTmp.x - camTarget.position.x, _uz = _camTmp.z - camTarget.position.z;
+        const _ul = Math.hypot(_ux, _uz);
+        if (_ul > 1e-4) { _ux /= _ul; _uz /= _ul; } else { _ux = tfx; _uz = tfz; }   // 正对正上方时退向镜头默认后方
+        let _guard = 0;
+        while (_camTmp.x > _b.minX - 0.5 && _camTmp.x < _b.maxX + 0.5 && _camTmp.z > _b.minZ - 0.5 && _camTmp.z < _b.maxZ + 0.5 && _guard < 60) {
+          _camTmp.x -= _ux * 0.25; _camTmp.z -= _uz * 0.25; _guard++;
+        }
+      }
+    }
     camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));
     camera.position.copy(camPos);
     // 落地/重击镜头抖动：直接作用在最终相机位置上，每帧指数衰减
@@ -21514,6 +21609,10 @@ function restoreSaveGame() {
     }
   }
   for (let i = cars.length - 1; i >= 0; i--) if ((cars[i].fixed || cars[i].owned) && !savedIds.has(cars[i].saveId)) { scene.remove(cars[i].group); cars.splice(i, 1); }
+  // 【2026-10-21·fix31 移植·旧分支 fix32】上面这行把"fixed 但不在存档里"的车清掉了，
+  // 警察局停放的警车正是 fixed —— 老存档没记录它们，于是被删光、玩家看不到。
+  // 这里立即兜底补回（和下面的固定林肯 / 军事基地载具同一套路）。
+  ensureParkedCops();
   // 两辆固定林肯（左黑右白）读档后必须都在庭院里：
   // 上面那行会把"不在存档里的 fixed 车"清掉（白色是新加的 saveId，老存档必然没有）；
   // 而存档又会记住车辆坐标 —— 玩家把黑色林肯开到城里存档，读档后庭院就空了，
