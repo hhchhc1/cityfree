@@ -9755,9 +9755,15 @@ var SIDEWALK_LANE_OUT = 6.45;            // 外侧道（靠路灯那半边，7.0
 //      同族的人聚在同一片人行道上 —— 不然同伙散在全城，共享仇恨根本看不出来。
 const CIVILIAN_CLAN_N = CIVILIAN_CLAN_COLORS.length;   // 族群数 = 纯色数量
 const CIVILIAN_CLAN_SPREAD = 55;                 // 同族成员散布在中心 ±55m 的人行道上
-const CIVILIAN_CLAN_CENTERS = (() => {
+// 【2026-10-21·fix34 用户反馈】"居民老是一群一窝出现，老是 6~7 个人在一块生成，然后就堵在那儿"。
+// 根因：46 人按 7 个帮派分组，同族的人全挤在**同一条街 ±55m** 里 → 正好 6~7 人一堆、还互相挡路。
+// 现在**颜色/帮派归属完全不变**（同色仍是同伙，`sameClan` 判定照旧），
+// 只是把"出生点"从 7 组拆成 **14 组**（每组 3~4 人），组内再强制 16m 最小间距 →
+// 街上看到的就是"零零散散几个在走"，而不是一窝人。
+const CIVILIAN_SPAWN_GROUPS = 14;
+const CIVILIAN_SPAWN_CENTERS = (() => {
   const out = [];
-  for (let i = 0; i < CIVILIAN_CLAN_N; i++) {
+  for (let i = 0; i < CIVILIAN_SPAWN_GROUPS; i++) {
     const c = roads[(Math.random() * roads.length) | 0];
     out.push({
       c,
@@ -9816,7 +9822,8 @@ function sidewalkAngle(axis, sign) {
 }
 for (let k = 0; k < CIVILIAN_N; k++) {
   // 族群轮转分配：46 人 ÷ 7 族 → 每族 6~7 人，人数均匀，
-  // 同族的人生成在同一条马路的一段上（CIVILIAN_CLAN_CENTERS），所以街上看到的是"一群同色的人"
+  // 【2026-10-21·fix34】同族的人**不再**挤在同一条街的一段上了（用户反馈"一窝人、还堵住"）：
+  // 颜色/帮派仍然按 7 族轮转（同色=同伙），但出生位置改成 14 组轮转 + 16m 最小间距，见下面取点逻辑。
   const clanIdx = k % CIVILIAN_CLAN_N;
   // 全身纯色（用户要求）：同一个族群一个颜色，一个人身上只有这一种颜色，
   // 不再有"上衣颜色 + 肉色头/胳膊/腿"的拼色。clan 判定仍然成立（同色 = 同伙）。
@@ -9839,7 +9846,18 @@ for (let k = 0; k < CIVILIAN_N; k++) {
   const rWpn = addWeaponMesh(g, sideGun, bodyColor);
   if (mWpn) { mWpn.visible = true; g.userData.meleeWeapon = mWpn; }
   if (rWpn) { rWpn.visible = false; g.userData.rangedWeapon = rWpn; }
-  const s = randomSidewalkSpot(CIVILIAN_CLAN_CENTERS[clanIdx]);
+  // 【2026-10-21·fix34】出生点：14 组轮转（每组 3~4 人），并且与已生成的人保持 16m 以上。
+  // 原来这里是 `randomSidewalkSpot(CIVILIAN_CLAN_CENTERS[clanIdx])` —— 同族 6~7 人挤一条街的一段。
+  let s = randomSidewalkSpot(CIVILIAN_SPAWN_CENTERS[k % CIVILIAN_SPAWN_GROUPS]);
+  for (let tries = 0; tries < 8; tries++) {
+    let tooClose = false;
+    for (const o of residents) {
+      const ddx = o.x - s.x, ddz = o.z - s.z;
+      if (ddx * ddx + ddz * ddz < 256) { tooClose = true; break; }   // 16m 内已有别人 → 重点
+    }
+    if (!tooClose) break;
+    s = randomSidewalkSpot(CIVILIAN_SPAWN_CENTERS[k % CIVILIAN_SPAWN_GROUPS]);
+  }
   const a0 = sidewalkAngle(s.axis, s.sign);
   g.position.set(s.x, terrainHeight(s.x, s.z), s.z); g.rotation.y = a0; scene.add(g);
   const hp = 40 + Math.random() * 30;
@@ -18515,9 +18533,23 @@ function recyclePedestrians(dt) {
     if (d2 > PED_RECYCLE_NEAR * PED_RECYCLE_NEAR && d2 < PED_RECYCLE_FAR * PED_RECYCLE_FAR) pool.push({ t, d2 });
   }
   if (!pool.length) return;
+  // 【2026-10-21·fix34】落点必须去重：原来 6 个人各自独立挑点（∝1/r² 加权），
+  // 很可能挑中同一个点 → 直接叠成一个人堆（这也是"一窝人"的来源之一）。
+  // 现在每用一个点，就把 20m 内的点一起标记掉，保证几个人之间至少隔 20m。
   for (const r of movers) {
-    let pick = pool[0], best = -1;
-    for (const c of pool) { const sc = Math.random() / c.d2; if (sc > best) { best = sc; pick = c; } }   // ∝ 1/r²
+    let pick = null, best = -1;
+    for (const c of pool) {
+      if (c.used) continue;
+      const sc = Math.random() / c.d2;   // ∝ 1/r²
+      if (sc > best) { best = sc; pick = c; }
+    }
+    if (!pick) break;
+    pick.used = true;
+    for (const c of pool) {
+      if (c.used) continue;
+      const ux = c.t.x - pick.t.x, uz = c.t.z - pick.t.z;
+      if (ux * ux + uz * uz < 400) c.used = true;   // 20m 内不许再落人
+    }
     const s = pick.t;
     r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
     r.angle = sidewalkAngle(s.axis, s.sign);
