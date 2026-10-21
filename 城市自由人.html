@@ -21738,6 +21738,11 @@ function batchStaticScene() {
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, batch.material);
       mesh.renderOrder = batch.meshes[0].renderOrder || 0;
+      // 【2026-10-21·fix33 手机 CPU】静态合批出来的网格**永远不会动**（几何体已经烘进世界坐标，
+      // 位置就是 0,0,0），但 three.js 每帧仍会为每个对象跑一次 updateMatrix() 重组矩阵。
+      // 全城几百个合批网格 → 每帧几百次无意义的矩阵计算。关掉 matrixAutoUpdate 直接省掉。
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
       scene.add(mesh);
       for (const object of batch.meshes) {
         if (object.parent) object.parent.remove(object);
@@ -22304,9 +22309,13 @@ const frameLoop = () => {
   // 这个上限只会**拖慢带得动的机器**（帧时间本来 ≥33ms 的慢机器根本不受它影响），
   // 所以放开到 60fps 不会让慢机器更卡；万一哪台真扛不住，
   // updateAutoQuality 的降质阶梯（先降像素比 → 再收窄远景）会把帧率拉回来。
+  // 【2026-10-21·fix33】帧率上限的判定从 16ms 放宽到 14ms。
+  // 原因：60Hz 屏的 rAF 间隔约 16.7ms，但只要某帧因抖动落在 16ms 以下，就会被这个门槛**整帧丢掉**，
+  // 下一帧要再等 16.7ms → 出现一次 33ms 的间隔 = 肉眼可见的一顿（平均帧率没降，但"感觉卡"）。
+  // 14ms 的门槛能容忍这点抖动，同时对 120Hz 屏仍然是一帧隔一帧（8.3ms < 14 → 跳过 → 稳定 60fps）。
   if (isMobile) {
     const now = performance.now();
-    if (now - _lastFrameMs < 16) return;   // 60fps（原 33ms ≈ 30fps）
+    if (now - _lastFrameMs < 14) return;
     _lastFrameMs = now;
   }
   // 【2026-10-13 用户要求】狙击开镜期间时间放慢到 0.5 倍 —— 人物、车流、计时全部跟着慢，
