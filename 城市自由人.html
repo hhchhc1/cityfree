@@ -838,7 +838,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference
 renderer.setSize(innerWidth, innerHeight);
 // 像素比上下限：手机 0.8~1.25 可动态调整；桌面保持设备原始值（不降质）
 const PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
-const PIXEL_RATIO_MIN = isMobile ? 0.8 : Math.min(devicePixelRatio, 2);
+const PIXEL_RATIO_MIN = isMobile ? 0.85 : Math.min(devicePixelRatio, 2);
 let pixelRatio = PIXEL_RATIO_MAX;
 renderer.setPixelRatio(pixelRatio);
 document.body.appendChild(renderer.domElement);
@@ -20424,11 +20424,10 @@ function updateDayNight(dt) {
   }
 }
 function update(dt) {
-  // 【2026-10-20·fix28】每 2 帧 → 每 4 帧重建 NPC 空间网格。
-  // 每次重建都要把 _gridW×_gridH（约 31×30 = 930）个格子数组全部清空，
-  // 每 2 帧一次 = 每秒近 1.4 万次清空操作，纯 CPU 浪费。
-  // 网格只用来做"附近有什么"的粗筛，4 帧一次完全够用（迟滞另有 40m 兜底，不会闪烁）。
-  if (_frameCnt % 4 === 0) rebuildNpcGrid();
+  // 【2026-10-21·fix32】每 4 帧 → 每 6 帧（60fps 下 15Hz → 10Hz）。
+  // 每次重建要把 _gridW×_gridH（约 31×30 = 930）个格子数组全部清空，纯 CPU 浪费。
+  // 网格只用来做"附近有什么"的粗筛，10Hz 对走路/开枪完全够（迟滞另有 40m 兜底，不会闪）。
+  if (_frameCnt % 6 === 0) rebuildNpcGrid();
   tickCollisionSfx(dt);
   atkCd -= dt;
   // 全自动武器：按住左键/攻击键持续射击（加特林/冲锋枪/步枪/AK47/链锯...），不必反复点击
@@ -21681,7 +21680,10 @@ function batchStaticScene() {
   const batches = new Map();
   // 【手机性能】静态合批分块：80m 太细（同材质建筑被切散合不起来），全图一块又会让
   // 视锥剔除完全失效（三角形翻倍，手机 GPU 反而吃紧）。220~300m 是两边平衡的点。
-  const cellSize = isMobile ? 220 : 300;
+  // 【2026-10-21·fix32】手机 220 → 300（与桌面一致）：实测手机真正的瓶颈是 **draw call**，
+  // 而批次数≈格子数×格子内材质数，220m 分块把同一张地图切成 25 块、300m 只切 16 块 →
+  // 静态绘制调用直接少 1/3。三角形多一点手机完全吃得下（本项目注释也写着"全屏三角形只有十几万"）。
+  const cellSize = 300;   // 手机与桌面统一 300m（见上面的注释）
   scene.traverse(object => {
     if (!object.isMesh || object.isInstancedMesh || object.isSkinnedMesh || !isVisible(object) || !object.geometry || !object.geometry.attributes || !object.geometry.attributes.position || Array.isArray(object.material) || isDynamic(object)) return;
     const geometry = object.geometry;
@@ -22231,12 +22233,16 @@ try { warmUpLods(); } catch (error) { console.error('[LOD warmup error]', error)
 // 主动降一档分辨率能把最坏情况压住，比让玩家手动重开游戏强得多。
 // 【2026-10-20·fix29】加第二级"流畅模式"：分辨率降到底还是卡，就自动收窄远景可见半径
 // （少画人/车 = 少 draw call + 少 NPC 动画）。这才是原生游戏动态画质的做法：先降分辨率、再降远景。
-var _cpuEco = 0;   // 0=正常 / 1=流畅（远景 ×0.82）/ 2=极限（远景 ×0.65）
+var _cpuEco = 0;   // 0=正常 / 1=省电（远景 ×0.92）/ 2=省电+（远景 ×0.86）
 // 注意：下面用 (_cpuEco|0) 而不是直接比大小 —— 启动时 updateDynamicVisibility() 会在
 // _cpuEco 赋值之前被调用一次，undefined 直接比较会得到错误的降质档位（项目 TDZ 约定的写法）。
-function ecoCullScale() { const e = (_cpuEco | 0); return e >= 2 ? 0.65 : (e === 1 ? 0.82 : 1); }
-// 流畅模式下允许像素比再往下探一截（0.8 → 0.68 → 0.62），把"撑不住"的机器彻底救回来
-function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.62, PIXEL_RATIO_MIN - e * 0.12); }
+// 【2026-10-21·fix32】收缩幅度大幅调轻（原 0.82/0.65）：0.65 意味着行人只在 195m 内可见，
+// 再减去 40m 迟滞 → 人要到 155m 才"凭空出现"，玩家看到的就是"远处的人走到跟前才加载出来"。
+// 现在 0.92/0.86 基本看不出来，只作为最后手段。
+function ecoCullScale() { const e = (_cpuEco | 0); return e >= 2 ? 0.86 : (e === 1 ? 0.92 : 1); }
+// 省电模式下允许像素比再往下探一点（0.85 → 0.78 → 0.71），但**绝不再下探到 0.62**：
+// 实测降到 0.62 帧率并没有变好（瓶颈不在填充率），只换来一片模糊。
+function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.71, PIXEL_RATIO_MIN - e * 0.07); }
 let _qFrames = 0, _qWindowStart = 0, _qBad = 0, _qGood = 0, _qCooldownUntil = 0;
 function updateAutoQuality() {
   if (!isMobile) return;
@@ -22250,37 +22256,37 @@ function updateAutoQuality() {
   const fps = _qFrames * 1000 / elapsed;
   _qFrames = 0; _qWindowStart = now;
   if (now < _qCooldownUntil) return;
-  // 【2026-10-20·fix29 重新定阈值】帧率上限已从 30 提到 60，所以“流畅”的判据也一起改：
-  //   掉帧阈值 fps < 45（明显低于 60 才动手）；回升阈值 fps >= 55（稳稳接近 60 才敢升回去）。
-  //   特别卡（fps < 25）时一次降两级，别让玩家先卡好几秒才看到画面变糊。
-  // 两级降质阶梯（先软后硬，这也是原生游戏“动态画质”的标准顺序）：
-  //   第 1 级：降像素比（分辨率）—— 最省事，副作用最小
-  //   第 2 级：进入“流畅模式”，收窄远景可见半径（少画人/车 → 少 draw call + 少 NPC 动画）
-  // 升回去要求更高（连续 8 个 1 秒窗都流畅才收回远景），避免在临界点反复抖。
-  if (fps < 45) {
+  // 【2026-10-21·fix32 核心修正：降质阶梯太激进，机器被永久钉在最低画质】
+  // fix29 为了冲 60fps 把掉帧阈值设成 45fps，结果：
+  //   跑 35~44fps 的机器被判定"掉帧" → 一路降到最低（像素比 0.62 + 远景 0.65），
+  //   但它永远到不了 55fps 的回升阈值 → **再也升不回来**，永久卡在最低画质；
+  //   而帧率一点没变好（说明瓶颈不在填充率），玩家只看到"又糊、人走近才出现"。
+  // 现在：**只有真的低于 28fps 才降质**；回到 34fps 就升回来。
+  // 中间 28~34fps 是缓冲带，不动作 —— 避免在临界点反复横跳。
+  if (fps < 28) {
     _qBad++; _qGood = 0;
-    if (_qBad >= 2) {
+    if (_qBad >= 3) {          // 连续 3 个 1 秒窗都低于 28fps 才动手（偶发掉帧不降质）
       const prMin = ecoPixelMin();
       if (pixelRatio > prMin + 0.01) {
-        const steps = fps < 25 ? 2 : 1;
-        pixelRatio = Math.max(prMin, pixelRatio - 0.15 * steps);
+        const steps = fps < 16 ? 2 : 1;
+        pixelRatio = Math.max(prMin, pixelRatio - 0.12 * steps);
         renderer.setPixelRatio(pixelRatio);
-        _qBad = 0; _qCooldownUntil = now + 3000;
-      } else if (_cpuEco < 2) {
-        // 分辨率已经到底了还在卡 → 进入流畅模式：收窄远景
-        _cpuEco++;
         _qBad = 0; _qCooldownUntil = now + 4000;
-        try { setHint(_cpuEco === 1 ? '已自动开启「流畅模式」：为保帧率收窄了远景可见范围' : '已开启「极限流畅模式」：远景进一步收窄'); } catch (e) {}
+      } else if (_cpuEco < 2) {
+        // 分辨率已经到底了还在卡 → 进入省电模式：轻微收窄远景（0.92 / 0.86，几乎看不出来）
+        _cpuEco++;
+        _qBad = 0; _qCooldownUntil = now + 5000;
+        try { setHint(_cpuEco === 1 ? '已开启「省电模式」：轻微收窄远景以保帧率' : '已开启「省电模式」：远景进一步收窄'); } catch (e) {}
       }
     }
-  } else if (fps >= 55) {                // 要稳稳接近 60fps 才敢升回去，避免来回抖
+  } else if (fps >= 34) {      // 回到 34fps 就升回来（原来要 55fps，机器永远够不到）
     _qGood++; _qBad = 0;
-    if (_qGood >= 8 && _cpuEco > 0) {           // 连续 8 秒都流畅，才收回一档远景
+    if (_qGood >= 6 && _cpuEco > 0) {           // 连续 6 秒都够流畅，才收回一档远景
       _cpuEco--;
-      _qGood = 0; _qCooldownUntil = now + 5000;
+      _qGood = 0; _qCooldownUntil = now + 6000;
       try { setHint(_cpuEco === 0 ? '已恢复完整远景' : ''); } catch (e) {}
     } else if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回调分辨率
-      pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.15);
+      pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.12);
       renderer.setPixelRatio(pixelRatio);
       _qGood = 0; _qCooldownUntil = now + 4000;
     }
@@ -22320,7 +22326,9 @@ const frameLoop = () => {
   } catch (err) {}
   // 【2026-10-20·fix28】每 3 帧 → 每 4 帧（车辆网格 + 动态可见性一起）。
   // 可见性判断本身带 40~50m 迟滞，4 帧一次不会看出闪烁。
-  if (_frameCnt % 4 === 0) { buildVehicleGrid(); updateDynamicVisibility(); }
+  // 【2026-10-21·fix32】拆开：车辆网格每 4 帧（碰撞要准），可见性/LOD 每 6 帧（纯视觉，10Hz 足够）。
+  if (_frameCnt % 4 === 0) buildVehicleGrid();
+  if (_frameCnt % 6 === 0) updateDynamicVisibility();
   // 【2026-10-15·弹窗 = 整个游戏暂停】商店 / 地图 / 属性 / 任务 / 摩天轮 / 开发者 /
   // 工作模式 / 南岛立牌 / 足球场 这些面板一出现：update 不跑（人物、NPC、车流、任务倒计时
   // 全部冻结），并且**在刚进入暂停的那一帧清空所有按键与摇杆输入** ——
