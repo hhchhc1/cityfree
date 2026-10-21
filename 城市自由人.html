@@ -18492,7 +18492,11 @@ function respawnResident(r) {
 //   · 落点按 1/r² 加权采样，保证 30m 和 130m 上的落点面密度一致，人都堆在近处；
 //   · 一次最多搬 6 个，避免某一帧突然集中做几十次 terrainHeight。
 const PED_RECYCLE_DIST = isMobile ? 150 : 230;   // 超过这个距离就回收
-const PED_RECYCLE_NEAR = 16, PED_RECYCLE_FAR = 100;   // 落点环带：近到能看清表情，远到不会"凭空出现"
+// 落点环带：近到能看清，远到不会"凭空出现"。
+// 【2026-10-21·fix35 用户反馈】"一堆一堆的都是不同颜色的人在一块生成"——
+// 16m 太近了：人就在你眼前 16m 处凭空冒出来，一眼就能看见。抬到 26m，配合下面的去重与降权，
+// 就不会再出现"几个人同时糊在你旁边"的画面。
+const PED_RECYCLE_NEAR = 26, PED_RECYCLE_FAR = 110;
 let _pedRecycleT = 0;
 const _pedFwd = new THREE.Vector3();
 function recyclePedestrians(dt) {
@@ -18522,12 +18526,15 @@ function recyclePedestrians(dt) {
     const d = Math.sqrt(d2) || 1;
     if ((dx / d) * _pedFwd.x + (dz / d) * _pedFwd.z > 0.35) continue;   // 视野正前方不搬
     movers.push(r);
-    if (movers.length >= 6) break;
+    // 【2026-10-21·fix35】一次最多搬 3 个（原 6）：一次搬 6 个混色的人到玩家周围，
+    // 视觉上就是"一堆人凭空出现"。3 个 + 0.8 秒一次，看起来是零散有人走动。
+    if (movers.length >= 3) break;
   }
   if (!movers.length) return;
-  // 落点池：在玩家的 30~140m 环带上采一批人行道点
+  // 落点池：在玩家的 26~110m 环带上采一批人行道点
+  // 【fix35】采样数 48→90、池上限 26→32：环带变大后要多采一些，落点才有得挑、才铺得开。
   const pool = [];
-  for (let k = 0; k < 48 && pool.length < 26; k++) {
+  for (let k = 0; k < 90 && pool.length < 32; k++) {
     const t = randomSidewalkSpot();
     const dx = t.x - px, dz = t.z - pz, d2 = dx * dx + dz * dz;
     if (d2 > PED_RECYCLE_NEAR * PED_RECYCLE_NEAR && d2 < PED_RECYCLE_FAR * PED_RECYCLE_FAR) pool.push({ t, d2 });
@@ -18540,7 +18547,9 @@ function recyclePedestrians(dt) {
     let pick = null, best = -1;
     for (const c of pool) {
       if (c.used) continue;
-      const sc = Math.random() / c.d2;   // ∝ 1/r²
+      // 【fix35】权重从 ∝1/r² 改成 ∝1/r：1/r² 会让人**全都挤在环带最内侧**，
+      // 于是几个人一起出现在同一个近处小圈里 = "一堆人凭空出现"。1/r 会铺满整个环带。
+      const sc = Math.random() / Math.sqrt(c.d2);
       if (sc > best) { best = sc; pick = c; }
     }
     if (!pick) break;
