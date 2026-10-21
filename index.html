@@ -40,7 +40,8 @@
   @media (max-width: 520px) { #vitals { width: 128px; padding: 6px 8px; } }
   #crosshair {
  position: fixed; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%,-50%); pointer-events: none; z-index: 15; }
-  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.95); box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+  /* 【2026-10-21·fix36 用户要求】准星改成绿色（原来白色），在灰蓝天色/路面上更容易看清 */
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(70,255,120,0.95); box-shadow: 0 0 3px rgba(0,60,20,0.85); }
   /* 十字缩小（2026-10-13 用户要求"稍微做的小一点"）：20px → 14px，粗细仍 2px，居中偏移 9px → 6px */
   #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
   #crosshair::after { top: 6px; left: 0; height: 2px; width: 14px; }
@@ -9479,6 +9480,10 @@ function setHeldWeapon(humanGroup, key) {
   }
 }
 const personAngle = { v: 0 };
+// 【2026-10-21·fix36】"开火时平滑转向准星"用的两个量：
+//   _faceAimAng = 要转向的角度（准星水平方向），_faceAimT = 还剩多少秒继续转。
+// 用 var + 初值，避免被更早执行的函数引用时踩 TDZ（项目约定）。
+var _faceAimAng = 0, _faceAimT = 0;
 // 人物基础属性（v3 平衡：削弱前期、增强后期）
 // 说明：基础值刻意压低，靠技能点把属性堆起来；技能曲线为「越点越贵」，
 //      第 n 点的收益随 n 递增，所以前期弱、后期强。
@@ -17314,14 +17319,12 @@ function attack() {
   }
   if (state !== 'walk' || atkCd > 0) return;
   const w = WEAPONS[currentWeapon];
-  // 【2026-10-21·fix30 移植】攻击方向 = 人物当前朝向（personAngle），不再把人物瞬时拧向准心。
-  // 另一分支里这个修复叫 fix27，当时就写在注释里：
-  //   "原来这里是 `const aim = aimDirection(); personAngle.v = Math.atan2(aim.x, aim.z)`：
-  //    人物朝的不是正面（相机正前方）时，一按攻击，身体会被**瞬间**拧回正面 —— 既僵直、
-  //    又把身体拖着转，攻击方向也跟着'回到正面'。现在人物朝哪边就攻击哪边；
-  //    朝向只由玩家自己移动转身决定，攻击动作绝不改变它。"
-  // 这次把它搬回来：不同方向都能打，按攻击不再把身体掰向正面。
-  const fx = Math.sin(personAngle.v), fz = Math.cos(personAngle.v);
+  // 【2026-10-21·fix36 用户反馈修正】子弹/拳头方向 = **准星方向**（打准星指的地方），
+  // 同时让人物在开火后 0.3 秒内**平滑转**向准星 —— 不是瞬间拧过去，所以不会有"僵直"感。
+  // （fix30 曾把方向改成"人物朝向"，用户反馈"开枪不转身、只朝身前打"，这里改回准星方向。）
+  const aim = aimDirection(); const fx = aim.x, fz = aim.z;
+  _faceAimAng = Math.atan2(fx, fz);
+  _faceAimT = 0.3;   // 0.3 秒的转身窗口（连发武器每次开火都会刷新，等于持续面向准星）
   const px = person.position.x, pz = person.position.z;
   if (w.type === 'melee') {
     atkCd = w.swing || 0.5;
@@ -17377,9 +17380,9 @@ function attack() {
   }
 }
 function shoot(w, count) {
-  // 【2026-10-21·fix30 移植】弹道水平方向 = 人物当前朝向（与 attack() 保持一致，做到"人朝哪边就打哪边"）。
+  // 【2026-10-21·fix36 用户反馈修正】弹道水平方向 = **准星方向**（与 attack() 保持一致）。
   // 垂直俯仰仍由下面的准心射线 slope 决定，所以上下瞄准照旧可用。
-  const fx = Math.sin(personAngle.v), fz = Math.cos(personAngle.v);
+  const aim = aimDirection(); const fx = aim.x, fz = aim.z;
   const px = person.position.x, pz = person.position.z;
   // 部位判定：用**准星光标**反投影出来的 3D 射线，看它经过目标处的高度（头/身/腿）
   // 【2026-10-13】手机端 aimDirection() 内部已经 setFromCamera(aimCurNDC)，
@@ -20614,6 +20617,12 @@ function update(dt) {
       }
       if (punchAnim > 0) punchAnim = Math.max(0, punchAnim - dt * 5);
       if (kickAnim > 0) kickAnim = Math.max(0, kickAnim - dt * 4.5);
+      // 【2026-10-21·fix36】开火后的 0.3 秒内**平滑转**向准星方向（16 rad/s ≈ 0.2 秒转 180°，
+      // 快到跟手但不僵直）。必须放在上面"按移动方向转身"之后 —— 否则会被移动逻辑每帧覆盖。
+      if (_faceAimT > 0) {
+        _faceAimT -= dt;
+        personAngle.v = approachAngle(personAngle.v, _faceAimAng, 16 * dt);
+      }
       person.rotation.y = personAngle.v;
       animateHuman(person, walkPhase, punchAnim, currentWeapon, moving, punchHand, kickAnim, reloadAnim);
       // 端平手上的武器（摆臂动画之后再做，否则会被动画覆盖回去）。
@@ -22454,6 +22463,12 @@ function updateRaceCdHud() {
   el.style.borderColor = left <= 10 ? 'rgba(255,107,94,.75)' : 'rgba(255,210,74,.55)';
   el.style.display = 'block';
 }
+// 【2026-10-21·fix36 用户反馈"第一次用钩爪钩墙时卡一下，后面就不卡了"】
+// 根因：钩爪的绳索（ropeLine/ropeCyl）平时是隐藏的，它的材质**从来没被渲染过**，
+// 所以第一次显示时才现场编译着色器 + 上传 GPU —— 那一帧就会明显卡一下（之后有缓存就不卡了）。
+// three.js 的 renderer.compile() 用 scene.traverse（**包含隐藏对象**）把场景里所有材质
+// 提前编译好。放在主循环启动前，正好落在加载画面里，玩家感觉不到。
+try { renderer.compile(scene, camera); } catch (e) { console.warn('[precompile]', e); }
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
