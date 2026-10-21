@@ -455,6 +455,36 @@
   }
   #mapPanel .map-foot > * { pointer-events: auto; }
   #mapPanel .map-btn { padding: 12px 24px; border-radius: 24px; background: #1565c0; font-size: 16px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+  /* 【2026-10-21·fix38】拖动提示 + 设置按钮（设置按钮用灰色，跟人物属性区分开） */
+  #mapPanel .map-hint { font-size: 12px; color: rgba(255,255,255,0.55); -webkit-user-select: none; user-select: none; }
+  #settingsBtn { background: #455a64; }
+  /* ---- 设置面板（沿用角色属性面板的外观） ---- */
+  #setPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 96; color: #fff; font-family: sans-serif; overflow-y: auto; }
+  #setPanel .st-head { padding: 16px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); }
+  #setPanel .st-close { cursor: pointer; font-size: 26px; padding: 0 8px; color: #aab; }
+  #setPanel .set-sec { padding: 18px 16px; }
+  #setPanel .set-sec h4 { margin: 0 0 10px; font-size: 15px; color: #ffd76a; }
+  #setPanel .set-desc { margin: 0 0 14px; font-size: 13px; line-height: 1.7; color: #b9c4d0; }
+  #setPanel .set-desc.set-dim { color: #6b7684; font-size: 12px; }
+  #setPanel .set-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  #setPanel .set-gray { background: #546e7a; }
+  /* ---- 布局编辑工具条 ---- */
+  #layoutBar {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 120;
+    display: none; align-items: center; gap: 8px;
+    background: rgba(10,14,20,0.94); border: 1px solid rgba(120,180,255,0.45); border-radius: 26px;
+    padding: 8px 12px; font: 13px sans-serif; color: #dfe8f2;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.55); max-width: 94vw;
+  }
+  #layoutBar .lay-btn { padding: 7px 13px; border-radius: 18px; background: #37474f; text-align: center; cursor: pointer; -webkit-user-select: none; user-select: none; font-weight: bold; white-space: nowrap; }
+  #layoutBar .lay-ok { background: #2e7d32; }
+  #layoutBar .lay-warn { background: #b71c1c; }
+  #layoutName { opacity: 0.85; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 编辑模式：可调按钮加描边；选中的那个高亮；摇杆恢复可触摸（平时 pointer-events:none） */
+  body.layout-editing [data-lay] { outline: 2px dashed rgba(255,215,80,0.85); outline-offset: 2px; }
+  body.layout-editing [data-lay].lay-sel { outline: 2px solid #ffd750; box-shadow: 0 0 0 4px rgba(255,215,80,0.22), 0 4px 12px rgba(0,0,0,0.5); }
+  body.layout-editing #joy, body.layout-editing #joy * { pointer-events: auto; }
+  body.layout-editing #joy { transition: none; }
   #mapClose { cursor: pointer; font-size: 24px; }
   #statsPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 96; color: #fff; font-family: sans-serif; overflow-y: auto; }
   #statsPanel .st-head { padding: 16px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; }
@@ -732,13 +762,41 @@
       <span>🗺️ 城市地图</span><span id="mapClose">×</span>
     </div>
     <canvas id="mapCanvas" width="800" height="520"></canvas>
-    <div class="map-foot"><div class="map-btn" id="statsBtn">🧍 人物属性</div></div>
+    <div class="map-foot">
+      <div class="map-btn" id="statsBtn">🧍 人物属性</div>
+      <div class="map-btn" id="settingsBtn">⚙️ 设置</div>
+      <span class="map-hint">👆 拖动移动地图</span>
+    </div>
   </div>
   <div id="statsPanel" style="display:none">
     <div class="st-head"><span>🧍 角色属性</span><span class="st-close" id="statsClose">×</span></div>
     <div class="st-xp" id="statsXp"></div>
     <div class="st-base"><h4>人物属性（基础值 + 技能加成 + 装备加成）</h4><div class="st-bgrid" id="statsBase"></div></div>
     <div id="statsList"></div>
+  </div>
+  <!-- 【2026-10-21·fix38 用户要求】"除了人物属性，再弄一个设置，设置里边可以调整
+       手机界面的那些按钮的位置还有大小，可以根据个人的喜好调整" -->
+  <div id="setPanel" style="display:none">
+    <div class="st-head"><span>⚙️ 设置</span><span class="st-close" id="setClose">×</span></div>
+    <div class="set-sec">
+      <h4>🎮 手机按钮布局</h4>
+      <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
+      改动自动存在本机浏览器里（换设备不互通）。</p>
+      <div class="set-row">
+        <div class="map-btn" id="layoutEditBtn">🎮 进入调整</div>
+        <div class="map-btn set-gray" id="layoutResetBtn">♻️ 恢复默认</div>
+      </div>
+      <p class="set-desc set-dim">可调按钮：攻击 / 跳 / 上车 / 踢飞 / 钩爪 / 疾跑 / 武器 / 瞄准 / 连发 /
+      前进 / 后退 / 直升升 / 直升降 / 转向盘 / 摇杆 / 小地图</p>
+    </div>
+  </div>
+  <!-- 布局编辑模式的工具条（编辑时才显示） -->
+  <div id="layoutBar">
+    <span id="layoutName">拖动按钮移动位置</span>
+    <div class="lay-btn" id="layMinus">－</div>
+    <div class="lay-btn" id="layPlus">＋</div>
+    <div class="lay-btn lay-warn" id="layReset">重置</div>
+    <div class="lay-btn lay-ok" id="layDone">完成</div>
   </div>
 
   <!-- ========== 任务系统 UI ========== -->
@@ -1021,6 +1079,27 @@ function terrainHeight(x, z) {
     const t = THREE.MathUtils.clamp((65 - mbDist) / 20, 0, 1);
     h = h * (1 - t) + mbFlat * t;
   }
+  // 【2026-10-21·fix38】机场地形压平（矩形：中心 -255,14，半宽 60 / 半深 76，blend 12）。
+  // 旧版机场没压平：跑道用固定 y=0.06 铺在丘陵上（ring≈0.61，起伏 ±1.5m），
+  // 结果地面从跑道旁边鼓出来、跑道又悬空，怎么摆都穿帮。现在整平到 0 再摆机场。
+  // 【fix38 追加·迁址理由】旧址 (-260,-220) 距原点 r=340，正落在内环半径带 [305,366]
+  // 正中：跑道沿 z 130m 跨 r 296..386，把整条环道拦腰穿过（实测啃掉跑道东沿 5.5m），
+  // 且航站楼避让圆会把环道推进高尔夫球场。径向避让无解 —— 跑道北端 r≈300 在半径带
+  // 下沿内侧，切向预算 40m 也绕不过 130m 的墙。故整体迁到城市正西环带：
+  // 核心压平 |apx|≤48 / |apz|≤64 完整覆盖新机场占位（建筑 X∈[-303,-207]、Z∈[-55,78]，
+  // 航站楼北沿 z=74 留 4m），各留 12m blend。环道在新区径向上自然走 r≈325-345，
+  // 与建筑（最远 r≈305）净空 20m+。blend 西沿到 x=-315，环道（x≈-321~-330）够不着。
+  // 【fix38 追加·北沿为什么只到 76】半深原定 81（blend 北沿 z=95），但军事基地压平区
+  // （圆心 -280,120 半径 65、台地 2.5）南弧正压到 z≈90：基地机库南墙在 z=90，
+  // blend 会把墙根地形从 2.5 削到 1.46 → 墙根悬空 1m。半深收到 76（blend 北沿 z=90）
+  // 后墙根恰好落在台地边缘（t=0，地形仍是 2.5），指挥楼（z≥95）更不受影响。
+  {
+    const apx = x + 255, apz = z - 14;
+    if (Math.abs(apx) < 60 && Math.abs(apz) < 76) {
+      const t = Math.min(1, (60 - Math.abs(apx)) / 12) * Math.min(1, (76 - Math.abs(apz)) / 12);
+      h = h * (1 - t) + 0 * t;
+    }
+  }
   return h;
 }
 // 人物在海洋区域半个身体没入水中，陆地上走地面
@@ -1066,6 +1145,12 @@ function isOnRoadOrBridge(x, z) {
   if (Math.abs(x - PITCH.x) < PITCH.hw + 2.5 && Math.abs(z - PITCH.z) < PITCH.hd + 7) return true;
   // 军事基地内部（不刷阻挡物）
   if (Math.hypot(x + 280, z - 120) < 45) return true;
+  // 【2026-10-21·fix38】机场占位也算禁入区：外圈树/厂房沿内环道生成，落点半径
+  // 289~374，而机场西沿（机库 -302）正落在这圈里 —— 不拦的话树会从停机坪和飞机
+  // 身上长出来，厂房会压在机库上，棕榈还会白塞一个 treeObstacles 碰撞体。
+  // 范围比机场围栏再外扩 ~3m（X∈[-330,-206]、Z∈[-64,91]；东沿 -206 正好收在
+  // 城市西侧马路 x=-200 的人行道外，不误伤街区绿化）。
+  if (x > -330 && x < -206 && z > -64 && z < 91) return true;
   return false;
 }
 // 外围弯曲公路：判断点到折线的最短距离。
@@ -5237,36 +5322,241 @@ function makeSignPlane(text, w, h, bg, fg, border) {
   }
 })();
 
-// 机场（西北方向，跑道+塔台）
+// 机场（城市正西，紧贴西缘：跑道+塔台+航站楼+机库+两架客机）
+// 【2026-10-21·fix38 用户反馈"机场还有那个固定的飞机，模型做得很烂，再完善一下"】
+// 旧版：一条 12×120 的灰盒子当跑道 + 圆柱机身+方盒机翼+红方块的"纸飞机"，
+// 而且机场地面没压平（丘陵 ±1.5m），跑道悬空/地面鼓包 always 穿帮。
+// 新版：地形已在 terrainHeight 里压平到 0；本块重做为——
+//   完整跑道（边线/中线虚线/入口钢琴键/边灯）+ 滑行道 + 停机坪（2 个机位划线）
+//   + 详细塔台（基座/井筒/玻璃指挥室/护栏/航空障碍灯）+ 航站楼（玻璃幕墙/登机桥/雨篷）
+//   + 机库（拱形屋顶/大门）+ 风向袋 + 加油车 + **两架按真实客机结构搭的民航机**。
+// 【fix38 追加·迁址】旧址 (-260,-220) 距原点 r=340，正落内环半径带 [305,366] 正中：
+// 130m 跑道跨 r 296..386 把整条环道拦腰穿过（实测啃掉跑道东沿 5.5m），且航站楼
+// 避让圆会把环道推进高尔夫球场。径向避让无解（跑道北端 r≈300 在半径带下沿内侧，
+// 切向预算 40m 绕不过 130m 的墙）→ 整体迁到城市正西环带：建筑全收在 r≤305，
+// 环道自然走 r≈325-345，净空 20m+（cf_ring.js 实测机库 21.5m、航站楼 56.9m）；
+// 东沿（围栏 -209）离城市核心（-200）只有 9m，出城往西就到，更好找。
+// 布局（跑道中心 zx=-260, zz=0，跑道沿 z 南北向）：
+//   跑道 16×110｜滑行道｜停机坪 32×44（2 机位）依次在东侧；
+//   塔台在跑道与停机坪之间（-243,20）；航站楼在停机坪正北（-252,66），
+//   两座 26.5m 登机桥从航站楼南墙直通停机坪北沿 —— 不横穿跑道；
+//   机库在跑道西侧（-288,-30）；风向袋、加油车各就各位。
+// 材质只用 MeshLambertMaterial（航行灯等少量自发光件用 MeshBasicMaterial），
+// 几何体只带 position/normal/uv → 会被 batchStaticScene 按材质合批，不涨 draw call。
 (function addAirport() {
-  const zx = -260, zz = -220;
-  // 跑道
-  const runwayMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-  const runway = new THREE.Mesh(new THREE.BoxGeometry(12, 0.1, 120), runwayMat);
-  runway.position.set(zx, 0.06, zz); scene.add(runway);
-  // 跑道标线
-  const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  for (let i = -50; i <= 50; i += 8) {
-    const line = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 3), lineMat);
-    line.position.set(zx, 0.12, zz + i); scene.add(line);
+  const zx = -260, zz = 0;
+  // ---- 共用材质（同色合并，静态合批更友好）----
+  const M = {
+    asphalt: new THREE.MeshLambertMaterial({ color: 0x2e3134 }),
+    apronC: new THREE.MeshLambertMaterial({ color: 0x70767c }),
+    white: new THREE.MeshLambertMaterial({ color: 0xe8eaec }),
+    yellow: new THREE.MeshLambertMaterial({ color: 0xc9a227 }),
+    concrete: new THREE.MeshLambertMaterial({ color: 0xb9bdc2 }),
+    dark: new THREE.MeshLambertMaterial({ color: 0x2a2e33 }),
+    glass: new THREE.MeshLambertMaterial({ color: 0x3f6f9f, transparent: true, opacity: 0.55 }),
+    red: new THREE.MeshLambertMaterial({ color: 0xc0392b }),
+    orange: new THREE.MeshLambertMaterial({ color: 0xe67e22 }),
+    lamp: new THREE.MeshBasicMaterial({ color: 0xffe9b0 }),      // 跑道边灯（不依赖光照也亮）
+    beacon: new THREE.MeshBasicMaterial({ color: 0xff3b30 }),    // 航空障碍灯
+    navL: new THREE.MeshBasicMaterial({ color: 0xff3b30 }),      // 左航行灯（红）
+    navR: new THREE.MeshBasicMaterial({ color: 0x34c759 }),      // 右航行灯（绿）
+    navW: new THREE.MeshBasicMaterial({ color: 0xffffff })       // 尾部频闪
+  };
+  const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+  const put = (geo, mat, x, y, z, rx, ry, rz) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx;
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    scene.add(m); return m;
+  };
+  // ================= 跑道（16m 宽 × 110m 长，沿 Z；地面已压平到 0）=================
+  put(box(16, 0.12, 110), M.asphalt, zx, 0.06, zz);
+  // 边线
+  put(box(0.3, 0.14, 106), M.white, zx - 7.6, 0.13, zz);
+  put(box(0.3, 0.14, 106), M.white, zx + 7.6, 0.13, zz);
+  // 中线虚线
+  for (let i = -50; i <= 50; i += 10) put(box(0.35, 0.14, 4.5), M.white, zx, 0.13, zz + i);
+  // 入口"钢琴键"（跑道两端各一组横向短杠）+ 入口长杠
+  for (const ez of [zz - 52, zz + 52]) {
+    for (let k = -3; k <= 3; k++) put(box(1.1, 0.14, 5), M.white, zx + k * 2.2, 0.13, ez);
+    put(box(10, 0.14, 1.2), M.white, zx, 0.13, ez + (ez < zz ? 4.5 : -4.5));
   }
-  // 塔台
-  const towerBase = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.5, 12, 8), new THREE.MeshLambertMaterial({ color: 0x888888 }));
-  towerBase.position.set(zx + 20, 6, zz); scene.add(towerBase);
-  const towerCab = new THREE.Mesh(new THREE.CylinderGeometry(3, 2, 3, 8), new THREE.MeshLambertMaterial({ color: 0x6699cc, transparent: true, opacity: 0.6 }));
-  towerCab.position.set(zx + 20, 13.5, zz); scene.add(towerCab);
-  buildings.push({ minX: zx + 17, maxX: zx + 23, minZ: zz - 3, maxZ: zz + 3, bottom: 0, top: 15 });
-  // 候机楼
-  const terminal = new THREE.Mesh(new THREE.BoxGeometry(40, 6, 15), new THREE.MeshLambertMaterial({ color: 0xaaaaaa }));
-  terminal.position.set(zx - 10, 3, zz + 25); scene.add(terminal);
-  buildings.push({ minX: zx - 30, maxX: zx + 10, minZ: zz + 17.5, maxZ: zz + 32.5, bottom: 0, top: 6 });
-  // 飞机模型（静态装饰）
-  const planeBody = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 14, 8), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
-  planeBody.rotation.x = Math.PI / 2; planeBody.position.set(zx, 2, zz - 20); scene.add(planeBody);
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(16, 0.3, 3), new THREE.MeshLambertMaterial({ color: 0xcccccc }));
-  wing.position.set(zx, 2.5, zz - 20); scene.add(wing);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 2.5), new THREE.MeshLambertMaterial({ color: 0xff3333 }));
-  tail.position.set(zx, 4, zz - 27); scene.add(tail);
+  // 跑道边灯（每 11m 一对，暖白色）
+  for (let i = -50; i <= 50; i += 11) {
+    put(box(0.3, 0.3, 0.3), M.lamp, zx - 8.4, 0.35, zz + i);
+    put(box(0.3, 0.3, 0.3), M.lamp, zx + 8.4, 0.35, zz + i);
+  }
+  // ================= 滑行道 + 停机坪 =================
+  put(box(17, 0.1, 12), M.asphalt, zx + 17, 0.05, zz);          // 滑行道（跑道→停机坪）
+  put(box(0.35, 0.12, 10), M.yellow, zx + 17, 0.12, zz);        // 滑行道中线
+  put(box(32, 0.1, 44), M.apronC, zx + 35, 0.045, 14);          // 停机坪（东侧，z∈[-8,36]）
+  // 2 个机位：白框 + 停止线 + 黄色引导线（32m 宽停两架 15m 级客机正好）
+  // 【2026-10-21·fix38】迁址后机位北移到停机坪中段（pz=22）：停止线放北端、
+  // 引导线从南侧（滑行道方向）引入 —— 与两架飞机车头朝北（+Z）的停机姿态一致；
+  // 旧版停止线在南端、引导线在北端，与"机头朝北停"自相矛盾。
+  for (let i = 0; i < 2; i++) {
+    const px = zx + 24 + i * 13, pz = 22;                       // 机位中心 x=-230 / -217
+    put(box(0.25, 0.12, 19), M.white, px, 0.11, pz);            // 西线
+    put(box(0.25, 0.12, 19), M.white, px + 12, 0.11, pz);       // 东线
+    put(box(12, 0.12, 0.25), M.white, px + 6, 0.11, pz + 9.5);  // 停止线（北端，机头停这）
+    put(box(0.3, 0.12, 17), M.yellow, px + 6, 0.11, 3.5);       // 引导线（南来，通往滑行道）
+  }
+  // ================= 塔台（跑道与停机坪之间，停机坪西沿）=================
+  // 【2026-10-21·fix38】迁址后落在 (-243,20)：基座 r=4.6 的盒子 x∈[-247.6,-238.4]，
+  // 与 1 号机飞机 A 的西翼尖（x=-237.4）保持 1m 净空 —— 旧址参数 (-241,24) 时
+  // 翼尖会以约 1cm 差距蹭上塔台锥形基座（复算见 cf_airport2.js）。
+  const tx = -243, tz = 20;
+  put(new THREE.CylinderGeometry(3.6, 4.6, 13, 10), M.concrete, tx, 6.5, tz);        // 基座
+  put(new THREE.CylinderGeometry(2.5, 3.6, 4.5, 10), M.concrete, tx, 15, tz);        // 井筒
+  put(new THREE.CylinderGeometry(3.9, 3.9, 0.3, 10), M.dark, tx, 17.4, tz);          // 指挥室地板
+  put(new THREE.CylinderGeometry(3.7, 3.5, 3.2, 10), M.glass, tx, 19.1, tz);         // 玻璃指挥室
+  put(new THREE.CylinderGeometry(4.1, 4.1, 0.4, 10), M.concrete, tx, 21, tz);        // 屋顶
+  put(new THREE.TorusGeometry(3.95, 0.07, 6, 18), M.dark, tx, 21.3, tz, -Math.PI / 2);   // 护栏
+  put(box(0.4, 0.4, 0.4), M.beacon, tx, 22, tz);                                     // 航空障碍灯
+  buildings.push({ minX: tx - 4.6, maxX: tx + 4.6, minZ: tz - 4.6, maxZ: tz + 4.6, bottom: 0, top: 22 });
+  // ================= 航站楼（停机坪正北，两桥直通停机坪）=================
+  // 【2026-10-21·fix38】迁址后重排：主楼 40×15 放在停机坪正北（ux=-252, uz=66），
+  // 幕墙/雨篷从东墙改到南墙（朝停机坪），两座登机桥从南墙伸出 26.5m，
+  // 玻璃舱落在 1/2 号机位机头旁 —— 旧址登机桥朝东、正对旧跑道，迁址后不再横穿跑道。
+  const ux = -252, uz = 66;
+  put(box(40, 7, 15), M.concrete, ux, 3.5, uz);                  // 主楼 x∈[-272,-232] z∈[58.5,73.5]
+  put(box(41, 0.6, 16), M.dark, ux, 7.3, uz);                    // 屋顶沿口
+  put(box(30, 4.4, 0.4), M.glass, ux, 3.8, uz - 7.2);            // 玻璃幕墙（南墙，朝停机坪）
+  put(box(9, 0.4, 4.5), M.dark, ux, 4.6, uz - 9);                // 入口雨篷（探出南墙 2m）
+  for (const bx of [-237, -226]) {                               // 两座登机桥（南墙→停机坪）
+    put(box(10, 3.4, 26.5), M.concrete, bx, 3.2, 45.25);         // 桥身 z∈[32,58.5]
+    put(box(1.2, 1.6, 1.8), M.glass, bx, 3.4, 33.5);             // 玻璃舱（机位端）
+  }
+  buildings.push({ minX: ux - 20.5, maxX: ux + 20.5, minZ: uz - 8, maxZ: uz + 8, bottom: 0, top: 8 });
+  // ================= 机库（拱形屋顶 + 大门，跑道西侧）=================
+  // 【2026-10-21·fix38】迁址后机库放到跑道西侧（hx=-288, hz=-30，28×22 →
+  // x∈[-302,-274] z∈[-41,-19]），大门从北侧改朝东（对着滑行道/停机坪方向，
+  // 飞机能直接推进去）；拱形屋顶结构不变。
+  const hx = -288, hz = -30;
+  put(box(28, 7, 22), M.concrete, hx, 3.5, hz);
+  // 半圆拱屋顶：取圆柱 theta∈[π/2,3π/2] 的一半，绕 X 转 +90° 后弧面正好朝上
+  // （转完后 世界y = -原z = -r·cos(theta)，该区间 cos≤0 → y≥0）
+  const roofGeo = new THREE.CylinderGeometry(9, 9, 22, 14, 1, Math.PI / 2, Math.PI);
+  roofGeo.rotateX(Math.PI / 2);
+  put(roofGeo, M.dark, hx, 7, hz);
+  put(box(18, 0.2, 22), M.dark, hx, 7.05, hz);                   // 封住拱顶敞口（从下面看不见空腔）
+  put(box(0.4, 5.5, 15), M.dark, hx + 14.2, 2.75, hz);           // 大门（朝东）
+  put(box(0.5, 1.2, 2), M.red, hx + 14.4, 7.6, hz);              // 门上方标识条
+  buildings.push({ minX: hx - 14, maxX: hx + 14, minZ: hz - 11, maxZ: hz + 11, bottom: 0, top: 16 });
+  // ================= 风向袋 + 加油车 =================
+  // 【2026-10-21·fix38】风向袋挪到跑道东侧草地上（-249,-20，避开滑行道/停机坪）；
+  // 加油车停到停机坪南侧服务位（-225,4），不再占 2 号机位。
+  const wx = -249, wz = -20;
+  put(new THREE.CylinderGeometry(0.07, 0.09, 4, 6), M.dark, wx, 2, wz);
+  put(new THREE.ConeGeometry(0.55, 1.8, 8, 1, true), M.orange, wx, 4.2, wz, Math.PI / 2);
+  put(box(0.5, 0.5, 0.1), M.white, wx, 4.2, wz - 0.95);          // 袋口白边
+  const fx2 = -225, fz2 = 4;                                     // 加油车（停机坪南侧服务位）
+  put(box(2.4, 1.8, 5), M.white, fx2, 1.6, fz2);
+  put(box(2.2, 1.4, 1.8), M.red, fx2, 1.4, fz2 - 3.2);
+  put(box(2.4, 0.3, 5.2), M.dark, fx2, 2.55, fz2);
+  for (const wzz of [-1.6, 1.6]) put(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 8), M.dark, fx2 + wzz, 0.45, fz2 - 1.2, 0, 0, Math.PI / 2);
+  // ================= 民航客机 =================
+  // 后掠梯形机翼：Shape + Extrude 挤出一片带后掠量的翼型（比斜放盒子真实得多）。
+  // sign=+1 右翼（伸 +X），-1 左翼；材质用 DoubleSide（薄板两面都该可见）。
+  function sweptWing(sign, span, rootChord, tipChord, thick, sweep) {
+    const sh = new THREE.Shape();
+    // 注意：Extrude 后 rotateX(-π/2)，Shape 的 +y 会变成世界的 -z，所以"前缘"要写在 -y 侧
+    sh.moveTo(0, -rootChord / 2);
+    sh.lineTo(sign * span, -(rootChord / 2 - sweep));
+    sh.lineTo(sign * span, -(rootChord / 2 - sweep - tipChord));
+    sh.lineTo(0, rootChord / 2);
+    sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);   // Shape(XY) → 世界 XZ；挤出(+Z) → 世界 +Y（板厚）
+    return geo;
+  }
+  // 机头朝 +Z。机身/头锥/尾锥/舷窗/舱门/腰线/后掠翼/小翼/双发/起落架/垂尾/平尾一样不少。
+  function makeAirliner(scale, livery) {
+    const g = new THREE.Group();
+    const body = new THREE.MeshLambertMaterial({ color: livery.body });
+    const stripe = new THREE.MeshLambertMaterial({ color: livery.stripe });
+    const tailC = new THREE.MeshLambertMaterial({ color: livery.tail });
+    const win = new THREE.MeshLambertMaterial({ color: 0x1a2028 });                       // 舷窗/舱门/进气口
+    const tire = new THREE.MeshLambertMaterial({ color: 0x15181c });                      // 轮胎
+    const metal = new THREE.MeshLambertMaterial({ color: 0xaab2ba });                     // 发动机/起落架支柱
+    const wingM = new THREE.MeshLambertMaterial({ color: livery.body, side: THREE.DoubleSide });
+    const A = (geo, mat, x, y, z, rx, ry, rz) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      if (ry) m.rotation.y = ry;
+      if (rz) m.rotation.z = rz;
+      g.add(m); return m;
+    };
+    const FL = 15;   // 机身圆柱段长度
+    // 机身 + 头锥 + 尾锥
+    A(new THREE.CylinderGeometry(1.05, 1.05, FL, 12), body, 0, 0, 0, Math.PI / 2);
+    A(new THREE.ConeGeometry(1.05, 2.6, 12), body, 0, 0, FL / 2 + 1.3, Math.PI / 2);
+    A(new THREE.ConeGeometry(1.05, 2.2, 12), body, 0, 0, -FL / 2 - 1.1, -Math.PI / 2);
+    // 腰线（两侧）
+    A(box(0.06, 0.18, 13), stripe, 1.02, -0.42, 0);
+    A(box(0.06, 0.18, 13), stripe, -1.02, -0.42, 0);
+    // 舷窗（两排各 9 扇）
+    for (let i = 0; i < 9; i++) {
+      const wz2 = 5.6 - i * 1.35;
+      A(box(0.06, 0.26, 0.36), win, 1.04, 0.34, wz2);
+      A(box(0.06, 0.26, 0.36), win, -1.04, 0.34, wz2);
+    }
+    // 驾驶舱舷窗
+    A(box(0.06, 0.3, 0.7), win, 0.62, 0.36, 7.6);
+    A(box(0.06, 0.3, 0.7), win, -0.62, 0.36, 7.6);
+    // 舱门（前/中/后）
+    for (const dz of [4.2, -1.5, -6.5]) {
+      A(box(0.07, 0.95, 1.15), win, 1.04, -0.1, dz);
+      A(box(0.07, 0.95, 1.15), win, -1.04, -0.1, dz);
+    }
+    // 主翼 + 翼尖小翼
+    for (const s of [1, -1]) {
+      A(sweptWing(s, 7.4, 3.6, 1.25, 0.24, 1.15), wingM, 0, -0.62, 1.1);
+      A(box(0.12, 1.15, 1.05), tailC, s * 7.3, 0.05, 1.35, 0, 0, s * 0.16);   // 小翼
+    }
+    A(box(2.6, 0.5, 3.4), body, 0, -0.72, 1.0);                                 // 翼根整流罩
+    // 双发（吊舱 + 进气口 + 挂架）
+    for (const s of [1, -1]) {
+      A(new THREE.CylinderGeometry(0.52, 0.46, 2.5, 10), metal, s * 3.5, -1.15, 1.5, Math.PI / 2);
+      A(new THREE.CircleGeometry(0.44, 10), win, s * 3.5, -1.15, 2.78);         // 进气口（暗）
+      A(box(0.16, 0.7, 1.1), metal, s * 3.5, -0.8, 1.9);                        // 挂架
+    }
+    // 尾翼：红色垂尾 + 后掠平尾
+    A(box(0.24, 3.0, 2.7), tailC, 0, 1.55, -7.7, -0.32);
+    A(box(0.9, 0.7, 0.1), stripe, 0, 2.25, -6.6, -0.32);                        // 垂尾上的航司标
+    for (const s of [1, -1]) A(sweptWing(s, 3.2, 1.7, 0.6, 0.16, 0.55), wingM, 0, 0.55, -7.9);
+    // 起落架（前三点式：前 1 轮 + 主 4 轮）
+    A(new THREE.CylinderGeometry(0.09, 0.09, 1.5, 6), metal, 0, -1.55, 6.0);
+    A(new THREE.CylinderGeometry(0.42, 0.42, 0.26, 10), tire, 0, -2.62, 6.0, 0, 0, Math.PI / 2);
+    for (const s of [1, -1]) {
+      A(new THREE.CylinderGeometry(0.11, 0.11, 1.6, 6), metal, s * 1.75, -1.5, -1.2);
+      A(new THREE.CylinderGeometry(0.46, 0.46, 0.3, 10), tire, s * 1.75, -2.62, -1.2, 0, 0, Math.PI / 2);
+      A(new THREE.CylinderGeometry(0.46, 0.46, 0.3, 10), tire, s * 1.75, -2.62, -1.75, 0, 0, Math.PI / 2);
+    }
+    // 航行灯（左红右绿）+ 尾部频闪
+    A(box(0.16, 0.16, 0.16), M.navL, -7.35, 0.1, 1.4);
+    A(box(0.16, 0.16, 0.16), M.navR, 7.35, 0.1, 1.4);
+    A(box(0.14, 0.14, 0.14), M.navW, 0, 0.3, -8.9);
+    g.scale.setScalar(scale || 1);
+    return g;
+  }
+  // 大机（1 号机位 -230,21，机头与跑道同向 +Z；轮底 -3.08 → 恰好落在停机坪面）
+  const planeA = makeAirliner(1, { body: 0xf4f6f8, stripe: 0x1a5fb4, tail: 0xd0342c });
+  planeA.position.set(-230, 0.12 + 3.08, 21);
+  scene.add(planeA);
+  // 机身碰撞体：只拦机身（不拦机翼 —— 翼展 15m 全拦会堵掉整个机位，而机翼离地
+  // 2.5m，人走车开都从翼下过，视觉上不穿帮）。玩家碰撞是高度感知的
+  // （person.y < top-0.3 才挡），所以站在机身上/从翼下过都不受影响。
+  // 尾翼只有 0.24m 厚且偏在尾端，不做碰撞（穿模风险可忽略）。
+  buildings.push({ minX: -231.05, maxX: -228.95, minZ: 12.4, maxZ: 31.1, bottom: 0, top: 4.25 });
+  // 小一点的通航机（2 号机位 -217,21，同向 +Z，绿尾）—— 有大小对比才看得出"这是机场"
+  const planeB = makeAirliner(0.72, { body: 0xeef1f4, stripe: 0x2e7d32, tail: 0xf39c12 });
+  planeB.position.set(-217, 0.12 + 3.08 * 0.72, 21);
+  scene.add(planeB);
+  buildings.push({ minX: -217.76, maxX: -216.24, minZ: 14.81, maxZ: 28.27, bottom: 0, top: 3.1 });
 })();
 
 // 公园（中心区域，绿地+池塘+亭子）
@@ -5612,17 +5902,37 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 })();
 
 // 围栏（环绕体育场和机场）
+// 【2026-10-21·fix38】机场围栏从圆形改成矩形：新机场是 110m 跑道+航站楼+机库+停机坪的
+// 矩形布局（占位 X∈[-302,-209]、Z∈[-55,74]），旧圆形 r=65 既切进停机坪东沿
+// 又漏掉整个机库。现在按矩形周长等距布桩（四边 step≈4m），外扩 6m 余量。
+// 【fix38 追加·迁址】机场整体搬到城市正西环带（原址被内环道拦腰穿过，见 terrainHeight
+// 里的长注释），围栏矩形随迁：X∈[-308,-209]、Z∈[-61,88]。
 (function addFences() {
   const fenceMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
   const zones = [
-    { cx: -280, cz: 200, r: 50 },  // 体育场
-    { cx: -260, cz: -220, r: 65 },  // 机场
+    { cx: -280, cz: 200, r: 50 },               // 体育场（圆形）
+    { cx: -258.5, cz: 13.5, hw: 49.5, hh: 74.5 } // 机场（矩形，含 6m 余量）
   ];
+  const addPost = (fx, fz) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 4), fenceMat);
+    // 贴地放置：机场围栏有 6m 余量落在压平 blend 带外（丘陵 ±1.5m），
+    // 固定 y=1 会让桩浮空/被埋，用 terrainHeight 逐桩找地
+    post.position.set(fx, terrainHeight(fx, fz) + 1, fz); scene.add(post);
+  };
   zones.forEach(z => {
-    for (let a = 0; a < Math.PI * 2; a += 0.25) {
-      const fx = z.cx + Math.cos(a) * z.r, fz = z.cz + Math.sin(a) * z.r;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 4), fenceMat);
-      post.position.set(fx, 1, fz); scene.add(post);
+    if (z.r) {   // 圆形（体育场）
+      for (let a = 0; a < Math.PI * 2; a += 0.25) addPost(z.cx + Math.cos(a) * z.r, z.cz + Math.sin(a) * z.r);
+      return;
+    }
+    const W = z.hw * 2, D = z.hh * 2;           // 矩形（机场）：四边等距布桩
+    const nX = Math.max(2, Math.round(W / 4)), nZ = Math.max(2, Math.round(D / 4));
+    for (let i = 0; i <= nX; i++) {
+      const fx = z.cx - z.hw + (W * i) / nX;
+      addPost(fx, z.cz - z.hh); addPost(fx, z.cz + z.hh);
+    }
+    for (let i = 1; i < nZ; i++) {
+      const fz = z.cz - z.hh + (D * i) / nZ;
+      addPost(z.cx - z.hw, fz); addPost(z.cx + z.hw, fz);
     }
   });
 })();
@@ -12711,6 +13021,11 @@ const JOY_ZONE_H = 0.5;                // 摇杆触发区：下 1/2 屏（原来
 // 摇杆默认停靠位（左下角）：常显，新手一眼就能看到"这里是走路的键"。
 // 纵向偏移上限压到 100px（+半径 62 = 162px）—— 必须留在"冲刺键"（bottom:176px）下方，大屏上才不打架。
 function joyHomePos() {
+  // 【2026-10-21·fix38】布局自定义：存过摇杆停靠位就用存档（按屏幕比例存，转屏自适应）。
+  // btnLayout 是文件末尾用 var 声明的（提升为 undefined），这里判空兼容"初始化期就被调用"。
+  if (typeof btnLayout !== 'undefined' && btnLayout && btnLayout.joy) {
+    return { x: btnLayout.joy.x * innerWidth, y: btnLayout.joy.y * innerHeight };
+  }
   return {
     x: Math.max(86, Math.min(innerWidth * 0.16, 150)),
     y: innerHeight - Math.max(86, Math.min(innerHeight * 0.22, 100))
@@ -12759,7 +13074,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar'));
 }
 addEventListener('touchstart', e => {
   if (ferrisPanelOpen || devPanelOpen || islandPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
@@ -19758,6 +20073,9 @@ const LANDMARKS = [
   { x: 180, z: 272, icon: '\uD83C\uDFE1', name: '别墅', color: '#ffc48a' },
   { x: -280, z: 120, icon: '\uD83E\uDE96', name: '军事基地', color: '#8fd98f' },
   { x: -200, z: -280, icon: '\u26F3', name: '高尔夫', color: '#8fe0a0' },
+  // 【2026-10-21·fix38】机场（正西，fix38 重做：跑道/塔台/航站楼/机库/两架客机；
+  // 从西北 (-256,-220) 迁到正西 (-256,14) —— 原址被内环道拦腰穿过，详见 addAirport 注释）
+  { x: -256, z: 14, icon: '\u2708\uFE0F', name: '机场', color: '#bcd3e6' },
   // 城市公共设施（perf11 新建）：小地图 / 全屏地图上都会显示，方便找
   { x: POLICE_STATION.x, z: POLICE_STATION.z, icon: '\uD83D\uDC6E', name: '城管局', color: '#7fb8ff' },
   { x: HOSPITAL.x, z: HOSPITAL.z, icon: '\uD83C\uDFE5', name: '医院', color: '#ff9a9a' }
@@ -19920,17 +20238,28 @@ function drawMinimap() {
   mctx.strokeStyle = 'rgba(100,120,160,0.4)'; mctx.lineWidth = 1.5;
   mctx.strokeRect(1, 1, S - 1, S - 1);
 }
+// 【2026-10-21·fix38】大地图拖动平移（像素）。打开时归零；拖动由下面的指针事件更新。
+var mapPanX = 0, mapPanY = 0;
+// 大地图缩放系数（cover：铺满宽度，裁上下）。drawFullMap 和钳制逻辑共用，抽成函数避免两处算错。
+function mapScale(W, H) { return Math.max(W / (WORLD_LIMIT_X * 2), H / (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN)); }
 function drawFullMap() {
   const cv = document.getElementById('mapCanvas');
   const W = cv.width, H = cv.height;
   const ctx = cv.getContext('2d');
+  // 【2026-10-21·fix38 用户要求】"放大版的地图弄成可以用手移动的"。
+  // 手指拖动 = 给整幅地图加一个像素级平移（mapPanX/Y）。某一轴如果整幅图比屏幕还小
+  // （宽度方向按 cover 铺满时通常正好等宽），该轴不允许平移，钳制在 0。
+  const _mw = WORLD_LIMIT_X * 2 * mapScale(W, H), _mh = (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * mapScale(W, H);
+  const _maxPanX = Math.max(0, (_mw - W) / 2), _maxPanY = Math.max(0, (_mh - H) / 2);
+  mapPanX = Math.max(-_maxPanX, Math.min(_maxPanX, mapPanX));
+  mapPanY = Math.max(-_maxPanY, Math.min(_maxPanY, mapPanY));
   // 【fix15 用户要求】"点开地图要铺满手机宽度"。
   // 原来用 Math.min（contain）：世界近乎正方形、手机横屏很宽，于是地图只画出中间约 50% 宽度，
   // 两侧全是海洋底色，看着"地图太小"。改成 Math.max（cover）：整幅地图按宽度铺满屏幕，
   // 只裁掉上下多余的海域（城市核心 ±200 仍在可视区内）。
-  const s = Math.max(W / (WORLD_LIMIT_X * 2), H / (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN));
-  const ox = (W - WORLD_LIMIT_X * 2 * s) / 2 + WORLD_LIMIT_X * s;
-  const oy = (H - (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s) / 2 - WORLD_LIMIT_Z_MIN * s;
+  const s = mapScale(W, H);
+  const ox = (W - WORLD_LIMIT_X * 2 * s) / 2 + WORLD_LIMIT_X * s + mapPanX;
+  const oy = (H - (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s) / 2 - WORLD_LIMIT_Z_MIN * s + mapPanY;
   const X = wx => ox + wx * s, Y = wz => oy + wz * s;
   ctx.clearRect(0, 0, W, H);
   // 海洋底色
@@ -19940,7 +20269,8 @@ function drawFullMap() {
   // 新区域标注
   const zones = [
     { x: 280, z: 200, r: 70, color: '#3a7a3a', name: '体育场' },
-    { x: -280, z: 200, r: 70, color: '#6a6a72', name: '机场' },
+    // 【2026-10-21·fix38】机场迁址到城市正西环带（原址被内环道拦腰穿过），标注同步
+    { x: -256, z: 14, r: 95, color: '#6a6a72', name: '机场' },
     { x: 260, z: -200, r: 50, color: '#1a6f9f', name: '码头' },
     { x: 230, z: 100, r: 20, color: '#cc3333', name: '摩天轮' },
     { x: -200, z: -280, r: 40, color: '#3a9a3a', name: '高尔夫' },
@@ -20174,6 +20504,7 @@ function syncMapCanvasSize() {
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
 }
 function openFullMap() {
+  mapPanX = 0; mapPanY = 0;   // 每次打开都从全景开始，避免上次拖到一半的位置让人迷路
   document.getElementById('mapPanel').style.display = 'flex';
   syncMapCanvasSize();     // 必须先让面板显示出来，才量得到 head/foot 的真实高度
   drawFullMap();
@@ -20182,6 +20513,44 @@ function openFullMap() {
 document.getElementById('minimap').addEventListener('click', openFullMap);
 document.getElementById('minimap').addEventListener('touchstart', e => { e.preventDefault(); openFullMap(); });
 document.getElementById('mapClose').addEventListener('click', () => { document.getElementById('mapPanel').style.display = 'none'; });
+// 【2026-10-21·fix38 用户要求】"放大版的地图弄成可以用手移动的"。
+// 手指/鼠标在地图画布上拖动 → 改 mapPanX/Y 并重画。用 Pointer Events（一套代码同时覆盖
+// 触摸和鼠标）；老浏览器没有 PointerEvent 时退回 touch + mouse 两套。
+// ⚠️ 这里**不能** preventDefault 触摸：地图面板本身已在 isUiTouch 排除列表里（不会穿透到
+// 摇杆/视角），preventDefault 反而会连带掐死 click 事件（点头像进属性、点关闭就失灵）。
+(function initMapPan() {
+  const cv = document.getElementById('mapCanvas');
+  if (!cv) return;
+  let dragging = false, lastX = 0, lastY = 0, pid = null;
+  const isOpen = () => { const p = document.getElementById('mapPanel'); return p && p.style.display === 'flex'; };
+  const down = (x, y, id) => {
+    if (!isOpen()) return false;
+    dragging = true; lastX = x; lastY = y; pid = (id === undefined ? null : id);
+    return true;
+  };
+  const move = (x, y, id) => {
+    if (!dragging || !isOpen()) return;
+    if (pid !== null && id !== undefined && id !== pid) return;   // 多指：只认最初那一根
+    mapPanX += x - lastX; mapPanY += y - lastY;
+    lastX = x; lastY = y;
+    drawFullMap();
+  };
+  const up = () => { dragging = false; pid = null; };
+  if (window.PointerEvent) {
+    cv.addEventListener('pointerdown', e => { if (down(e.clientX, e.clientY, e.pointerId)) { try { cv.setPointerCapture(e.pointerId); } catch (err) {} } });
+    cv.addEventListener('pointermove', e => move(e.clientX, e.clientY, e.pointerId));
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+  } else {
+    cv.addEventListener('touchstart', e => { const t = e.changedTouches[0]; down(t.clientX, t.clientY, t.identifier); }, { passive: true });
+    cv.addEventListener('touchmove', e => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, t.identifier); }, { passive: true });
+    cv.addEventListener('touchend', up);
+    cv.addEventListener('touchcancel', up);
+    cv.addEventListener('mousedown', e => down(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    window.addEventListener('mouseup', up);
+  }
+})();
 function openStats() { document.getElementById('statsPanel').style.display = 'block'; renderStats(); }
 document.getElementById('mapAvatar').addEventListener('click', openStats);
 document.getElementById('mapAvatar').addEventListener('touchstart', e => { e.preventDefault(); openStats(); });
@@ -22301,7 +22670,11 @@ function gamePaused() {
     return getComputedStyle(el).display !== 'none';
   };
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
-      || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel');
+      || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel')
+      || vis('setPanel')
+      // 【2026-10-21·fix38】布局编辑模式也要暂停：玩家在摆按钮时世界必须冻住，
+      // 否则背后的车流/NPC 照跑，一退出编辑就"世界自己动了半天"。
+      || (typeof layoutEditing !== 'undefined' && layoutEditing);
   // ⚠️ 别把 #soccerPanel（足球场开赛面板）加进来：它由 updateSoccer 每帧判断"玩家是否还在球场里"，
   //    一旦它也冻结世界，updateSoccer 就不跑了 —— 玩家走出球场面板不会自动收起，
   //    点「取消」后也失去了自动恢复的路径，表现为"足球玩不了、也取消不了"。
@@ -22507,6 +22880,246 @@ function updateRaceCdHud() {
 // three.js 的 renderer.compile() 用 scene.traverse（**包含隐藏对象**）把场景里所有材质
 // 提前编译好。放在主循环启动前，正好落在加载画面里，玩家感觉不到。
 try { renderer.compile(scene, camera); } catch (e) { console.warn('[precompile]', e); }
+// ========== 【2026-10-21·fix38】手机 HUD 按钮布局自定义（位置 / 大小） ==========
+// 用户要求："除了人物属性，再弄一个设置，设置里边可以调整手机界面的那些按钮的位置
+// 还有大小，可以根据个人的喜好调整"。
+// 实现要点：
+//  · 没自定义过时，按钮位置/大小**完全由原 CSS 决定**（一行 JS 都不碰）；只有玩家在
+//    「设置 → 进入调整」里拖动/改大小后，才按存档给按钮写 left/top/width/height。
+//  · 存档用**屏幕比例**存 x/y（转屏/换窗口不跑偏），尺寸存像素，key = cityfree_btn_layout_v1。
+//  · 编辑模式下：世界暂停（gamePaused 已登记 layoutEditing）、所有可调按钮强制显示并加
+//    虚线描边、点选中后 －/＋ 改大小、每次改动立即写 localStorage（不丢档）。
+//  · 输入拦截用 **capture 阶段 + stopPropagation**：游戏自己的摇杆/视角/攻击监听全是
+//    window 上的冒泡监听，捕获阶段拦住它们就都收不到，不需要逐个按钮改代码。
+//    ⚠️ 只拦 [data-lay]（可调按钮）上的事件，工具条自己的按钮还要用，不能被误伤。
+//  · 进入编辑前必须把地图/属性面板关掉：它们是 z-index 95/96 的全屏浮层，会盖住
+//    z-index 20~25 的 HUD 按钮，玩家根本摸不到要拖的按钮。
+var LAYOUT_KEY = 'cityfree_btn_layout_v1';
+var btnLayout = null;          // { atk:{x,y,w,h}, ..., joy:{x,y} } —— x/y 是屏幕比例，w/h 是像素
+var layoutEditing = false, layoutSel = null, layoutDrag = null, layoutBak = null;
+// 可调按钮清单 + 默认几何（数值与原 CSS 逐条对齐，仅作文档与「恢复默认」的对照）
+var BTN_LAYOUT_DEF = {
+  atk:         { right: 36,  bottom: 40,  w: 96,  h: 96 },
+  btn:         { right: 120, bottom: 46,  w: 72,  h: 72 },
+  jump:        { right: 120, bottom: 196, w: 62,  h: 62 },
+  weaponBtn:   { right: 30,  bottom: 122, w: 62,  h: 62 },
+  grappleBtn:  { right: 30,  bottom: 196, w: 62,  h: 62 },
+  kickBtn:     { right: 120, bottom: 128, w: 62,  h: 62 },
+  sprintBtn:   { left: 30,   bottom: 176, w: 66,  h: 66 },
+  scopeBtn:    { right: 210, bottom: 24,  w: 62,  h: 62 },
+  salvoBtn:    { right: 120, bottom: 24,  w: 62,  h: 62 },
+  gasBtn:      { right: 26,  bottom: 26,  w: 96,  h: 96 },
+  reverseBtn:  { right: 134, bottom: 52,  w: 60,  h: 60 },
+  heliUpBtn:   { right: 26,  bottom: 26,  w: 96,  h: 96 },
+  heliDownBtn: { right: 134, bottom: 52,  w: 60,  h: 60 },
+  steerPad:    { left: 24,   bottom: 90,  w: 300, h: 64 },
+  minimap:     { left: 12,   top: 12,     w: 110, h: 110 }
+};
+const LAYOUT_NAMES = { atk: '攻击', btn: '上车', jump: '跳', weaponBtn: '武器', grappleBtn: '钩爪', kickBtn: '踢飞', sprintBtn: '疾跑', scopeBtn: '瞄准', salvoBtn: '连发', gasBtn: '前进', reverseBtn: '后退', heliUpBtn: '直升升', heliDownBtn: '直升降', steerPad: '转向盘', minimap: '小地图', joy: '摇杆' };
+function loadBtnLayout() {
+  try { btnLayout = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) { btnLayout = null; }
+  if (!btnLayout || typeof btnLayout !== 'object') btnLayout = null;
+}
+function applyBtnLayout() {
+  if (!btnLayout) return;
+  for (const id in BTN_LAYOUT_DEF) {
+    const el = document.getElementById(id); if (!el) continue;
+    const L = btnLayout[id]; if (!L) continue;
+    el.style.left = (L.x * innerWidth) + 'px';
+    el.style.top = (L.y * innerHeight) + 'px';
+    el.style.right = 'auto'; el.style.bottom = 'auto';   // inline auto 覆盖 CSS 的 right/bottom
+    el.style.width = L.w + 'px'; el.style.height = L.h + 'px';
+    // 圆按钮的文字靠 CSS 行高居中；改了高度必须同步行高，否则文字会跑出圆外
+    el.style.lineHeight = L.h + 'px';
+    el.style.fontSize = Math.max(10, Math.round(L.h * 0.2)) + 'px';
+  }
+}
+function saveBtnLayout(silent) {
+  const out = {};
+  for (const id in BTN_LAYOUT_DEF) {
+    const el = document.getElementById(id); if (!el) continue;
+    const r = el.getBoundingClientRect();
+    out[id] = { x: r.left / innerWidth, y: r.top / innerHeight, w: Math.round(r.width), h: Math.round(r.height) };
+  }
+  // 摇杆存"圆心"比例（它的 CSS 带 translate(-50%,-50%)，left/top 指的就是圆心）
+  if (typeof joyEl !== 'undefined' && joyEl) {
+    const jr = joyEl.getBoundingClientRect();
+    out.joy = { x: (jr.left + jr.width / 2) / innerWidth, y: (jr.top + jr.height / 2) / innerHeight };
+  }
+  btnLayout = out;
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(out)); } catch (e) {}
+  if (!silent) floatText('布局已保存', '#8ef58e');
+}
+function resetBtnLayout() {
+  try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+  btnLayout = null;
+  for (const id in BTN_LAYOUT_DEF) {
+    const el = document.getElementById(id); if (!el) continue;
+    el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = '';
+    el.style.width = ''; el.style.height = ''; el.style.lineHeight = ''; el.style.fontSize = '';
+  }
+  resetJoyHome();
+  if (layoutEditing) selectLayoutBtn(null);
+  floatText('已恢复默认布局', '#8ef58e');
+}
+function selectLayoutBtn(id) {
+  if (layoutSel) { const o = document.getElementById(layoutSel); if (o) o.classList.remove('lay-sel'); }
+  layoutSel = id || null;
+  const nameEl = document.getElementById('layoutName');
+  if (layoutSel) {
+    const el = document.getElementById(layoutSel); if (el) el.classList.add('lay-sel');
+    if (nameEl) nameEl.textContent = '已选中：' + (LAYOUT_NAMES[layoutSel] || layoutSel) + '（－/＋ 调大小）';
+  } else if (nameEl) nameEl.textContent = '拖动按钮移动位置';
+}
+function enterLayoutEdit() {
+  if (layoutEditing) return;
+  // 关掉会盖住 HUD 按钮的全屏面板（地图 z95 / 属性 z96 / 设置 z96，按钮才 z20~25）
+  document.getElementById('mapPanel').style.display = 'none';
+  document.getElementById('statsPanel').style.display = 'none';
+  document.getElementById('setPanel').style.display = 'none';
+  layoutEditing = true;
+  document.body.classList.add('layout-editing');
+  // 打命中标记 + 记住进入前的显示状态（退出时原样还回去，不破坏游戏自己的显隐逻辑）
+  layoutBak = {};
+  for (const id in BTN_LAYOUT_DEF) {
+    const el = document.getElementById(id); if (!el) continue;
+    el.setAttribute('data-lay', '1');
+    layoutBak[id] = el.style.display;
+    el.style.display = 'block';
+  }
+  if (typeof joyEl !== 'undefined' && joyEl) {
+    joyEl.setAttribute('data-lay', '1');
+    layoutBak.joy = joyEl.style.display;
+    joyEl.style.display = 'block';
+    resetJoyHome();   // 摇杆平时是"按下才出现"，编辑时先停到 Home 位给人拖
+  }
+  document.getElementById('layoutBar').style.display = 'flex';
+  selectLayoutBtn(null);
+}
+function exitLayoutEdit() {
+  if (!layoutEditing) return;
+  layoutEditing = false;
+  document.body.classList.remove('layout-editing');
+  if (layoutBak) { for (const id in layoutBak) { const el = document.getElementById(id); if (el) el.style.display = layoutBak[id]; } }
+  layoutBak = null; layoutDrag = null;
+  selectLayoutBtn(null);
+  document.getElementById('layoutBar').style.display = 'none';
+  // 退出后让游戏自己的可见性逻辑立刻接管（编辑期间世界是暂停的，update 没跑）
+  try { updateJoyUi(); } catch (e) {}
+}
+function moveLayoutBtn(cx, cy) {
+  const el = document.getElementById(layoutDrag.id); if (!el) return;
+  const r = el.getBoundingClientRect();
+  if (layoutDrag.centered) {
+    // 摇杆：left/top 指圆心（CSS translate(-50%,-50%)），按手指落点居中，钳在半屏内
+    const x = Math.max(r.width / 2 + 2, Math.min(innerWidth - r.width / 2 - 2, cx));
+    const y = Math.max(r.height / 2 + 2, Math.min(innerHeight - r.height / 2 - 2, cy));
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+  } else {
+    const x = Math.max(2, Math.min(innerWidth - r.width - 2, cx - layoutDrag.dx));
+    const y = Math.max(2, Math.min(innerHeight - r.height - 2, cy - layoutDrag.dy));
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.style.right = 'auto'; el.style.bottom = 'auto';
+  }
+}
+function resizeLayoutBtn(delta) {
+  if (!layoutSel) { floatText('先点一个按钮', '#ffd76a'); return; }
+  const el = document.getElementById(layoutSel); if (!el) return;
+  const r = el.getBoundingClientRect();
+  const maxW = layoutSel === 'steerPad' ? 460 : 200, maxH = layoutSel === 'steerPad' ? 160 : 200;
+  const w = Math.max(40, Math.min(maxW, Math.round(r.width + delta)));
+  const h = Math.max(40, Math.min(maxH, Math.round(r.height + delta)));
+  // 以中心为锚缩放：按钮长大也不会凭空飞出屏幕外
+  const cxc = r.left + r.width / 2, cyc = r.top + r.height / 2;
+  el.style.width = w + 'px'; el.style.height = h + 'px';
+  el.style.left = Math.max(2, Math.min(innerWidth - w - 2, cxc - w / 2)) + 'px';
+  el.style.top = Math.max(2, Math.min(innerHeight - h - 2, cyc - h / 2)) + 'px';
+  el.style.right = 'auto'; el.style.bottom = 'auto';
+  el.style.lineHeight = h + 'px';
+  el.style.fontSize = Math.max(10, Math.round(h * 0.2)) + 'px';
+  saveBtnLayout(true);
+}
+(function initLayoutEditInput() {
+  const onDown = (x, y, e) => {
+    if (!layoutEditing) return;
+    const el = (e.target && e.target.closest) ? e.target.closest('[data-lay]') : null;
+    if (!el) return;
+    e.stopPropagation(); e.preventDefault();   // 拦住游戏window上的冒泡监听（摇杆/视角/攻击）
+    selectLayoutBtn(el.id);
+    const r = el.getBoundingClientRect();
+    layoutDrag = { id: el.id, dx: x - r.left, dy: y - r.top, centered: el.id === 'joy' };
+  };
+  const onMove = (x, y, e) => {
+    if (!layoutEditing || !layoutDrag) return;
+    e.stopPropagation(); e.preventDefault();
+    moveLayoutBtn(x, y);
+  };
+  const onUp = () => { if (layoutDrag) { layoutDrag = null; saveBtnLayout(true); } };
+  if (window.PointerEvent) {
+    addEventListener('pointerdown', e => onDown(e.clientX, e.clientY, e), true);
+    addEventListener('pointermove', e => onMove(e.clientX, e.clientY, e), true);
+    addEventListener('pointerup', onUp, true);
+    addEventListener('pointercancel', onUp, true);
+  } else {
+    addEventListener('touchstart', e => { const t = e.changedTouches[0]; onDown(t.clientX, t.clientY, e); }, true);
+    addEventListener('touchmove', e => { const t = e.changedTouches[0]; onMove(t.clientX, t.clientY, e); }, true);
+    addEventListener('touchend', onUp, true);
+    addEventListener('touchcancel', onUp, true);
+    addEventListener('mousedown', e => onDown(e.clientX, e.clientY, e), true);
+    addEventListener('mousemove', e => onMove(e.clientX, e.clientY, e), true);
+    addEventListener('mouseup', onUp, true);
+  }
+})();
+// ---- 设置面板 / 工具条 接线 ----
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; });
+document.getElementById('setClose').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'none'; });
+document.getElementById('layoutEditBtn').addEventListener('click', enterLayoutEdit);
+document.getElementById('layoutResetBtn').addEventListener('click', resetBtnLayout);
+document.getElementById('layMinus').addEventListener('click', () => resizeLayoutBtn(-8));
+document.getElementById('layPlus').addEventListener('click', () => resizeLayoutBtn(8));
+document.getElementById('layReset').addEventListener('click', resetBtnLayout);
+document.getElementById('layDone').addEventListener('click', () => { saveBtnLayout(true); exitLayoutEdit(); });
+// 启动：读档并应用（比例 → 像素）
+loadBtnLayout(); applyBtnLayout();
+// 【2026-10-21·fix38 用户反馈"第一次上车开车卡几下，之后就不卡了"】
+// 和钩爪（fix36）同属"懒编译"家族，但触发点全在**首次驾驶**这条路上，boot 时场景里没有：
+// ① 尾烟：updateCarExhaust 在第一次踩油门时才 new 出"无贴图 + 透明"的 MeshBasicMaterial，
+//    这个程序变体此前不存在 → 现场编译着色器卡一帧（之后有缓存就不卡）。
+//    注意不能把烟材质改成全局缓存：updateSmokes 每帧逐颗改 opacity 做淡出，共享材质会一起褪色。
+//    所以这里用**同参数**的材质先造两颗编译好再删掉（参数必须与 emitSmoke 完全一致）。
+// ② 车灯 SpotLight：headSpot 原来在 updateDayNight 第一帧才创建，numSpotLights 0→1 会让
+//    全场景受光材质重新编译着色器（一大笔账）—— 必须提前到加载画面里建好。
+// ③ 车载音乐：musicEl 原来第一次上车才 new Audio() + 设 src，移动端首次 play() 要现建
+//    媒体管线（下载/解码/混音图），主线程卡一下。加载阶段就建好并 load() 预解码
+//    （只加载不播放，不需要用户手势；首次上车 playNextMusic 直接复用它）。
+try {
+  const _pwTrash = [];
+  for (const heavy of [false, true]) {
+    const pw = new THREE.Mesh(smokeGeometry(heavy),
+      new THREE.MeshBasicMaterial({ color: heavy ? 0x3a3a3a : 0x5a5a5a, transparent: true, opacity: heavy ? 0.33 : 0.42 }));
+    pw.visible = true; scene.add(pw); _pwTrash.push(pw);
+  }
+  if (!headSpot) {
+    headSpot = new THREE.SpotLight(0xfff2d8, 0, 46, 0.62, 0.55, 1.4);
+    headSpot.castShadow = false;          // 投影是夜里最大的一笔开销，不开
+    scene.add(headSpot);
+    scene.add(headSpot.target);
+  }
+  renderer.compile(scene, camera);
+  for (const pw of _pwTrash) scene.remove(pw);
+} catch (e) { console.warn('[prewarm-drive]', e); }
+try {
+  if (!musicEl) {
+    musicEl = new Audio();
+    musicEl.volume = 0.35;
+    musicEl.preload = 'auto';
+    musicEl.onended = () => { musicIdx++; playNextMusic(); };
+    musicEl.onerror = () => { musicFailRun++; musicIdx++; playNextMusic(); };
+    musicEl.oncanplay = () => { musicFailRun = 0 };   // 能加载就重置失败计数
+    musicEl.src = MUSIC_FILES[0];
+    musicEl.load();                       // 预解码第一首，把媒体管线建起来
+  }
+} catch (e) { console.warn('[prewarm-music]', e); }
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
@@ -22549,6 +23162,8 @@ addEventListener('resize', () => {
     // 大地图开着的时候转屏/改窗口：画布分辨率要跟着重算，否则又变回"扁扁的一条"
     const mp = document.getElementById('mapPanel');
     if (mp && mp.style.display === 'flex') { syncMapCanvasSize(); drawFullMap(); }
+    // 【2026-10-21·fix38】自定义按钮布局是按屏幕比例存的，转屏/改窗口后要重算成像素
+    if (!layoutEditing) applyBtnLayout();
     checkRotate();
   }, 150);
 });
