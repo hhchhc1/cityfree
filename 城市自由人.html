@@ -1201,8 +1201,12 @@ for (let j = 0; j < roads.length; j++) {
 
 // 马路路面（深灰，横竖条带，分段贴合地形起伏）
 const roadMat = new THREE.MeshLambertMaterial({ color: 0x2e2e2e });
+// 【2026-10-21·fix37 移植·旧分支 fix21】路口灰块闪烁 = 横竖两条路都铺在 y=0.02 同一平面，
+// 交叉处重叠 → 深度冲突（Z-fighting），相机一动交叉块就闪。
+// 把"沿 X 坐标排列（南北向）"那组路抬高 0.01，交叉点由它盖住另一组，闪烁消失；
+// 两路同为深灰，抬高 1cm 肉眼完全看不出差别。
 roads.forEach(cx => layStrip(ROAD, CITY * 2, 60, cx, 0, roadMat, 0.02, true));
-roads.forEach(cz => layStrip(ROAD, CITY * 2, 60, 0, cz, roadMat, 0.02, false));
+roads.forEach(cz => layStrip(ROAD, CITY * 2, 60, 0, cz, roadMat, 0.03, false));
 
 // ========== 外围弯曲公路（环形 + 放射支线，连接城市与海岸/军事基地） ==========
 // 说明：外围原本只有网格状直路，越往外越是空旷丘陵。现在补一圈"会拐弯"的环形公路，
@@ -17397,6 +17401,25 @@ function shoot(w, count) {
   // 因为垂直方向已经完全由准星光标 aimCurY 决定了）。
   const slope = _rd.y / _rh;
   const shotY = (x, z, s) => Math.max(terrainHeight(x, z) + 0.05, muzzleY + s * slope);
+  // 【2026-10-21·fix37】子弹打地面：无目标时沿弹道步进检测是否提前命中地形，
+  // 避免 Math.max 把弹道硬拉到地面以上导致"子弹永远打不进地里"的违和感。
+  const groundHit = (dx, dz, maxDist) => {
+    const step = 4.0;
+    let prevS = 0, prevX = px, prevZ = pz, prevG = terrainHeight(prevX, prevZ), prevB = muzzleY;
+    for (let s = step; s <= maxDist + 0.001; s += step) {
+      const x = px + dx * s, z = pz + dz * s;
+      const g = terrainHeight(x, z);
+      const b = muzzleY + s * slope;
+      if (b <= g) {
+        const denom = (prevG - prevB) + (b - g);
+        const t = denom > 1e-6 ? (prevG - prevB) / denom : 0;
+        const hitS = prevS + t * (s - prevS);
+        return { x: px + dx * hitS, z: pz + dz * hitS, dist: hitS };
+      }
+      prevS = s; prevX = x; prevZ = z; prevG = g; prevB = b;
+    }
+    return null;
+  };
   const zoneOf = o => {
     const rr = raycaster.ray;
     const ox = o.x - rr.origin.x, oy = 1.0 - rr.origin.y, oz = o.z - rr.origin.z;
@@ -17492,9 +17515,10 @@ function shoot(w, count) {
       const ca = Math.cos(ang), sa = Math.sin(ang);
       const dx = fx * ca - fz * sa, dz = fx * sa + fz * ca;
       const r = ray(dx, dz);
-      const hx = r.best ? r.best.o.x : px + dx * w.range;
-      const hz = r.best ? r.best.o.z : pz + dz * w.range;
-      const pd = Math.hypot(hx - px, hz - pz);
+      let hx = r.best ? r.best.o.x : px + dx * w.range;
+      let hz = r.best ? r.best.o.z : pz + dz * w.range;
+      let pd = Math.hypot(hx - px, hz - pz);
+      if (!r.best) { const gh = groundHit(dx, dz, pd); if (gh) { hx = gh.x; hz = gh.z; pd = gh.dist; } }
       const hy = shotY(hx, hz, pd);
       const ptt = bulletTravelTime(w, pd);
       spawnTracer(px + dx * 0.5, muzzleY, pz + dz * 0.5, hx, hy, hz, currentWeapon, ptt || undefined);
@@ -17503,6 +17527,9 @@ function shoot(w, count) {
         const hit = r.best;
         if (ptt > 0) queueBullet(hx, hy, hz, ptt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy); applyBulletHit(hit, dmg); });
         else applyBulletHit(hit, dmg);
+      } else {
+        if (ptt > 0) queueBullet(hx, hy, hz, ptt, () => spawnBurst(hx, hz, 0xaaaaaa, 3, hy));
+        else spawnBurst(hx, hz, 0xaaaaaa, 3, hy);
       }
     }
     return;
@@ -17522,9 +17549,10 @@ function shoot(w, count) {
         az = (fx / baseLen) * sa + (fz / baseLen) * ca;
       }
       const shot = ray(ax, az);
-      const hx = shot.best ? shot.best.o.x : px + ax * w.range;
-      const hz = shot.best ? shot.best.o.z : pz + az * w.range;
-      const rpgDist = Math.hypot(hx - px, hz - pz);
+      let hx = shot.best ? shot.best.o.x : px + ax * w.range;
+      let hz = shot.best ? shot.best.o.z : pz + az * w.range;
+      let rpgDist = Math.hypot(hx - px, hz - pz);
+      if (!shot.best) { const gh = groundHit(ax, az, rpgDist); if (gh) { hx = gh.x; hz = gh.z; rpgDist = gh.dist; } }
       const rpgTt = bulletTravelTime(w, rpgDist);
       spawnTracer(px + ax * 0.5, muzzleY, pz + az * 0.5, hx, shotY(hx, hz, rpgDist), hz, currentWeapon, rpgTt || undefined);
       if (rpgTt > 0) queueBullet(hx, 1.0, hz, rpgTt, () => rocketImpact(w, shot.best, hx, hz));
@@ -17537,9 +17565,10 @@ function shoot(w, count) {
   if (w.pierce) {
     const hits = rayPierce(fx, fz);
     const lastO = hits.length ? hits[hits.length - 1].o : null;
-    const farX = lastO ? lastO.x : px + fx * w.range;
-    const farZ = lastO ? lastO.z : pz + fz * w.range;
-    const pdFar = Math.hypot(farX - px, farZ - pz);
+    let farX = lastO ? lastO.x : px + fx * w.range;
+    let farZ = lastO ? lastO.z : pz + fz * w.range;
+    let pdFar = Math.hypot(farX - px, farZ - pz);
+    if (!lastO) { const gh = groundHit(fx, fz, pdFar); if (gh) { farX = gh.x; farZ = gh.z; pdFar = gh.dist; } }
     const ttl = bulletTravelTime(w, pdFar);
     spawnTracer(px + fx * 0.5, muzzleY, pz + fz * 0.5, farX, shotY(farX, farZ, pdFar), farZ, currentWeapon, ttl || undefined);
     for (const hit of hits) {
@@ -17550,13 +17579,19 @@ function shoot(w, count) {
       if (tt > 0) queueBullet(hit.o.x, hy2, hit.o.z, tt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy2); applyBulletHit(hit, dmg); });
       else applyBulletHit(hit, dmg);
     }
+    if (!hits.length) {
+      const hyFar = shotY(farX, farZ, pdFar);
+      if (ttl > 0) queueBullet(farX, hyFar, farZ, ttl, () => spawnBurst(farX, farZ, 0xaaaaaa, 4, hyFar));
+      else spawnBurst(farX, farZ, 0xaaaaaa, 4, hyFar);
+    }
     return;
   }
   // 普通枪：单发
   const r = ray(fx, fz);
-  const hx = r.best ? r.best.o.x : px + fx * w.range;
-  const hz = r.best ? r.best.o.z : pz + fz * w.range;
-  const sdist = Math.hypot(hx - px, hz - pz);
+  let hx = r.best ? r.best.o.x : px + fx * w.range;
+  let hz = r.best ? r.best.o.z : pz + fz * w.range;
+  let sdist = Math.hypot(hx - px, hz - pz);
+  if (!r.best) { const gh = groundHit(fx, fz, sdist); if (gh) { hx = gh.x; hz = gh.z; sdist = gh.dist; } }
   const hy = shotY(hx, hz, sdist);
   const stt = bulletTravelTime(w, sdist);
   spawnTracer(px + fx * 0.5, muzzleY, pz + fz * 0.5, hx, hy, hz, currentWeapon, stt || undefined);
@@ -17565,6 +17600,9 @@ function shoot(w, count) {
     const hit = r.best;
     if (stt > 0) queueBullet(hx, hy, hz, stt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy); applyBulletHit(hit, dmg); });
     else applyBulletHit(hit, dmg);
+  } else {
+    if (stt > 0) queueBullet(hx, hy, hz, stt, () => spawnBurst(hx, hz, 0xaaaaaa, 4, hy));
+    else spawnBurst(hx, hz, 0xaaaaaa, 4, hy);
   }
 }
 function rocketImpact(w, shotBest, hx, hz) {
