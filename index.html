@@ -12979,7 +12979,21 @@ function fireGrapple() {
     const ti = traffic.indexOf(o);
     if (ti >= 0) traffic.splice(ti, 1);
     o.grappled = true;
-    grapple = { mode: 'pull', o, t: 0, dur: 0.28, sx: o.x, sz: o.z, tx: px, tz: pz };
+    // 【2026-10-21·fix30 移植】三维牵引（另一分支里叫 fix26）。
+    // 原来只记了 sx/sz/tx/tz（纯二维），站在房顶钩人会把人拽到「楼顶正下方的地面高度」，
+    // 再被外墙卡住 —— 视觉上就是"人只在地面二维滑动、拽不上楼"。
+    // 现在把高度的起止一并记下来：sy = 目标当前高度，ty = 玩家当前高度（站在房顶时就是房顶高度），
+    // 让 pull 变成真正的 3D 牵引，NPC 会被一起拉上楼顶。
+    const _oy = (o.group && o.group.position) ? o.group.position.y : terrainHeight(o.x, o.z);
+    // 拉拽时长按三维距离自适应：原来固定 0.28s，跨楼层时快到几乎看不见过程。
+    // 现在 0.45~0.85s，距离越远/越高越慢一点，能看清"人被抡起来甩到脚下"的全过程。
+    const _pdx = px - o.x, _pdy = py - _oy, _pdz = pz - o.z;
+    const _pdist = Math.hypot(_pdx, _pdy, _pdz);
+    const _pdur = Math.min(0.85, Math.max(0.45, _pdist / 26));
+    // 抛物线弧高：跨楼层时给足向上的"甩起"感，纯水平拉给一点小弧即可。
+    const _lift = Math.min(3.2, Math.abs(_pdy) * 0.32 + _pdist * 0.10) + 0.6;
+    grapple = { mode: 'pull', o, t: 0, dur: _pdur, lift: _lift,
+      sx: o.x, sy: _oy, sz: o.z, tx: px, ty: py, tz: pz };
     sfx('grapple');
     setHint('钩爪！把目标拽过来');
   } else {
@@ -13067,11 +13081,20 @@ function updateGrapple(dt) {
   g.t += dt;
   const k = Math.min(1, g.t / g.dur);
   if (g.mode === 'pull') {
-    // 把实体勾到玩家面前
+    // 把实体勾到玩家面前（【2026-10-21·fix30】真正的 3D 牵引：x/y/z 一起插值 + 缓动 + 抛物线弧）
     const o = g.o;
-    const ex = g.sx + (g.tx - g.sx) * k, ez = g.sz + (g.tz - g.sz) * k;
+    // easeOutCubic：起步猛、收尾稳，像被抡过去甩到脚下，而不是匀速平移。
+    // 抛物线弧：中途额外抬高，让"跨楼层被拽上来"一眼看清（纯线性插值在垂直方向上
+    // 只有匀速升降，加上弧线后才有"被抡起再落下"的重量感）。
+    const e = 1 - Math.pow(1 - k, 3);
+    const arc = Math.sin(Math.PI * k) * (g.lift || 0);
+    const ex = g.sx + (g.tx - g.sx) * e, ez = g.sz + (g.tz - g.sz) * e;
+    const ey = g.sy + (g.ty - g.sy) * e + arc;
     o.x = ex; o.z = ez;
-    if (o.group) { o.group.position.x = ex; o.group.position.z = ez; }
+    if (o.group) { o.group.position.x = ex; o.group.position.z = ez; o.group.position.y = ey; }
+    // 【fix30】"钉住高度"：标记这次被放置的绝对高度，供 syncPersonGround 使用。
+    // 没有它，syncPersonGround 每帧都会把人按地形压回地面，跨楼层拉人就卡在墙下（拽不上楼）。
+    o.holdY = ey; o.holdX = ex; o.holdZ = ez;
     if (k >= 1) {
       if (o.hp !== undefined && o.alive !== undefined) {
         // 是人：摔倒 + 掉血
@@ -13102,8 +13125,10 @@ function updateGrapple(dt) {
             shoeColor: RIDER_COLORS.shoe
           });
           addWeaponMesh(rg, 'fist');
-          rg.position.set(ex, 0, ez); scene.add(rg);
-          residents.push({ group: rg, x: ex, z: ez, angle: Math.atan2(person.position.x - ex, person.position.z - ez), alive: true, walking: false, timer: 0, walkTime: 0, respawn: 0, hp: 50, maxHp: 50, melee: 'fist', ranged: null, faction: -1, flee: false, hate: 'player', down: true, downT: 1.5, attackCd: 0, phase: 0, punchAnim: 0, punchHand: 0, armed: false, ammo: 0, maxAmmo: 0, chaseMode: 'run' });
+          // 【2026-10-21·fix30】骑手生成高度跟随被拉摩托的实际高度（原来写死 y=0，车在房顶时骑手会掉到地面）。
+          const _ry = (o.group && o.group.position) ? o.group.position.y : 0;
+          rg.position.set(ex, _ry, ez); scene.add(rg);
+          residents.push({ group: rg, x: ex, z: ez, angle: Math.atan2(person.position.x - ex, person.position.z - ez), alive: true, walking: false, timer: 0, walkTime: 0, respawn: 0, hp: 50, maxHp: 50, melee: 'fist', ranged: null, faction: -1, flee: false, hate: 'player', down: true, downT: 1.5, attackCd: 0, phase: 0, punchAnim: 0, punchHand: 0, armed: false, ammo: 0, maxAmmo: 0, chaseMode: 'run', holdY: _ry, holdX: ex, holdZ: ez });
           spawnBurst(ex, ez, 0xff3333, 8);
           // 摩托倒地飞出
           launchFly(o, (Math.random() - 0.5) * 6, 5, (Math.random() - 0.5) * 6, false);
@@ -17207,9 +17232,14 @@ function attack() {
   }
   if (state !== 'walk' || atkCd > 0) return;
   const w = WEAPONS[currentWeapon];
-  // 瞄准方向 = 准心（鼠标位置，手机则为相机前方）
-  const aim = aimDirection(); const fx = aim.x, fz = aim.z;
-  personAngle.v = Math.atan2(fx, fz);   // 攻击时面向准心
+  // 【2026-10-21·fix30 移植】攻击方向 = 人物当前朝向（personAngle），不再把人物瞬时拧向准心。
+  // 另一分支里这个修复叫 fix27，当时就写在注释里：
+  //   "原来这里是 `const aim = aimDirection(); personAngle.v = Math.atan2(aim.x, aim.z)`：
+  //    人物朝的不是正面（相机正前方）时，一按攻击，身体会被**瞬间**拧回正面 —— 既僵直、
+  //    又把身体拖着转，攻击方向也跟着'回到正面'。现在人物朝哪边就攻击哪边；
+  //    朝向只由玩家自己移动转身决定，攻击动作绝不改变它。"
+  // 这次把它搬回来：不同方向都能打，按攻击不再把身体掰向正面。
+  const fx = Math.sin(personAngle.v), fz = Math.cos(personAngle.v);
   const px = person.position.x, pz = person.position.z;
   if (w.type === 'melee') {
     atkCd = w.swing || 0.5;
@@ -17265,7 +17295,9 @@ function attack() {
   }
 }
 function shoot(w, count) {
-  const aim = aimDirection(); const fx = aim.x, fz = aim.z;
+  // 【2026-10-21·fix30 移植】弹道水平方向 = 人物当前朝向（与 attack() 保持一致，做到"人朝哪边就打哪边"）。
+  // 垂直俯仰仍由下面的准心射线 slope 决定，所以上下瞄准照旧可用。
+  const fx = Math.sin(personAngle.v), fz = Math.cos(personAngle.v);
   const px = person.position.x, pz = person.position.z;
   // 部位判定：用**准星光标**反投影出来的 3D 射线，看它经过目标处的高度（头/身/腿）
   // 【2026-10-13】手机端 aimDirection() 内部已经 setFromCamera(aimCurNDC)，
@@ -20011,6 +20043,22 @@ document.getElementById('statsBtn').addEventListener('click', openStats);
 document.getElementById('statsClose').addEventListener('click', () => { document.getElementById('statsPanel').style.display = 'none'; });
 function syncPersonGround(unit) {
   if (unit.fly) return;
+  // 【2026-10-21·fix30 移植】被钩爪拽到高处的人/车，钉在放置高度上，不被地形压平。
+  // 没有这一段时：updateGrapple 刚把 y 拉到房顶，syncPersonGround 下一帧就用
+  // terrainHeight 把它压回地面 → 人被卡在楼顶正下方的墙里，拽不上来（"二维"问题的另一半根因）。
+  if (unit.holdY !== undefined) {
+    // 安全兜底：它站起来了、且自己走离放置点 6m 以上 → 解除钉住、落回地形高度。
+    // 只用"是否倒地 + 水平位移"判断，不依赖 grappled 标志（居民被拉后 grappled 永不清除，
+    // 拿它当条件会导致人永远悬在房顶高度，下楼也跟着悬空）。
+    const dxH = Math.abs(unit.x - (unit.holdX !== undefined ? unit.holdX : unit.x));
+    const dzH = Math.abs(unit.z - (unit.holdZ !== undefined ? unit.holdZ : unit.z));
+    if (!unit.down && (dxH > 6 || dzH > 6)) {
+      unit.holdY = undefined;   // 落到下面的地形贴地分支
+    } else {
+      unit.group.position.y = unit.holdY;
+      return;
+    }
+  }
   if (unit.groundX !== unit.x || unit.groundZ !== unit.z || unit.groundY === undefined) {
     unit.groundX = unit.x; unit.groundZ = unit.z; unit.groundY = personGroundY(unit.x, unit.z);
   }
