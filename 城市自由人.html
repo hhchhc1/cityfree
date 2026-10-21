@@ -19981,7 +19981,9 @@ minimapGradient.addColorStop(0, 'rgba(15,18,28,0.75)'); minimapGradient.addColor
 const minimapZones = [
   { x: 280, z: 200, r: 70, color: 'rgba(240,208,128,0.15)' },
   { x: -280, z: 200, r: 50, color: 'rgba(45,138,45,0.15)' },
-  { x: -260, z: -220, r: 65, color: 'rgba(100,100,120,0.15)' },
+  // 【2026-10-21·fix38】机场从 (-260,-220) 迁到 (-256,14)（原址被内环道拦腰穿过，
+  // 环道啃掉跑道 5.5m 无解），小地图区域标注同步新址；半径 65 覆盖机场占位 Z∈[-55,78]。
+  { x: -256, z: 14, r: 65, color: 'rgba(100,100,120,0.15)' },
   { x: 0, z: 0, r: 25, color: 'rgba(58,122,58,0.12)' },
   { x: 260, z: -200, r: 50, color: 'rgba(26,111,159,0.12)' },
   { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)' }
