@@ -468,6 +468,10 @@
   #setPanel .set-desc.set-dim { color: #6b7684; font-size: 12px; }
   #setPanel .set-row { display: flex; gap: 10px; margin-bottom: 14px; }
   #setPanel .set-gray { background: #546e7a; }
+  /* 【2026-10-22·fix39】模式切换 tab（设置面板里选要调整哪个模式的按钮布局） */
+  #setPanel #layoutModeRow { flex-wrap: wrap; gap: 7px; }
+  #setPanel .mode-tab { flex: 1 1 auto; min-width: 62px; text-align: center; padding: 9px 6px; border-radius: 9px; background: #37475a; color: #cfe0f0; font-size: 13px; cursor: pointer; -webkit-user-select: none; user-select: none; border: 1px solid rgba(255,255,255,0.08); }
+  #setPanel .mode-tab.active { background: #ffd76a; color: #22262b; font-weight: bold; border-color: #ffd76a; }
   /* ---- 布局编辑工具条 ---- */
   #layoutBar {
     position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 120;
@@ -480,6 +484,7 @@
   #layoutBar .lay-ok { background: #2e7d32; }
   #layoutBar .lay-warn { background: #b71c1c; }
   #layoutName { opacity: 0.85; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #layoutModeTag { color: #ffd76a; font-weight: bold; white-space: nowrap; }
   /* 编辑模式：可调按钮加描边；选中的那个高亮；摇杆恢复可触摸（平时 pointer-events:none） */
   body.layout-editing [data-lay] { outline: 2px dashed rgba(255,215,80,0.85); outline-offset: 2px; }
   body.layout-editing [data-lay].lay-sel { outline: 2px solid #ffd750; box-shadow: 0 0 0 4px rgba(255,215,80,0.22), 0 4px 12px rgba(0,0,0,0.5); }
@@ -782,6 +787,14 @@
       <h4>🎮 手机按钮布局</h4>
       <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
       改动自动存在本机浏览器里（换设备不互通）。</p>
+      <p class="set-desc">先选<b>模式</b>再调整 —— 每种模式出现的按钮不同，分开摆放才不会互相重叠：</p>
+      <div class="set-row" id="layoutModeRow">
+        <div class="mode-tab" data-m="normal">正常</div>
+        <div class="mode-tab" data-m="weapon">拿武器</div>
+        <div class="mode-tab" data-m="drive">开车</div>
+        <div class="mode-tab" data-m="heli">直升机</div>
+        <div class="mode-tab" data-m="tank">坦克</div>
+      </div>
       <div class="set-row">
         <div class="map-btn" id="layoutEditBtn">🎮 进入调整</div>
         <div class="map-btn set-gray" id="layoutResetBtn">♻️ 恢复默认</div>
@@ -792,6 +805,7 @@
   </div>
   <!-- 布局编辑模式的工具条（编辑时才显示） -->
   <div id="layoutBar">
+    <span id="layoutModeTag">当前模式：正常</span>
     <span id="layoutName">拖动按钮移动位置</span>
     <div class="lay-btn" id="layMinus">－</div>
     <div class="lay-btn" id="layPlus">＋</div>
@@ -13023,8 +13037,8 @@ const JOY_ZONE_H = 0.5;                // 摇杆触发区：下 1/2 屏（原来
 function joyHomePos() {
   // 【2026-10-21·fix38】布局自定义：存过摇杆停靠位就用存档（按屏幕比例存，转屏自适应）。
   // btnLayout 是文件末尾用 var 声明的（提升为 undefined），这里判空兼容"初始化期就被调用"。
-  if (typeof btnLayout !== 'undefined' && btnLayout && btnLayout.joy) {
-    return { x: btnLayout.joy.x * innerWidth, y: btnLayout.joy.y * innerHeight };
+  if (typeof btnLayout !== 'undefined' && btnLayout && btnLayout.__joy) {
+    return { x: btnLayout.__joy.x * innerWidth, y: btnLayout.__joy.y * innerHeight };
   }
   return {
     x: Math.max(86, Math.min(innerWidth * 0.16, 150)),
@@ -19979,14 +19993,15 @@ const mctx = minimap.getContext('2d');
 const minimapGradient = mctx.createRadialGradient(minimap.width / 2, minimap.height / 2, 0, minimap.width / 2, minimap.height / 2, minimap.width / 2);
 minimapGradient.addColorStop(0, 'rgba(15,18,28,0.75)'); minimapGradient.addColorStop(1, 'rgba(5,8,14,0.9)');
 const minimapZones = [
-  { x: 280, z: 200, r: 70, color: 'rgba(240,208,128,0.15)' },
-  { x: -280, z: 200, r: 50, color: 'rgba(45,138,45,0.15)' },
+  // 【2026-10-22·fix39】加 name：小地图直接显示区域名（之前只有灰块没字，找机场/找基地都费劲）。
+  { x: 280, z: 200, r: 70, color: 'rgba(240,208,128,0.15)', name: '体育场' },
+  { x: -280, z: 200, r: 50, color: 'rgba(45,138,45,0.15)', name: '军事基地' },
   // 【2026-10-21·fix38】机场从 (-260,-220) 迁到 (-256,14)（原址被内环道拦腰穿过，
   // 环道啃掉跑道 5.5m 无解），小地图区域标注同步新址；半径 65 覆盖机场占位 Z∈[-55,78]。
-  { x: -256, z: 14, r: 65, color: 'rgba(100,100,120,0.15)' },
-  { x: 0, z: 0, r: 25, color: 'rgba(58,122,58,0.12)' },
-  { x: 260, z: -200, r: 50, color: 'rgba(26,111,159,0.12)' },
-  { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)' }
+  { x: -256, z: 14, r: 65, color: 'rgba(100,100,120,0.15)', name: '机场' },
+  { x: 0, z: 0, r: 25, color: 'rgba(58,122,58,0.12)', name: '市中心' },
+  { x: 260, z: -200, r: 50, color: 'rgba(26,111,159,0.12)', name: '码头' },
+  { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)', name: '南岛' }
 ];
 // ========== 赛车检查点的地图标点 ==========
 // 之前 6 个黄色检查点只在 3D 场景里生成，地图上一个点都没有，
@@ -20134,6 +20149,13 @@ function drawMinimap() {
     const cx = w2m(z.x), cy = w2n(z.z), cr = z.r * s;
     mctx.fillStyle = z.color;
     mctx.beginPath(); mctx.arc(cx, cy, cr, 0, 7); mctx.fill();
+    // 【2026-10-22·fix39】区域名：只有小地图能看见的区（机场/军事基地/码头…）标上字，
+    // 落在画布内才画，避免拖到屏幕外一堆字叠一起。字号小、带黑影，压在灰块上也看得清。
+    if (z.name && cx > -30 && cx < S + 30 && cy > -10 && cy < S + 20) {
+      mctx.font = 'bold 10px sans-serif'; mctx.textAlign = 'center';
+      mctx.fillStyle = 'rgba(0,0,0,0.65)'; mctx.fillText(z.name, cx + 1, cy + 1);
+      mctx.fillStyle = 'rgba(220,232,245,0.92)'; mctx.fillText(z.name, cx, cy);
+    }
   }
   // 道路
   mctx.strokeStyle = 'rgba(130,140,160,0.5)'; mctx.lineWidth = 1.2;
@@ -20242,24 +20264,27 @@ function drawMinimap() {
 }
 // 【2026-10-21·fix38】大地图拖动平移（像素）。打开时归零；拖动由下面的指针事件更新。
 var mapPanX = 0, mapPanY = 0;
+// 【2026-10-22·fix39】大地图缩放系数（1=全景；双指捏合放大 >1，最大 5 倍）。打开时归 1。
+var mapZoom = 1;
+const MAP_ZOOM_MAX = 5;
+function mapClampZoom(z) { return Math.max(1, Math.min(MAP_ZOOM_MAX, z)); }
 // 大地图缩放系数（cover：铺满宽度，裁上下）。drawFullMap 和钳制逻辑共用，抽成函数避免两处算错。
 function mapScale(W, H) { return Math.max(W / (WORLD_LIMIT_X * 2), H / (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN)); }
 function drawFullMap() {
   const cv = document.getElementById('mapCanvas');
   const W = cv.width, H = cv.height;
   const ctx = cv.getContext('2d');
+
+  // 【2026-10-22·fix39】"地图可以左右移动，也可以双手放大，双手缩小"。
+  // 单指/指针拖动 = 平移（mapPanX/Y）；双指捏合 / 滚轮 = 缩放（mapZoom）。实际比例 s = 基准×缩放，
+  // 平移上限按缩放后的图幅算 —— 缩得越大，可平移范围越大（等于把地图放大了看）。
   // 【2026-10-21·fix38 用户要求】"放大版的地图弄成可以用手移动的"。
-  // 手指拖动 = 给整幅地图加一个像素级平移（mapPanX/Y）。某一轴如果整幅图比屏幕还小
-  // （宽度方向按 cover 铺满时通常正好等宽），该轴不允许平移，钳制在 0。
-  const _mw = WORLD_LIMIT_X * 2 * mapScale(W, H), _mh = (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * mapScale(W, H);
+  const s = mapScale(W, H) * mapZoom;
+  const _mw = WORLD_LIMIT_X * 2 * s, _mh = (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s;
   const _maxPanX = Math.max(0, (_mw - W) / 2), _maxPanY = Math.max(0, (_mh - H) / 2);
   mapPanX = Math.max(-_maxPanX, Math.min(_maxPanX, mapPanX));
   mapPanY = Math.max(-_maxPanY, Math.min(_maxPanY, mapPanY));
-  // 【fix15 用户要求】"点开地图要铺满手机宽度"。
-  // 原来用 Math.min（contain）：世界近乎正方形、手机横屏很宽，于是地图只画出中间约 50% 宽度，
-  // 两侧全是海洋底色，看着"地图太小"。改成 Math.max（cover）：整幅地图按宽度铺满屏幕，
-  // 只裁掉上下多余的海域（城市核心 ±200 仍在可视区内）。
-  const s = mapScale(W, H);
+  // 【fix15 用户要求】"点开地图要铺满手机宽度"：用 cover 铺满宽度（只裁上下多余海域）。
   const ox = (W - WORLD_LIMIT_X * 2 * s) / 2 + WORLD_LIMIT_X * s + mapPanX;
   const oy = (H - (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s) / 2 - WORLD_LIMIT_Z_MIN * s + mapPanY;
   const X = wx => ox + wx * s, Y = wz => oy + wz * s;
@@ -20507,6 +20532,7 @@ function syncMapCanvasSize() {
 }
 function openFullMap() {
   mapPanX = 0; mapPanY = 0;   // 每次打开都从全景开始，避免上次拖到一半的位置让人迷路
+  mapZoom = 1;                // 【2026-10-22·fix39】缩放也归 1，和全景一致
   document.getElementById('mapPanel').style.display = 'flex';
   syncMapCanvasSize();     // 必须先让面板显示出来，才量得到 head/foot 的真实高度
   drawFullMap();
@@ -20520,37 +20546,86 @@ document.getElementById('mapClose').addEventListener('click', () => { document.g
 // 触摸和鼠标）；老浏览器没有 PointerEvent 时退回 touch + mouse 两套。
 // ⚠️ 这里**不能** preventDefault 触摸：地图面板本身已在 isUiTouch 排除列表里（不会穿透到
 // 摇杆/视角），preventDefault 反而会连带掐死 click 事件（点头像进属性、点关闭就失灵）。
+// 【2026-10-22·fix39 用户要求】"地图也可以左右移动，也可以双手放大，双手缩小"。
+// 在拖动平移基础上加**双指捏合缩放**（mapZoom）：同时按下两根手指，张开放大、收拢缩小；
+// 单指仍是平移。桌面端再加滚轮缩放。捏合用两指"距离比"相对第二指落下瞬间的基准距离换算。
+// ⚠️ 这里**不能** preventDefault 触摸：地图面板本身已在 isUiTouch 排除列表里（不会穿透到
+// 摇杆/视角），preventDefault 反而会连带掐死 click 事件（点头像进属性、点关闭就失灵）。
 (function initMapPan() {
   const cv = document.getElementById('mapCanvas');
   if (!cv) return;
-  let dragging = false, lastX = 0, lastY = 0, pid = null;
   const isOpen = () => { const p = document.getElementById('mapPanel'); return p && p.style.display === 'flex'; };
-  const down = (x, y, id) => {
-    if (!isOpen()) return false;
-    dragging = true; lastX = x; lastY = y; pid = (id === undefined ? null : id);
-    return true;
+  const pts = new Map();          // 活动指针 id → {x,y}（同时按下的手指都记着，用来判定捏合）
+  let pinchDist = 0, pinchZoom0 = 1;   // 第二根手指落下瞬间的"两指距离"和当时的缩放，做比例基准
+  const startPinch = () => {
+    const v = [...pts.values()];
+    pinchDist = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y);
+    pinchZoom0 = mapZoom;
   };
-  const move = (x, y, id) => {
-    if (!dragging || !isOpen()) return;
-    if (pid !== null && id !== undefined && id !== pid) return;   // 多指：只认最初那一根
-    mapPanX += x - lastX; mapPanY += y - lastY;
-    lastX = x; lastY = y;
-    drawFullMap();
+  const doPinch = () => {
+    if (pts.size < 2 || pinchDist <= 0) return;
+    const v = [...pts.values()];
+    const d = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y);
+    mapZoom = mapClampZoom(pinchZoom0 * (d / pinchDist));
   };
-  const up = () => { dragging = false; pid = null; };
   if (window.PointerEvent) {
-    cv.addEventListener('pointerdown', e => { if (down(e.clientX, e.clientY, e.pointerId)) { try { cv.setPointerCapture(e.pointerId); } catch (err) {} } });
-    cv.addEventListener('pointermove', e => move(e.clientX, e.clientY, e.pointerId));
-    cv.addEventListener('pointerup', up);
-    cv.addEventListener('pointercancel', up);
+    cv.addEventListener('pointerdown', e => {
+      if (!isOpen()) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) startPinch();
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    cv.addEventListener('pointermove', e => {
+      if (!isOpen() || !pts.has(e.pointerId)) return;
+      const prev = pts.get(e.pointerId);
+      const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) { mapPanX += dx; mapPanY += dy; }   // 单指：平移
+      else { doPinch(); }                                     // 双指：捏合缩放
+      drawFullMap();
+    });
+    const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinchDist = 0; };
+    cv.addEventListener('pointerup', end);
+    cv.addEventListener('pointercancel', end);
+    // 桌面端：滚轮缩放（向上滚放大）
+    cv.addEventListener('wheel', e => {
+      if (!isOpen()) return;
+      e.preventDefault();
+      mapZoom = mapClampZoom(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+      drawFullMap();
+    }, { passive: false });
   } else {
-    cv.addEventListener('touchstart', e => { const t = e.changedTouches[0]; down(t.clientX, t.clientY, t.identifier); }, { passive: true });
-    cv.addEventListener('touchmove', e => { const t = e.changedTouches[0]; move(t.clientX, t.clientY, t.identifier); }, { passive: true });
-    cv.addEventListener('touchend', up);
-    cv.addEventListener('touchcancel', up);
-    cv.addEventListener('mousedown', e => down(e.clientX, e.clientY));
-    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
-    window.addEventListener('mouseup', up);
+    let tPts = {};   // 触摸回退：触摸点表
+    cv.addEventListener('touchstart', e => {
+      if (!isOpen()) return;
+      for (const t of e.changedTouches) tPts[t.identifier] = { x: t.clientX, y: t.clientY };
+      const v = Object.values(tPts);
+      if (v.length === 2) { pinchDist = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); pinchZoom0 = mapZoom; }
+    }, { passive: true });
+    cv.addEventListener('touchmove', e => {
+      if (!isOpen()) return;
+      if (e.touches.length >= 2) {
+        for (const t of e.touches) tPts[t.identifier] = { x: t.clientX, y: t.clientY };
+        const v = Object.values(tPts);
+        const d = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y);
+        if (pinchDist > 0) mapZoom = mapClampZoom(pinchZoom0 * (d / pinchDist));
+        drawFullMap();
+      } else if (Object.keys(tPts).length === 1) {
+        const t = e.touches[0]; const p = tPts[t.identifier]; if (!p) return;
+        mapPanX += t.clientX - p.x; mapPanY += t.clientY - p.y;
+        tPts[t.identifier] = { x: t.clientX, y: t.clientY };
+        drawFullMap();
+      }
+    }, { passive: true });
+    cv.addEventListener('touchend', e => {
+      for (const t of e.changedTouches) delete tPts[t.identifier];
+      if (Object.keys(tPts).length < 2) pinchDist = 0;
+    }, { passive: true });
+    cv.addEventListener('touchcancel', () => { tPts = {}; pinchDist = 0; }, { passive: true });
+    cv.addEventListener('mousedown', e => { if (isOpen()) pts.set('mouse', { x: e.clientX, y: e.clientY }); });
+    addEventListener('mousemove', e => { const p = pts.get('mouse'); if (!isOpen() || !p) return; mapPanX += e.clientX - p.x; mapPanY += e.clientY - p.y; pts.set('mouse', { x: e.clientX, y: e.clientY }); drawFullMap(); });
+    addEventListener('mouseup', () => pts.delete('mouse'));
+    cv.addEventListener('wheel', e => { if (!isOpen()) return; e.preventDefault(); mapZoom = mapClampZoom(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)); drawFullMap(); }, { passive: false });
   }
 })();
 function openStats() { document.getElementById('statsPanel').style.display = 'block'; renderStats(); }
@@ -21732,6 +21807,10 @@ function update(dt) {
   const near = state === 'walk' ? nearestDrivable() : null;
     const isHeli = state === 'drive' && currentCar && currentCar.isHelicopter;
     const isTank = state === 'drive' && currentCar && currentCar.isTank;
+    // 【2026-10-22·fix39】模式切换（步行↔开车↔直升机↔坦克↔持枪）时，按新模式重排 HUD 按钮：
+    // 清掉所有按钮内联定位再套新模式存档，避免不同模式的按钮叠在彼此的旧位置上。
+    const _mNow = getCurMode();
+    if (_mNow !== lastLayoutMode) { lastLayoutMode = _mNow; relayoutForMode(_mNow); }
     hudDisplay(btnEl, 'btnDisplay', state === 'drive' || near ? 'block' : 'none');
     hudText(btnEl, 'btnText', state === 'drive' ? '下车' : '上车');
     hudDisplay(atkEl, 'atkDisplay', state === 'walk' || isHeli || isTank ? 'block' : 'none');
@@ -21769,11 +21848,17 @@ function update(dt) {
     hudDisplay(heliDownEl, 'heliDownDisplay', heliBtns ? 'block' : 'none');
     // 直升机的「机枪」键必须往上挪：右下角被「升」占了（和坦克同一套排位）
     const atkStacked = (driveBtns && isTank) || heliBtns;
-    hudStyle(atkEl, 'atkDriveBottom', 'bottom', atkStacked ? '134px' : '24px');
-    hudStyle(atkEl, 'atkDriveRight', 'right', atkStacked ? '26px' : '24px');
-    // 步行时「上车」放 bottom 46px（2026-10-13 与「踢飞」互换后整体上移：46 / 128 / 196 三档）
-    hudStyle(btnEl, 'btnBottom', 'bottom', atkStacked ? '230px' : (driveBtns ? '134px' : '46px'));
-    hudStyle(btnEl, 'btnRight', 'right', (driveBtns || heliBtns) ? '38px' : '122px');
+    // 【2026-10-22·fix39】玩家在本模式自定义过 atk/btn 位置时，布局系统已用 left/top 接管，
+    // 这里必须跳过 hudStyle 的 bottom/right 重排，否则两处会打架（bottom/right 覆盖 left/top，竖向错位）。
+    if (!layStored(_mNow, 'atk')) {
+      hudStyle(atkEl, 'atkDriveBottom', 'bottom', atkStacked ? '134px' : '24px');
+      hudStyle(atkEl, 'atkDriveRight', 'right', atkStacked ? '26px' : '24px');
+    }
+    if (!layStored(_mNow, 'btn')) {
+      // 步行时「上车」放 bottom 46px（2026-10-13 与「踢飞」互换后整体上移：46 / 128 / 196 三档）
+      hudStyle(btnEl, 'btnBottom', 'bottom', atkStacked ? '230px' : (driveBtns ? '134px' : '46px'));
+      hudStyle(btnEl, 'btnRight', 'right', (driveBtns || heliBtns) ? '38px' : '122px');
+    }
     hudText(weaponBtnEl, 'weaponText', WEAPONS[currentWeapon].name);
     hudStyle(hpFillEl, 'hpWidth', 'width', (player.hp / player.maxHp * 100).toFixed(1) + '%');
     hudStyle(hpFillEl, 'hpColor', 'background', player.hp > 50 ? '#2ecc71' : player.hp > 25 ? '#f39c12' : '#e74c3c');
@@ -22896,9 +22981,56 @@ try { renderer.compile(scene, camera); } catch (e) { console.warn('[precompile]'
 //    ⚠️ 只拦 [data-lay]（可调按钮）上的事件，工具条自己的按钮还要用，不能被误伤。
 //  · 进入编辑前必须把地图/属性面板关掉：它们是 z-index 95/96 的全屏浮层，会盖住
 //    z-index 20~25 的 HUD 按钮，玩家根本摸不到要拖的按钮。
+// 【2026-10-22·fix39】布局改为**按模式分别存档**：正常/拿武器/开车/直升机/坦克各一套，
+// 避免不同模式按钮互相重叠（之前全模式共用一套，开车的"前进/后退/转向条"和步行的"攻击/跳"等
+// 都挤在同一个默认坐标上，切换时就叠一块）。结构：btnLayout = { normal:{...}, weapon:{...},
+// drive:{...}, heli:{...}, tank:{...}, __joy:{x,y} }；每个模式里是和旧版一样的 per-button 比例存档。
 var LAYOUT_KEY = 'cityfree_btn_layout_v1';
-var btnLayout = null;          // { atk:{x,y,w,h}, ..., joy:{x,y} } —— x/y 是屏幕比例，w/h 是像素
+var LAYOUT_MODES = ['normal', 'weapon', 'drive', 'heli', 'tank'];
+var LAYOUT_MODE_LABELS = { normal: '正常(步行)', weapon: '拿武器', drive: '开车', heli: '直升机', tank: '坦克' };
+// 每个模式**实际会出现的按钮**（只列这些，编辑/应用都只动这些；摇杆单独全局处理）：
+// 来源 = 下方 HUD 显隐逻辑（atk/btn/weaponBtn 等只在对应状态出现）。
+var MODE_BUTTONS = {
+  normal: ['atk', 'btn', 'jump', 'weaponBtn', 'grappleBtn', 'sprintBtn', 'kickBtn', 'minimap'],
+  weapon: ['atk', 'btn', 'jump', 'weaponBtn', 'grappleBtn', 'sprintBtn', 'kickBtn', 'scopeBtn', 'salvoBtn', 'minimap'],
+  drive:  ['gasBtn', 'reverseBtn', 'steerPad', 'btn', 'minimap'],
+  heli:   ['heliUpBtn', 'heliDownBtn', 'atk', 'btn', 'minimap'],
+  tank:   ['atk', 'btn', 'minimap']
+};
+var ALL_BTN_IDS = (function () { const s = {}; for (const m of LAYOUT_MODES) for (const id of MODE_BUTTONS[m]) s[id] = 1; return Object.keys(s); })();
+var btnLayout = null;          // { normal:{atk:{x,y,w,h},...}, ..., __joy:{x,y} } —— x/y 是屏幕比例，w/h 像素
+var layoutEditMode = 'normal'; // 设置面板里当前正在编辑/套用的模式
+var lastLayoutMode = null;     // 上一次游戏模式，变了就重排 HUD 按钮位置（清旧内联+套新模式）
 var layoutEditing = false, layoutSel = null, layoutDrag = null, layoutBak = null;
+// ===== 模式判定 / 存档读写 / 模式切换重排 =====
+// 当前游戏模式：步行空手=normal，步行持枪=weapon，开车(汽车/摩托/自行车)=drive，
+// 直升机=heli，坦克=tank。和下方 HUD 显隐逻辑保持一致（currentWeapon==='fist' 即空手）。
+function getCurMode() {
+  if (state === 'drive') {
+    if (currentCar && currentCar.isTank) return 'tank';
+    if (currentCar && currentCar.isHelicopter) return 'heli';
+    return 'drive';
+  }
+  return (currentWeapon && currentWeapon !== 'fist') ? 'weapon' : 'normal';
+}
+// 某模式里某按钮是否存过自定义位置（存过 → 布局系统接管；没存过 → 交给 CSS/hudStyle 默认）
+function layStored(mode, id) { return !!(btnLayout && btnLayout[mode] && btnLayout[mode][id]); }
+// 切换模式：先清掉所有按钮的内联定位，再按新模式套用，避免残留上个模式的位置导致重叠
+function relayoutForMode(mode) {
+  mode = mode || getCurMode();
+  for (const id of ALL_BTN_IDS) {
+    const el = document.getElementById(id); if (!el) continue;
+    el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = '';
+    el.style.width = ''; el.style.height = ''; el.style.lineHeight = ''; el.style.fontSize = '';
+  }
+  applyBtnLayout(mode);
+}
+// 摇杆单独全局处理（所有模式共用一个停靠位），并存到 __joy
+function applyJoyLayout() {
+  if (!btnLayout || !btnLayout.__joy) return;   // 没存过 → joyHomePos 用默认，不动
+  // joyHomePos 已读 btnLayout.__joy，这里只需在「非编辑」时让停靠位立即生效
+  if (!layoutEditing && typeof resetJoyHome === 'function') resetJoyHome();
+}
 // 可调按钮清单 + 默认几何（数值与原 CSS 逐条对齐，仅作文档与「恢复默认」的对照）
 var BTN_LAYOUT_DEF = {
   atk:         { right: 36,  bottom: 40,  w: 96,  h: 96 },
@@ -22919,43 +23051,62 @@ var BTN_LAYOUT_DEF = {
 };
 const LAYOUT_NAMES = { atk: '攻击', btn: '上车', jump: '跳', weaponBtn: '武器', grappleBtn: '钩爪', kickBtn: '踢飞', sprintBtn: '疾跑', scopeBtn: '瞄准', salvoBtn: '连发', gasBtn: '前进', reverseBtn: '后退', heliUpBtn: '直升升', heliDownBtn: '直升降', steerPad: '转向盘', minimap: '小地图', joy: '摇杆' };
 function loadBtnLayout() {
-  try { btnLayout = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) { btnLayout = null; }
-  if (!btnLayout || typeof btnLayout !== 'object') btnLayout = null;
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) { raw = null; }
+  if (!raw || typeof raw !== 'object') { btnLayout = null; return; }
+  // 新格式：带 normal/weapon/... 子键 → 直接用
+  if (raw.normal && typeof raw.normal === 'object') { btnLayout = raw; return; }
+  // 旧格式（fix39 前）：扁平一套 {atk:{...},joy:{...}} → 复制到 5 个模式都先用旧布局，
+  // 玩家可再分别微调；摇杆提到 __joy。
+  if (raw.atk && typeof raw.atk === 'object') {
+    btnLayout = {};
+    for (const m of LAYOUT_MODES) btnLayout[m] = JSON.parse(JSON.stringify(raw));
+    if (raw.joy) btnLayout.__joy = raw.joy;
+    return;
+  }
+  btnLayout = null;
 }
-function applyBtnLayout() {
-  if (!btnLayout) return;
-  for (const id in BTN_LAYOUT_DEF) {
+function applyBtnLayout(mode) {
+  mode = mode || getCurMode();
+  const set = MODE_BUTTONS[mode] || MODE_BUTTONS.normal;
+  // 只套用"存过"的按钮（本模式优先，回退到 normal）；没存过的不碰，交给 CSS/hudStyle 默认。
+  // 这样未自定义的按钮位置保持原样，不会因套用 BTN_LAYOUT_DEF 而偏移（如攻击键 24/24）。
+  for (const id of set) {
     const el = document.getElementById(id); if (!el) continue;
-    const L = btnLayout[id]; if (!L) continue;
+    const L = (btnLayout && btnLayout[mode] && btnLayout[mode][id]) ||
+               (btnLayout && btnLayout.normal && btnLayout.normal[id]);
+    if (!L) continue;
     el.style.left = (L.x * innerWidth) + 'px';
     el.style.top = (L.y * innerHeight) + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';   // inline auto 覆盖 CSS 的 right/bottom
     el.style.width = L.w + 'px'; el.style.height = L.h + 'px';
-    // 圆按钮的文字靠 CSS 行高居中；改了高度必须同步行高，否则文字会跑出圆外
     el.style.lineHeight = L.h + 'px';
     el.style.fontSize = Math.max(10, Math.round(L.h * 0.2)) + 'px';
   }
 }
 function saveBtnLayout(silent) {
-  const out = {};
-  for (const id in BTN_LAYOUT_DEF) {
+  const mode = layoutEditMode || getCurMode();
+  if (!btnLayout || typeof btnLayout !== 'object') btnLayout = {};
+  if (!btnLayout[mode] || typeof btnLayout[mode] !== 'object') btnLayout[mode] = {};
+  const out = btnLayout[mode];
+  for (const id of MODE_BUTTONS[mode]) {
     const el = document.getElementById(id); if (!el) continue;
     const r = el.getBoundingClientRect();
     out[id] = { x: r.left / innerWidth, y: r.top / innerHeight, w: Math.round(r.width), h: Math.round(r.height) };
   }
-  // 摇杆存"圆心"比例（它的 CSS 带 translate(-50%,-50%)，left/top 指的就是圆心）
+  // 摇杆存"圆心"比例（它的 CSS 带 translate(-50%,-50%)，left/top 指的就是圆心）；全局共用
   if (typeof joyEl !== 'undefined' && joyEl) {
     const jr = joyEl.getBoundingClientRect();
-    out.joy = { x: (jr.left + jr.width / 2) / innerWidth, y: (jr.top + jr.height / 2) / innerHeight };
+    btnLayout.__joy = { x: (jr.left + jr.width / 2) / innerWidth, y: (jr.top + jr.height / 2) / innerHeight };
   }
-  btnLayout = out;
-  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(out)); } catch (e) {}
-  if (!silent) floatText('布局已保存', '#8ef58e');
+  btnLayout.__modes = 1;
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(btnLayout)); } catch (e) {}
+  if (!silent) floatText('布局已保存 (' + (LAYOUT_MODE_LABELS[mode] || mode) + ')', '#8ef58e');
 }
 function resetBtnLayout() {
   try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
   btnLayout = null;
-  for (const id in BTN_LAYOUT_DEF) {
+  for (const id of ALL_BTN_IDS) {
     const el = document.getElementById(id); if (!el) continue;
     el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = '';
     el.style.width = ''; el.style.height = ''; el.style.lineHeight = ''; el.style.fontSize = '';
@@ -22981,13 +23132,16 @@ function enterLayoutEdit() {
   document.getElementById('setPanel').style.display = 'none';
   layoutEditing = true;
   document.body.classList.add('layout-editing');
-  // 打命中标记 + 记住进入前的显示状态（退出时原样还回去，不破坏游戏自己的显隐逻辑）
+  // 打命中标记 + 记住进入前的显示状态（退出时原样还回去，不破坏游戏自己的显隐逻辑）。
+  // 只显示**当前模式**的按钮（其余隐藏），这样编辑某个模式时不会被别的模式的按钮挡着/叠着。
   layoutBak = {};
-  for (const id in BTN_LAYOUT_DEF) {
+  const set = MODE_BUTTONS[layoutEditMode] || MODE_BUTTONS.normal;
+  applyBtnLayout(layoutEditMode);   // 先把当前模式的已存布局套上，让用户看到实际位置
+  for (const id of ALL_BTN_IDS) {
     const el = document.getElementById(id); if (!el) continue;
     el.setAttribute('data-lay', '1');
     layoutBak[id] = el.style.display;
-    el.style.display = 'block';
+    el.style.display = (set.indexOf(id) >= 0) ? 'block' : 'none';
   }
   if (typeof joyEl !== 'undefined' && joyEl) {
     joyEl.setAttribute('data-lay', '1');
@@ -22996,6 +23150,8 @@ function enterLayoutEdit() {
     resetJoyHome();   // 摇杆平时是"按下才出现"，编辑时先停到 Home 位给人拖
   }
   document.getElementById('layoutBar').style.display = 'flex';
+  const tag = document.getElementById('layoutModeTag');
+  if (tag) tag.textContent = '当前模式：' + (LAYOUT_MODE_LABELS[layoutEditMode] || layoutEditMode);
   selectLayoutBtn(null);
 }
 function exitLayoutEdit() {
@@ -23006,6 +23162,8 @@ function exitLayoutEdit() {
   layoutBak = null; layoutDrag = null;
   selectLayoutBtn(null);
   document.getElementById('layoutBar').style.display = 'none';
+  // 退出后按当前游戏模式重新套用布局（编辑期间可能改了模式或位置）
+  applyBtnLayout(getCurMode());
   // 退出后让游戏自己的可见性逻辑立刻接管（编辑期间世界是暂停的，update 没跑）
   try { updateJoyUi(); } catch (e) {}
 }
@@ -23073,8 +23231,23 @@ function resizeLayoutBtn(delta) {
   }
 })();
 // ---- 设置面板 / 工具条 接线 ----
-document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; });
+// 打开设置时：把模式标签同步到当前游戏模式（没在编辑时），高亮对应 tab
+function syncLayoutModeTabs() {
+  if (!layoutEditing) layoutEditMode = getCurMode();
+  document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
+}
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); });
 document.getElementById('setClose').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'none'; });
+// 模式切换 tab：选中模式即更新高亮；正在编辑时切换 = 重进编辑（保留各自已存布局）
+document.querySelectorAll('#layoutModeRow .mode-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    layoutEditMode = t.getAttribute('data-m');
+    document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x === t));
+    const tag = document.getElementById('layoutModeTag');
+    if (tag) tag.textContent = '当前模式：' + (LAYOUT_MODE_LABELS[layoutEditMode] || layoutEditMode);
+    if (layoutEditing) { exitLayoutEdit(); enterLayoutEdit(); }
+  });
+});
 document.getElementById('layoutEditBtn').addEventListener('click', enterLayoutEdit);
 document.getElementById('layoutResetBtn').addEventListener('click', resetBtnLayout);
 document.getElementById('layMinus').addEventListener('click', () => resizeLayoutBtn(-8));
@@ -23082,7 +23255,7 @@ document.getElementById('layPlus').addEventListener('click', () => resizeLayoutB
 document.getElementById('layReset').addEventListener('click', resetBtnLayout);
 document.getElementById('layDone').addEventListener('click', () => { saveBtnLayout(true); exitLayoutEdit(); });
 // 启动：读档并应用（比例 → 像素）
-loadBtnLayout(); applyBtnLayout();
+loadBtnLayout(); applyBtnLayout(); applyJoyLayout();
 // 【2026-10-21·fix38 用户反馈"第一次上车开车卡几下，之后就不卡了"】
 // 和钩爪（fix36）同属"懒编译"家族，但触发点全在**首次驾驶**这条路上，boot 时场景里没有：
 // ① 尾烟：updateCarExhaust 在第一次踩油门时才 new 出"无贴图 + 透明"的 MeshBasicMaterial，
