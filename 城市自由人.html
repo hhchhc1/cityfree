@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261013-fix16-islandsign';
+const BUILD = '20261022-fix40-bugfix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -2663,33 +2663,14 @@ function buildBusStop(x, z) {
   roof.position.set(x, gy + 2.65, z); scene.add(roof);
 }
 
-// 中央公园：4 个中心街区变绿地 + 喷泉 + 长椅 + 树（打破整齐网格，增添细节）
-(function buildCentralPark() {
-  const parkMat = new THREE.MeshLambertMaterial({ color: 0x6aa84f });
-  [-20, 20].forEach(mx => [-20, 20].forEach(mz => {
-    const geo = new THREE.PlaneGeometry(36, 36, 6, 6);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) pos.setZ(i, terrainHeight(mx + pos.getX(i), mz - pos.getY(i)) + 0.05);
-    geo.computeVertexNormals();
-    const green = new THREE.Mesh(geo, parkMat);
-    green.rotation.x = -Math.PI / 2; green.position.set(mx, 0, mz); scene.add(green);
-    for (let i = 0; i < 4; i++) {
-      const tx = mx + (Math.random() - 0.5) * 26, tz = mz + (Math.random() - 0.5) * 26;
-      const tree = makeTree(); tree.position.set(tx, terrainHeight(tx, tz), tz); scene.add(tree);
-      treeObstacles.push({ x: tx, z: tz, r: 0.6 });
-    }
-  }));
-  // 喷泉（东南角中心街区）
-  const gy = terrainHeight(20, 20);
-  const pool = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 0.6, 24), new THREE.MeshLambertMaterial({ color: 0x9aaab4 }));
-  pool.position.set(20, gy + 0.3, 20); scene.add(pool);
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(3.7, 3.7, 0.12, 24), new THREE.MeshLambertMaterial({ color: 0x3a9ad0 }));
-  water.position.set(20, gy + 0.64, 20); scene.add(water);
-  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 3.0, 10), new THREE.MeshLambertMaterial({ color: 0x9fd8f0 }));
-  jet.position.set(20, gy + 2.1, 20); scene.add(jet);
-  treeObstacles.push({ x: 20, z: 20, r: 4.6 });
-  for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + 0.25; buildBench(20 + Math.cos(a) * 8.5, 20 + Math.sin(a) * 8.5, a + Math.PI / 2); }
-})();
+// 【fix40 清理】这里原来还有一份"旧版中央公园"匿名 IIFE，坐标与新版的 buildCentralPark()
+// （见上方 buildCentralPark / CENTRAL_PARK_STATS）**完全重叠**，都在 (±20, ±20) 这 4 个街区：
+//   · 新版：圆形草坪(r15.5) + 环形步道(r15.5~18.5, polygonOffset 抗 z-fighting) + 大喷泉(r6.2，带实体碰撞)
+//   · 旧版：方形绿地(36×36) + 第二个喷泉(r4.5，同坐标 20,20) + 5 张长椅 + 每块 4 棵树
+// 两者堆叠导致：① (20,20) 处三层圆形几何体共面（旧版还没加 polygonOffset，是闪烁高发区）；
+// ② 同一位置有两套碰撞体（新版 buildings[hq:true] + 旧版 treeObstacles r=4.6）；
+// ③ 纯浪费几何体与 draw call。新版功能是旧版的超集，故整块删除。
+// 说明：旧版那 4 棵树/长椅由新版的花坛+长椅（每街区 6 张）与街区绿化替代。
 
 // 街道家具：消防栓 / 公交站（散落在路边，增添细节）
 (function addFurniture() {
@@ -4001,6 +3982,7 @@ function makeCar(kind, color, withDriver) {
       hood.rotation.x = -Math.PI / 2;
       hood.position.set(0, offY + noseTop + 0.022, hoodZ);
             hood.renderOrder = 2;
+      hood.userData.copDecal = true;   // 【fix40】显式标记"这是警用贴花"，供"抢警车"时精确隐藏
       g.add(hood);
       // 车顶警灯由下面的 S.lightbar 分支统一建（红蓝双色段+爆闪灯），
       // 这里原来又建了一套平铺在引擎盖上的，y=1.36 < 车顶 1.44 会被车壳完全挡住，纯属浪费 draw call，故删除。
@@ -4014,6 +3996,7 @@ function makeCar(kind, color, withDriver) {
         d.rotation.y=s>0?Math.PI/2:-Math.PI/2;
         d.position.set(s*(W/2+0.012),offY+0.82,0.55);
         d.renderOrder=2;
+        d.userData.copDecal = true;   // 【fix40】显式标记"这是警用贴花"，供"抢警车"时精确隐藏
         g.add(d);
       }
     }
@@ -4443,8 +4426,11 @@ buildPlayerHome();
 var DEV_PASSWORD = 'hhc81192';
 var DEV_PILLAR = { x: -90, z: -78, r: 3.4 };
 var devMode = false, devPillar = null, devBtnEl = null, devExitEl = null, devPanelOpen = false;
-// 【fix15】开发者模式的"进入前快照"：退出时把金币 / 技能点原样还回去（原来不退，等于白送）。
-var devModeGoldBackup = null, devModeSpBackup = null;
+// 【fix15】开发者模式的"进入前快照"：退出时把金币原样还回去（原来不退，等于白送）。
+// 【fix40 清理】原来这里还有一个 devModeSpBackup（技能点快照）。fix31 改成"开发者模式
+// 只给无限金币、不再灌技能点"之后，它再也没有被赋过值 —— 退出分支里的
+// if (devModeSpBackup !== null) 永远为假，属于死代码。现删除。
+var devModeGoldBackup = null;
 
 function makeDevPillar() {
   const H = 7;
@@ -4515,10 +4501,10 @@ function setDevMode(on) {
     floatText('开发者模式已开启', '#c9a8ff');
     showOverlay('开发者模式\n\n无限金币已生效（人物属性保持普通模式不变）。\n\n退出后会把进入前的金币原样还给你。', 5);
   } else {
-    // 【fix15】退出还原：金币、技能点回到进入前的数量（技能等级保留，方便继续看高等级数值）
+    // 【fix15】退出还原：金币回到进入前的数量（技能等级保留，方便继续看高等级数值）
+    // 【fix40 清理】删掉了恒为假的 devModeSpBackup 还原分支（见 4447 行说明）。
     if (devModeGoldBackup !== null) { gold = devModeGoldBackup; devModeGoldBackup = null; }
-    if (devModeSpBackup !== null) { player.skillPoints = devModeSpBackup; devModeSpBackup = null; }
-    floatText('已退出开发者模式（金币/技能点已还原）', '#c9a8ff');
+    floatText('已退出开发者模式（金币已还原）', '#c9a8ff');
   }
   refreshDevBtnText();
   try { renderStats(); } catch (e) {}
@@ -7026,21 +7012,10 @@ function soccerTryStart() {
   } catch (e) { console.error('[soccer start]', e); }
 }
 
-// 【2026-10-16】球衣号码牌：一张写着数字的小方片，悬在头顶、永远面向相机。
-// 直接加进 scene（**不**挂在会旋转的人物 group 上），每帧只要更新位置 + 复制相机朝向就行，
-// 不需要任何父子旋转换算。depthWrite:false 避免遮挡后面的东西。
-function makeSoccerNumber(num, textColor) {
-  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
-  const c = cv.getContext('2d');
-  c.font = 'bold 46px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.lineWidth = 9; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(String(num), 32, 34);
-  c.fillStyle = textColor; c.fillText(String(num), 32, 34);
-  const tex = new THREE.CanvasTexture(cv);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.66),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-  m.renderOrder = 5;
-  return m;
-}
+// 【fix40 清理】原来这里还有一个 makeSoccerNumber()：造一块悬在头顶、永远面向相机的
+// 号码牌（billboard）。fix26 改成"号码印在球衣正反面"之后它就没有任何调用者了，
+// 却仍然留在文件里误导阅读者。现删除（对应的 numMesh 字段与三处更新分支也一并清理，
+// 见 soccerNewPlayer / updateSoccer / soccerHud）。
 
 // 【2026-10-19·fix26】球衣号码贴图（只生成 canvas 纹理，供正/反面贴片复用）
 function makeSoccerNumberTexture(num, textColor) {
@@ -7088,15 +7063,15 @@ function soccerNewPlayer(team, x, z, isPlayer, role, num) {
   if (isPlayer) g.visible = false;
   scene.add(g);
   // 【2026-10-19·fix26】号码改成**印在球衣正反面**（用户要求，不再悬在头顶）。
-  // numMesh 字段保留为 null（其它地方都有 if(p.numMesh) 守卫，不再创建头顶牌）。
-  let numMesh = null;
+  // 【fix40 清理】原来这里还保留了一个恒为 null 的 numMesh 字段 + 三处 if(p.numMesh) 死分支，
+  // 现全部删除（头顶号码牌已随 makeSoccerNumber 一起移除）。
   if (num !== undefined && num !== null) attachJerseyNumber(g, num, isGk);
   // 【2026-10-16】疾跑脚下光环：一圈贴着地面的发光环，开启疾跑时显示并脉动。
   const ring = makeSprintRing(team === 1 ? 0x5fd8ff : 0xffa54f);
   ring.position.set(x, terrainHeight(x, z) + 0.06, z);
   scene.add(ring);
   return { team: team, isPlayer: !!isPlayer, role: (role === undefined ? 0 : role),
-           x: x, z: z, mesh: g, numMesh: numMesh, ring: ring, cd: 0, gkCd: 0,
+           x: x, z: z, mesh: g, ring: ring, cd: 0, gkCd: 0,
            // 【2026-10-16】动作动画进度（0→1→0）：kick=射门抬腿，tackle=铲抢
            anim: { kick: 0, tackle: 0 },
            spT: 0, spCd: Math.random() * 3,   // 疾跑：剩余加速时间 / 剩余冷却（错开一点，别所有人同时冲）
@@ -7383,7 +7358,6 @@ function soccerEnd(playerWon) {
   try {
     for (const p of SOC.players) {
       try { scene.remove(p.mesh); } catch (e) {}
-      try { if (p.numMesh) scene.remove(p.numMesh); } catch (e) {}   // 号码牌也要收掉
       try { if (p.ring) scene.remove(p.ring); } catch (e) {}         // 疾跑光环
     }
     SOC.players = [];
@@ -7599,13 +7573,6 @@ function updateSoccer(dt) {
           applySoccerCelebrate(p.mesh, ct, win, true);
         }
         if (p.ring) p.ring.visible = false;                 // 庆祝时收掉疾跑光环
-        if (p.numMesh) {
-          const nx = p.isPlayer ? person.position.x : p.x;
-          const nz = p.isPlayer ? person.position.z : p.z;
-          const ny = p.isPlayer ? person.position.y : p.mesh.position.y;
-          p.numMesh.position.set(nx, ny + 2.35, nz);
-          p.numMesh.quaternion.copy(camera.quaternion);
-        }
       }
       if (SOC.goalT <= 0) { soccerResolveRound(); return; }
       SOC.kickReq = 0; SOC.passReq = 0; SOC.tackleReq = 0; SOC.sprintReq = 0;   // 庆祝期间按键吞掉
@@ -7775,15 +7742,9 @@ function updateSoccer(dt) {
       }
     }
 
-    // ---- 号码牌：悬在头顶、永远面向相机（球员 1/2/3，门将 0）----
-    for (const p of SOC.players) {
-      if (!p.numMesh) continue;
-      const nx = p.isPlayer ? person.position.x : p.x;
-      const nz = p.isPlayer ? person.position.z : p.z;
-      const ny = p.isPlayer ? person.position.y : p.mesh.position.y;
-      p.numMesh.position.set(nx, ny + 2.35, nz);
-      p.numMesh.quaternion.copy(camera.quaternion);
-    }
+    // 【fix40 清理】这里原来有一个"号码牌：悬在头顶、永远面向相机"的每帧循环
+    // （遍历全部 8 名球员、改位置并复制相机朝向）。fix26 把号码改成印在球衣上之后，
+    // p.numMesh 恒为 null、循环体永远 continue —— 属于纯空转，现整块删除。
 
     soccerUpdatePowerups(dt);   // 【fix26】技能包：定时刷新 / 旋转浮动 / 玩家与AI拾取判定
 
@@ -8671,10 +8632,13 @@ person.position.set(-104, 0, -64); scene.add(person);   // 出生在主角房子
 // 拿步枪当基准：真实步枪 0.90m = 0.918 单位，占身高 0.51。
 // 所以 WEAPON_WORLD 必须让步枪成品长度落在 0.918 附近；早期随手取的 0.63
 // 让所有武器小了一半，结果就是"看不见、像个小方块"。
-var WEAPON_WORLD = 1.50;              // 火柴人只有真人 0.63 高（这句注释已过时，见上）
-function weaponWorldScale() { return 1.50; }   // 直接返回字面量：这行在 4539 行，
-                                                // 而 addWeaponMesh() 在 1782 行就调用过它，
-                                                // 读 var 会拿到 undefined，模型会被缩成 NaN 消失。
+// 【fix40 清理】这里原来还有一行 `var WEAPON_WORLD = 1.50;`，与下面 weaponWorldScale()
+// 的返回值重复定义，而且**全文件从未被读取过**（唯一的消费者 polishWeaponModel 走的是
+// weaponWorldScale()）。两个 1.50 手工同步，改了 var 不会生效、改了函数才生效 ——
+// 这种"看起来能调、实际调不动"的重复来源最容易误导后续维护者，故删除 var。
+// 注意：下面这个函数**必须保留为 function**（不能改成 const）：addWeaponMesh / polishWeaponModel
+// 在 1782 行就被调用，那时模块顶层的赋值还没执行；写成 var 会读到 undefined → 模型缩成 NaN 消失。
+function weaponWorldScale() { return 1.50; }   // 真实尺寸 → 人物比例的统一缩放
 // 每把武器沿"长度轴(Z)"的二次校准系数：15 把枪建模时长短不一，
 // 步枪/霰弹枪/狙击枪为基准 1，其余按真实尺寸比例微调。
 // 只拉 Z 不动 XY —— 否则握把和枪身会一起变胖，握不住也会露出手掌。
@@ -11400,6 +11364,10 @@ function serializeQuestState() {
       state: q.state, completed: q.completed, elapsed: q.elapsed,
       killedCount: q.killedCount || 0, startedWithHeli: !!q.startedWithHeli,
       checkpointIndex: q.checkpointIndex || 0,
+      // 【fix40 修复】存档字段不对称：原来这里不写 progressValue，而 deserializeQuestState
+      // 却会读 s.progressValue（永远拿到 undefined → 恒为 0）。赛车任务的进度条因此
+      // 在"存档 → 读档"后必然归零（虽然 11467 也会重置它，但字段本身应当对齐）。
+      progressValue: q.progressValue || 0,
       cooldownUntilDay: q.cooldownUntilDay || 0
     };
   }
@@ -11467,7 +11435,10 @@ function deserializeQuestState(saved) {
         q.progressValue = 0;
         clearQuestCheckpoints(q);
       }
-      if (q.id === 'gangHq') q.phase = q.killedCount >= 8 ? 'cleared' : 'idle';
+      // 【fix40 修复】这里原来写死 >= 8，与 11341/11365 反复强调的"不要写死 8"自相矛盾：
+      // 站位已从 8 扩到 15，老存档里 killedCount=8（在 8 人版本里打满）的玩家会被误判成
+      // 已清剿、可以提前回去领奖。改成与任务定义同源的总数。
+      if (q.id === 'gangHq') q.phase = q.killedCount >= GANG_HQ_GUARDS.length ? 'cleared' : 'idle';
     }
   }
 }
@@ -11691,7 +11662,7 @@ function spawnPoliceCar(crew) {
     const a = driving
       ? baseA + (Math.random() - 0.5) * 2.4
       : (i / 8) * Math.PI * 2 + Math.random() * 0.6;
-    // 5 星时刷得更近（45~70m）：配合 22 的极速就是"立马贴上来"
+    // 5 星时刷得更近（45~70m）：配合 COP_MAX_SPEED（5 星 22 / 其余 15）就是"立马贴上来"
     const dist = (wanted >= 5) ? (45 + Math.random() * 25) : (62 + Math.random() * 26);
     let tx = px + Math.cos(a) * dist, tz = pz + Math.sin(a) * dist;
     [tx, tz] = snapToRoadLane(tx, tz);   // 吸附到最近车道，避免直接刷进建筑里卡住
@@ -11710,7 +11681,11 @@ function spawnPoliceCar(crew) {
     if (bestScore > 45) break;
   }
   g.position.set(cx, terrainHeight(cx, cz), cz); g.rotation.y = 0; scene.add(g);
-  const pc = { group: g, x: cx, z: cz, angle: 0, speed: 0, radius: CAR_SHAPES.cop.radius, rideH: CAR_SHAPES.cop.rideH, topSpeed: 8, accel: 14, _isCop: true,     saveId: nextSaveId('police'), saveKind: 'cop', saveColor: COP_CAR_PAINT, durability: 34, stuckT: 0, recoverT: 0, recoverSide: 1, ramCd: 0, hitCd: 0, crew: (crew === 1 ? 1 : 2) };   // crew = 这辆车会下来几个警察
+  // 【fix40 说明】topSpeed 对警车 AI 其实不起作用 —— 追捕速度完全由 updatePoliceCar 里的
+  // COP_MAX_SPEED（5 星 22 / 其余 15）决定。原来这里写 8、注释却说"配合 22 的极速"，
+  // 读档路径（restoreSaveGame）又把它写成 8，而玩家抢来的警车被改成 40，同一个概念三套值。
+  // 现在统一到"警车巡航上限"这个真实来源，避免以后照着这个字段调参却调不动。
+  const pc = { group: g, x: cx, z: cz, angle: 0, speed: 0, radius: CAR_SHAPES.cop.radius, rideH: CAR_SHAPES.cop.rideH, topSpeed: 15, accel: 14, _isCop: true,     saveId: nextSaveId('police'), saveKind: 'cop', saveColor: COP_CAR_PAINT, durability: 34, stuckT: 0, recoverT: 0, recoverSide: 1, ramCd: 0, hitCd: 0, crew: (crew === 1 ? 1 : 2) };   // crew = 这辆车会下来几个警察
   attachCopCrewStars(pc);   // 车身贴 1/2 颗星，标识这辆车会下来几个人
   policeCars.push(pc);
 }
@@ -13596,7 +13571,13 @@ function drawGrappleRope() {
   ropeLine.visible = true;
   const pos = ropeGeom.attributes.position.array;
   let tx, ty, tz;
-  if (grapple.mode === 'pull') { tx = grapple.o.x; ty = 1.0; tz = grapple.o.z; }
+  // 【fix40 修复】pull 模式的绳索终点原来写死 ty = 1.0（贴地），但被拽的人/车
+  // 在 updateGrapple 里是按三维插值抬到可能几十米高的（"能把 NPC 拽上楼"正是本功能的卖点），
+  // 于是绳子指向地面、目标却在天上，视觉上绳与目标脱节。现在跟随目标实际高度。
+  if (grapple.mode === 'pull') {
+    tx = grapple.o.x; tz = grapple.o.z;
+    ty = (grapple.o.group ? grapple.o.group.position.y : (grapple.o.y || 0)) + 1.0;
+  }
   else if (grapple.mode === 'wall') { tx = grapple.ax; ty = grapple.ay; tz = grapple.az; }
   else { tx = grapple.tx; ty = grapple.ty; tz = grapple.tz; }
   const sx = person.position.x, sy = person.position.y + 1.3, sz = person.position.z;   // 绳子从举高的双手出发
@@ -13732,10 +13713,14 @@ function tryToggle() {
           cu[k] = null;
         }
         // 车漆改成普通黑色（原来白底 + POLICE 车门贴花）
+        // 【fix40 改进】原来只靠 `o.renderOrder === 2` 这个"渲染顺序魔法值"来猜哪块是贴花，
+        // 任何一次车模调整、或别的系统复用了 renderOrder=2，都会误隐藏正常部件。
+        // 现在优先用建贴花时打的 copDecal 标记，旧启发式仅作为兜底（兼容已烘进合批的旧网格）。
         c.group.traverse(o => {
-          if (o.isMesh && o.material && o.material.map && o.material.transparent && o.renderOrder === 2) {
-            o.visible = false;   // 车门贴花 + 车头警徽贴花
-          }
+          if (!o.isMesh || !o.material) return;
+          const isDecal = o.userData.copDecal === true
+            || (o.material.map && o.material.transparent && o.renderOrder === 2);
+          if (isDecal) o.visible = false;   // 车门贴花 + 车头警徽贴花
         });
         if (c.group.userData.driver) {
           c.group.remove(c.group.userData.driver);
@@ -14931,7 +14916,7 @@ function emitSmoke(x, y, z, heavy) {
   const cap = smokeCap();
   if (smokes.length >= cap) {
     const old = smokes.shift();
-    if (old) scene.remove(old.m);
+    if (old) disposeSmokeParticle(old);   // 【fix40】超上限被挤掉的粒子同样要释放材质
   }
   // 【fix15 用户要求"烟不要那么浓"】浓烟（heavy）颜色提亮 + 透明度下调，整体更轻薄。
   const m = new THREE.Mesh(smokeGeometry(heavy), new THREE.MeshBasicMaterial({ color: heavy ? 0x3a3a3a : 0x5a5a5a, transparent: true, opacity: heavy ? 0.33 : 0.42 }));
@@ -14953,7 +14938,7 @@ function emitDamageSmoke(x, y, z, stage) {
   const cap = smokeCap();
   const n = stage >= 3 ? 3 : (stage === 2 ? 2 : 1);
   for (let i = 0; i < n; i++) {
-    if (smokes.length >= cap) { const old = smokes.shift(); if (old) scene.remove(old.m); }
+    if (smokes.length >= cap) { const old = smokes.shift(); if (old) disposeSmokeParticle(old); }
     // 【fix15 用户要求"冒的烟不要那么浓"】颜色提亮一档 + 透明度下调：烟更薄，但白天依然看得见。
     const col = stage >= 2 ? 0x4a4a4a : 0x7a7a7a;
     const op = stage >= 2 ? 0.52 : 0.38;
@@ -14974,7 +14959,11 @@ function sparkMaterial(hot) {
 }
 function emitSpark(x, y, z, n, hot) {
   const cap = effectCap();
-  for (let i = 0; i < (n || 2); i++) {
+  // 【fix40 加固】原来循环次数直接用 n，没有像 spawnBurst 那样先 min(n, cap) 归一。
+  // 万一日后有人传个很大的 n（比如 200），这一个调用就会把 effects 里所有旧粒子
+  // 全 shift 掉并 scene.remove，等于瞬间清空玩家眼前的特效。现在按上限截断。
+  const count = Math.min(Math.max(1, n || 2), cap);
+  for (let i = 0; i < count; i++) {
     if (effects.length >= cap) { const old = effects.shift(); if (old) scene.remove(old.m); }
     const m = new THREE.Mesh(sparkGeometry(), sparkMaterial(hot));
     m.position.set(x, y, z);
@@ -14990,8 +14979,20 @@ function updateSmokes(dt) {
     s.m.position.x += s.vx * dt; s.m.position.y += s.vy * dt; s.m.position.z += s.vz * dt;
     s.m.scale.multiplyScalar(1 + s.grow * dt);
     s.m.material.opacity = Math.max(0, s.life / s.maxLife) * s.op;
-    if (s.life <= 0) { scene.remove(s.m); smokes.splice(i, 1); }
+    // 【fix40 修复】这里原来只 scene.remove、不释放材质。烟/火/扬尘每颗粒子用的都是
+    // **独立材质**（emitSmoke 每次 new，emitDamageSmoke/emitDamageFire 每次 .clone()），
+    // 而且 updateSmokes 每帧都要改它的 opacity（所以不能共享）。寿命到了却不 dispose，
+    // 长时间开车/烧车会持续堆积材质对象。现在统一走 disposeSmokeParticle。
+    if (s.life <= 0) { disposeSmokeParticle(s); smokes.splice(i, 1); }
   }
+}
+// 【fix40】释放一颗烟/火/扬尘粒子。
+// 注意：几何体是全局缓存的（smokeGeometry / _dmgSmokeGeo / dustGeometry / fireGeometry），
+// **绝对不能 dispose**，否则后面所有粒子都会变成空壳；只有材质是每颗独立的，需要释放。
+function disposeSmokeParticle(s) {
+  if (!s || !s.m) return;
+  try { scene.remove(s.m); } catch (e) {}
+  try { const mat = s.m.material; if (mat && !mat.userData.sharedMat) mat.dispose(); } catch (e) {}
 }
 let _stepDustCd = 0;
 var _dustGeoCache = null;   // 脚下扬尘：几何体复用（var + 惰性，避免 TDZ）
@@ -15003,7 +15004,7 @@ function emitDust(x, z) {
   const cap = smokeCap();
   if (smokes.length >= cap) {
     const old = smokes.shift();
-    if (old) scene.remove(old.m);
+    if (old) disposeSmokeParticle(old);   // 【fix40】超上限被挤掉的粒子同样要释放材质
   }
   const m = new THREE.Mesh(dustGeometry(), new THREE.MeshBasicMaterial({ color: 0xb9a786, transparent: true, opacity: 0.5 }));
   m.position.set(x, 0.08, z); scene.add(m);
@@ -15231,7 +15232,7 @@ function fireMaterial() {
 function emitDamageFire(x, y, z, n) {
   const cap = smokeCap();
   for (let i = 0; i < (n || 2); i++) {
-    if (smokes.length >= cap) { const old = smokes.shift(); if (old) scene.remove(old.m); }
+    if (smokes.length >= cap) { const old = smokes.shift(); if (old) disposeSmokeParticle(old); }
     const m = new THREE.Mesh(fireGeometry(), fireMaterial().clone());
     m.position.set(x + (Math.random() - 0.5) * 0.5, y, z + (Math.random() - 0.5) * 0.5);
     scene.add(m);
@@ -15864,8 +15865,12 @@ function playNextMusic() {
   if (!musicEl) {
     musicEl = new Audio();
     musicEl.volume = 0.35;
-    musicEl.onended = () => { musicIdx++; playNextMusic(); };
-    musicEl.onerror = () => { musicFailRun++; musicIdx++; playNextMusic(); };
+    // 【fix40 修复】原来 onended / onerror 里各自 musicIdx++，而 playNextMusic 末尾也 ++，
+    // 于是"自然播完"和"加载失败"这两条路径都会**跳号**（每次前进 2 首，歌单被跳着听）。
+    // 现在统一由 playNextMusic 负责推进，回调里不再自增。
+    // 另补一道守卫：下车后（state 不是 drive）若旧的 ended 事件迟到，不应再自动续播音乐。
+    musicEl.onended = () => { if (typeof state !== 'undefined' && state === 'drive' && !musicMuted) playNextMusic(); };
+    musicEl.onerror = () => { musicFailRun++; if (typeof state !== 'undefined' && state === 'drive' && !musicMuted) playNextMusic(); };
     musicEl.oncanplay = () => { musicFailRun = 0; };   // 能加载就重置失败计数
   }
   currentMusic = musicEl;
@@ -16873,8 +16878,11 @@ function craneAction(v) {
   if (v._cargo) v._cargo.visible = true;
   setHint('吊起材料！送到绿色交付区按 E 卸货');
   sfx('coin');
+  // 【fix40 修复】这一行原来写在 return true 之后，属于不可达代码 —— 注释承诺的
+  // "每次装货都换一个随机卸货点"实际上从来没生效，卸货点从开局随机一次后就永久固定。
+  // 现在移到 return 之前，恢复注释所声明的行为（工地四周 11~25m 环带内重新随机）。
+  rollCraneDropPoint();
   return true;
-  rollCraneDropPoint();     // 每次装货都换一个随机卸货点（工地四周）
 }
 function updateCrane(v, dt) {
   if (!v || !v.isCrane || !v._cargo) return;
@@ -17430,8 +17438,27 @@ function makeRagdoll(r) {
     if (b) captureBone(b, i);
   });
   // 分离骨骼
+  // 【fix40 修复】这里原来写的是裸变量 `g` —— 全文件没有任何地方定义过它。
+  // 设计意图显然是 r.group（见末尾 push 的 g: r.group），但写成 `g` 会抛
+  // ReferenceError。目前这个函数没有任何调用者（死亡一律走"伪倒地"），所以还没暴露；
+  // 一旦接线上就会出现"布娃娃一出必崩"。现改为 r.group，并做存在性保护。
+  // 另：骨骼原本挂在 hip/torso 等父子链上、坐标是局部的，直接 reparent 到 group 会让
+  // 它们整体错位。这里先把世界坐标烘进 obj.position，安装后视觉位置才与分离前一致。
+  const ragGroup = r.group;
+  if (!ragGroup) return;
   bones.forEach(b => {
-    if (b.parent) { b.parent.remove(b.obj); g.add(b.obj); }
+    if (b.parent) {
+      ragGroup.updateMatrixWorld(true);
+      const wp = new THREE.Vector3();
+      b.obj.getWorldPosition(wp);
+      const wq = new THREE.Quaternion();
+      b.obj.getWorldQuaternion(wq);
+      b.parent.remove(b.obj);
+      ragGroup.add(b.obj);
+      ragGroup.worldToLocal(wp);
+      b.obj.position.copy(wp);
+      b.obj.quaternion.copy(wq);
+    }
     b.obj.userData.ragdoll = { vel: new THREE.Vector3(), angVel: new THREE.Euler() };
   });
   // 给初始速度
@@ -17449,7 +17476,7 @@ function makeRagdoll(r) {
       );
     }
   });
-  ragdolls.push({ bones, r, time: 0, g: r.group });
+  ragdolls.push({ bones, r, time: 0, g: ragGroup });
 }
 // ============================================================
 // 黑帮大本营：每过 2 个昼夜，把空缺（被打死的）黑衣人补上（2026-10-12 用户要求）
@@ -17528,8 +17555,11 @@ function updateRagdolls(dt) {
       }
     });
     // 静止超过 3 秒移除
+    // 【fix40 修复】这里原来也是裸变量 `g`（应为本条布娃娃的宿主 rd.g）。
+    // 骨骼现在挂在 rd.g 上，必须从同一个父节点摘除，否则残留 + 抛错。
     if (rd.time > 3 && allResting) {
-      rd.bones.forEach(b => { g.remove(b.obj); });
+      const host = rd.g || rd.r.group;
+      rd.bones.forEach(b => { if (host) { try { host.remove(b.obj); } catch (e) {} } });
       ragdolls.splice(i, 1);
     }
   }
@@ -20270,6 +20300,19 @@ const MAP_ZOOM_MAX = 5;
 function mapClampZoom(z) { return Math.max(1, Math.min(MAP_ZOOM_MAX, z)); }
 // 大地图缩放系数（cover：铺满宽度，裁上下）。drawFullMap 和钳制逻辑共用，抽成函数避免两处算错。
 function mapScale(W, H) { return Math.max(W / (WORLD_LIMIT_X * 2), H / (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN)); }
+// 【fix40 性能】大地图重绘调度器。
+// 问题：拖动时每个 pointermove / touchmove 都同步调一次 drawFullMap()，而它会遍历
+//       全部建筑（数千个 fillRect）+ 全部车流/NPC/掉落物重画一遍。120Hz 触屏上单指拖动
+//       能以每秒上百次的频率全量重绘，是最容易被玩家感知的卡顿。
+// 修法：把同一帧内的多次请求合并成一次，用 rAF 对齐到浏览器刷新节奏。
+//       —— 重绘次数只减不增：原来 N 次/帧，现在最多 1 次/帧；拖动跟手性不变（仍在同一帧内出画面）。
+// 注意：静默重绘（不开面板时）不做延迟合并，直接同步执行，避免"关掉面板后地图还停一帧旧的"。
+let _mapDrawPending = false;
+function requestMapRedraw() {
+  if (_mapDrawPending) return;          // 本帧已排过队：再点多少次都只画一次
+  _mapDrawPending = true;
+  requestAnimationFrame(() => { _mapDrawPending = false; drawFullMap(); });
+}
 function drawFullMap() {
   const cv = document.getElementById('mapCanvas');
   const W = cv.width, H = cv.height;
@@ -20582,7 +20625,7 @@ document.getElementById('mapClose').addEventListener('click', () => { document.g
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 1) { mapPanX += dx; mapPanY += dy; }   // 单指：平移
       else { doPinch(); }                                     // 双指：捏合缩放
-      drawFullMap();
+      requestMapRedraw();                                     // 【fix40】合并到每帧最多一次
     });
     const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinchDist = 0; };
     cv.addEventListener('pointerup', end);
@@ -20592,7 +20635,7 @@ document.getElementById('mapClose').addEventListener('click', () => { document.g
       if (!isOpen()) return;
       e.preventDefault();
       mapZoom = mapClampZoom(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
-      drawFullMap();
+      requestMapRedraw();   // 【fix40】滚轮也是连续事件（触控板），一并合并
     }, { passive: false });
   } else {
     let tPts = {};   // 触摸回退：触摸点表
@@ -20609,12 +20652,12 @@ document.getElementById('mapClose').addEventListener('click', () => { document.g
         const v = Object.values(tPts);
         const d = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y);
         if (pinchDist > 0) mapZoom = mapClampZoom(pinchZoom0 * (d / pinchDist));
-        drawFullMap();
+        requestMapRedraw();                                   // 【fix40】
       } else if (Object.keys(tPts).length === 1) {
         const t = e.touches[0]; const p = tPts[t.identifier]; if (!p) return;
         mapPanX += t.clientX - p.x; mapPanY += t.clientY - p.y;
         tPts[t.identifier] = { x: t.clientX, y: t.clientY };
-        drawFullMap();
+        requestMapRedraw();                                   // 【fix40】
       }
     }, { passive: true });
     cv.addEventListener('touchend', e => {
@@ -20623,9 +20666,9 @@ document.getElementById('mapClose').addEventListener('click', () => { document.g
     }, { passive: true });
     cv.addEventListener('touchcancel', () => { tPts = {}; pinchDist = 0; }, { passive: true });
     cv.addEventListener('mousedown', e => { if (isOpen()) pts.set('mouse', { x: e.clientX, y: e.clientY }); });
-    addEventListener('mousemove', e => { const p = pts.get('mouse'); if (!isOpen() || !p) return; mapPanX += e.clientX - p.x; mapPanY += e.clientY - p.y; pts.set('mouse', { x: e.clientX, y: e.clientY }); drawFullMap(); });
+    addEventListener('mousemove', e => { const p = pts.get('mouse'); if (!isOpen() || !p) return; mapPanX += e.clientX - p.x; mapPanY += e.clientY - p.y; pts.set('mouse', { x: e.clientX, y: e.clientY }); requestMapRedraw(); });
     addEventListener('mouseup', () => pts.delete('mouse'));
-    cv.addEventListener('wheel', e => { if (!isOpen()) return; e.preventDefault(); mapZoom = mapClampZoom(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)); drawFullMap(); }, { passive: false });
+    cv.addEventListener('wheel', e => { if (!isOpen()) return; e.preventDefault(); mapZoom = mapClampZoom(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)); requestMapRedraw(); }, { passive: false });
   }
 })();
 function openStats() { document.getElementById('statsPanel').style.display = 'block'; renderStats(); }
@@ -21930,7 +21973,14 @@ function update(dt) {
 
 const SAVE_KEY = 'cityFreeMan.save.v1';
 const SAVE_VERSION = 1;
+// 【fix40 修复】原来用 Number(value) 判断，而 Number(null) === 0、Number('') === 0、
+// Number([]) === 0 —— 这些都不是 NaN，会被当成"合法值 0"从而**绕过 fallback**。
+// 影响面：凡是 fallback ≠ min 的字段（例如 gold，fallback 是当前金币、min 是 0），
+// 存档里该字段一旦是 null/空串，读档就会把金币静默清成 0，而不是保留原值。
+// 现在显式要求"必须是数字或非空数字字符串"，其余一律走 fallback。
 function saveNumber(value, fallback, min, max) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'boolean' || Array.isArray(value)) return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 }
@@ -22132,7 +22182,7 @@ function restoreSaveGame() {
     applyVehicleState(v, s);
   }
   // 统一警车标记与限速（存档里恢复的警车也要打上 _isCop，并强制压回安全速度）
-  for (const pc of policeCars) { pc._isCop = true; pc.hitCd = 0; pc.speed = 0; pc.topSpeed = 8; pc.recoverT = 0; pc.stuckT = 0; pc.ramCd = 0; }
+  for (const pc of policeCars) { pc._isCop = true; pc.hitCd = 0; pc.speed = 0; pc.topSpeed = 15; pc.recoverT = 0; pc.stuckT = 0; pc.ramCd = 0; }
   // 大本营站岗：死亡状态存档保留（noRespawn，打死的不会补员，读档也不该满血复活）
   if (Array.isArray(data.hqGuards)) {
     for (let i = 0; i < GANG_HQ_GUARDS.length && i < data.hqGuards.length; i++) {
@@ -22625,11 +22675,19 @@ function humanLodColor(item) {
 }
 function attachLod(item, lodColor, isVehicle) {
   const g = item.group;
-  if (!g || g.userData.detail) return;
+  if (!g || g.userData.detail || g.userData.lodDone) return;
   // 【按用户要求】车辆不再做"远景低模替换"：无论远近，永远显示原本的完整车模。
   // 原因：城市里几乎每辆车都在 70m 以外，低模会让玩家觉得"车全都不是原来那辆"。
   // 车辆的性能改由"几何体按材质合并（每辆 39→18 个网格）+ 车流减量"来保证。
-  if (isVehicle) return;
+  if (isVehicle) {
+    // 【fix40 性能】车辆不做 LOD，直接打标记返回。
+    // 原来这里只 return、不打标记，导致 updateDynamicVisibility 里
+    // "if (!detail || !lod) attachLod(...)" 这个兜底条件对每辆车**永远成立** ——
+    // 于是每 6 帧就对全城每一辆车（cars + traffic + policeCars，数百辆）重试一次
+    // 注定立刻返回的调用。打上 lodDone 标记后彻底跳过，纯减少每帧工作量。
+    g.userData.lodDone = true;
+    return;
+  }
   g.updateMatrixWorld(true);
   // 远景不再换成"不动的刚体低模"，而是换成会走路的廉价骨架（5 个网格，见函数注释）
   const cols = (g.userData && g.userData.colors) || null;
@@ -22706,7 +22764,11 @@ function updateDynamicVisibility() {
         // 用 try 包住并校验结果：万一某个模型算包围盒失败，宁可让它保持完整模型，
         // 也绝不能每帧抛错把整个可见性更新带崩（那会导致整屏模型不刷新）。
         if (!item.group.userData.detail || !item.group.userData.lod) {
-          try { attachLod(item, isVehicle ? ((item.saveColor != null) ? item.saveColor : 0x4a525a) : humanLodColor(item), isVehicle); } catch (e) {}
+          // 【fix40】lodDone 标记过的对象（车辆）不再重试：否则每 6 帧都会对全城每辆车
+          // 调一次必定立刻返回的 attachLod。这里先判标记，连函数调用都省掉。
+          if (!item.group.userData.lodDone) {
+            try { attachLod(item, isVehicle ? ((item.saveColor != null) ? item.saveColor : 0x4a525a) : humanLodColor(item), isVehicle); } catch (e) {}
+          }
         }
         if (item.group.userData.detail && item.group.userData.lod) {
           // LOD 切换同样要迟滞：否则在阈值附近开车时 detail/lod 的显隐会每帧翻转，看起来一闪一闪
@@ -22750,10 +22812,18 @@ function gamePaused() {
   //    隐藏），这时 el.style.display 是**空串**而不是 'none'，会被误判成"面板开着"，
   //    整个世界就永远暂停了（ferrisPanel / devPanel 都踩过，v2026-10-13）。
   //    先看 inline（关闭时零开销直接短路），不确定再问 computed style 兜底。
+  // 【fix40 性能】补一行 inline 快路径。
+  // 现状：全部 9 个浮层在 HTML 里都写着 style="display:none"，打开时 JS 会写 inline display
+  // （flex/block）—— 也就是说 inline 值本身已经能完全判定显隐，原来那句 getComputedStyle
+  // 只在"面板正开着"时才会被执行，而它会**强制一次样式重算(reflow)**，每帧一次。
+  // 补上 `if (el.style.display) return true;` 后：开着的那个面板也不再触发 reflow。
+  // 语义等价：inline 被设成非 'none' 的可见值时，元素就是可见的（display 不继承，
+  // 祖先隐藏也不会让 getComputedStyle(el).display 变成 'none'）。
   const vis = id => {
     const el = document.getElementById(id);
     if (!el) return false;                       // jobModal 是懒创建的，不存在就是没开
     if (el.style.display === 'none') return false;
+    if (el.style.display) return true;           // inline 已给出确定答案 → 不必问 computed style
     return getComputedStyle(el).display !== 'none';
   };
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
