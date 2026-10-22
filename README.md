@@ -63,7 +63,7 @@ git push origin master
 游戏主文件里有一个构建版本常量，右上角 HUD 会显示它：
 
 ```js
-const BUILD = '20261022-fix40-bugfix';
+const BUILD = '20261022-fix41-airport';
 ```
 
 **每次改动都要把末尾数字 +1**，它是确认"浏览器加载的是新文件而不是缓存"的唯一依据。
@@ -76,7 +76,7 @@ const BUILD = '20261022-fix40-bugfix';
 改动前先复制一份主文件，命名为 `城市自由人.html.bak-fixNN`，例如：
 
 ```
-城市自由人.html.bak-fix40-before
+城市自由人.html.bak-fix41-before-airport
 ```
 
 这类文件已被 `.gitignore` 忽略，不会误提交进仓库。

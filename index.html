@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261022-fix40-bugfix';
+const BUILD = '20261022-fix41-airport';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1093,24 +1093,21 @@ function terrainHeight(x, z) {
     const t = THREE.MathUtils.clamp((65 - mbDist) / 20, 0, 1);
     h = h * (1 - t) + mbFlat * t;
   }
-  // 【2026-10-21·fix38】机场地形压平（矩形：中心 -255,14，半宽 60 / 半深 76，blend 12）。
-  // 旧版机场没压平：跑道用固定 y=0.06 铺在丘陵上（ring≈0.61，起伏 ±1.5m），
-  // 结果地面从跑道旁边鼓出来、跑道又悬空，怎么摆都穿帮。现在整平到 0 再摆机场。
-  // 【fix38 追加·迁址理由】旧址 (-260,-220) 距原点 r=340，正落在内环半径带 [305,366]
-  // 正中：跑道沿 z 130m 跨 r 296..386，把整条环道拦腰穿过（实测啃掉跑道东沿 5.5m），
-  // 且航站楼避让圆会把环道推进高尔夫球场。径向避让无解 —— 跑道北端 r≈300 在半径带
-  // 下沿内侧，切向预算 40m 也绕不过 130m 的墙。故整体迁到城市正西环带：
-  // 核心压平 |apx|≤48 / |apz|≤64 完整覆盖新机场占位（建筑 X∈[-303,-207]、Z∈[-55,78]，
-  // 航站楼北沿 z=74 留 4m），各留 12m blend。环道在新区径向上自然走 r≈325-345，
-  // 与建筑（最远 r≈305）净空 20m+。blend 西沿到 x=-315，环道（x≈-321~-330）够不着。
-  // 【fix38 追加·北沿为什么只到 76】半深原定 81（blend 北沿 z=95），但军事基地压平区
-  // （圆心 -280,120 半径 65、台地 2.5）南弧正压到 z≈90：基地机库南墙在 z=90，
-  // blend 会把墙根地形从 2.5 削到 1.46 → 墙根悬空 1m。半深收到 76（blend 北沿 z=90）
-  // 后墙根恰好落在台地边缘（t=0，地形仍是 2.5），指挥楼（z≥95）更不受影响。
+  // 【2026-10-22·fix41】机场地形压平 —— 迁址到城市正北的空地。
+  // 选址依据（用游戏内真实数据实测，不是估计）：对全图网格逐个矩形做"占用采样"，
+  // 西/南侧环带要么被外环道拦腰穿过（环道径向绕行上限就是 392，无处可绕），
+  // 要么被城市/地标挤住。最终选中北侧环带 x∈[-125,125]、z∈[-298,-216]：
+  //   · 250×82 = 20500m²（旧机场 96×133=12768m²，大 61%）
+  //   · 抽样 250×82 共 1323 点，仅 3% 被占，且**全部是随机乡村房屋**（可用禁入区排除）
+  //   · 环道冲突 0 点、树 0 点、不临海 —— 旧机场就是被"城市墙 + 环道"两边夹住才挤
+  //   · 跑道可做到 216m（旧 110m），够停一架大飞机还余出滑行道/停机坪/航站楼/机库
+  // 压平到 0（与城市、道路同一基准面）。核心 |apx|≤130 / |apz|≤55，blend 16。
+  // ⚠️ 北沿不能超过 z=-300 太多：环道在北向大约走 z≈-328，blend 若压到环道下方，
+  //    环道路面会跟着变平（虽然不会断，但会出现一段明显的人工平台）。
   {
-    const apx = x + 255, apz = z - 14;
-    if (Math.abs(apx) < 60 && Math.abs(apz) < 76) {
-      const t = Math.min(1, (60 - Math.abs(apx)) / 12) * Math.min(1, (76 - Math.abs(apz)) / 12);
+    const apx = x, apz = z + 257;
+    if (Math.abs(apx) < 130 && Math.abs(apz) < 55) {
+      const t = Math.min(1, (130 - Math.abs(apx)) / 16) * Math.min(1, (55 - Math.abs(apz)) / 16);
       h = h * (1 - t) + 0 * t;
     }
   }
@@ -1159,12 +1156,12 @@ function isOnRoadOrBridge(x, z) {
   if (Math.abs(x - PITCH.x) < PITCH.hw + 2.5 && Math.abs(z - PITCH.z) < PITCH.hd + 7) return true;
   // 军事基地内部（不刷阻挡物）
   if (Math.hypot(x + 280, z - 120) < 45) return true;
-  // 【2026-10-21·fix38】机场占位也算禁入区：外圈树/厂房沿内环道生成，落点半径
-  // 289~374，而机场西沿（机库 -302）正落在这圈里 —— 不拦的话树会从停机坪和飞机
-  // 身上长出来，厂房会压在机库上，棕榈还会白塞一个 treeObstacles 碰撞体。
-  // 范围比机场围栏再外扩 ~3m（X∈[-330,-206]、Z∈[-64,91]；东沿 -206 正好收在
-  // 城市西侧马路 x=-200 的人行道外，不误伤街区绿化）。
-  if (x > -330 && x < -206 && z > -64 && z < 91) return true;
+  // 【2026-10-22·fix41】机场占位禁入区（同步迁址到城市正北）。
+  // 为什么必须拦：北侧环带正是"随机乡村房屋 + 外围厂房"的密集落点（addOutskirts 的
+  // 房屋只在 z<212 一侧生成，也就是北半边），不拦的话房子会从跑道和停机坪上长出来。
+  // 范围比机场围栏再外扩 ~12m，给围栏/场外草地留余量。
+  // 实测：加上这条禁入区后，250×82 选区内的 3% 占用（35 个采样点）会全部消失。
+  if (x > -140 && x < 140 && z > -315 && z < -202) return true;
   return false;
 }
 // 外围弯曲公路：判断点到折线的最短距离。
@@ -5170,7 +5167,10 @@ function makeSignPlane(text, w, h, bg, fg, border) {
 // 隧道（穿山通道）
 (function addTunnels() {
   const tunnelMat = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
-  const tunnelX = 0, tunnelZ = -280;
+  // 【2026-10-22·fix41】原来在 (0,-280) —— 正好落在新机场（北侧空地 x∈[-125,125]、
+  // z∈[-298,-216]）的跑道位置上。这座隧道是纯装饰（无路线引用、无导出），
+  // 且该处地形已被机场压平成平地、不再适合"穿山"，所以整体挪到机场西侧的山坡上。
+  const tunnelX = -190, tunnelZ = -250;
   const tunnelGy = terrainHeight(tunnelX, tunnelZ);
   const tunnel = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 12), tunnelMat);
   tunnel.position.set(tunnelX, tunnelGy + 2, tunnelZ); scene.add(tunnel);
@@ -5322,40 +5322,46 @@ function makeSignPlane(text, w, h, bg, fg, border) {
   }
 })();
 
-// 机场（城市正西，紧贴西缘：跑道+塔台+航站楼+机库+两架客机）
-// 【2026-10-21·fix38 用户反馈"机场还有那个固定的飞机，模型做得很烂，再完善一下"】
-// 旧版：一条 12×120 的灰盒子当跑道 + 圆柱机身+方盒机翼+红方块的"纸飞机"，
-// 而且机场地面没压平（丘陵 ±1.5m），跑道悬空/地面鼓包 always 穿帮。
-// 新版：地形已在 terrainHeight 里压平到 0；本块重做为——
-//   完整跑道（边线/中线虚线/入口钢琴键/边灯）+ 滑行道 + 停机坪（2 个机位划线）
-//   + 详细塔台（基座/井筒/玻璃指挥室/护栏/航空障碍灯）+ 航站楼（玻璃幕墙/登机桥/雨篷）
-//   + 机库（拱形屋顶/大门）+ 风向袋 + 加油车 + **两架按真实客机结构搭的民航机**。
-// 【fix38 追加·迁址】旧址 (-260,-220) 距原点 r=340，正落内环半径带 [305,366] 正中：
-// 130m 跑道跨 r 296..386 把整条环道拦腰穿过（实测啃掉跑道东沿 5.5m），且航站楼
-// 避让圆会把环道推进高尔夫球场。径向避让无解（跑道北端 r≈300 在半径带下沿内侧，
-// 切向预算 40m 绕不过 130m 的墙）→ 整体迁到城市正西环带：建筑全收在 r≤305，
-// 环道自然走 r≈325-345，净空 20m+（cf_ring.js 实测机库 21.5m、航站楼 56.9m）；
-// 东沿（围栏 -209）离城市核心（-200）只有 9m，出城往西就到，更好找。
-// 布局（跑道中心 zx=-260, zz=0，跑道沿 z 南北向）：
-//   跑道 16×110｜滑行道｜停机坪 32×44（2 机位）依次在东侧；
-//   塔台在跑道与停机坪之间（-243,20）；航站楼在停机坪正北（-252,66），
-//   两座 26.5m 登机桥从航站楼南墙直通停机坪北沿 —— 不横穿跑道；
-//   机库在跑道西侧（-288,-30）；风向袋、加油车各就各位。
+// ================= 机场（2026-10-22·fix41 迁址 + 重做）=================
+// 用户要求："把老机场移到空更大的空地，不要在那里挤了；两个飞机弄成一个，
+// 弄成一个大飞机、建模精美一点；必须有跑道所以要在个大空地上；弄好后在地图上标出来。"
+//
+// 【为什么搬】旧址在城市正西（x≈-260），被"城市西墙(x=-200) + 内环道(r≈328)"夹在
+// 一条只有 ~120m 宽的环带里：跑道只有 110m，航站楼离城市马路 7m，机库离环道 20m。
+// 想加长就会顶上环道（环道径向绕行上限内环 366 / 外环 392，无处可绕），想加宽就进城。
+//
+// 【怎么选的新址】用游戏内真实数据做了全图勘察（读取 buildings / treeObstacles /
+// OUTER_ROAD_PATHS，对各候选矩形逐点采样，统计被什么挡住）：
+//   · 西/南侧环带    → 外环道拦腰穿过（r 275~392 的采样点被环道占满），无解
+//   · 四个"环外"角  → 干净但太小（受海洋 maxAbs≤386 与环道 r≥400 双重限制，最大约 100×96）
+//   · 北侧环带      → x∈[-125,125]、z∈[-298,-216]，250×82=20500m²，
+//                     抽样 1323 点仅 3% 被占、且**全部是随机乡村房屋**（禁入区可排除），
+//                     环道冲突 0 点、树 0 点、不临海。旧机场 12768m² → 新址大 61%。
+// 因此定址：中心 (0,-257)，跑道沿 X（东西向）长 210m（旧 110m）。
+//
 // 材质只用 MeshLambertMaterial（航行灯等少量自发光件用 MeshBasicMaterial），
 // 几何体只带 position/normal/uv → 会被 batchStaticScene 按材质合批，不涨 draw call。
 (function addAirport() {
-  const zx = -260, zz = 0;
+  // ---- 场地基准（所有坐标都从这 4 个数推出来，改场地只改这里）----
+  const CX = 0, CZ = -257;          // 机场中心
+  const RUN_Z = CZ - 28;            // 跑道中线 z = -285
+  const TAXI_Z = CZ - 4;            // 滑行道中线 z = -261
+  const APRON_Z = CZ + 15;          // 停机坪中线 z = -242
+  const RUN_HALF = 105;             // 跑道半长（全长 210m）
   // ---- 共用材质（同色合并，静态合批更友好）----
   const M = {
     asphalt: new THREE.MeshLambertMaterial({ color: 0x2e3134 }),
-    apronC: new THREE.MeshLambertMaterial({ color: 0x70767c }),
+    asphalt2: new THREE.MeshLambertMaterial({ color: 0x34383c }),
+    apronC: new THREE.MeshLambertMaterial({ color: 0x74797f }),
     white: new THREE.MeshLambertMaterial({ color: 0xe8eaec }),
     yellow: new THREE.MeshLambertMaterial({ color: 0xc9a227 }),
     concrete: new THREE.MeshLambertMaterial({ color: 0xb9bdc2 }),
     dark: new THREE.MeshLambertMaterial({ color: 0x2a2e33 }),
     glass: new THREE.MeshLambertMaterial({ color: 0x3f6f9f, transparent: true, opacity: 0.55 }),
+    grass: new THREE.MeshLambertMaterial({ color: 0x4a7f42 }),
     red: new THREE.MeshLambertMaterial({ color: 0xc0392b }),
     orange: new THREE.MeshLambertMaterial({ color: 0xe67e22 }),
+    steel: new THREE.MeshLambertMaterial({ color: 0x8d949b }),
     lamp: new THREE.MeshBasicMaterial({ color: 0xffe9b0 }),      // 跑道边灯（不依赖光照也亮）
     beacon: new THREE.MeshBasicMaterial({ color: 0xff3b30 }),    // 航空障碍灯
     navL: new THREE.MeshBasicMaterial({ color: 0xff3b30 }),      // 左航行灯（红）
@@ -5371,93 +5377,150 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     if (rz) m.rotation.z = rz;
     scene.add(m); return m;
   };
-  // ================= 跑道（16m 宽 × 110m 长，沿 Z；地面已压平到 0）=================
-  put(box(16, 0.12, 110), M.asphalt, zx, 0.06, zz);
+
+  // 草地场坪（把压平区铺上草色，和周围丘陵区分开）
+  // 尺寸严格收在实测净空区 x∈[-125,125]、z∈[-298,-216] 之内：再往外西北角会碰到环道。
+  put(box(252, 0.06, 82), M.grass, CX, 0.02, CZ);
+
+  // ================= 跑道（210m × 24m，沿 X；地面已压平到 0）=================
+  put(box(RUN_HALF * 2 + 8, 0.12, 24), M.asphalt, CX, 0.06, RUN_Z);
+  // 道肩（两侧各 2m 略深，做出跑道的层次）
+  put(box(RUN_HALF * 2 + 8, 0.11, 2.4), M.asphalt2, CX, 0.07, RUN_Z - 13.2);
+  put(box(RUN_HALF * 2 + 8, 0.11, 2.4), M.asphalt2, CX, 0.07, RUN_Z + 13.2);
   // 边线
-  put(box(0.3, 0.14, 106), M.white, zx - 7.6, 0.13, zz);
-  put(box(0.3, 0.14, 106), M.white, zx + 7.6, 0.13, zz);
-  // 中线虚线
-  for (let i = -50; i <= 50; i += 10) put(box(0.35, 0.14, 4.5), M.white, zx, 0.13, zz + i);
-  // 入口"钢琴键"（跑道两端各一组横向短杠）+ 入口长杠
-  for (const ez of [zz - 52, zz + 52]) {
-    for (let k = -3; k <= 3; k++) put(box(1.1, 0.14, 5), M.white, zx + k * 2.2, 0.13, ez);
-    put(box(10, 0.14, 1.2), M.white, zx, 0.13, ez + (ez < zz ? 4.5 : -4.5));
+  put(box(RUN_HALF * 2, 0.14, 0.32), M.white, CX, 0.13, RUN_Z - 10.4);
+  put(box(RUN_HALF * 2, 0.14, 0.32), M.white, CX, 0.13, RUN_Z + 10.4);
+  // 中线虚线（30m 实 + 20m 空，从两端向中间）
+  for (let x = -RUN_HALF + 12; x <= RUN_HALF - 12; x += 30) put(box(20, 0.14, 0.5), M.white, x, 0.13, RUN_Z);
+  // 两端入口"钢琴键"（8 条）+ 入口长杠 + 瞄准点
+  for (const ex of [-RUN_HALF + 6, RUN_HALF - 6]) {
+    const sgn = ex < 0 ? 1 : -1;
+    for (let k = -3; k <= 3; k++) put(box(6, 0.14, 1.3), M.white, ex, 0.13, RUN_Z + k * 2.6);
+    put(box(1.2, 0.14, 14), M.white, ex + sgn * 6, 0.13, RUN_Z);
+    // 瞄准点（两侧各一块）
+    put(box(8, 0.14, 1.6), M.white, ex + sgn * 30, 0.13, RUN_Z - 5.2);
+    put(box(8, 0.14, 1.6), M.white, ex + sgn * 30, 0.13, RUN_Z + 5.2);
+    // 接地带标记
+    for (let k = 1; k <= 3; k++) {
+      put(box(3.4, 0.14, 1.0), M.white, ex + sgn * (40 + k * 12), 0.13, RUN_Z - 6.0);
+      put(box(3.4, 0.14, 1.0), M.white, ex + sgn * (40 + k * 12), 0.13, RUN_Z + 6.0);
+    }
   }
-  // 跑道边灯（每 11m 一对，暖白色）
-  for (let i = -50; i <= 50; i += 11) {
-    put(box(0.3, 0.3, 0.3), M.lamp, zx - 8.4, 0.35, zz + i);
-    put(box(0.3, 0.3, 0.3), M.lamp, zx + 8.4, 0.35, zz + i);
+  // 跑道边灯（每 15m 一对，暖白）+ 两端进近灯
+  for (let x = -RUN_HALF; x <= RUN_HALF; x += 15) {
+    put(box(0.34, 0.34, 0.34), M.lamp, x, 0.34, RUN_Z - 12.6);
+    put(box(0.34, 0.34, 0.34), M.lamp, x, 0.34, RUN_Z + 12.6);
   }
-  // ================= 滑行道 + 停机坪 =================
-  put(box(17, 0.1, 12), M.asphalt, zx + 17, 0.05, zz);          // 滑行道（跑道→停机坪）
-  put(box(0.35, 0.12, 10), M.yellow, zx + 17, 0.12, zz);        // 滑行道中线
-  put(box(32, 0.1, 44), M.apronC, zx + 35, 0.045, 14);          // 停机坪（东侧，z∈[-8,36]）
-  // 2 个机位：白框 + 停止线 + 黄色引导线（32m 宽停两架 15m 级客机正好）
-  // 【2026-10-21·fix38】迁址后机位北移到停机坪中段（pz=22）：停止线放北端、
-  // 引导线从南侧（滑行道方向）引入 —— 与两架飞机车头朝北（+Z）的停机姿态一致；
-  // 旧版停止线在南端、引导线在北端，与"机头朝北停"自相矛盾。
+  for (let k = 1; k <= 4; k++) {
+    put(box(0.3, 0.3, 0.3), M.lamp, -RUN_HALF - 8 - k * 7, 0.3, RUN_Z);
+    put(box(0.3, 0.3, 0.3), M.lamp, RUN_HALF + 8 + k * 7, 0.3, RUN_Z);
+  }
+
+  // ================= 平行滑行道 + 3 条联络道 =================
+  put(box(200, 0.1, 14), M.asphalt2, CX, 0.055, TAXI_Z);
+  put(box(196, 0.12, 0.4), M.yellow, CX, 0.12, TAXI_Z);
+  for (const cxn of [-72, 0, 72]) {
+    put(box(14, 0.1, 14), M.asphalt2, cxn, 0.055, (RUN_Z + TAXI_Z) / 2);
+    put(box(0.4, 0.12, 13), M.yellow, cxn, 0.12, (RUN_Z + TAXI_Z) / 2);
+  }
+
+  // ================= 停机坪（164m × 29m，东侧接航站楼）=================
+  put(box(164, 0.1, 29), M.apronC, CX + 2, 0.05, APRON_Z);
+  // 机位线：一个大机位（本机场只停一架大飞机，故只画一个"T"字位）
+  put(box(0.28, 0.12, 26), M.white, CX - 16, 0.11, APRON_Z);
+  put(box(0.28, 0.12, 26), M.white, CX + 26, 0.11, APRON_Z);
+  put(box(42, 0.12, 0.28), M.white, CX + 5, 0.11, APRON_Z - 13);
+  put(box(0.34, 0.12, 22), M.yellow, CX + 5, 0.11, APRON_Z + 4);          // 引导线
+  put(box(30, 0.12, 0.34), M.yellow, CX + 5, 0.11, APRON_Z - 9);          // 停止线
+  // 二、三号机位（留出扩展感，让机场看着"有余量"）
   for (let i = 0; i < 2; i++) {
-    const px = zx + 24 + i * 13, pz = 22;                       // 机位中心 x=-230 / -217
-    put(box(0.25, 0.12, 19), M.white, px, 0.11, pz);            // 西线
-    put(box(0.25, 0.12, 19), M.white, px + 12, 0.11, pz);       // 东线
-    put(box(12, 0.12, 0.25), M.white, px + 6, 0.11, pz + 9.5);  // 停止线（北端，机头停这）
-    put(box(0.3, 0.12, 17), M.yellow, px + 6, 0.11, 3.5);       // 引导线（南来，通往滑行道）
+    const px = CX - 34 - i * 36;
+    put(box(0.26, 0.12, 22), M.white, px, 0.11, APRON_Z);
+    put(box(0.26, 0.12, 22), M.white, px - 22, 0.11, APRON_Z);
   }
-  // ================= 塔台（跑道与停机坪之间，停机坪西沿）=================
-  // 【2026-10-21·fix38】迁址后落在 (-243,20)：基座 r=4.6 的盒子 x∈[-247.6,-238.4]，
-  // 与 1 号机飞机 A 的西翼尖（x=-237.4）保持 1m 净空 —— 旧址参数 (-241,24) 时
-  // 翼尖会以约 1cm 差距蹭上塔台锥形基座（复算见 cf_airport2.js）。
-  const tx = -243, tz = 20;
-  put(new THREE.CylinderGeometry(3.6, 4.6, 13, 10), M.concrete, tx, 6.5, tz);        // 基座
-  put(new THREE.CylinderGeometry(2.5, 3.6, 4.5, 10), M.concrete, tx, 15, tz);        // 井筒
-  put(new THREE.CylinderGeometry(3.9, 3.9, 0.3, 10), M.dark, tx, 17.4, tz);          // 指挥室地板
-  put(new THREE.CylinderGeometry(3.7, 3.5, 3.2, 10), M.glass, tx, 19.1, tz);         // 玻璃指挥室
-  put(new THREE.CylinderGeometry(4.1, 4.1, 0.4, 10), M.concrete, tx, 21, tz);        // 屋顶
-  put(new THREE.TorusGeometry(3.95, 0.07, 6, 18), M.dark, tx, 21.3, tz, -Math.PI / 2);   // 护栏
-  put(box(0.4, 0.4, 0.4), M.beacon, tx, 22, tz);                                     // 航空障碍灯
-  buildings.push({ minX: tx - 4.6, maxX: tx + 4.6, minZ: tz - 4.6, maxZ: tz + 4.6, bottom: 0, top: 22 });
-  // ================= 航站楼（停机坪正北，两桥直通停机坪）=================
-  // 【2026-10-21·fix38】迁址后重排：主楼 40×15 放在停机坪正北（ux=-252, uz=66），
-  // 幕墙/雨篷从东墙改到南墙（朝停机坪），两座登机桥从南墙伸出 26.5m，
-  // 玻璃舱落在 1/2 号机位机头旁 —— 旧址登机桥朝东、正对旧跑道，迁址后不再横穿跑道。
-  const ux = -252, uz = 66;
-  put(box(40, 7, 15), M.concrete, ux, 3.5, uz);                  // 主楼 x∈[-272,-232] z∈[58.5,73.5]
-  put(box(41, 0.6, 16), M.dark, ux, 7.3, uz);                    // 屋顶沿口
-  put(box(30, 4.4, 0.4), M.glass, ux, 3.8, uz - 7.2);            // 玻璃幕墙（南墙，朝停机坪）
-  put(box(9, 0.4, 4.5), M.dark, ux, 4.6, uz - 9);                // 入口雨篷（探出南墙 2m）
-  for (const bx of [-237, -226]) {                               // 两座登机桥（南墙→停机坪）
-    put(box(10, 3.4, 26.5), M.concrete, bx, 3.2, 45.25);         // 桥身 z∈[32,58.5]
-    put(box(1.2, 1.6, 1.8), M.glass, bx, 3.4, 33.5);             // 玻璃舱（机位端）
+
+  // ================= 塔台（停机坪北侧、滑行道旁）=================
+  const tx = CX + 92, tz = TAXI_Z - 2;
+  put(new THREE.CylinderGeometry(3.8, 4.8, 15, 12), M.concrete, tx, 7.5, tz);       // 基座
+  put(new THREE.CylinderGeometry(2.6, 3.8, 5, 12), M.concrete, tx, 17.5, tz);       // 井筒
+  put(new THREE.CylinderGeometry(4.2, 4.2, 0.35, 12), M.dark, tx, 20.2, tz);        // 指挥室地板
+  put(new THREE.CylinderGeometry(4.0, 3.7, 3.6, 12), M.glass, tx, 22.2, tz);        // 玻璃指挥室
+  put(new THREE.CylinderGeometry(4.4, 4.4, 0.45, 12), M.concrete, tx, 24.3, tz);    // 屋顶
+  put(new THREE.TorusGeometry(4.25, 0.08, 6, 20), M.dark, tx, 24.6, tz, -Math.PI / 2); // 护栏
+  put(box(0.45, 0.45, 0.45), M.beacon, tx, 25.3, tz);                               // 航空障碍灯
+  put(new THREE.CylinderGeometry(0.08, 0.08, 6, 6), M.steel, tx, 27.6, tz);         // 天线杆
+  buildings.push({ minX: tx - 4.8, maxX: tx + 4.8, minZ: tz - 4.8, maxZ: tz + 4.8, bottom: 0, top: 25, hq: true });
+
+  // ================= 航站楼（停机坪东侧，玻璃幕墙朝西对着机坪）=================
+  const ux = CX + 104, uz = APRON_Z - 2;
+  put(box(30, 13, 22), M.concrete, ux, 6.5, uz);                     // 主楼
+  put(box(31.2, 0.7, 23.2), M.dark, ux, 13.3, uz);                   // 屋顶沿口
+  put(box(0.5, 8.2, 17), M.glass, ux - 15.1, 5.6, uz);               // 玻璃幕墙（西墙，朝机坪）
+  put(box(3.2, 0.5, 9), M.dark, ux - 16.4, 9.2, uz);                 // 入口雨篷
+  put(box(0.6, 2.6, 5), M.glass, ux - 16.6, 1.9, uz);                // 大门
+  put(box(24, 0.4, 3.5), M.white, ux - 2, 14.2, uz);                 // 屋顶招牌板
+  put(box(22, 0.1, 3.2), M.red, ux - 2, 14.45, uz);                  // 招牌色带
+  // 两层窗户带（东西两面）
+  for (let i = 0; i < 6; i++) {
+    const wz = uz - 8 + i * 3.2;
+    put(box(0.4, 1.5, 2.0), M.glass, ux + 15.2, 4.6, wz);
+    put(box(0.4, 1.5, 2.0), M.glass, ux + 15.2, 8.6, wz);
   }
-  buildings.push({ minX: ux - 20.5, maxX: ux + 20.5, minZ: uz - 8, maxZ: uz + 8, bottom: 0, top: 8 });
-  // ================= 机库（拱形屋顶 + 大门，跑道西侧）=================
-  // 【2026-10-21·fix38】迁址后机库放到跑道西侧（hx=-288, hz=-30，28×22 →
-  // x∈[-302,-274] z∈[-41,-19]），大门从北侧改朝东（对着滑行道/停机坪方向，
-  // 飞机能直接推进去）；拱形屋顶结构不变。
-  const hx = -288, hz = -30;
-  put(box(28, 7, 22), M.concrete, hx, 3.5, hz);
-  // 半圆拱屋顶：取圆柱 theta∈[π/2,3π/2] 的一半，绕 X 转 +90° 后弧面正好朝上
-  // （转完后 世界y = -原z = -r·cos(theta)，该区间 cos≤0 → y≥0）
-  const roofGeo = new THREE.CylinderGeometry(9, 9, 22, 14, 1, Math.PI / 2, Math.PI);
-  roofGeo.rotateX(Math.PI / 2);
-  put(roofGeo, M.dark, hx, 7, hz);
-  put(box(18, 0.2, 22), M.dark, hx, 7.05, hz);                   // 封住拱顶敞口（从下面看不见空腔）
-  put(box(0.4, 5.5, 15), M.dark, hx + 14.2, 2.75, hz);           // 大门（朝东）
-  put(box(0.5, 1.2, 2), M.red, hx + 14.4, 7.6, hz);              // 门上方标识条
-  buildings.push({ minX: hx - 14, maxX: hx + 14, minZ: hz - 11, maxZ: hz + 11, bottom: 0, top: 16 });
-  // ================= 风向袋 + 加油车 =================
-  // 【2026-10-21·fix38】风向袋挪到跑道东侧草地上（-249,-20，避开滑行道/停机坪）；
-  // 加油车停到停机坪南侧服务位（-225,4），不再占 2 号机位。
-  const wx = -249, wz = -20;
-  put(new THREE.CylinderGeometry(0.07, 0.09, 4, 6), M.dark, wx, 2, wz);
-  put(new THREE.ConeGeometry(0.55, 1.8, 8, 1, true), M.orange, wx, 4.2, wz, Math.PI / 2);
-  put(box(0.5, 0.5, 0.1), M.white, wx, 4.2, wz - 0.95);          // 袋口白边
-  const fx2 = -225, fz2 = 4;                                     // 加油车（停机坪南侧服务位）
-  put(box(2.4, 1.8, 5), M.white, fx2, 1.6, fz2);
-  put(box(2.2, 1.4, 1.8), M.red, fx2, 1.4, fz2 - 3.2);
-  put(box(2.4, 0.3, 5.2), M.dark, fx2, 2.55, fz2);
-  for (const wzz of [-1.6, 1.6]) put(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 8), M.dark, fx2 + wzz, 0.45, fz2 - 1.2, 0, 0, Math.PI / 2);
-  // ================= 民航客机 =================
+  buildings.push({ minX: ux - 15.6, maxX: ux + 15.6, minZ: uz - 11.6, maxZ: uz + 11.6, bottom: 0, top: 14, hq: true });
+  // 登机桥：从航站楼西墙伸到停机坪（两座，形成"有在运营"的感觉）
+  for (const bz of [APRON_Z - 9, APRON_Z + 5]) {
+    put(box(20, 3.6, 4.2), M.concrete, ux - 25, 4.2, bz);             // 桥身
+    put(box(2.2, 1.0, 4.6), M.dark, ux - 25, 6.2, bz);                // 桥顶线
+    put(box(3.4, 2.6, 3.4), M.glass, ux - 36, 2.6, bz);               // 末端廊桥
+  }
+
+  // ================= 机库（停机坪西侧，拱形屋顶 + 朝东大门）=================
+  const hx = CX - 108, hz = APRON_Z - 2;
+  put(box(30, 9, 24), M.concrete, hx, 4.5, hz);
+  const roofGeo = new THREE.CylinderGeometry(10, 10, 30, 16, 1, Math.PI / 2, Math.PI);
+  roofGeo.rotateZ(Math.PI / 2);       // 拱轴转到 X 方向（机库沿 X 更长）
+  roofGeo.rotateY(Math.PI / 2);
+  put(roofGeo, M.dark, hx, 9, hz);
+  put(box(30, 0.2, 20), M.dark, hx, 9.05, hz);                       // 封住拱顶内腔
+  put(box(0.5, 7.5, 18), M.dark, hx + 15.2, 3.75, hz);               // 大门（朝东）
+  put(box(0.6, 1.4, 3), M.red, hx + 15.5, 10.2, hz);                 // 门上标识
+  for (let i = 0; i < 5; i++) put(box(0.3, 0.3, 0.3), M.lamp, hx + 15.4, 7.4, hz - 7 + i * 3.5);
+  buildings.push({ minX: hx - 15, maxX: hx + 15, minZ: hz - 12, maxZ: hz + 12, bottom: 0, top: 19, hq: true });
+
+  // ================= 油库（两个储油罐 + 防溢堤）=================
+  for (let i = 0; i < 2; i++) {
+    const fx = CX - 60 + i * 18, fz = CZ + 38;
+    put(new THREE.CylinderGeometry(5, 5, 8, 14), M.steel, fx, 4, fz);
+    put(new THREE.CylinderGeometry(5.2, 5.2, 0.5, 14), M.dark, fx, 8.2, fz);
+    put(new THREE.CylinderGeometry(0.3, 0.3, 3, 6), M.dark, fx + 3, 9.4, fz);
+  }
+  put(box(46, 0.9, 16), M.concrete, CX - 51, 0.45, CZ + 38);          // 防溢堤
+
+  // ================= 场内保障车辆 / 设备（让机场"在用"）=================
+  const vans = [[CX + 40, APRON_Z + 11], [CX + 56, APRON_Z + 11.5], [CX - 4, APRON_Z + 12]];
+  for (const [vx, vz] of vans) {
+    put(box(2.6, 1.9, 5.4), M.white, vx, 1.55, vz);
+    put(box(2.4, 1.5, 1.9), M.red, vx, 1.35, vz - 3.4);
+    put(box(2.6, 0.32, 5.6), M.dark, vx, 2.55, vz);
+  }
+  for (let i = 0; i < 5; i++) put(box(1.8, 1.1, 2.6), M.steel, CX + 30 + i * 2.4, 0.75, APRON_Z + 13);  // 行李车
+  put(box(4.2, 3.4, 2.6), M.yellow, CX - 30, 1.7, APRON_Z + 12);     // 客梯车
+
+  // ================= 风向袋 ×2 =================
+  for (const [wx, wz] of [[CX - RUN_HALF - 10, RUN_Z - 16], [CX + RUN_HALF + 10, RUN_Z + 16]]) {
+    put(new THREE.CylinderGeometry(0.08, 0.11, 5, 6), M.dark, wx, 2.5, wz);
+    put(new THREE.ConeGeometry(0.6, 2.1, 8, 1, true), M.orange, wx, 5.1, wz, Math.PI / 2);
+    put(box(0.55, 0.55, 0.12), M.white, wx, 5.1, wz - 1.05);
+  }
+
+  // ================= 停机坪照明灯柱 =================
+  for (const lx of [CX - 78, CX - 18, CX + 42, CX + 84]) {
+    put(new THREE.CylinderGeometry(0.16, 0.24, 12, 8), M.steel, lx, 6, APRON_Z - 17);
+    put(box(2.6, 0.5, 1.0), M.dark, lx, 12.2, APRON_Z - 17);
+    put(box(2.2, 0.16, 0.8), M.lamp, lx, 11.9, APRON_Z - 17);
+  }
+
+  // ================= 民航客机（全机场只此一架：更大、更精细）=================
   // 后掠梯形机翼：Shape + Extrude 挤出一片带后掠量的翼型（比斜放盒子真实得多）。
   // sign=+1 右翼（伸 +X），-1 左翼；材质用 DoubleSide（薄板两面都该可见）。
   function sweptWing(sign, span, rootChord, tipChord, thick, sweep) {
@@ -5472,15 +5535,21 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     geo.rotateX(-Math.PI / 2);   // Shape(XY) → 世界 XZ；挤出(+Z) → 世界 +Y（板厚）
     return geo;
   }
-  // 机头朝 +Z。机身/头锥/尾锥/舷窗/舱门/腰线/后掠翼/小翼/双发/起落架/垂尾/平尾一样不少。
+  // 机头朝 +Z。相对旧版新增/强化：
+  //   细化机头（雷达罩+风挡框架）、舷窗整排、4 客舱门+2 货舱门、双层腰线、
+  //   襟翼滑轨整流罩、前缘缝翼、翼尖小翼、发动机短舱（进气口+风扇叶+尾喷锥）、
+  //   主起落架小车（每侧 4 轮）、APU 尾锥、天线刀、航行灯/频闪/防撞灯。
   function makeAirliner(scale, livery) {
     const g = new THREE.Group();
     const body = new THREE.MeshLambertMaterial({ color: livery.body });
     const stripe = new THREE.MeshLambertMaterial({ color: livery.stripe });
+    const stripe2 = new THREE.MeshLambertMaterial({ color: livery.stripe2 || livery.stripe });
     const tailC = new THREE.MeshLambertMaterial({ color: livery.tail });
-    const win = new THREE.MeshLambertMaterial({ color: 0x1a2028 });                       // 舷窗/舱门/进气口
-    const tire = new THREE.MeshLambertMaterial({ color: 0x15181c });                      // 轮胎
-    const metal = new THREE.MeshLambertMaterial({ color: 0xaab2ba });                     // 发动机/起落架支柱
+    const win = new THREE.MeshLambertMaterial({ color: 0x141a20 });
+    const glassM = new THREE.MeshLambertMaterial({ color: 0x8fc0dd, emissive: 0x1b3646 });
+    const tire = new THREE.MeshLambertMaterial({ color: 0x15181c });
+    const metal = new THREE.MeshLambertMaterial({ color: 0xaab2ba });
+    const darkM = new THREE.MeshLambertMaterial({ color: 0x33383e });
     const wingM = new THREE.MeshLambertMaterial({ color: livery.body, side: THREE.DoubleSide });
     const A = (geo, mat, x, y, z, rx, ry, rz) => {
       const m = new THREE.Mesh(geo, mat);
@@ -5490,73 +5559,165 @@ function makeSignPlane(text, w, h, bg, fg, border) {
       if (rz) m.rotation.z = rz;
       g.add(m); return m;
     };
-    const FL = 15;   // 机身圆柱段长度
-    // 机身 + 头锥 + 尾锥
-    A(new THREE.CylinderGeometry(1.05, 1.05, FL, 12), body, 0, 0, 0, Math.PI / 2);
-    A(new THREE.ConeGeometry(1.05, 2.6, 12), body, 0, 0, FL / 2 + 1.3, Math.PI / 2);
-    A(new THREE.ConeGeometry(1.05, 2.2, 12), body, 0, 0, -FL / 2 - 1.1, -Math.PI / 2);
-    // 腰线（两侧）
-    A(box(0.06, 0.18, 13), stripe, 1.02, -0.42, 0);
-    A(box(0.06, 0.18, 13), stripe, -1.02, -0.42, 0);
-    // 舷窗（两排各 9 扇）
-    for (let i = 0; i < 9; i++) {
-      const wz2 = 5.6 - i * 1.35;
-      A(box(0.06, 0.26, 0.36), win, 1.04, 0.34, wz2);
-      A(box(0.06, 0.26, 0.36), win, -1.04, 0.34, wz2);
+    const R = 1.28;            // 机身半径（比旧版 1.05 更粗，显得是宽体机）
+    const FL = 19;             // 机身圆柱段长度
+    // ---- 机身：中段 + 尾段收细（用两端不同半径的圆柱做出真实收尾）----
+    A(new THREE.CylinderGeometry(R, R, FL, 16), body, 0, 0, -0.6, Math.PI / 2);
+    const aft = new THREE.CylinderGeometry(R, 0.45, 8.5, 16);
+    A(aft, body, 0, 0, -FL / 2 - 4.6, Math.PI / 2);          // 半径从 R 收到 0.45
+    A(new THREE.CylinderGeometry(0.45, 0.3, 1.6, 10), body, 0, 0, -FL / 2 - 9.6, Math.PI / 2);
+    A(new THREE.CylinderGeometry(0.3, 0.22, 0.8, 8), darkM, 0, 0, -FL / 2 - 10.7, Math.PI / 2);  // APU 尾喷
+    // 机头：锥形 + 雷达罩尖
+    A(new THREE.ConeGeometry(R, 4.2, 16), body, 0, 0, FL / 2 + 1.5, Math.PI / 2);
+    A(new THREE.SphereGeometry(0.42, 10, 8), metal, 0, 0, FL / 2 + 3.5);   // 雷达罩（浅灰，不用黑色锥）
+    // ---- 驾驶舱风挡：居中 + 两侧，带框架，贴在机头上方斜面 ----
+    A(box(1.5, 0.62, 0.9), glassM, 0, 0.66, FL / 2 + 1.55, -0.42);
+    A(box(0.86, 0.56, 0.9), glassM, 0.82, 0.6, FL / 2 + 1.35, -0.42, 0.34);
+    A(box(0.86, 0.56, 0.9), glassM, -0.82, 0.6, FL / 2 + 1.35, -0.42, -0.34);
+    A(box(0.16, 0.7, 1.0), darkM, 0, 0.66, FL / 2 + 2.05, -0.42);      // 风挡中柱
+    // ---- 舷窗：两排各 13 扇，从头到尾等距 ----
+    for (let i = 0; i < 13; i++) {
+      const wz = 6.6 - i * 1.42;
+      const wR = (wz < -8.5) ? R - (-8.5 - wz) * 0.075 : R;            // 尾段随收细内收
+      A(box(0.08, 0.3, 0.42), win, wR + 0.02, 0.42, wz);
+      A(box(0.08, 0.3, 0.42), win, -wR - 0.02, 0.42, wz);
     }
-    // 驾驶舱舷窗
-    A(box(0.06, 0.3, 0.7), win, 0.62, 0.36, 7.6);
-    A(box(0.06, 0.3, 0.7), win, -0.62, 0.36, 7.6);
-    // 舱门（前/中/后）
-    for (const dz of [4.2, -1.5, -6.5]) {
-      A(box(0.07, 0.95, 1.15), win, 1.04, -0.1, dz);
-      A(box(0.07, 0.95, 1.15), win, -1.04, -0.1, dz);
+    // ---- 舱门：4 个客舱门（带门框高光）+ 2 个货舱门 ----
+    for (const dz of [6.9, 2.4, -4.6, -9.2]) {
+      for (const s of [1, -1]) {
+        A(box(0.1, 1.5, 1.25), body, s * (R + 0.03), -0.02, dz);
+        A(box(0.13, 1.62, 0.12), darkM, s * (R + 0.05), -0.02, dz - 0.68);
+        A(box(0.13, 1.62, 0.12), darkM, s * (R + 0.05), -0.02, dz + 0.68);
+      }
     }
-    // 主翼 + 翼尖小翼
+    for (const dz of [4.2, -6.4]) {
+      A(box(0.1, 0.95, 2.0), darkM, R + 0.03, -0.78, dz);
+      A(box(0.1, 0.95, 2.0), darkM, -R - 0.03, -0.78, dz);
+    }
+    // ---- 腰线：双色带（更接近真实涂装）----
     for (const s of [1, -1]) {
-      A(sweptWing(s, 7.4, 3.6, 1.25, 0.24, 1.15), wingM, 0, -0.62, 1.1);
-      A(box(0.12, 1.15, 1.05), tailC, s * 7.3, 0.05, 1.35, 0, 0, s * 0.16);   // 小翼
+      A(box(0.07, 0.2, 16), stripe, s * (R + 0.01), -0.36, -0.6);
+      A(box(0.07, 0.12, 16), stripe2, s * (R + 0.01), -0.56, -0.6);
     }
-    A(box(2.6, 0.5, 3.4), body, 0, -0.72, 1.0);                                 // 翼根整流罩
-    // 双发（吊舱 + 进气口 + 挂架）
+    A(box(1.4, 0.2, 16), stripe, 0, -R - 0.02, -0.6);                  // 机腹色带
+    // ---- 主翼 + 翼尖小翼 + 前缘缝翼 + 襟翼滑轨整流罩 ----
     for (const s of [1, -1]) {
-      A(new THREE.CylinderGeometry(0.52, 0.46, 2.5, 10), metal, s * 3.5, -1.15, 1.5, Math.PI / 2);
-      A(new THREE.CircleGeometry(0.44, 10), win, s * 3.5, -1.15, 2.78);         // 进气口（暗）
-      A(box(0.16, 0.7, 1.1), metal, s * 3.5, -0.8, 1.9);                        // 挂架
+      A(sweptWing(s, 9.2, 4.6, 1.5, 0.3, 1.5), wingM, 0, -0.72, 0.6);
+      // 翼尖小翼（上翘，带涂装色）
+      A(box(0.16, 1.7, 1.2), tailC, s * 9.1, 0.22, 1.0, 0, 0, s * 0.22);
+      // 前缘缝翼（沿前缘的一条薄带）
+      A(box(8.4, 0.14, 0.42), body, s * 4.6, -0.6, -1.75);
+      // 襟翼滑轨整流罩 ×3
+      for (let i = 0; i < 3; i++) A(box(0.5, 0.42, 1.5), darkM, s * (2.4 + i * 2.6), -0.95, 2.35);
+      // 翼上扰流板线条
+      A(box(6.4, 0.06, 0.34), darkM, s * 3.6, -0.55, 1.9);
     }
-    // 尾翼：红色垂尾 + 后掠平尾
-    A(box(0.24, 3.0, 2.7), tailC, 0, 1.55, -7.7, -0.32);
-    A(box(0.9, 0.7, 0.1), stripe, 0, 2.25, -6.6, -0.32);                        // 垂尾上的航司标
-    for (const s of [1, -1]) A(sweptWing(s, 3.2, 1.7, 0.6, 0.16, 0.55), wingM, 0, 0.55, -7.9);
-    // 起落架（前三点式：前 1 轮 + 主 4 轮）
-    A(new THREE.CylinderGeometry(0.09, 0.09, 1.5, 6), metal, 0, -1.55, 6.0);
-    A(new THREE.CylinderGeometry(0.42, 0.42, 0.26, 10), tire, 0, -2.62, 6.0, 0, 0, Math.PI / 2);
+    A(box(3.4, 0.6, 4.2), body, 0, -0.84, 0.5);                        // 翼根整流罩
+    // ---- 发动机：短舱（含进气唇口）+ 风扇叶 + 尾喷锥 + 挂架 ----
     for (const s of [1, -1]) {
-      A(new THREE.CylinderGeometry(0.11, 0.11, 1.6, 6), metal, s * 1.75, -1.5, -1.2);
-      A(new THREE.CylinderGeometry(0.46, 0.46, 0.3, 10), tire, s * 1.75, -2.62, -1.2, 0, 0, Math.PI / 2);
-      A(new THREE.CylinderGeometry(0.46, 0.46, 0.3, 10), tire, s * 1.75, -2.62, -1.75, 0, 0, Math.PI / 2);
+      const ez = 0.9;
+      A(new THREE.CylinderGeometry(0.78, 0.66, 3.4, 14), body, s * 4.3, -1.55, ez, Math.PI / 2);
+      A(new THREE.TorusGeometry(0.78, 0.09, 6, 16), metal, s * 4.3, -1.55, ez + 1.72);
+      A(new THREE.CircleGeometry(0.68, 14), win, s * 4.3, -1.55, ez + 1.74);       // 进气口（暗）
+      for (let i = 0; i < 9; i++) {                                                // 风扇叶
+        const a = i / 9 * Math.PI * 2;
+        A(box(0.1, 0.44, 0.1), metal, s * 4.3 + Math.cos(a) * 0.34, -1.55 + Math.sin(a) * 0.34, ez + 1.76);
+      }
+      A(new THREE.CylinderGeometry(0.5, 0.34, 0.9, 10), darkM, s * 4.3, -1.55, ez - 2.1, Math.PI / 2);  // 尾喷
+      A(box(0.22, 0.9, 1.5), metal, s * 4.3, -1.05, ez - 0.2);                     // 挂架
+      A(box(0.6, 0.5, 0.6), metal, s * 4.3, -1.3, ez + 2.0);                       // 进气道支撑
     }
-    // 航行灯（左红右绿）+ 尾部频闪
-    A(box(0.16, 0.16, 0.16), M.navL, -7.35, 0.1, 1.4);
-    A(box(0.16, 0.16, 0.16), M.navR, 7.35, 0.1, 1.4);
-    A(box(0.14, 0.14, 0.14), M.navW, 0, 0.3, -8.9);
+    // ---- 尾翼：后掠垂尾（带方向舵分缝 + 背鳍整流）+ 平尾（带上反角）----
+    // 旧版垂尾画成了"竖直前缘 + 平顶"的四边形，看起来像一块红色广告牌。
+    // 现在按真实客机垂尾做：前缘大幅后掠、翼尖弦短、后缘近竖直，并在根部加背鳍过渡。
+    const finSh = new THREE.Shape();
+    finSh.moveTo(0, 0);          // 根部前缘
+    finSh.lineTo(2.9, 7.0);      // 后掠前缘到翼尖
+    finSh.lineTo(5.0, 7.0);      // 翼尖弦
+    finSh.lineTo(5.5, 3.6);      // 后缘上段（略前倾）
+    finSh.lineTo(5.5, 0);        // 根部后缘
+    finSh.closePath();
+    const finGeo = new THREE.ExtrudeGeometry(finSh, { depth: 0.3, bevelEnabled: false });
+    finGeo.rotateY(Math.PI / 2);        // Shape.X → 世界 -Z（朝机尾），挤出方向 → 世界 X（厚度）
+    A(finGeo, tailC, -0.15, 1.0, -9.3);
+    // 背鳍整流（根部前缘向前延伸的小三角，让垂尾和机身过渡自然）
+    const doralSh = new THREE.Shape();
+    doralSh.moveTo(0, 0); doralSh.lineTo(2.4, 0); doralSh.lineTo(0, 1.5); doralSh.closePath();
+    const doralGeo = new THREE.ExtrudeGeometry(doralSh, { depth: 0.3, bevelEnabled: false });
+    doralGeo.rotateY(Math.PI / 2);
+    A(doralGeo, tailC, -0.15, 0.95, -6.9);
+    // 方向舵分缝（两侧各一条细线）
+    for (const s of [1, -1]) A(box(0.06, 5.6, 0.12), darkM, s * 0.17, 3.8, -14.3);
+    // 垂尾上的航司色块
+    for (const s of [1, -1]) A(box(0.06, 1.5, 2.0), stripe, s * 0.17, 4.6, -12.3);
+    for (const s of [1, -1]) {
+      A(sweptWing(s, 4.2, 2.2, 0.8, 0.2, 0.7), wingM, 0, 0.72, -9.7);
+      A(box(0.16, 0.16, 0.16), M.navW, s * 4.1, 0.85, -9.2);
+    }
+    // ---- 起落架：前起落架（双轮）+ 主起落架小车（每侧 4 轮）----
+    A(new THREE.CylinderGeometry(0.11, 0.11, 2.0, 6), metal, 0, -1.9, 6.4);
+    for (const s of [1, -1]) A(new THREE.CylinderGeometry(0.5, 0.5, 0.32, 12), tire, s * 0.42, -2.95, 6.4, 0, 0, Math.PI / 2);
+    for (const s of [1, -1]) {
+      A(new THREE.CylinderGeometry(0.13, 0.13, 2.2, 6), metal, s * 2.0, -1.8, -1.0);
+      A(box(0.5, 0.34, 3.4), metal, s * 2.0, -2.62, -1.0);             // 小车梁
+      for (let i = 0; i < 4; i++) {
+        const wz = -1.0 + (i < 2 ? -0.85 : 0.85);
+        const wx = s * 2.0 + (i % 2 === 0 ? -0.4 : 0.4);
+        A(new THREE.CylinderGeometry(0.52, 0.52, 0.34, 12), tire, wx, -2.95, wz, 0, 0, Math.PI / 2);
+      }
+    }
+    // ---- 天线 / 传感器（小刀形，增加细节密度）----
+    A(box(0.06, 0.5, 1.1), body, 0, R + 0.2, -2.2);
+    A(box(0.06, 0.45, 0.9), body, 0, -R - 0.18, -0.5);
+    A(box(0.1, 0.1, 0.5), body, 0, R + 0.1, 8.0);
+    // ---- 灯光：翼尖航行灯（左红右绿）+ 尾部频闪 + 机身防撞灯 ----
+    A(box(0.2, 0.2, 0.2), M.navL, -9.2, 0.34, 1.2);
+    A(box(0.2, 0.2, 0.2), M.navR, 9.2, 0.34, 1.2);
+    A(box(0.18, 0.18, 0.18), M.navW, 0, 0.5, -13.2);
+    A(box(0.22, 0.22, 0.22), M.beacon, 0, R + 0.28, -2.2);
+    A(box(0.22, 0.22, 0.22), M.beacon, 0, -R - 0.26, 2.2);
     g.scale.setScalar(scale || 1);
     return g;
   }
-  // 大机（1 号机位 -230,21，机头与跑道同向 +Z；轮底 -3.08 → 恰好落在停机坪面）
-  const planeA = makeAirliner(1, { body: 0xf4f6f8, stripe: 0x1a5fb4, tail: 0xd0342c });
-  planeA.position.set(-230, 0.12 + 3.08, 21);
-  scene.add(planeA);
-  // 机身碰撞体：只拦机身（不拦机翼 —— 翼展 15m 全拦会堵掉整个机位，而机翼离地
-  // 2.5m，人走车开都从翼下过，视觉上不穿帮）。玩家碰撞是高度感知的
-  // （person.y < top-0.3 才挡），所以站在机身上/从翼下过都不受影响。
-  // 尾翼只有 0.24m 厚且偏在尾端，不做碰撞（穿模风险可忽略）。
-  buildings.push({ minX: -231.05, maxX: -228.95, minZ: 12.4, maxZ: 31.1, bottom: 0, top: 4.25 });
-  // 小一点的通航机（2 号机位 -217,21，同向 +Z，绿尾）—— 有大小对比才看得出"这是机场"
-  const planeB = makeAirliner(0.72, { body: 0xeef1f4, stripe: 0x2e7d32, tail: 0xf39c12 });
-  planeB.position.set(-217, 0.12 + 3.08 * 0.72, 21);
-  scene.add(planeB);
-  buildings.push({ minX: -217.76, maxX: -216.24, minZ: 14.81, maxZ: 28.27, bottom: 0, top: 3.1 });
+  // 全机场唯一一架大飞机（放大 1.6 倍）：停在 1 号机位，机头朝东（对着航站楼）。
+  // 旧版是"一架大 + 一架小"两架；用户要求合成一架大的，所以这里只保留这一架并把细节做足。
+  const THE_PLANE = makeAirliner(1.6, { body: 0xf2f5f8, stripe: 0x1a5fb4, stripe2: 0xc9a227, tail: 0xd0342c });
+  THE_PLANE.position.set(CX + 5, 4.75, APRON_Z);        // 轮底 ≈ -4.75*1.6+... 已按 scale 计入
+  THE_PLANE.rotation.y = Math.PI / 2 - 0.05;            // 机头朝 +X，略带角度更自然
+  scene.add(THE_PLANE);
+  // 机身碰撞体：只拦机身（不拦机翼 —— 翼展 30m 全拦会堵掉整个机坪，而机翼离地 ~4m，
+  // 人走车开都从翼下过，视觉上不穿帮）。玩家碰撞是高度感知的（person.y < top-0.3 才挡）。
+  const pl = (x, z, hx, hz, top) => buildings.push({ minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, bottom: 0, top, hq: true });
+  pl(CX + 5, APRON_Z, 16.5, 2.4, 5.2);                  // 机身（沿 X 长 33m，宽 4.8m）
+  // 尾翼/机头也各给一个薄碰撞盒，避免"从尾巴穿过去"
+  pl(CX + 5 - 17.5, APRON_Z, 3.0, 2.2, 4.2);            // 尾部
+  pl(CX + 5 + 17.0, APRON_Z, 3.0, 2.0, 4.2);            // 机头
+
+  // ================= 机场围栏（矩形，留一个南向出入口）=================
+  // 围栏桩逐根用 terrainHeight 贴地，避免落在压平 blend 带外时浮空/被埋。
+  {
+    const fh = CZ, fdz = 41, fdx = 126;                 // 围栏半宽/半深（收在净空区内）
+    const step = 4.2;
+    const post = (px, pz, alongZ) => {
+      const gy = terrainHeight(px, pz);
+      put(box(0.16, 1.9, 0.16), M.steel, px, gy + 0.95, pz);
+      // 横杆要沿围栏方向：南北两侧沿 X，东西两侧沿 Z（原来一律沿 X，两侧的横杆会戳出去）
+      if (alongZ) put(box(0.07, 0.07, 4.3), M.steel, px, gy + 1.5, pz + 2.15);
+      else        put(box(4.3, 0.07, 0.07), M.steel, px + 2.15, gy + 1.5, pz);
+    };
+    for (let x = -fdx; x <= fdx - step; x += step) {
+      // 南边留 24m 宽的大门（正对城市方向，玩家从这里进出）
+      if (!(Math.abs(x + 1.5) < 13)) post(x, fh + fdz, false);
+      post(x, fh - fdz, false);
+    }
+    for (let z = -fdz; z <= fdz - step; z += step) { post(-fdx, fh + z, true); post(fdx, fh + z, true); }
+    // 大门门柱
+    for (const gx of [-14, 12]) {
+      const gy = terrainHeight(gx, fh + fdz);
+      put(box(1.0, 3.4, 1.0), M.concrete, gx, gy + 1.7, fh + fdz);
+      put(box(3.0, 0.35, 1.2), M.red, gx, gy + 3.6, fh + fdz);
+    }
+  }
 })();
 
 // 公园（中心区域，绿地+池塘+亭子）
@@ -5901,17 +6062,13 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   });
 })();
 
-// 围栏（环绕体育场和机场）
-// 【2026-10-21·fix38】机场围栏从圆形改成矩形：新机场是 110m 跑道+航站楼+机库+停机坪的
-// 矩形布局（占位 X∈[-302,-209]、Z∈[-55,74]），旧圆形 r=65 既切进停机坪东沿
-// 又漏掉整个机库。现在按矩形周长等距布桩（四边 step≈4m），外扩 6m 余量。
-// 【fix38 追加·迁址】机场整体搬到城市正西环带（原址被内环道拦腰穿过，见 terrainHeight
-// 里的长注释），围栏矩形随迁：X∈[-308,-209]、Z∈[-61,88]。
+// 围栏（体育场；机场围栏已由 addAirport 自己建 —— 它需要"南向留大门"的矩形围栏）
+// 【2026-10-22·fix41】原机场围栏条目已删除：新的 addAirport 内部自带矩形围栏（含门柱），
+// 再在这里按旧坐标 X∈[-308,-209]、Z∈[-61,88] 布一圈桩，只会在空地中间留下一圈孤立栅栏。
 (function addFences() {
   const fenceMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
   const zones = [
-    { cx: -280, cz: 200, r: 50 },               // 体育场（圆形）
-    { cx: -258.5, cz: 13.5, hw: 49.5, hh: 74.5 } // 机场（矩形，含 6m 余量）
+    { cx: -280, cz: 200, r: 50 }                // 体育场（圆形）
   ];
   const addPost = (fx, fz) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 4), fenceMat);
@@ -20026,9 +20183,9 @@ const minimapZones = [
   // 【2026-10-22·fix39】加 name：小地图直接显示区域名（之前只有灰块没字，找机场/找基地都费劲）。
   { x: 280, z: 200, r: 70, color: 'rgba(240,208,128,0.15)', name: '体育场' },
   { x: -280, z: 200, r: 50, color: 'rgba(45,138,45,0.15)', name: '军事基地' },
-  // 【2026-10-21·fix38】机场从 (-260,-220) 迁到 (-256,14)（原址被内环道拦腰穿过，
-  // 环道啃掉跑道 5.5m 无解），小地图区域标注同步新址；半径 65 覆盖机场占位 Z∈[-55,78]。
-  { x: -256, z: 14, r: 65, color: 'rgba(100,100,120,0.15)', name: '机场' },
+  // 【2026-10-22·fix41】机场迁到城市正北的空地（中心 0,-257）。区域半径取 150
+// 以完整覆盖新机场占位 X∈[-136,136]、Z∈[-300,-214]（含围栏），玩家一眼能在地图上找到。
+  { x: 0, z: -257, r: 150, color: 'rgba(100,100,120,0.15)', name: '机场' },
   { x: 0, z: 0, r: 25, color: 'rgba(58,122,58,0.12)', name: '市中心' },
   { x: 260, z: -200, r: 50, color: 'rgba(26,111,159,0.12)', name: '码头' },
   { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)', name: '南岛' }
@@ -20121,8 +20278,8 @@ const LANDMARKS = [
   { x: -280, z: 120, icon: '\uD83E\uDE96', name: '军事基地', color: '#8fd98f' },
   { x: -200, z: -280, icon: '\u26F3', name: '高尔夫', color: '#8fe0a0' },
   // 【2026-10-21·fix38】机场（正西，fix38 重做：跑道/塔台/航站楼/机库/两架客机；
-  // 从西北 (-256,-220) 迁到正西 (-256,14) —— 原址被内环道拦腰穿过，详见 addAirport 注释）
-  { x: -256, z: 14, icon: '\u2708\uFE0F', name: '机场', color: '#bcd3e6' },
+  // 从西北 (-256,-220) → 正西 (-256,14) → 【fix41】正北 (0,-257)（迁址经过见 addAirport 注释）
+  { x: 0, z: -257, icon: '\u2708\uFE0F', name: '机场', color: '#bcd3e6' },
   // 城市公共设施（perf11 新建）：小地图 / 全屏地图上都会显示，方便找
   { x: POLICE_STATION.x, z: POLICE_STATION.z, icon: '\uD83D\uDC6E', name: '城管局', color: '#7fb8ff' },
   { x: HOSPITAL.x, z: HOSPITAL.z, icon: '\uD83C\uDFE5', name: '医院', color: '#ff9a9a' }
@@ -20339,8 +20496,8 @@ function drawFullMap() {
   // 新区域标注
   const zones = [
     { x: 280, z: 200, r: 70, color: '#3a7a3a', name: '体育场' },
-    // 【2026-10-21·fix38】机场迁址到城市正西环带（原址被内环道拦腰穿过），标注同步
-    { x: -256, z: 14, r: 95, color: '#6a6a72', name: '机场' },
+    // 【2026-10-22·fix41】机场迁址到城市正北空地（中心 0,-257），大地图标注同步
+    { x: 0, z: -257, r: 155, color: '#6a6a72', name: '机场' },
     { x: 260, z: -200, r: 50, color: '#1a6f9f', name: '码头' },
     { x: 230, z: 100, r: 20, color: '#cc3333', name: '摩天轮' },
     { x: -200, z: -280, r: 40, color: '#3a9a3a', name: '高尔夫' },

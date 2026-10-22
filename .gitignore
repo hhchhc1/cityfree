@@ -2,3 +2,6 @@
 survey.txt
 备份说明.txt
 .DS_Store
+# 本地勘察/截图脚本与成图（只在开发机上用，不进仓库）
+_*.js
+shots/
