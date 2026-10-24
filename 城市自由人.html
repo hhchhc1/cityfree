@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix57-noocean';;;;;;
+const BUILD = '20261024-fix59-antistuck';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1040,7 +1040,7 @@ function terrainHeight(x, z) {
   const maxDist = Math.max(dx, dz);
   // 【fix57】用户要求"先把海洋去掉"：主城**东侧**不再压到海平面，
   // 而是让陆地向东一直延伸到荷芷市，两城连成一片（既不会"困在海里"，也能直接走过去）。
-  if (maxDist > oceanStart && x < 300) {
+  if (false && maxDist > oceanStart && x < 300) {   // 【fix58】用户要求『把海洋去掉』：整块地图外都是陆地
     const t = (maxDist - oceanStart) / oceanMargin;
     h = h * (1 - t) + (WATER_Y * t);
   }
@@ -1147,7 +1147,7 @@ function personGroundY(x, z) {
   // 【fix57】东侧（x≥300）现在是与荷芷市连成一片的陆地，不能再按『超出即为海』处理，
   // 否则玩家走在东侧陆地上却仍被按到海面高度（实测 personGroundY(600,0) 返回 0.3）。
   if (x > 900) return linhaiHeight(x, z);
-  if (m > HALF - 100 && x < 300 && !onBridge && !onIsland) return WATER_Y + 0.9;
+  // 【fix58】不再把地图外判成海（用户要求『把海洋去掉』）
   return terrainHeight(x, z);
 }
 // 判断是否在道路/桥面/桥引道上（禁止刷实体阻挡物）
@@ -15476,7 +15476,7 @@ function clampCity(p) {
   // 【fix55】主城边界必须和 personGroundY() 的"超出 ±(HALF-100) 就算海"判据对齐。
   // 原来这里允许走到 615，而 personGroundY 从 400 起就返回海面高度 ——
   // 中间那 215 米正是用户看到的"左边陆地、右边海、分界线在那里、越过去就泡在海里"。
-  const lim = HALF - 100;
+  const lim = 3000;   // 【fix58】用户要求去掉海洋、并抱怨在南边(码头)被卡住：放宽到 ±3000，覆盖主城+中间地带+荷芷市
   p.x = Math.max(-lim, Math.min(lim, p.x));
   p.z = Math.max(Math.max(WORLD_LIMIT_Z_MIN, -lim), Math.min(Math.min(WORLD_LIMIT_Z_MAX, lim), p.z));
 }
@@ -15496,6 +15496,12 @@ for (let i = 0; i < _gridW * _gridH; i++) { _gridBld[i] = []; _gridTree[i] = [];
 // 于是玩家在那里会撞上『看不见的墙』（用户实测『不能正常走路』）。给它一个专用空槽。
 const _gridEmptyIdx = _gridW * _gridH;
 _gridBld.push([]); _gridTree.push([]); _gridCar.push([]); _gridNpc.push([]);
+// ⚠️ 必须给**所有**网格数组都补一格：只补 4 个的话，其他数组在 _gridEmptyIdx 处会取到
+// undefined，遍历时可能抛异常（这类异常会被 update 外面的 try 吞掉，表现为'走不动'）。
+_gridCellsStatic.push([]); _gridCellsBld.push([]); _gridCellsCar.push([]); _gridCellsNpc.push([]);
+_gridCellsTree.push([]); _gridCellsPlatform.push([]); _gridCellsVehicle.push([]); _gridCellsGas.push([]);
+_gridCellsTraffic.push([]); _gridCellsHeli.push([]); _gridCellsCarNear.push([]); _gridCellsHit.push([]);
+_gridCellsInter.push([]); _gridCellsGap.push([]);
 function _gridIdx(x, z) {
   // 【fix57】荷芷市在地图之外：不这样拦一下，坐标会被钳到**边缘格子**、读到主城边缘的
   // 建筑与树木，玩家在那里就会撞上"看不见的墙"（用户实测"不能正常走路"）。
@@ -25355,6 +25361,37 @@ const frameLoop = () => {
   // 放在 frameLoop 而不是 update 内部，是因为 update 在乘机过场期间会被整段跳过，
   // 而天气（尤其雨）在过场里也应该继续。定义是 const，放这里也避开了 TDZ。
   try { updateWeather(dt); } catch (e) {}
+  // 【fix59】万能解卡保险。
+  // 用户反馈："就是那个状态不能正常走路，我用一下钩爪发现钩爪也弹不回来。"
+  // 但我手动调用 update() 测下来一切正常（60 帧无异常、state=walk、grapple=null），
+  // 说明卡住的是**输入/状态机**而不是游戏逻辑本身 —— 单靠定位某条具体路径很脆弱，
+  // 所以加一道通用兜底：只要有明确的移动输入、位置却连续 1.5 秒没变化，
+  // 就强制复位（松开钩爪 / 回到 walk / 清掉暂停残留），保证玩家一定能重新走动。
+  try {
+    const A = window.__cfGuard || (window.__cfGuard = { t: 0, x: 0, z: 0 });
+    const wantMove = (joyActive && (Math.abs(joyX) > 0.25 || Math.abs(joyY) > 0.25))
+      || keys['w'] || keys['a'] || keys['s'] || keys['d'];
+    const px = person.position.x, pz = person.position.z;
+    if (!wantMove || !isFinite(px) || !isFinite(pz)) {
+      A.t = 0; A.x = px; A.z = pz;
+    } else if (Math.hypot(px - A.x, pz - A.z) > 0.30) {
+      A.t = 0; A.x = px; A.z = pz;
+    } else {
+      A.t += dt;
+      if (A.t > 1.5) {
+        A.t = 0;
+        if (grapple) releaseGrapple();
+        state = 'walk';
+        _wasPaused = false;
+        console.warn('[anti-stuck] 强制复位：松开钩爪 / 回到 walk');
+      }
+    }
+    // 位置万一被污染成 NaN，松钩爪也救不回来 —— 直接拉回主城
+    if (!isFinite(person.position.x) || !isFinite(person.position.y) || !isFinite(person.position.z)) {
+      person.position.set(0, 2, 0); vy = 0; onGround = false;
+      console.warn('[anti-stuck] 位置异常，已拉回主城');
+    }
+  } catch (e) {}
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
   renderer.render(scene, camera);
   updateDebugHud();
