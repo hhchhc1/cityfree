@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261022-fix41-airport';
+const BUILD = '20261024-fix42-cars-buildings';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1927,7 +1927,14 @@ function makeBuildingTexture(style) {
     roof:     ['#8b8a80', '#7e7d74', '#98978c', '#727167'],
     // 【2026-10-13 用户要求】新增两种有特色的建筑风格（数量少但特征明显）
     tower:    ['#6fb4dd', '#7cbfe6', '#5fa8d4', '#8ac9ec'],   // 【fix15】玻璃幕墙塔楼：天蓝玻璃（原深蓝灰近黑，改浅蓝/天蓝走科技感）
-    shop:     ['#c87a4a', '#b96a3c', '#d98a58', '#a85f34']    // 临街商铺：暖橙外墙 + 招牌
+    shop:     ['#c87a4a', '#b96a3c', '#d98a58', '#a85f34'],   // 临街商铺：暖橙外墙 + 招牌
+    // ===== 【fix42·用户要求"建筑风格再多元一点，不要只是那三种"】新增 6 种外立面 =====
+    marble:   ['#e8e6e0', '#dedbd4', '#f0eee8', '#d4d1c9'],   // 白色大理石（公共建筑/银行）
+    terracotta: ['#b4583a', '#a84e33', '#c26544', '#9c452c'], // 陶土瓦（地中海/老街）
+    blueglass: ['#2f5f8f', '#2a5680', '#37699b', '#244b72'],  // 深蓝反光玻璃（商务塔）
+    brutal:   ['#8d8d88', '#82827d', '#98988f', '#77776f'],   // 粗野混凝土（外露梁柱）
+    victorian: ['#e0d3b0', '#d6c8a2', '#e8dcbc', '#cbba90'],  // 维多利亚砖石（拱窗+线脚）
+    green:    ['#4a6b45', '#42603d', '#52764c', '#3a5636']    // 垂直绿化（阳台爬藤）
   };
   const wall = palettes[style];
   ctx.fillStyle = wall[Math.floor(Math.random() * wall.length)]; ctx.fillRect(0, 0, 128, 192);
@@ -2056,6 +2063,77 @@ function makeBuildingTexture(style) {
       ctx.fillStyle = 'rgba(40,44,52,0.82)'; ctx.fillRect(x, y, 16, 17);
       if (Math.random() < 0.35) { ctx.fillStyle = 'rgba(255,230,170,0.55)'; ctx.fillRect(x + 2, y + 2, 12, 13); }
     }
+  // ===== 【fix42】6 种新外立面 =====
+  } else if (style === 'marble') {
+    // 大理石公共建筑：浅色石材 + 灰色纹理纹路 + 竖向壁柱 + 高窗 + 门廊
+    for (let i = 0; i < 14; i++) {
+      ctx.strokeStyle = 'rgba(120,120,128,0.16)'; ctx.lineWidth = 1 + Math.random();
+      ctx.beginPath();
+      let yy = Math.random() * 192;
+      ctx.moveTo(0, yy);
+      for (let x = 0; x <= 128; x += 16) { yy += (Math.random() - 0.5) * 9; ctx.lineTo(x, yy); }
+      ctx.stroke();
+    }
+    for (let x = 0; x < 128; x += 32) { ctx.fillStyle = 'rgba(255,255,255,0.30)'; ctx.fillRect(x, 0, 3, 192); }
+    for (let y = 16; y < 132; y += 38) for (let x = 20; x < 128; x += 32) pane(x, y, 16, 22, Math.random() < 0.25);
+    ctx.fillStyle = 'rgba(70,72,78,0.9)'; ctx.fillRect(0, 0, 128, 5);
+    door(50, 28, 46);
+  } else if (style === 'terracotta') {
+    // 陶土瓦：横向瓦垄 + 拱形窗 + 木门（暖红陶土外墙）
+    for (let y = 0; y < 192; y += 7) {
+      ctx.fillStyle = 'rgba(0,0,0,0.13)'; ctx.fillRect(0, y, 128, 1.5);
+      ctx.fillStyle = 'rgba(255,220,190,0.07)'; ctx.fillRect(0, y + 2, 128, 2);
+    }
+    for (let y = 18; y < 140; y += 34) for (let x = 14; x < 128; x += 40) {
+      ctx.fillStyle = 'rgba(46,28,20,0.9)';
+      ctx.beginPath(); ctx.moveTo(x, y + 20); ctx.lineTo(x, y + 8);
+      ctx.quadraticCurveTo(x + 8, y - 2, x + 16, y + 8); ctx.lineTo(x + 16, y + 20); ctx.closePath(); ctx.fill();
+      pane(x + 2, y + 8, 12, 12, Math.random() < 0.3);
+    }
+    ctx.fillStyle = 'rgba(60,36,26,0.92)'; ctx.fillRect(46, 150, 36, 42);
+  } else if (style === 'blueglass') {
+    // 深蓝反光玻璃：整面横向通条 + 深色竖框 + 斜向反光带
+    const g1 = ctx.createLinearGradient(0, 0, 0, 192);
+    g1.addColorStop(0, 'rgba(150,205,235,0.55)'); g1.addColorStop(0.5, 'rgba(60,120,175,0.35)'); g1.addColorStop(1, 'rgba(28,60,105,0.55)');
+    ctx.fillStyle = g1; ctx.fillRect(0, 0, 128, 192);
+    for (let y = 0; y < 192; y += 13) { ctx.fillStyle = 'rgba(220,240,255,0.22)'; ctx.fillRect(0, y, 128, 2); }
+    for (let x = 0; x < 128; x += 16) { ctx.fillStyle = 'rgba(18,34,54,0.72)'; ctx.fillRect(x, 0, 2, 192); }
+    for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(Math.random() * 120, 0, 6 + Math.random() * 10, 192); }
+  } else if (style === 'brutal') {
+    // 粗野混凝土：外露横梁 + 深凹窗洞（窗洞比墙面暗得多，形成"穴居"感）
+    for (let y = 0; y < 192; y += 26) {
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(0, y, 128, 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, y + 3, 128, 2);
+    }
+    for (let x = 0; x < 128; x += 26) { ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x, 0, 2, 192); }
+    for (let y = 8; y < 160; y += 26) for (let x = 6; x < 128; x += 26) {
+      ctx.fillStyle = 'rgba(16,18,20,0.92)'; ctx.fillRect(x, y, 18, 15);
+      ctx.fillStyle = 'rgba(120,140,155,0.30)'; ctx.fillRect(x + 1, y + 1, 16, 5);
+    }
+    ctx.fillStyle = 'rgba(20,22,24,0.95)'; ctx.fillRect(42, 156, 44, 36);
+  } else if (style === 'victorian') {
+    // 维多利亚：奶油色砖石 + 拱形高窗 + 上下线脚 + 雕花窗台
+    for (let y = 0; y < 192; y += 11) { ctx.fillStyle = 'rgba(150,120,80,0.10)'; ctx.fillRect(0, y, 128, 1); }
+    ctx.fillStyle = 'rgba(255,255,255,0.32)'; ctx.fillRect(0, 0, 128, 6); ctx.fillRect(0, 148, 128, 5);
+    for (let y = 22; y < 138; y += 36) for (let x = 12; x < 128; x += 34) {
+      ctx.fillStyle = 'rgba(70,50,30,0.9)';
+      ctx.beginPath(); ctx.moveTo(x - 2, y + 24); ctx.lineTo(x - 2, y + 8);
+      ctx.quadraticCurveTo(x + 7, y - 4, x + 16, y + 8); ctx.lineTo(x + 16, y + 24); ctx.closePath(); ctx.fill();
+      pane(x, y + 8, 14, 15, Math.random() < 0.34);
+      ctx.fillStyle = 'rgba(255,255,255,0.20)'; ctx.fillRect(x - 3, y + 25, 22, 2);
+    }
+    door(48, 32, 44);
+  } else if (style === 'green') {
+    // 垂直绿化：整面爬藤 + 阳台绿植箱 + 少量落地窗
+    ctx.fillStyle = 'rgba(30,40,30,0.35)'; ctx.fillRect(0, 0, 128, 192);
+    for (let y = 6; y < 168; y += 22) for (let x = 4; x < 128; x += 20) {
+      ctx.fillStyle = 'rgba(20,28,18,0.55)'; ctx.fillRect(x, y, 18, 20);
+      if (Math.random() < 0.75) {
+        ctx.fillStyle = ['#4e8a3c', '#3f7a33', '#5d9a46', '#376b2c'][Math.random() * 4 | 0];
+        ctx.beginPath(); ctx.arc(x + 9, y + 10, 6 + Math.random() * 4, 0, 7); ctx.fill();
+      } else { pane(x + 2, y + 3, 14, 13, Math.random() < 0.4); }
+    }
+    ctx.fillStyle = 'rgba(40,44,40,0.9)'; ctx.fillRect(46, 152, 36, 40);
   } else if (style === 'roof') {
     // 波纹铁皮：横向压型 + 铆接带 + 锈斑 + 高侧窗（仓库/工棚）
     for (let y = 0; y < 192; y += 6) { ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(0, y, 128, 1); }
@@ -2164,7 +2242,7 @@ function makeLamp() {
 
 // 人字顶（小屋斜屋顶 + 烟囱）
 function addGableRoof(x, gy, z, w, d, h) {
-  const roofM = new THREE.MeshLambertMaterial({ color: 0x9a4a3a });
+  const roofM = BLD_M_ROOF, chimM = BLD_M_CHIM;
   const half = w * 0.5 + 0.6, tilt = 0.62, len = d + 0.6;
   for (const sgn of [1, -1]) {
     const s = new THREE.Mesh(new THREE.BoxGeometry(half * 1.05, 0.12, len), roofM);
@@ -2172,9 +2250,29 @@ function addGableRoof(x, gy, z, w, d, h) {
     s.position.set(x + sgn * half * 0.5 * Math.cos(tilt), gy + h + half * 0.5 * Math.sin(tilt), z);
     scene.add(s);
   }
-  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.5), new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
+  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.5), chimM);
   chim.position.set(x + w * 0.2, gy + h + 0.5, z); scene.add(chim);
 }
+
+// ===== 【fix42】建筑装饰件的共享材质 =====
+// 关键：这些材质必须**模块级共享**，不能在每栋楼的生成循环里 new。
+// 大楼主体早就用 buildingBodyMaterial(style) 按风格复用了，但屋顶/女儿墙/空调/阳台
+// 这些配件一直是每栋楼各 new 一份 —— 静态合批按材质分组，每多一个唯一材质就多一次
+// 绘制调用：几百栋楼 × 每个配件一份 = 白白多出几百次调用。共享之后配件全部并批。
+const BLD_M_TRIM  = new THREE.MeshLambertMaterial({ color: 0x8e949b });   // 女儿墙 / 压顶
+const BLD_M_DARK  = new THREE.MeshLambertMaterial({ color: 0x727980 });   // 设备层 / 檐口
+const BLD_M_MECH  = new THREE.MeshLambertMaterial({ color: 0x7d848b });   // 屋顶机房
+const BLD_M_STEEL = new THREE.MeshLambertMaterial({ color: 0x9aa2aa });   // 空调机组 / 柱廊
+const BLD_M_ANT   = new THREE.MeshLambertMaterial({ color: 0xcccccc });   // 天线杆
+const BLD_M_BRIDGE= new THREE.MeshLambertMaterial({ color: 0x9ec6de });   // 双塔连廊
+const BLD_M_RAIL  = new THREE.MeshLambertMaterial({ color: 0x30353a });   // 阳台栏杆
+const BLD_M_FLOOR = new THREE.MeshLambertMaterial({ color: 0x8b8f94 });   // 阳台楼板
+const BLD_M_CROWN = new THREE.MeshLambertMaterial({ color: 0x666666 });   // 摩天楼尖顶/女儿墙
+const BLD_M_PYR   = new THREE.MeshLambertMaterial({ color: 0x8a3b2f });   // 居民楼金字塔顶
+const BLD_M_TANK  = new THREE.MeshLambertMaterial({ color: 0x7a7a7a });   // 屋顶水箱
+const BLD_M_ROOF  = new THREE.MeshLambertMaterial({ color: 0x9a4a3a });   // 人字屋顶瓦
+const BLD_M_CHIM  = new THREE.MeshLambertMaterial({ color: 0x8a6d3b });   // 烟囱
+const BLD_M_POLE  = new THREE.MeshLambertMaterial({ color: 0x6b4f2a });   // 遮阳棚立柱
 
 // 遮阳棚：红白条纹斜篷（小房子门口）
 function addAwning(x, gy, z, w) {
@@ -2186,7 +2284,7 @@ function addAwning(x, gy, z, w) {
   m.rotation.x = 0.4;
   m.position.set(x, gy + 2.5, z + 0.5);
   scene.add(m);
-  const poleM = new THREE.MeshLambertMaterial({ color: 0x6b4f2a });
+  const poleM = BLD_M_POLE;
   for (const s of [-1, 1]) {
     const p = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.5, 0.08), poleM);
     p.position.set(x + s * w / 2, gy + 1.25, z + 1.05); scene.add(p);
@@ -2265,9 +2363,44 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
     let w, d, h, style, kind;
     // 【2026-10-13】摩天楼有一半概率用新的"玻璃幕墙塔楼"（通条玻璃），低矮房有 1/4 概率
     // 用新的"临街商铺"（彩色招牌 + 大橱窗）—— 新风格只占少数，但走在街上能一眼认出来。
-    if (tier < 0.22)      { w = 11 + Math.random() * 6; d = 11 + Math.random() * 6; h = 26 + Math.random() * 28; style = (Math.random() < 0.5 ? 'tower' : 'glass'); kind = 'sky'; }   // 摩天楼（少）
-    else if (tier < 0.62) { w = 13 + Math.random() * 7; d = 11 + Math.random() * 6; h = 10 + Math.random() * 11; style = (Math.random() < 0.5 ? 'brick' : (Math.random() < 0.5 ? 'painted' : 'concrete')); kind = 'apt'; }  // 居民楼
-    else                  { w = 8 + Math.random() * 5;  d = 7 + Math.random() * 5;  h = 4.5 + Math.random() * 3.5; style = (Math.random() < 0.25 ? 'shop' : (Math.random() < 0.4 ? 'wood' : (Math.random() < 0.5 ? 'brick' : (Math.random() < 0.5 ? 'stone' : 'panel')))); kind = 'house'; } // 小房子
+    // 【fix42·用户要求"建筑风格再多元一点，不要只是那三种"】
+    // 原来只有 3 种体量：sky(摩天楼) / apt(居民楼) / house(小房子)，外立面 9 种。
+    // 现在扩到 8 种体量 + 15 种外立面，并且每一档都按权重散开到多个风格上，
+    // 这样同一条街上不会再出现"一排一模一样的盒子"。
+    const R = Math.random();
+    if (tier < 0.15) {
+      // —— 摩天楼群：玻璃塔 / 退台塔 / 圆柱塔 / 双塔连廊 ——
+      if (R < 0.34)      { kind = 'sky';     style = (Math.random() < 0.5 ? 'tower' : 'glass'); }
+      else if (R < 0.58) { kind = 'stepped'; style = (Math.random() < 0.55 ? 'tower' : 'blueglass'); }
+      else if (R < 0.80) { kind = 'round';   style = (Math.random() < 0.6 ? 'blueglass' : 'glass'); }
+      else               { kind = 'twin';    style = (Math.random() < 0.5 ? 'tower' : 'marble'); }
+      w = 11 + Math.random() * 6; d = 11 + Math.random() * 6; h = 26 + Math.random() * 28;
+    } else if (tier < 0.32) {
+      // —— 板式办公楼：宽而薄 + 横向长条窗 ——
+      kind = 'slab';
+      style = ['brutal', 'blueglass', 'marble', 'panel'][Math.random() * 4 | 0];
+      w = 20 + Math.random() * 9; d = 9 + Math.random() * 4; h = 14 + Math.random() * 16;
+    } else if (tier < 0.58) {
+      // —— 居民楼：老砖 / 涂料 / 混凝土 / 维多利亚 / 大理石 / 垂直绿化 / 陶土 ——
+      kind = 'apt';
+      style = ['brick', 'painted', 'concrete', 'victorian', 'marble', 'green', 'terracotta'][Math.random() * 7 | 0];
+      w = 13 + Math.random() * 7; d = 11 + Math.random() * 6; h = 10 + Math.random() * 11;
+    } else if (tier < 0.70) {
+      // —— 联排住宅：一排 3~4 个窄单元，各自屋顶 ——
+      kind = 'row';
+      style = ['victorian', 'brick', 'terracotta', 'painted'][Math.random() * 4 | 0];
+      w = 22 + Math.random() * 8; d = 9 + Math.random() * 3; h = 7 + Math.random() * 5;
+    } else if (tier < 0.80) {
+      // —— 转角楼：体量方正 + 切角门面 ——
+      kind = 'corner';
+      style = ['marble', 'brutal', 'shop', 'concrete'][Math.random() * 4 | 0];
+      w = 14 + Math.random() * 5; d = 14 + Math.random() * 5; h = 9 + Math.random() * 8;
+    } else {
+      // —— 小房子：商铺 / 木屋 / 砖房 / 石屋 / 陶土 ——
+      kind = 'house';
+      style = ['shop', 'wood', 'brick', 'stone', 'terracotta'][Math.random() * 5 | 0];
+      w = 8 + Math.random() * 5; d = 7 + Math.random() * 5; h = 4.5 + Math.random() * 3.5;
+    }
     const bx = mx + (Math.random() - 0.5) * (30 - w), bz = mz + (Math.random() - 0.5) * (30 - d);
     // 出生房子(-104,-68)和车库(-90,-70)周边清空：任何建筑（含小房子）都别靠近，避免堵门/挡路出不去
     if (Math.hypot(bx + 104, bz + 68) < 36 || Math.hypot(bx + 90, bz + 70) < 30) continue;
@@ -2288,9 +2421,9 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
     if (kind === 'sky') {
       addSkyGlow(bx, bz, gy, w, d, h);   // 夜里整栋楼会微微发亮，楼脚给路面一点光
       // 摩天楼：顶部收窄尖顶 + 天线 + 红灯（实体：楼顶不穿透、钩爪可抓）
-      const crown = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.3, h * 0.12, 4), new THREE.MeshLambertMaterial({ color: 0x666666 }));
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.3, h * 0.12, 4), BLD_M_CROWN);
       crown.position.set(bx, gy + h + h * 0.06, bz); crown.rotation.y = Math.PI / 4; scene.add(crown);
-      const ant = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), new THREE.MeshLambertMaterial({ color: 0xcccccc }));
+      const ant = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), BLD_M_ANT);
       ant.position.set(bx, gy + h + h * 0.12 + 3, bz); scene.add(ant);
       const blinker = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff3333 }));
       blinker.position.set(bx, gy + h + h * 0.12 + 6.1, bz); scene.add(blinker);
@@ -2303,37 +2436,136 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       // （尖顶的碰撞盒保留：它和视觉圆锥的底座一样宽，是"看得见"的实体。）
     } else if (kind === 'apt') {
       if (Math.random() < 0.5) {
-        const pyr = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.5, h * 0.22, 4), new THREE.MeshLambertMaterial({ color: 0x8a3b2f }));
+        const pyr = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.5, h * 0.22, 4), BLD_M_PYR);
         pyr.position.set(bx, gy + h + h * 0.11, bz); pyr.rotation.y = Math.PI / 4; scene.add(pyr);
         const pr = Math.min(w, d) * 0.5;   // 金字塔尖底座半径（实体，楼顶不穿透）
         buildings.push({ minX: bx - pr, maxX: bx + pr, minZ: bz - pr, maxZ: bz + pr, bottom: gy + h, top: gy + h + h * 0.22 });
       } else {
-        const parapet = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.5, d * 0.96), new THREE.MeshLambertMaterial({ color: 0x666666 }));
+        const parapet = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.5, d * 0.96), BLD_M_CROWN);
         parapet.position.set(bx, gy + h + 0.25, bz); scene.add(parapet);
         if (Math.random() < 0.5) {
           const tx = bx + (Math.random() - 0.5) * (w - 2), tz = bz + (Math.random() - 0.5) * (d - 2);
-          const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 8), new THREE.MeshLambertMaterial({ color: 0x7a7a7a }));
+          const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 8), BLD_M_TANK);
           tank.position.set(tx, gy + h + 1.3, tz); scene.add(tank);
           buildings.push({ minX: tx - 0.9, maxX: tx + 0.9, minZ: tz - 0.9, maxZ: tz + 0.9, bottom: gy + h + 0.5, top: gy + h + 2.1 });   // 水箱实体
         }
       }
+    } else if (kind === 'stepped') {
+      // —— 退台塔楼：主体之上再收一级（下宽上窄），天台加女儿墙与四角装饰柱 ——
+      const w2 = w * 0.62, d2 = d * 0.62, h2 = h * 0.36;
+      const up = new THREE.Mesh(
+        uvBox(w2, h2, d2, Math.max(1, Math.min(4, Math.round(w2 / 7))), Math.max(1, Math.min(6, Math.round(h2 / 12)))),
+        buildingBodyMaterial(style));
+      up.position.set(bx, gy + h + h2 / 2, bz); scene.add(up);
+      const slabM = BLD_M_TRIM;
+      const par = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.55, d + 0.6), slabM);
+      par.position.set(bx, gy + h + 0.28, bz); scene.add(par);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const col = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.0, 0.55), slabM);
+        col.position.set(bx + sx * w2 / 2, gy + h + h2 + 1.0, bz + sz * d2 / 2); scene.add(col);
+      }
+      const cap2 = new THREE.Mesh(new THREE.BoxGeometry(w2 * 0.46, 0.9, d2 * 0.46), BLD_M_DARK);
+      cap2.position.set(bx, gy + h + h2 + 0.45, bz); scene.add(cap2);
+      buildings.push({ minX: bx - w2 / 2, maxX: bx + w2 / 2, minZ: bz - d2 / 2, maxZ: bz + d2 / 2, bottom: gy + h, top: gy + h + h2 });
+    } else if (kind === 'round') {
+      // —— 圆柱塔：整栋圆柱（外立面贴图按角度铺开），顶部檐口圈 + 设备层 + 天线 ——
+      const r0 = Math.min(w, d) / 2;
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r0, r0 * 1.05, h, 20, 1), buildingBodyMaterial(style));
+      cyl.position.set(bx, gy + h / 2, bz); scene.add(cyl);
+      const ringM = BLD_M_STEEL;
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 1.12, r0 * 1.12, 0.5, 20), ringM);
+      ring.position.set(bx, gy + h + 0.25, bz); scene.add(ring);
+      const cap3 = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.72, r0 * 0.92, 1.5, 16), BLD_M_MECH);
+      cap3.position.set(bx, gy + h + 1.25, bz); scene.add(cap3);
+      const ant2 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 5, 0.22), BLD_M_ANT);
+      ant2.position.set(bx, gy + h + 4.5, bz); scene.add(ant2);
+      buildings.push({ minX: bx - r0, maxX: bx + r0, minZ: bz - r0, maxZ: bz + r0, bottom: gy, top: gy + h });
+    } else if (kind === 'twin') {
+      // —— 双塔 + 空中连廊：两栋瘦塔并排，62% 高度处一道玻璃连廊 ——
+      const gw = Math.max(5, w * 0.33), gap = w * 0.62;
+      for (const sx of [-1, 1]) {
+        const tx2 = bx + sx * gap / 2;
+        const t = new THREE.Mesh(
+          uvBox(gw, h, d, Math.max(1, Math.min(3, Math.round(gw / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
+          buildingBodyMaterial(style));
+        t.position.set(tx2, gy + h / 2, bz); scene.add(t);
+        buildings.push({ minX: tx2 - gw / 2, maxX: tx2 + gw / 2, minZ: bz - d / 2, maxZ: bz + d / 2, bottom: gy, top: gy + h });
+      }
+      const brM = BLD_M_BRIDGE;
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2, gap - gw), 2.4, d * 0.5), brM);
+      bridge.position.set(bx, gy + h * 0.62, bz); scene.add(bridge);
+      buildings.push({ minX: bx - gap / 2, maxX: bx + gap / 2, minZ: bz - d * 0.25, maxZ: bz + d * 0.25, bottom: gy + h * 0.62 - 1.2, top: gy + h * 0.62 + 1.2 });
+    } else if (kind === 'slab') {
+      // —— 板式办公楼：平屋顶 + 女儿墙 + 机房 + 两组空调机组 ——
+      const slabM2 = BLD_M_TRIM;
+      const par2 = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.6, d + 0.4), slabM2);
+      par2.position.set(bx, gy + h + 0.3, bz); scene.add(par2);
+      const mech = new THREE.Mesh(new THREE.BoxGeometry(w * 0.3, 2.2, d * 0.5), BLD_M_MECH);
+      mech.position.set(bx - w * 0.2, gy + h + 1.4, bz); scene.add(mech);
+      const acM = BLD_M_STEEL;
+      for (let i = 0; i < 2; i++) {
+        const ac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.6), acM);
+        ac.position.set(bx + w * 0.14 + i * 2.6, gy + h + 1.1, bz + d * 0.18); scene.add(ac);
+      }
+      buildings.push({ minX: bx - w * 0.2 - w * 0.15, maxX: bx - w * 0.2 + w * 0.15, minZ: bz - d * 0.25, maxZ: bz + d * 0.25, bottom: gy + h, top: gy + h + 2.5 });
+    } else if (kind === 'row') {
+      // —— 联排住宅：3~4 个窄单元并排，各自高度略有差、各自人字顶 ——
+      const n = 3 + (Math.random() * 2 | 0), uw = w / n;
+      for (let i = 0; i < n; i++) {
+        const ux = bx - w / 2 + uw * (i + 0.5);
+        const uh = h * (0.86 + Math.random() * 0.26);
+        const u = new THREE.Mesh(
+          uvBox(uw * 0.97, uh, d, Math.max(1, Math.min(3, Math.round(uw / 7))), Math.max(1, Math.min(5, Math.round(uh / 12)))),
+          buildingBodyMaterial(style));
+        u.position.set(ux, gy + uh / 2, bz); scene.add(u);
+        addGableRoof(ux, gy, bz, uw * 0.95, d, uh);      // 人字顶落在该单元顶部
+      }
+    } else if (kind === 'corner') {
+      // —— 转角楼：主体 + 朝街角切一刀的斜面 + 底部骑楼檐口 ——
+      const cutM = new THREE.Mesh(uvBox(w * 0.52, h, d * 0.52, 2, Math.max(1, Math.min(6, Math.round(h / 12)))), buildingBodyMaterial(style));
+      cutM.position.set(bx + w * 0.26, gy + h / 2 + 0.02, bz + d * 0.26);
+      cutM.rotation.y = -Math.PI / 4;
+      scene.add(cutM);
+      const cor = new THREE.Mesh(new THREE.BoxGeometry(w * 0.99, 0.5, d * 0.99), BLD_M_TRIM);
+      cor.position.set(bx, gy + h + 0.25, bz); scene.add(cor);
+      const eave = new THREE.Mesh(new THREE.BoxGeometry(w * 1.12, 0.35, d * 1.12), BLD_M_DARK);
+      eave.position.set(bx, gy + 3.4, bz); scene.add(eave);      // 骑楼/雨篷线
+      buildings.push({ minX: bx - w * 0.26, maxX: bx + w * 0.26, minZ: bz - d * 0.26, maxZ: bz + d * 0.26, bottom: gy + 3.4, top: gy + 3.75 });
     } else {
       addGableRoof(bx, gy, bz, w, d, h);   // 小房子人字顶
     }
-    // 街景细节：广告牌 / 阳台 / 遮阳棚
-    if (kind === 'sky' && Math.random() < 0.45) {
+    // 街景细节：广告牌 / 阳台 / 遮阳棚 / 骑楼柱廊
+    // 【fix42】新增的体量也各自配上合适的街景细节，否则新楼看着"光秃秃"。
+    if ((kind === 'sky' || kind === 'stepped' || kind === 'round') && Math.random() < 0.45) {
       const bc = [0xff3366, 0x33ccff, 0xffcc00, 0x66ff66][Math.random() * 4 | 0];
       const sign = new THREE.Mesh(new THREE.BoxGeometry(Math.min(w, d) * 0.5, 2.4, 0.35), new THREE.MeshBasicMaterial({ color: bc }));
       sign.position.set(bx, gy + h + 4, bz + d / 2 + 0.4); scene.add(sign);
-    } else if (kind === 'apt') {
+    } else if (kind === 'twin' && Math.random() < 0.5) {
+      const bc = [0x33ccff, 0xffcc00, 0xff3366][Math.random() * 3 | 0];
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(2.6, 8, 0.6), new THREE.MeshBasicMaterial({ color: bc }));
+      sign.position.set(bx + w * 0.31, gy + h * 0.5, bz + d / 2 + 0.45); scene.add(sign);
+    } else if (kind === 'slab') {
+      // 板楼下：一排骑楼柱 + 通长雨篷（最能体现"办公楼裙房"）
+      const pilM = BLD_M_STEEL;
+      for (let i = -2; i <= 2; i++) {
+        const pil = new THREE.Mesh(new THREE.BoxGeometry(0.55, 3.4, 0.55), pilM);
+        pil.position.set(bx + i * w * 0.19, gy + 1.7, bz + d / 2 + 1.1); scene.add(pil);
+        treeObstacles.push({ x: bx + i * w * 0.19, z: bz + d / 2 + 1.1, r: 0.4 });
+      }
+      const can = new THREE.Mesh(new THREE.BoxGeometry(w * 0.92, 0.35, 2.0), BLD_M_DARK);
+      can.position.set(bx, gy + 3.55, bz + d / 2 + 1.1); scene.add(can);
+    } else if (kind === 'apt' || kind === 'row') {
       if (Math.random() < 0.6) {
-        const railM = new THREE.MeshLambertMaterial({ color: 0x30353a });
-        const floorM = new THREE.MeshLambertMaterial({ color: 0x8b8f94 });
+        const railM = BLD_M_RAIL;
+        const floorM = BLD_M_FLOOR;
+        const span = kind === 'row' ? Math.min(2.2, w / 5) : 2.2;
         for (let by = gy + 3.2; by < gy + h - 0.6; by += 4.2) {
-          const bal = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 0.9), floorM);
-          bal.position.set(bx, by, bz + d / 2 + 0.45); scene.add(bal);
-          const rail = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.55, 0.06), railM);
-          rail.position.set(bx, by + 0.32, bz + d / 2 + 0.86); scene.add(rail);
+          for (let k = -1; k <= 1; k += 2) {
+            const bal = new THREE.Mesh(new THREE.BoxGeometry(span, 0.12, 0.9), floorM);
+            bal.position.set(bx + k * w * 0.26, by, bz + d / 2 + 0.45); scene.add(bal);
+            const rail = new THREE.Mesh(new THREE.BoxGeometry(span, 0.55, 0.06), railM);
+            rail.position.set(bx + k * w * 0.26, by + 0.32, bz + d / 2 + 0.86); scene.add(rail);
+          }
         }
       }
       if (Math.random() < 0.35) {
@@ -2341,6 +2573,11 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
         const sign = new THREE.Mesh(new THREE.BoxGeometry(4, 1.8, 0.3), new THREE.MeshBasicMaterial({ color: bc }));
         sign.position.set(bx, gy + h + 1.2, bz + d / 2 + 0.4); scene.add(sign);
       }
+    } else if (kind === 'corner' && Math.random() < 0.7) {
+      // 转角楼：底层通长橱窗灯带
+      const bc = [0xffe9a8, 0xa8e6ff][Math.random() * 2 | 0];
+      const win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 2.2, 0.3), new THREE.MeshBasicMaterial({ color: bc }));
+      win.position.set(bx, gy + 1.6, bz + d / 2 + 0.16); scene.add(win);
     } else if (kind === 'house' && Math.random() < 0.7) {
       addAwning(bx, gy, bz + d / 2, w * 0.6);
     }
@@ -3585,7 +3822,23 @@ const CAR_MAT = {
   brake:  new THREE.MeshBasicMaterial({ color: 0xd41818 }),
   amber:  new THREE.MeshBasicMaterial({ color: 0xff8a00 }),
   work:   new THREE.MeshBasicMaterial({ color: 0xffc23a }),
-  yellow: new THREE.MeshLambertMaterial({ color: 0xf0b429 })
+  yellow: new THREE.MeshLambertMaterial({ color: 0xf0b429 }),
+  // ===== 【fix42】车辆精细化的新材料 =====
+  // 尾灯做成"灯座 + 灯罩"两件：灯座是深色塑料壳，灯罩才是发亮的部分。
+  // 只放一块红条的话，从后面看就是一根贴纸；有了深色壳才有"嵌在车尾里"的立体感。
+  tailHousing: new THREE.MeshLambertMaterial({ color: 0x2a1116 }),
+  // 尾灯灯罩基准色（暗红 = 未刹车）。每辆车克隆一份，刹车时由 updateDayNight 提亮。
+  // 之前只有一根横贯车尾的红条，且没有灯座，看起来不像尾灯 —— 这是用户反馈的根因。
+  tailDim: new THREE.MeshBasicMaterial({ color: 0x8f1414 }),
+  drl:    new THREE.MeshBasicMaterial({ color: 0xeaf4ff }),   // 日行灯条
+  grille: new THREE.MeshLambertMaterial({ color: 0x1b1e22 }), // 进气格栅底色
+  plate:  new THREE.MeshLambertMaterial({ color: 0xd9dee3 }), // 车牌
+  plateL: new THREE.MeshBasicMaterial({ color: 0xfff0c0 }),   // 牌照灯/车厢灯
+  reflector: new THREE.MeshBasicMaterial({ color: 0x6b1414 }),// 后杠反光条（不刹车也微亮）
+  mud:    new THREE.MeshLambertMaterial({ color: 0x17191c }), // 挡泥板/下护板
+  rust:   new THREE.MeshLambertMaterial({ color: 0x6b4a33 }), // 货车锈迹/木栏
+  // 刹车卡钳：用 Lambert（不是自发光 amber），这样整个轮子能被顶点色融成 1 个网格
+  caliper: new THREE.MeshLambertMaterial({ color: 0xb0281c })
 };
 
 const CAR_SHAPES = {
@@ -3763,11 +4016,34 @@ function makeCar(kind, color, withDriver) {
     const wg = new THREE.Group();
     const tire = new THREE.Mesh(new THREE.TorusGeometry(wheelR - tube, tube, 8, 16), M.rubber);
     tire.rotation.y = Math.PI / 2; wg.add(tire);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(wheelR * 0.68, wheelR * 0.68, wheelW * 0.38, 14), M.chrome);
-    rim.rotation.z = Math.PI / 2; wg.add(rim);
+    // 【fix42】轮毂从"一块饼"升级成有结构的轮圈：外圈轮辋 + 内凹盘 + 5 根辐条 + 中心盖。
+    // 全部是静态件，会一起融进顶点色网格，不增加 draw call。
+    const rimR = wheelR * 0.70;
+    const rimOuter = new THREE.Mesh(new THREE.CylinderGeometry(rimR, rimR, wheelW * 0.34, 14), M.chrome);
+    rimOuter.rotation.z = Math.PI / 2; wg.add(rimOuter);
+    const rimFace = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.80, rimR * 0.80, wheelW * 0.40, 14), M.trim);
+    rimFace.rotation.z = Math.PI / 2; wg.add(rimFace);
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2;
+      const spoke = new THREE.Mesh(new THREE.BoxGeometry(wheelW * 0.42, rimR * 0.30, rimR * 1.40), M.chrome);
+      spoke.position.set(0, Math.sin(a) * rimR * 0.42, Math.cos(a) * rimR * 0.42);
+      spoke.rotation.x = -a;
+      wg.add(spoke);
+    }
+    const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.26, rimR * 0.26, wheelW * 0.46, 10), M.chrome);
+    hubCap.rotation.z = Math.PI / 2; wg.add(hubCap);
+    // 刹车盘 + 卡钳（透过辐条能看到，轮子立刻"有内容"）
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.62, rimR * 0.62, 0.03, 14), M.steel);
+    disc.rotation.z = Math.PI / 2; wg.add(disc);
+    const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.06, rimR * 0.52, rimR * 0.34), M.caliper);
+    caliper.position.set(0, rimR * 0.46, 0); wg.add(caliper);
+    // 轮子内部先按顶点色融成 1 个网格：轮子整体跟着悬挂动，所以它必须留在 keepParts 里
+    // 不参与车身合批；但轮内零件彼此是静止的，可以先融掉 —— 否则新加的辐条/刹车盘
+    // 会让每个轮子从 2 个 Mesh 涨到 9 个，四个轮子就是 +28 draw call。
+    try { mergeVehicleByVertexColor(wg, null, true); } catch (e) {}
     wg.position.set(wx, wheelR, wz);
     g.add(wg);
-    wheels.push({ group: wg, x: wx, z: wz, tire, rim, suspension: { restY: wheelR, travel: 0.16, stiffness: 35, damping: 8 } });
+    wheels.push({ group: wg, x: wx, z: wz, tire, rim: rimOuter, suspension: { restY: wheelR, travel: 0.16, stiffness: 35, damping: 8 } });
   }
   for (const side of [-1, 1]) for (const [wz, count] of S.axles || [[S.wb / 2, 1], [-S.wb / 2, 1]]) for (let k = 0; k < count; k++) addWheel(side * (track - k * wheelW * 0.95), wz);
 
@@ -3813,9 +4089,21 @@ function makeCar(kind, color, withDriver) {
     }
     for (const side of [-1, 1]) {
       box(0.03, 0.62, 1.0, M.glass, side * (W * 0.485), offY + 1.1, cabZ - 0.15);
-      box(0.16, 0.12, 0.3, M.trim, side * (W / 2 + 0.1), offY + 1.34, cabZ + 0.5);
-      box(0.1, 0.22, 0.24, M.lamp, side * (W * 0.34), offY + 0.32, cabZ + cabL / 2 - 0.02);
+      // 后视镜：臂 + 壳 + 镜面（大车镜子大，外伸更多）
+      box(0.5, 0.06, 0.07, M.trim, side * (W / 2 + 0.24), offY + 1.42, cabZ + 0.62);
+      box(0.09, 0.46, 0.24, M.trim, side * (W / 2 + 0.48), offY + 1.42, cabZ + 0.62);
+      box(0.02, 0.40, 0.20, M.glass, side * (W / 2 + 0.53), offY + 1.42, cabZ + 0.62);
+      // 前照灯：灯座 + 灯罩 + 日行灯
+      box(0.30, 0.26, 0.05, M.trim, side * (W * 0.34), offY + 0.32, cabZ + cabL / 2 - 0.005);
+      box(0.20, 0.17, 0.05, M.lamp, side * (W * 0.34), offY + 0.32, cabZ + cabL / 2 - 0.035);
+      box(0.07, 0.22, 0.045, M.drl, side * (W * 0.34) + side * 0.13, offY + 0.32, cabZ + cabL / 2 - 0.035);
+      // 前转向灯 + 侧标灯
+      box(0.09, 0.10, 0.05, M.amber, side * (W * 0.46), offY + 0.30, cabZ + cabL / 2 - 0.03);
     }
+    // 驾驶室前脸：进气格栅 + 前车牌 + 前杠
+    box(W * 0.56, 0.52, 0.05, M.grille, 0, offY + 0.86, cabZ + cabL / 2 - 0.012);
+    for (let i = 0; i < 4; i++) box(W * 0.52, 0.05, 0.05, M.chrome, 0, offY + 0.66 + i * 0.14, cabZ + cabL / 2 - 0.035);
+    box(0.5, 0.14, 0.03, M.plate, 0, offY + 0.30, cabZ + cabL / 2 - 0.02);
     box(W * 0.9, 0.26, 0.2, M.steel, 0, offY + 0.02, cabZ + cabL / 2 + 0.02);
     for (let i = 0; i < 2; i++) box(W * 0.5, 0.05, 0.04, M.dark, 0, offY + 0.36 + i * 0.13, cabZ + cabL / 2 + 0.01);
     beltY = offY + 0.9;
@@ -3826,6 +4114,20 @@ function makeCar(kind, color, withDriver) {
       box(W * 0.99, 2.3, 4.3, paint, 0, offY + 1.2, boxZ);
       for (const side of [-1, 1]) for (let i = 0; i < 5; i++) box(0.05, 2.2, 0.09, paintDark, side * (W * 0.5), offY + 1.2, boxZ - 1.95 + i * 0.95);
       box(W * 0.9, 0.06, 0.06, M.chrome, 0, offY + 0.1, boxZ);
+      // 厢体后门：双开门缝 + 铰链 + 门闩 + 尾灯护板
+      box(W * 0.94, 2.16, 0.06, paintDark, 0, offY + 1.2, boxZ - 2.17);
+      box(0.05, 2.10, 0.07, M.trim, 0, offY + 1.2, boxZ - 2.20);
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 3; i++) box(0.10, 0.10, 0.09, M.steel, side * (W * 0.40), offY + 0.35 + i * 0.72, boxZ - 2.21);
+        box(0.07, 0.62, 0.07, M.steel, side * 0.30, offY + 1.05, boxZ - 2.22);
+      }
+      // 厢体侧标灯（琥珀，沿厢体两侧，夜间像真货车）
+      for (const side of [-1, 1]) for (let i = 0; i < 5; i++) box(0.05, 0.07, 0.07, M.amber, side * (W * 0.5 + 0.005), offY + 1.75, boxZ - 1.9 + i * 0.95);
+      // 排气管立管（驾驶室后方，镀铬 + 防烫罩）
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.4, 10), M.chrome);
+      st.position.set(W * 0.44, offY + 1.75, cabZ - cabL / 2 - 0.25); g.add(st);
+      const stShield = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.0, 10, 1, true), M.steel);
+      stShield.position.set(W * 0.44, offY + 2.1, cabZ - cabL / 2 - 0.25); g.add(stShield);
     } else {
       box(W * 0.99, 0.22, 4.0, M.steel, 0, offY + 0.12, -1.3);
       const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.7, 0.5, 12), M.yellow);
@@ -3859,6 +4161,32 @@ function makeCar(kind, color, withDriver) {
     const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.7, 8), M.chrome);
     stack.position.set(W * 0.47, offY + 0.5, cabZ - cabL / 2 - 0.1); g.add(stack);
     for (const side of [-1, 1]) box(0.04, 0.34, 0.5, M.trim, side * (W * 0.5), offY - 0.34, -3.0);
+    // 【fix42·用户点名】货车/吊车尾部灯光总成 —— 这一类车原来**完全没有尾灯**，
+    // 只有车头两个灯罩。现在补齐：左右尾灯座 + 红/琥珀/倒车三段灯罩 + 后防撞梁 +
+    // 反光条 + 后牌照与牌照灯，以及尾部上沿的高位灯。
+    {
+      const tl = S.truck ? -2.99 : -3.34;                 // 尾部灯面 z（卡车在厢体后门，吊车在车尾平台）
+      const tly = S.truck ? offY + 0.34 : offY + 0.12;    // 灯面高度（吊车平台很薄，要压低）
+      const tailMat = M.tailDim.clone();
+      const revMat = new THREE.MeshBasicMaterial({ color: 0x555049 });
+      const amberMatT = M.amber.clone();
+      for (const side of [-1, 1]) {
+        const lx = side * W * 0.34;
+        box(0.36, 0.28, 0.05, M.tailHousing, lx, tly, tl + 0.005);          // 灯座
+        const tlA = box(0.23, 0.18, 0.05, tailMat, lx, tly + 0.04, tl - 0.03);   // 主尾灯（可点亮）
+        box(0.20, 0.07, 0.05, amberMatT, lx, tly - 0.09, tl - 0.03);        // 转向灯
+        const rvA = box(0.13, 0.09, 0.05, revMat, lx - side * 0.21, tly + 0.04, tl - 0.03);  // 倒车灯
+        tlA.userData.keepAnimated = true; rvA.userData.keepAnimated = true;
+      }
+      box(W * 0.92, 0.13, 0.12, M.steel, 0, offY - 0.22, tl + 0.07);        // 后防撞梁
+      box(W * 0.80, 0.05, 0.04, M.reflector, 0, offY - 0.10, tl + 0.005);   // 反光条
+      box(0.50, 0.15, 0.03, M.plate, 0, tly - 0.05, tl - 0.03);             // 后牌照
+      box(0.32, 0.03, 0.03, M.plateL, 0, tly + 0.05, tl - 0.015);           // 牌照灯
+      const hiA = box(W * 0.30, 0.06, 0.05, tailMat, 0, S.truck ? offY + 2.20 : offY + 0.56, tl + 0.02);  // 高位尾灯
+      hiA.userData.keepAnimated = true;
+      g.userData.brakeMat = tailMat;
+      g.userData.reverseMat = revMat;
+    }
     driverAt = [-W * 0.2, offY + 0.62, cabZ - 0.35];
   } else {
     add(profileGeometry(S.hull, W, 0.04), paint, 0, offY, 0);
@@ -3932,23 +4260,79 @@ function makeCar(kind, color, withDriver) {
     }
     if (S.hoops) for (const hz of S.hoops) box(W * 0.66, 0.16, 0.16, paintDark, 0, offY + 0.78, hz);
 
-    box(W * 0.9, 0.2, 0.18, M.trim, 0, offY + 0.16, nose[0] - 0.04);
-    box(W * 0.88, 0.2, 0.16, M.trim, 0, offY + 0.18, tail[0] + 0.04);
-    for (let i = 0; i < 2; i++) box(W * 0.42, 0.05, 0.04, M.dark, 0, offY + noseTop * 0.42 + i * 0.1, nose[0] - 0.02);
+    // ========== 【fix42】前脸总成：灯座 + 灯罩 + 日行灯 + 格栅 + 前杠 + 雾灯 + 车牌 ==========
+    // 原来车头只有两块悬空的发光片（0.32×0.12）＋一个光秃秃的黑杠，没有灯座、没有格栅。
     for (const side of [-1, 1]) {
-      const hl = box(0.32, 0.12, 0.07, M.lamp, side * W * 0.31, offY + noseTop * 0.84, nose[0] - 0.02);
+      const hx2 = side * W * 0.31;
+      // 灯座：比灯罩大一圈的深色外壳 → 灯"嵌"在车头里
+      box(0.40, 0.18, 0.05, M.trim, hx2, offY + noseTop * 0.84, nose[0] - 0.005);
+      // 主灯罩（外侧）+ 日行灯条（内侧）
+      const hl = box(0.26, 0.12, 0.05, M.lamp, hx2 - side * 0.035, offY + noseTop * 0.84, nose[0] - 0.035);
       hl.rotation.z = side * 0.12;
-      box(0.1, 0.06, 0.05, M.amber, side * W * 0.42, offY + tailTop * 0.62, tail[0] + 0.02);
-      box(0.2, 0.06, 0.05, M.chrome, side * (W / 2 + 0.09), beltY + 0.14, nose[0] - 0.72);
-      box(0.05, 0.1, doorLen * 0.34, M.chrome, side * (W / 2 + 0.02), beltY - 0.1, doorZ - 0.1);
-      box(0.06, 0.12, L * 0.6, M.trim, side * (W / 2 + 0.01), offY + 0.1, 0);
+      box(0.08, 0.10, 0.045, M.drl, hx2 + side * 0.145, offY + noseTop * 0.84, nose[0] - 0.035);
+      // 雾灯（前杠下方两角）
+      box(0.14, 0.08, 0.05, M.lamp, side * W * 0.34, offY + 0.155, nose[0] - 0.02);
+      box(0.17, 0.11, 0.04, M.trim, side * W * 0.34, offY + 0.155, nose[0] + 0.005);
     }
-    const brakeMat = M.brake.clone();
-    box(W * 0.76, 0.07, 0.05, brakeMat, 0, offY + tailTop * 0.72, tail[0] + 0.02);
-    g.userData.brakeMat = brakeMat;
+    // 进气格栅：深色底 + 三道镀铬横条 + 中央车标
+    box(W * 0.52, noseTop * 0.36, 0.05, M.grille, 0, offY + noseTop * 0.55, nose[0] - 0.015);
+    for (let i = 0; i < 3; i++) box(W * 0.48, 0.035, 0.045, M.chrome, 0, offY + noseTop * 0.43 + i * noseTop * 0.12, nose[0] - 0.04);
+    box(0.13, 0.11, 0.05, M.chrome, 0, offY + noseTop * 0.55, nose[0] - 0.055);
+    // 前杠下唇 + 前车牌
+    box(W * 0.95, 0.10, 0.15, M.trim, 0, offY + 0.05, nose[0] + 0.02);
+    box(0.46, 0.13, 0.03, M.plate, 0, offY + 0.21, nose[0] - 0.025);
+    // ========== 车侧细节：后视镜 + 门把手 + 门缝 + 防擦条 + 侧转向灯 ==========
+    for (const side of [-1, 1]) {
+      const mirZ = nose[0] - 1.05;
+      // 后视镜：镜臂 + 镜壳 + 镜面（原来整车没有后视镜）
+      box(0.16, 0.05, 0.06, M.trim, side * (W / 2 + 0.07), beltY + 0.20, mirZ);
+      box(0.10, 0.13, 0.19, paint, side * (W / 2 + 0.16), beltY + 0.26, mirZ);
+      box(0.02, 0.10, 0.15, M.glass, side * (W / 2 + 0.215), beltY + 0.26, mirZ);
+      // 门把手（镀铬，前一后一）
+      box(0.06, 0.05, 0.22, M.chrome, side * (W / 2 + 0.02), beltY - 0.20, doorZ + doorLen * 0.30);
+      box(0.06, 0.05, 0.22, M.chrome, side * (W / 2 + 0.02), beltY - 0.20, doorZ - doorLen * 0.62);
+      // 门缝（前后各一道竖线）
+      for (const sz of [doorZ + doorLen * 0.52, doorZ - doorLen * 0.50]) box(0.04, doorH * 0.94, 0.035, M.trim, side * (W / 2 + 0.005), offY + 0.30 + doorH * 0.47, sz);
+      // 侧转向灯（前翼子板，琥珀色）
+      box(0.05, 0.055, 0.11, M.amber, side * (W / 2 + 0.008), beltY - 0.02, nose[0] - 1.45);
+      // 防擦条 + 侧裙
+      box(0.06, 0.12, L * 0.6, M.trim, side * (W / 2 + 0.01), offY + 0.10, 0);
+      box(0.05, 0.10, L * 0.52, M.mud, side * (W / 2 - 0.01), offY + 0.02, 0);
+      // 后轮挡泥板
+      box(0.06, 0.22, 0.30, M.mud, side * (W / 2 + 0.01), offY - 0.12, -S.wb / 2 - 0.45);
+    }
+    // 车顶天线 / 鲨鱼鳍
+    box(0.05, 0.13, 0.22, paintDark, 0, roofY + 0.07, tail[0] + 0.55);
+    // ========== 【fix42·用户点名】车尾灯总成 ==========
+    // 每侧一组：深色灯座 + 红色灯罩（刹车提亮）+ 琥珀转向段 + 倒车白灯。
+    // 原来的做法只有一根横贯车尾的红条，没有灯座也没有左右分组，看起来不像尾灯。
+    const tailMat = M.tailDim.clone();
     const reverseMat = new THREE.MeshBasicMaterial({ color: 0x555049 });
-    for (const side of [-1, 1]) box(0.16, 0.1, 0.05, reverseMat, side * W * 0.3, offY + tailTop * 0.46, tail[0] + 0.02);
+    const amberMat = M.amber.clone();
+    for (const side of [-1, 1]) {
+      const lx = side * W * 0.33;
+      const ly = offY + tailTop * 0.74;
+      // 灯座（深色外壳，横跨主灯 + 转向灯）
+      box(0.44, 0.21, 0.05, M.tailHousing, lx, ly, tail[0] + 0.005);
+      // 主尾灯罩（靠内，红色，可点亮）
+      const tlLens = box(0.26, 0.15, 0.05, tailMat, lx - side * 0.05, ly, tail[0] - 0.028);
+      // 转向灯段（靠外，琥珀色）
+      box(0.10, 0.15, 0.05, amberMat, lx + side * 0.145, ly, tail[0] - 0.028);
+      // 倒车灯（主灯下方，白）
+      const rvLens = box(0.20, 0.08, 0.05, reverseMat, lx - side * 0.04, ly - 0.155, tail[0] - 0.026);
+      // 这两片灯罩的材质颜色要在刹车/倒车时实时改 → 必须躲开顶点色合并（合并会把颜色烘进顶点）
+      tlLens.userData.keepAnimated = true;
+      rvLens.userData.keepAnimated = true;
+    }
+    // 高位刹车灯（后窗上沿中央，随刹车一起亮）
+    const hiBrake = box(W * 0.40, 0.055, 0.04, tailMat, 0, offY + tailTop * 1.42, tail[0] + 0.30);
+    hiBrake.userData.keepAnimated = true;
+    g.userData.brakeMat = tailMat;
     g.userData.reverseMat = reverseMat;
+    // 后杠反光条 + 后车牌 + 牌照灯
+    box(W * 0.74, 0.05, 0.04, M.reflector, 0, offY + 0.20, tail[0] + 0.005);
+    box(0.46, 0.13, 0.03, M.plate, 0, offY + tailTop * 0.42, tail[0] - 0.025);
+    box(0.30, 0.03, 0.03, M.plateL, 0, offY + tailTop * 0.42 + 0.09, tail[0] - 0.01);
     for (let i = 0; i < (S.exhaust || 0); i++) {
       const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.24, 8), M.chrome);
       ex.rotation.x = Math.PI / 2;
@@ -4063,22 +4447,30 @@ function makeCar(kind, color, withDriver) {
   }
 g.userData.spec = { L, W, H, cabH: Math.max(0.3, roofY - beltY), wheelR, wheelW, offY, baseY };
 if (withDriver && driverAt) g.userData.driverAt = driverAt;
-// 【性能】把车身所有静态零件按材质合并：一辆轿车原来是 39 个独立 Mesh，合并后只剩十来个。
-// 外观一模一样（顶点位置一个不动），但绘制调用直接降到三分之一以下 —— 这是手机端最关键的一刀。
-// 车轮（要跟着悬挂上下动）、车门（会开关）、警灯（要闪烁）、司机（抢车后要消失）保持独立。
-try {
-  const keepParts = [];
-  for (const w of wheels) if (w && w.group) keepParts.push(w.group);
-  if (doorL) keepParts.push(doorL);
-  if (doorR) keepParts.push(doorR);
-  if (g.userData.driver) keepParts.push(g.userData.driver);
-  if (g.userData.lightbar) keepParts.push(g.userData.lightbar);
-  if (g.userData.lightbarR) keepParts.push(g.userData.lightbarR);
-  if (g.userData.lightbarB) keepParts.push(g.userData.lightbarB);
-  if (g.userData.lightbarFlareR) keepParts.push(g.userData.lightbarFlareR);
-  if (g.userData.lightbarFlareB) keepParts.push(g.userData.lightbarFlareB);
-  mergeStaticChildren(g, keepParts);
-} catch (e) { console.error('[merge car error]', e); }
+// 【性能】车身静态零件合并。
+  // 【fix42 改动】从 mergeStaticChildren（按材质合并，一辆车仍剩 ~20 个 Mesh）换成
+  // mergeVehicleByVertexColor（按顶点色合并，同渲染方式的零件融成 1 个 Mesh）。
+  // 这样新加的后视镜/门缝/格栅/车牌/挡泥板/辐条等几十个细节件几乎不花 draw call；
+  // 会动的子树（车轮/车门/警灯/司机）和"要实时变色"的灯罩（keepAnimated）保持独立。
+  // 带贴图的贴花（警车）也必须保留 —— 顶点色合并只保留 position/normal/color，会丢掉 UV。
+  try {
+    const keepParts = [];
+    for (const w of wheels) if (w && w.group) keepParts.push(w.group);
+    if (doorL) keepParts.push(doorL);
+    if (doorR) keepParts.push(doorR);
+    if (g.userData.driver) keepParts.push(g.userData.driver);
+    if (g.userData.lightbar) keepParts.push(g.userData.lightbar);
+    if (g.userData.lightbarR) keepParts.push(g.userData.lightbarR);
+    if (g.userData.lightbarB) keepParts.push(g.userData.lightbarB);
+    if (g.userData.lightbarFlareR) keepParts.push(g.userData.lightbarFlareR);
+    if (g.userData.lightbarFlareB) keepParts.push(g.userData.lightbarFlareB);
+    g.traverse(o => {
+      if (!o.isMesh || !o.userData) return;
+      if (o.userData.keepAnimated || o.userData.copDecal) keepParts.push(o);
+      if (o.material && o.material.map) keepParts.push(o);   // 任何带贴图的零件
+    });
+    mergeVehicleByVertexColor(g, keepParts);
+  } catch (e) { console.error('[merge car error]', e); }
 return g;
 }
 function randomCarStyle() {
@@ -4098,94 +4490,170 @@ function randomCarStyle() {
   return { kind, color };
 }
 
-// 自行车（初始车辆；两轮大轮 + 三角车架 + 车把 + 座垫 + 菜篮）
+// 自行车（初始车辆；辐条大轮 + 完整车架 + 挡泥板 + 链条传动 + 前后灯）
+// 【fix42】整体重做：原来只有 2 个实心圆盘当轮子、8 根方管当车架，没有辐条/挡泥板/
+// 链条/脚踏/刹车，看起来像"钢筋焊的架子"。现在按真车结构补齐，且全部是静态件，
+// 会被顶点色合并，不增加 draw call。
 function makeBicycle(color) {
   const g = new THREE.Group();
   const bodyM = new THREE.MeshLambertMaterial({ color });
   const darkM = new THREE.MeshLambertMaterial({ color: 0x181818 });
   const chromeM = new THREE.MeshLambertMaterial({ color: 0xc9c9c9 });
   const seatM = new THREE.MeshLambertMaterial({ color: 0x222222 });
-  const WR = 0.48;
-  const tireG = new THREE.CylinderGeometry(WR, WR, 0.09, 18); tireG.rotateZ(Math.PI / 2);
   const tireM = new THREE.MeshLambertMaterial({ color: 0x111111 });
-  const hubG = new THREE.CylinderGeometry(0.1, 0.1, 0.12, 8); hubG.rotateZ(Math.PI / 2);
-  const hubM = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+  const frameM = new THREE.MeshLambertMaterial({ color: 0xd8dde2 });   // 挡泥板/货架（浅灰）
+  const redM = new THREE.MeshBasicMaterial({ color: 0xc41f1f });       // 尾灯/后反光片
+  const whiteM = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });     // 前灯/前反光片
+  const add = (geo, mat, x, y, z, rx, ry, rz) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz;
+    g.add(m); return m;
+  };
+  const WR = 0.48;
+  // ---- 轮子：外胎 + 轮辋 + 辐条 + 花鼓（两个轮子各 12 根辐条）----
   for (const pz of [0.85, -0.85]) {
-    const tire = new THREE.Mesh(tireG, tireM); tire.position.set(0, WR, pz); g.add(tire);
-    const hub = new THREE.Mesh(hubG, hubM); hub.position.set(0, WR, pz); g.add(hub);
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(WR - 0.045, 0.045, 6, 20), tireM);
+    tire.rotation.y = Math.PI / 2; tire.position.set(0, WR, pz); g.add(tire);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(WR - 0.10, 0.022, 6, 20), chromeM);
+    rim.rotation.y = Math.PI / 2; rim.position.set(0, WR, pz); g.add(rim);
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      add(new THREE.BoxGeometry(0.012, WR * 0.92, 0.012), chromeM, 0, WR + Math.sin(a) * WR * 0.44, pz + Math.cos(a) * WR * 0.44, -a);
+    }
+    add(new THREE.CylinderGeometry(0.055, 0.055, 0.14, 8), chromeM, 0, WR, pz, 0, 0, Math.PI / 2);
   }
-  // 下管（车头到底部支架）
-  const down = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.35), bodyM);
-  down.position.set(0, 0.72, 0); down.rotation.x = -0.28; g.add(down);
-  // 座管（竖直）
-  const seatT = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.06), bodyM);
-  seatT.position.set(0, 0.82, -0.45); g.add(seatT);
-  // 上管（水平）
-  const top = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.9), bodyM);
-  top.position.set(0, 1.05, 0.15); g.add(top);
-  // 头管 + 前叉
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), bodyM);
-  head.position.set(0, 1.15, 0.75); head.rotation.x = -0.3; g.add(head);
-  // 车把
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.05), chromeM);
-  bar.position.set(0, 1.38, 0.85); g.add(bar);
-  // 座垫
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.32), seatM);
-  seat.position.set(0, 1.12, -0.45); g.add(seat);
-  // 脚踏曲柄
-  const crank = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), chromeM);
-  crank.position.set(0, 0.48, 0); g.add(crank);
-  // 前菜篮
-  const basket = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.3), new THREE.MeshLambertMaterial({ color: 0x8a6a3b }));
-  basket.position.set(0, 1.0, 0.85); g.add(basket);
+  // ---- 车架：下管 + 上管 + 座管 + 头管 + 后叉（后上叉/后下叉）----
+  add(new THREE.BoxGeometry(0.055, 0.055, 1.32), bodyM, 0, 0.74, 0.05, -0.30);          // 下管
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.92), bodyM, 0, 1.02, 0.16);                     // 上管
+  add(new THREE.BoxGeometry(0.05, 0.52, 0.05), bodyM, 0, 0.83, -0.44);                    // 座管
+  add(new THREE.BoxGeometry(0.055, 0.42, 0.055), bodyM, 0, 1.13, 0.76, -0.30);            // 头管
+  for (const s of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.035, 0.035, 0.62), bodyM, s * 0.055, 0.72, -0.52, -0.16); // 后下叉
+    add(new THREE.BoxGeometry(0.035, 0.035, 0.56), bodyM, s * 0.055, 0.92, -0.52, 0.34);  // 后上叉
+    add(new THREE.BoxGeometry(0.03, 0.62, 0.03), chromeM, s * 0.075, 0.95, 0.80, -0.28);  // 前叉
+  }
+  // ---- 车把 + 把套 + 刹车把手 + 车铃 ----
+  add(new THREE.BoxGeometry(0.52, 0.045, 0.045), chromeM, 0, 1.38, 0.84);
+  for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.028, 0.028, 0.13, 8), darkM, s * 0.20, 1.38, 0.84, 0, 0, Math.PI / 2);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.10, 0.03, 0.03), darkM, s * 0.15, 1.34, 0.79);
+  add(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 10), chromeM, -0.15, 1.44, 0.80, Math.PI / 2);
+  // ---- 座垫（带座弓）----
+  add(new THREE.BoxGeometry(0.20, 0.075, 0.30), seatM, 0, 1.13, -0.44);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.02, 0.10, 0.02), chromeM, s * 0.05, 1.02, -0.44);
+  // ---- 传动：牙盘 + 曲柄 + 脚踏 + 链条 + 飞轮 ----
+  add(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 16), chromeM, 0, 0.48, 0.02, 0, 0, Math.PI / 2);
+  for (const s of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.03, 0.30, 0.05), darkM, s * 0.09, 0.48 + s * 0.05, 0.02, 0, 0, s * 0.9);
+    add(new THREE.BoxGeometry(0.09, 0.025, 0.13), darkM, s * 0.17, 0.36 + s * 0.10, 0.02);
+  }
+  add(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 12), chromeM, 0, 0.48, -0.83, 0, 0, Math.PI / 2);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.018, 0.035, 1.02), darkM, s * 0.075, 0.50, -0.40, -0.16);
+  // ---- 挡泥板（前后各一，半圆弧用几段拼）----
+  for (const [pz, dir] of [[0.85, 1], [-0.85, -1]]) {
+    for (let i = -2; i <= 2; i++) {
+      const a = i * 0.42;
+      add(new THREE.BoxGeometry(0.075, 0.022, 0.20), frameM, 0, WR + Math.cos(a) * (WR + 0.03), pz + dir * Math.sin(a) * (WR + 0.03), dir * a);
+    }
+  }
+  // ---- 后货架 + 撑脚 ----
+  add(new THREE.BoxGeometry(0.24, 0.02, 0.36), frameM, 0, 0.90, -0.78);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.02, 0.20, 0.02), chromeM, s * 0.10, 0.80, -0.78);
+  add(new THREE.BoxGeometry(0.025, 0.34, 0.025), chromeM, -0.11, 0.30, -0.55, 0, 0, 0.22);
+  // ---- 前菜篮 ----
+  add(new THREE.BoxGeometry(0.34, 0.24, 0.28), new THREE.MeshLambertMaterial({ color: 0x8a6a3b }), 0, 1.06, 0.86);
+  // ---- 灯光：前白灯 + 尾红灯 + 前后反光片（用户点名要的"车尾灯"，自行车也有）----
+  add(new THREE.BoxGeometry(0.09, 0.07, 0.06), whiteM, 0, 1.10, 0.99);          // 前灯
+  add(new THREE.BoxGeometry(0.07, 0.06, 0.05), redM, 0, 0.94, -0.96);           // 尾灯
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.03), redM, 0, 0.62, -0.96);           // 后反光片
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.03), whiteM, 0, 1.24, 0.93);          // 前反光片
   g.scale.setScalar(0.9);
+  // 【性能】整车静态零件按顶点色融合（自行车所有零件彼此静止，可以全融）。
+  // 重做后零件从 12 个涨到 76 个，不融合的话每辆自行车就是 76 次绘制调用。
+  try { mergeVehicleByVertexColor(g, null, true); } catch (e) {}
   return g;
 }
 
 // 摩托车（带骑手）
+// 【fix42】补齐真车结构：前叉/减震、前挡泥板、仪表、后视镜、尾灯、转向灯、
+// 链条护罩、后挡泥板、消音器与防烫罩、脚踏、边撑。
 function makeMotorcycle(color) {
   const g = new THREE.Group();
   const bodyM = new THREE.MeshLambertMaterial({ color });
   const darkM = new THREE.MeshLambertMaterial({ color: 0x151515 });
   const chromeM = new THREE.MeshLambertMaterial({ color: 0xbfbfbf });
   const seatM = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  const steelM = new THREE.MeshLambertMaterial({ color: 0x8d949b });
+  const redM = new THREE.MeshBasicMaterial({ color: 0xc41f1f });
+  const amberM = new THREE.MeshBasicMaterial({ color: 0xff8a00 });
+  const add = (geo, mat, x, y, z, rx, ry, rz) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz;
+    g.add(m); return m;
+  };
 
-  // 车身
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 1.5), bodyM);
-  body.position.y = 0.62; g.add(body);
-  // 油箱
-  const tank = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.5), bodyM);
-  tank.position.set(0, 0.9, 0.15); g.add(tank);
-  // 车头 + 前挡泥板
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.45, 0.4), bodyM);
-  head.position.set(0, 0.95, 0.75); g.add(head);
-  // 车灯
-  const light = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.08), new THREE.MeshBasicMaterial({ color: 0xffffdd }));
-  light.position.set(0, 0.95, 0.96); g.add(light);
-  // 座椅
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.6), seatM);
-  seat.position.set(0, 0.9, -0.35); g.add(seat);
-  // 车把
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.06), chromeM);
-  bar.position.set(0, 1.12, 0.85); g.add(bar);
-  const barL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), chromeM); barL.position.set(-0.25, 0.98, 0.85); g.add(barL);
-  const barR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), chromeM); barR.position.set(0.25, 0.98, 0.85); g.add(barR);
-  // 排气管
-  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.8, 8), chromeM);
-  pipe.rotation.x = Math.PI / 2; pipe.position.set(0.3, 0.4, -0.5); g.add(pipe);
+  // ---- 车架 / 油箱 / 尾罩（油箱做成有倒角的梯形，比原来一个方盒子像样）----
+  add(new THREE.BoxGeometry(0.30, 0.26, 1.30), bodyM, 0, 0.70, -0.10);
+  const tankGeo = new THREE.CylinderGeometry(0.19, 0.26, 0.62, 8);
+  tankGeo.rotateX(Math.PI / 2);
+  add(tankGeo, bodyM, 0, 0.94, 0.22);
+  add(new THREE.BoxGeometry(0.28, 0.20, 0.42), bodyM, 0, 0.88, -0.72);          // 尾罩
+  // ---- 车头：整流罩 + 大灯（灯座 + 灯罩 + 日行灯）----
+  add(new THREE.BoxGeometry(0.34, 0.34, 0.34), bodyM, 0, 1.00, 0.74);
+  add(new THREE.BoxGeometry(0.30, 0.28, 0.06), darkM, 0, 1.00, 0.92);           // 灯座
+  add(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 12), new THREE.MeshBasicMaterial({ color: 0xfff4cf }), 0, 1.00, 0.955, Math.PI / 2);
+  add(new THREE.BoxGeometry(0.24, 0.03, 0.04), new THREE.MeshBasicMaterial({ color: 0xeaf4ff }), 0, 0.86, 0.945);  // 日行灯
+  // ---- 仪表 + 车把 + 把套 + 后视镜 ----
+  add(new THREE.BoxGeometry(0.20, 0.10, 0.10), darkM, 0, 1.16, 0.80);
+  add(new THREE.BoxGeometry(0.58, 0.05, 0.05), chromeM, 0, 1.22, 0.78);
+  for (const s of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.025, 0.025, 0.13, 8), darkM, s * 0.24, 1.22, 0.78, 0, 0, Math.PI / 2);
+    // 后视镜：杆 + 镜面
+    add(new THREE.BoxGeometry(0.02, 0.16, 0.02), chromeM, s * 0.27, 1.34, 0.78);
+    add(new THREE.BoxGeometry(0.13, 0.08, 0.02), darkM, s * 0.33, 1.42, 0.78);
+    // 前转向灯
+    add(new THREE.BoxGeometry(0.07, 0.05, 0.05), amberM, s * 0.24, 1.02, 0.86);
+  }
+  // ---- 座椅（带缝线）+ 尾灯 + 后转向灯 + 后反光片 ----
+  add(new THREE.BoxGeometry(0.36, 0.13, 0.58), seatM, 0, 1.02, -0.48);
+  add(new THREE.BoxGeometry(0.30, 0.02, 0.06), darkM, 0, 1.09, -0.30);          // 缝线
+  add(new THREE.BoxGeometry(0.22, 0.10, 0.05), redM, 0, 0.94, -0.94);           // 尾灯
+  add(new THREE.BoxGeometry(0.10, 0.04, 0.04), redM, 0, 0.74, -0.94);           // 后反光片
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.06, 0.05, 0.05), amberM, s * 0.20, 0.90, -0.90);
+  // ---- 前叉 + 前挡泥板 + 后挡泥板 + 后减震 ----
+  for (const s of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.032, 0.032, 0.62, 8), chromeM, s * 0.10, 0.72, 0.72, 0.28);
+    add(new THREE.CylinderGeometry(0.030, 0.030, 0.56, 8), chromeM, s * 0.14, 0.60, -0.66, -0.30);
+  }
+  add(new THREE.BoxGeometry(0.20, 0.03, 0.34), bodyM, 0, 0.62, 0.74);
+  add(new THREE.BoxGeometry(0.24, 0.03, 0.40), bodyM, 0, 0.80, -0.76);
+  // ---- 传动：链条 + 链轮 + 链条护罩 + 脚踏 + 边撑 ----
+  add(new THREE.BoxGeometry(0.03, 0.05, 0.92), darkM, -0.19, 0.42, -0.32);
+  add(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 12), steelM, -0.19, 0.42, 0.02, 0, 0, Math.PI / 2);
+  add(new THREE.BoxGeometry(0.04, 0.10, 0.60), steelM, -0.20, 0.50, -0.30);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.10, 0.03, 0.04), steelM, s * 0.22, 0.40, -0.10);
+  add(new THREE.BoxGeometry(0.025, 0.30, 0.025), steelM, 0.20, 0.22, -0.20, 0, 0, -0.25);
+  // ---- 排气管：中段 + 消音器 + 防烫罩 ----
+  add(new THREE.CylinderGeometry(0.045, 0.05, 0.80, 8), chromeM, 0.20, 0.40, -0.30, Math.PI / 2);
+  add(new THREE.CylinderGeometry(0.075, 0.065, 0.60, 10), chromeM, 0.22, 0.42, -0.86, Math.PI / 2);
+  add(new THREE.BoxGeometry(0.10, 0.10, 0.30), steelM, 0.22, 0.50, -0.80);
 
-  // 骑手占位（由外部 addRider 添加，此处不预置，避免双重骑手）
-
-  // 前后轮
-  const wg = new THREE.CylinderGeometry(0.34, 0.34, 0.12, 14); wg.rotateZ(Math.PI / 2);
-  const wm = new THREE.MeshLambertMaterial({ color: 0x101010 });
-  const hubG = new THREE.CylinderGeometry(0.1, 0.1, 0.14, 8); hubG.rotateZ(Math.PI / 2);
-  const hubM = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
-  [[0.7], [-0.7]].forEach(p => {
-    const w = new THREE.Mesh(wg, wm); w.position.set(0, 0.34, p[0]); g.add(w);
-    const h = new THREE.Mesh(hubG, hubM); h.position.set(0, 0.34, p[0]); g.add(h);
-  });
+  // ---- 前后轮：外胎 + 轮辋 + 辐条 ----
+  for (const pz of [0.72, -0.72]) {
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.055, 6, 16), new THREE.MeshLambertMaterial({ color: 0x101010 }));
+    tire.rotation.y = Math.PI / 2; tire.position.set(0, 0.36, pz); g.add(tire);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.10, 12), steelM);
+    rim.rotation.z = Math.PI / 2; rim.position.set(0, 0.36, pz); g.add(rim);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      add(new THREE.BoxGeometry(0.11, 0.30, 0.02), steelM, 0, 0.36 + Math.sin(a) * 0.10, pz + Math.cos(a) * 0.10, a);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.14, 8), chromeM);
+    hub.rotation.z = Math.PI / 2; hub.position.set(0, 0.36, pz); g.add(hub);
+  }
   g.scale.setScalar(0.85);   // 摩托车整体略小（实体也改小）
+  // 【性能】车体零件先融一次。注意这里**不能**连骑手一起融：骑手是调用方
+  // （makeTrafficVehicle / addRider）之后才 add 进来的，必须先融车、再融骑手。
+  try { mergeVehicleByVertexColor(g, null, true); } catch (e) {}
   return g;
 }
 
@@ -22614,9 +23082,23 @@ function prepGeoWithColor(g, color) {
   const ng = g.index ? g.toNonIndexed() : g.clone();
   if (!ng.attributes.normal) ng.computeVertexNormals();
   const n = ng.attributes.position.count;
+  const src = ng.attributes.color;
   const col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { col[i * 3] = color.r; col[i * 3 + 1] = color.g; col[i * 3 + 2] = color.b; }
+  // 【fix42 关键修正】原来无条件用"材质颜色"重刷一份顶点色。
+  // 于是一旦对**已经合并过的网格**再合一次（车轮在 addWheel 里预先融过，随后整车又会融一次），
+  // 它那份顶点色就会被材质白（vcm 材质 color 恒为 0xffffff）整片覆盖 —— 车轮会变成纯白。
+  // 现在：已有顶点色的网格保留自己的颜色（并与材质色相乘，vc 材质是白色所以等价于保留）。
+  for (let i = 0; i < n; i++) {
+    if (src) {
+      col[i * 3]     = src.getX(i) * color.r;
+      col[i * 3 + 1] = src.getY(i) * color.g;
+      col[i * 3 + 2] = src.getZ(i) * color.b;
+    } else {
+      col[i * 3] = color.r; col[i * 3 + 1] = color.g; col[i * 3 + 2] = color.b;
+    }
+  }
   ng.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  if (src && src.array && src.array !== col) { /* 旧属性随几何体一起释放 */ }
   return ng;
 }
 var _vcMatCache = null;
