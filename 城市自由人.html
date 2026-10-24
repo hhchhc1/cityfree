@@ -23051,7 +23051,14 @@ function batchStaticScene() {
     const geometry = object.geometry;
     if (geometry.morphAttributes && Object.keys(geometry.morphAttributes).length) return;
     const names = Object.keys(geometry.attributes).sort();
-    if (names.some(name => !['position', 'normal', 'uv'].includes(name))) return;
+    // 【fix49】允许 'color' 属性参与合批。
+    // 原来只放行 position/normal/uv —— 而"细节件共用材质 + 顶点色区分颜色"是精细化最关键的手法
+    // （临海市的线脚/竖挺/斗拱/窗棂/栏杆都靠它，否则每件一个材质就是几千次 draw call）。
+    // prepGeoWithColor 会往几何体写 color 属性，于是这些件**全被挡在合批之外**，
+    // 实测细节一加上去 draw call 就从 1656 涨到 2545。放开 color 后它们能正常并批。
+    // 安全性：materialKey 里已经包含 material.vertexColors，所以同一批次的几何体要么都有
+    // color、要么都没有，mergeGeos 不会遇到属性不齐的情况。
+    if (names.some(name => !['position', 'normal', 'uv', 'color'].includes(name))) return;
     const keyMaterial = materialKey(object.material);
     if (!keyMaterial) return;
     const worldPosition = new THREE.Vector3();
@@ -23715,6 +23722,34 @@ let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于�
 function buildLinhaiCity(g) {
   const Z0 = LH.z0, Z1 = LH.z1, ZC = (Z0 + Z1) / 2, ZLEN = Z1 - Z0;
   const add = (m) => { g.add(m); return m; };
+  // ===== 【fix49·精细化的前提】细节件共用材质 =====
+  // 用户反馈"模型太粗糙"。但直接加细节会先把性能压垮：
+  // 原来霓虹/LED 边框/店铺门面都是**每件 new 一个材质**，加几百个细节就是几百次 draw call。
+  // 静态合批是按**材质**分组的，所以这里把细节件的材质**按颜色缓存**下来
+  // （约 30 种颜色 → 30 个材质，而不是每件一个）—— 细节可以放心加。
+  // 这是 fix42 车辆精细化时同一套思路。
+  // ⚠️ 曾经试过"顶点色 + 只有 2 个材质"的方案（更省），但实测出现大面积纯黑块
+  //    （顶点色一旦缺失/不齐就渲染成黑），所以退回按颜色缓存，稳妥优先。
+  const _detMats = new Map();
+  function detMat(hex, glow) {
+    const k = (glow ? 'b' : 'l') + hex;
+    let m = _detMats.get(k);
+    if (!m) {
+      m = glow ? new THREE.MeshBasicMaterial({ color: hex }) : new THREE.MeshLambertMaterial({ color: hex });
+      _detMats.set(k, m);
+    }
+    return m;
+  }
+  function det(geo, hex, x, y, z, rx, ry, rz, glow, to) {
+    const m = new THREE.Mesh(geo, detMat(hex, glow));
+    m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx;
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    (to || g).add(m);
+    return m;
+  }
+  const BX = (w, h, d) => new THREE.BoxGeometry(w, h, d);
   // ---------- 1) 两岸铺装 ----------
   const paveM = new THREE.MeshLambertMaterial({ color: 0x8d9298 });   // 西岸：现代石板
   const ancM = new THREE.MeshLambertMaterial({ color: 0x9d978c });    // 东岸：青砖灰
@@ -23860,33 +23895,51 @@ function buildLinhaiCity(g) {
         uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(9, Math.round(h / 12)))),
         buildingBodyMaterial(bpals[(Math.random() * bpals.length) | 0]));
       body.position.set(x, h / 2, z); add(body);
-      // 女儿墙 + 屋顶设备（抬高 3cm 避免与楼顶共面闪烁）
-      const par = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.7, d + 0.6), trimM);
-      par.position.set(x, h + 0.38, z); add(par);
-      if (Math.random() < 0.6) {
-        const mech = new THREE.Mesh(new THREE.BoxGeometry(w * 0.34, 2.4, d * 0.34), trimM);
-        mech.position.set(x, h + 1.6, z); add(mech);
+      // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
+      // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
+      // 裙楼只比塔楼略宽一点（原来写 w+9、最深到 55，而楼间距只有 56 ——
+// 等于把整格填满、街道被堵成窄巷，站在街上只看得到一面大墙）
+      const podW = Math.min(w + 5, w * 1.14);
+      const podH = 5.5 + Math.random() * 2.5;
+      det(BX(podW, podH, d + 5), 0x9aa1a8, x, podH / 2, z);          // 裙楼（底商基座）
+      det(BX(podW + 1.2, 0.6, d + 6.2), 0xb3bac2, x, podH + 0.3, z);
+      for (let k = -2; k <= 2; k++) {                       // 竖向线条（四个立面）
+        const off = k * (w / 5.4);
+        det(BX(0.65, h * 0.88, 0.65), 0xc4ccd4, x + off, h * 0.46, z + d / 2 + 0.3);
+        det(BX(0.65, h * 0.88, 0.65), 0xc4ccd4, x + off, h * 0.46, z - d / 2 - 0.3);
+        det(BX(0.65, h * 0.88, 0.65), 0xc4ccd4, x + w / 2 + 0.3, h * 0.46, z + off);
+        det(BX(0.65, h * 0.88, 0.65), 0xc4ccd4, x - w / 2 - 0.3, h * 0.46, z + off);
       }
-      // 侧墙霓虹竖条（贴地到楼顶，科技感来源）
+      for (let yy = 12; yy < h - 3; yy += 15) {             // 横向线脚（约每 5 层一道）
+        det(BX(w + 0.7, 0.42, d + 0.7), 0xcfd6dd, x, yy, z);
+      }
+      det(BX(1.1, 9 + Math.random() * 7, 1.1), 0xd8dee4, x, h + 5.5, z);    // 顶部桅杆
+      det(BX(w * 0.46, 1.3, d * 0.46), 0x7f868d, x, h + 1.0, z);            // 顶部构架
+      if (h > 70) {                                          // 高层楼冠（两级斜面顶）
+        det(BX(w * 0.74, h * 0.045, d * 0.74), 0xaab2ba, x, h + 2.2, z);
+        det(BX(w * 0.5, h * 0.04, d * 0.5), 0xaab2ba, x, h + 2.2 + h * 0.043, z);
+      }
+      if (Math.random() < 0.22) {                            // 空中连廊（连向东侧邻楼）
+        const span = 30 + Math.random() * 18, by = h * (0.44 + Math.random() * 0.26);
+        det(BX(span, 3.0, 5.5), 0x9ec6de, x + span / 2 + w / 2, by, z);
+        det(BX(span, 0.47, 5.9), 0x7f868d, x + span / 2 + w / 2, by + 1.65, z);
+        det(BX(span, 0.47, 5.9), 0x7f868d, x + span / 2 + w / 2, by - 1.65, z);
+      }
+      // 侧墙霓虹竖条（发光）
       const nc = neonC[(Math.random() * neonC.length) | 0];
-      const nMat = new THREE.MeshBasicMaterial({ color: nc });
-      for (const s of [-1, 1]) {
-        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.5, h * 0.82, 0.5), nMat);
-        strip.position.set(x + s * (w / 2 + 0.3), h * 0.5, z + d / 2 + 0.3); add(strip);
-      }
+      for (const s of [-1, 1]) det(BX(0.55, h * 0.8, 0.55), nc, x + s * (w / 2 + 0.55), h * 0.5, z + d / 2 + 0.55, 0, 0, 0, true);
       // 偶尔挂一块巨型 LED 屏（侧墙）
       if (Math.random() < 0.42) {
         const t = ledTex[(li++) % ledTex.length];
         const scr = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, Math.min(h * 0.5, 34)),
           new THREE.MeshBasicMaterial({ map: t, fog: false }));
-        scr.position.set(x, h * (0.42 + Math.random() * 0.2), z + d / 2 + 0.42); add(scr);
+        scr.position.set(x, h * (0.42 + Math.random() * 0.2), z + d / 2 + 0.68); add(scr);
       }
-      // 街角店铺：底层亮色门面 + 雨篷
+      // 街角店铺：底层亮色门面 + 雨篷 + 小招牌
       const shopC = [0xffd9a0, 0xa8e8ff, 0xffb0c8, 0xc0ffd0][(Math.random() * 4) | 0];
-      const front = new THREE.Mesh(new THREE.BoxGeometry(w * 0.82, 3.6, 0.4), new THREE.MeshBasicMaterial({ color: shopC }));
-      front.position.set(x, 2.1, z + d / 2 + 0.25); add(front);
-      const awn = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.25, 1.6), new THREE.MeshLambertMaterial({ color: 0x2b3038 }));
-      awn.position.set(x, 4.2, z + d / 2 + 0.9); add(awn);
+      det(BX(podW * 0.8, 3.4, 0.5), shopC, x, 2.0, z + d / 2 + 5.9, 0, 0, 0, true);
+      det(BX(podW * 0.88, 0.28, 2.0), 0x2b3038, x, 4.2, z + d / 2 + 6.7);
+      det(BX(podW * 0.3, 0.9, 0.35), [0xff3fa4, 0x3ff0ff, 0xffd24a, 0x44ff9a][(Math.random() * 4) | 0], x, 5.4, z + d / 2 + 6.8, 0, 0, 0, true);
     }
   }
   // ---------- 4) 东岸中式古建群 ----------
@@ -23960,20 +24013,27 @@ function buildLinhaiCity(g) {
       const y0 = 1.6 + L * 6.4;
       const wall2 = new THREE.Mesh(new THREE.BoxGeometry(bw - 3, 4.8, bd - 3), woodM);
       wall2.position.y = y0 + 2.4; pg.add(wall2);
-      // 雕花木窗（两侧亮色板）
+      // 【fix49】雕花窗棂：窗框 + 窗纸 + 竖棂条 + 横棂条（原来是"一整块亮板"，很粗糙）
       for (const s of [-1, 1]) {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, bd * 0.5), new THREE.MeshBasicMaterial({ color: 0xffd9a0 }));
-        win.position.set(s * (bw - 3) / 2 - s * 0.1, y0 + 2.6, 0); pg.add(win);
+        const wx0 = s * (bw - 3) / 2 - s * 0.14;
+        det(BX(0.2, 2.9, bd * 0.54), 0x5e3220, wx0 + s * 0.08, y0 + 2.6, 0, 0, 0, 0, false, pg);   // 窗框
+        det(BX(0.24, 2.5, bd * 0.44), 0xffd9a0, wx0, y0 + 2.6, 0, 0, 0, 0, true, pg);              // 窗纸（发光）
+        for (let k = -1; k <= 1; k++) {
+          det(BX(0.3, 2.5, 0.07), 0x6b3a22, wx0 - s * 0.1, y0 + 2.6, k * bd * 0.13, 0, 0, 0, false, pg);
+        }
+        for (let k = -1; k <= 0; k++) {
+          det(BX(0.3, 0.07, bd * 0.44), 0x6b3a22, wx0 - s * 0.1, y0 + 2.6 + k * 0.9, 0, 0, 0, false, pg);
+        }
       }
       for (const cx2 of [-1, 1]) for (const cz2 of [-1, 1]) {
         const col = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 4.8, 8), woodD);
         col.position.set(cx2 * (bw - 3) / 2, y0 + 2.4, cz2 * (bd - 3) / 2); pg.add(col);
       }
-      // 斗拱带（檐下一圈小方块）
+      // 【fix49】双层斗拱带：下昂 + 上斗错开，比原来单层小方块更有木构层次
       for (let k = -(bw / 2 - 1); k <= bw / 2 - 1; k += 1.4) {
         for (const s of [-1, 1]) {
-          const dg = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.9), roofR);
-          dg.position.set(k, y0 + 4.9, s * (bd / 2)); pg.add(dg);
+          det(BX(0.85, 0.5, 0.85), 0x8c3428, k, y0 + 4.72, s * (bd / 2), 0, 0, 0, false, pg);
+          det(BX(1.3, 0.42, 1.3), 0x9c4433, k, y0 + 5.02, s * (bd / 2), 0, 0, 0, false, pg);
         }
       }
       const eave = new THREE.Mesh(new THREE.BoxGeometry(bw + 3.6, 0.7, bd + 3.6), roofR);
@@ -23985,9 +24045,24 @@ function buildLinhaiCity(g) {
         tip.position.set(sx * (bw + 3.6) * 0.42, y0 + 5.7, sz * (bd + 3.6) * 0.42);
         tip.rotation.z = sx * 0.45; tip.rotation.x = -sz * 0.45; pg.add(tip);
       }
-      // 栏杆
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(bw + 2.4, 0.28, bd + 2.4), woodD);
-      rail.position.y = y0 + 6.1; pg.add(rail);
+      // 【fix49】望柱栏杆：立柱 + 上下横栏（原来是"一整条木板"）
+      for (let k = -(bw / 2 + 0.6); k <= bw / 2 + 0.6; k += 2.0) {
+        for (const s of [-1, 1]) {
+          det(BX(0.32, 1.15, 0.32), 0x5e3220, k, y0 + 6.35, s * (bd + 2.2) / 2, 0, 0, 0, false, pg);
+        }
+      }
+      for (const s of [-1, 1]) {
+        det(BX(bw + 2.8, 0.24, 0.24), 0x8a4a2c, 0, y0 + 6.92, s * (bd + 2.2) / 2, 0, 0, 0, false, pg);
+        det(BX(bw + 2.8, 0.18, 0.18), 0x8a4a2c, 0, y0 + 6.05, s * (bd + 2.2) / 2, 0, 0, 0, false, pg);
+      }
+      // 首层檐角挂一对灯笼（中式夜景的点睛）
+      if (L === 0) {
+        for (const sx of [-1, 1]) {
+          det(BX(0.09, 1.7, 0.09), 0x3a2015, sx * (bw / 2 + 1.5), y0 + 4.5, (bd / 2 + 1.6), 0, 0, 0, false, pg);
+          det(BX(0.75, 0.95, 0.75), 0xff5a3c, sx * (bw / 2 + 1.5), y0 + 3.2, (bd / 2 + 1.6), 0, 0, 0, true, pg);
+          det(BX(0.3, 0.14, 0.3), 0xffd24a, sx * (bw / 2 + 1.5), y0 + 2.68, (bd / 2 + 1.6), 0, 0, 0, true, pg);
+        }
+      }
     }
     pg.position.set(px, 0, pz); add(pg);
     return pg;
@@ -24563,6 +24638,13 @@ function endFlightShow() {
 }
 // 初始化布景（必须在 AIRLINER 就位之后）
 try { initFlightScenery(); } catch (e) { console.error('[flight scenery]', e); }
+// 【fix49·关键】临海市（含 CBD 的超高层与东岸古建）是在 initFlightScenery() 里建的，
+// 而 batchStaticScene() 早在它之前（第 23634 行）就跑过了 ——
+// 结果是新城的几千个细节件**从来没被合批**，draw call 实测 2545（主城才 1000）。
+// 建城之后再补跑一次合批，把新城并进来。
+// 重复运行是安全的：合批对"已经合并过的网格"再合并一次结果相同（幂等），
+// 而所有需要单独驱动的对象（水面/云/光柱/飞机/梯车）都已经 registerDynamicObject 排除在外。
+try { batchStaticScene(); } catch (error) { console.error('[Static batch 2 error]', error); }
 
 // ==================== 【fix46】自动版本守卫 ====================
 // 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
