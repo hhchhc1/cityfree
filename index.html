@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix43-flight';
+const BUILD = '20261024-fix44-overlap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -2356,7 +2356,15 @@ for (let i = 0; i < roads.length - 1; i++) blockMids.push((roads[i] + roads[i + 
 blockMids.forEach(mx => blockMids.forEach(mz => {
   if (Math.abs(mx) <= 20 && Math.abs(mz) <= 20) return;   // 中央 4 个街区留给中央公园
   if (nearCivicBlock(mx, mz)) return;                     // 警察局 / 医院的街区：整块留给公共建筑
-  const count = 1 + (Math.random() * 2 | 0);   // 每街区 1-2 栋
+  // 每街区尝试 2~3 栋（不是"必须放 2~3 栋"）：放不下就跳过，密度自适应 ——
+  // 小房子一个 40m 街区能塞 2~3 栋，大体量（板楼/联排）只放得下 1 栋。
+  // fix44 第一版是 1~2 栋，加了避让后城市会偏空（483 vs 535），提到 2~3 把密度找回来。
+  const count = 2 + (Math.random() * 2 | 0);
+  // 【fix44·用户报"建筑重叠在一起、墙面闪烁"】本街区已占用矩形（含 1.5m 间距）。
+  // 街区是 40m 一格，fix42 把体量加大后（板楼 29m / 联排 30m），
+  // 原来"1~2 栋各自独立随机位置、互不避让"必然叠在一起 ——
+  // 两栋楼的墙面近共面就会 z-fighting 狂闪（实测全城 209 对重叠、最深 16m）。
+  const blockRects = [];
   for (let k = 0; k < count; k++) {
     if (nearCivicBlock(mx + (Math.random() - 0.5) * 30, mz + (Math.random() - 0.5) * 30)) continue;   // 别溢到公共街区
     const tier = Math.random();
@@ -2401,28 +2409,66 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       style = ['shop', 'wood', 'brick', 'stone', 'terracotta'][Math.random() * 5 | 0];
       w = 8 + Math.random() * 5; d = 7 + Math.random() * 5; h = 4.5 + Math.random() * 3.5;
     }
-    const bx = mx + (Math.random() - 0.5) * (30 - w), bz = mz + (Math.random() - 0.5) * (30 - d);
-    // 出生房子(-104,-68)和车库(-90,-70)周边清空：任何建筑（含小房子）都别靠近，避免堵门/挡路出不去
-    if (Math.hypot(bx + 104, bz + 68) < 36 || Math.hypot(bx + 90, bz + 70) < 30) continue;
-    // 黑帮大本营(GANG_HQ_X,GANG_HQ_Z)山顶平台同样清空。
-    // 修复：城市街区生成器只避让了出生点，没避让大本营，于是随机小房子被丢在
-    // 山顶平台和坡道上 —— 它们既挡大本营的视线，又跟"大本营清剿"任务点重叠，
-    // 玩家上山后看到的全是无关小房子，真正的哨兵反而被挡住/埋掉。
-    // 半径 100（比山体 55 大很多），保证平台 + 坡道 + 山脚一整圈都没有杂房子。
-    if (nearGangHq(bx, bz, GANG_HQ_CLEAR)) continue;
-    // 出租车场 + 建筑工地要留出完整空地，不能被随机小房嵐占了
-    if (nearJobSite(bx, bz)) continue;
+    // 【fix44】同一街区的第二栋起，只放小体量。
+    // 否则 40m 的街区里先放一栋 29m 的板楼，剩下 11m 无论如何放不下第二栋大楼，
+    // 只能整栋跳过 —— 避让虽然生效了，但城市会明显变空（实测掉到 472 栋）。
+    // 强制降级为小房子后，密度回来、且依然不重叠。
+    if (k > 0 && (kind === 'slab' || kind === 'row' || kind === 'twin' || kind === 'round' || kind === 'corner')) {
+      kind = 'house';
+      style = ['shop', 'wood', 'brick', 'stone', 'terracotta'][Math.random() * 5 | 0];
+      w = 8 + Math.random() * 5; d = 7 + Math.random() * 5; h = 4.5 + Math.random() * 3.5;
+    }
+    // 【fix44】位置改成"可重试"：选好建筑类型后只重试坐标，直到本街区内不与人重叠。
+    // 原先是就地取一次随机坐标、`continue` 直接丢掉这栋 —— 既不能避让，
+    // 又把"避开出生点/大本营/工地"和"避开同街区另一栋楼"混在一起判，逻辑上做不到两全。
+    let bx = 0, bz = 0, placedOk = false;
+    for (let attempt = 0; attempt < 14 && !placedOk; attempt++) {
+      bx = mx + (Math.random() - 0.5) * Math.max(0, 30 - w);
+      bz = mz + (Math.random() - 0.5) * Math.max(0, 30 - d);
+      // 出生房子(-104,-68)和车库(-90,-70)周边清空：任何建筑（含小房子）都别靠近，避免堵门/挡路出不去
+      if (Math.hypot(bx + 104, bz + 68) < 36 || Math.hypot(bx + 90, bz + 70) < 30) continue;
+      // 黑帮大本营(GANG_HQ_X,GANG_HQ_Z)山顶平台同样清空。
+      // 半径 100（比山体 55 大很多），保证平台 + 坡道 + 山脚一整圈都没有杂房子。
+      if (nearGangHq(bx, bz, GANG_HQ_CLEAR)) continue;
+      // 出租车场 + 建筑工地要留出完整空地，不能被随机小房子占了
+      if (nearJobSite(bx, bz)) continue;
+      // 与本街区已放置的楼不重叠（留 1.5m 间距，避免墙面贴到一起共面闪烁）
+      const pad = 1.5;
+      const r = { minX: bx - w / 2 - pad, maxX: bx + w / 2 + pad, minZ: bz - d / 2 - pad, maxZ: bz + d / 2 + pad };
+      let hit = false;
+      for (const o of blockRects) {
+        if (!(r.maxX <= o.minX || r.minX >= o.maxX || r.maxZ <= o.minZ || r.minZ >= o.maxZ)) { hit = true; break; }
+      }
+      if (hit) continue;
+      blockRects.push(r);
+      placedOk = true;
+    }
+    if (!placedOk) continue;   // 这个街区放不下了：宁可少一栋楼，也不要叠着闪
     const gy = terrainHeight(bx, bz);
     // 【性能】平铺次数烘焙进几何体 UV、材质按 style 复用：同风格的楼才能被静态合批
-    const body = new THREE.Mesh(
-      uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
-      buildingBodyMaterial(style));
-    body.position.set(bx, gy + h / 2, bz); scene.add(body);
+    // ★★ 【fix44·用户报"建筑重叠、墙面闪烁"的真正根因】★★
+    // twin / round / row 这三种体量**本身就是用多个盒子/圆柱拼出来的**，
+    // 而这里原本是**无条件**再建一个 w×h×d 的主体盒。后果：
+    //   · twin（双塔）：两座塔被主体盒整个吞掉（塔宽仅 6m、主体 16m），"双塔"造型根本没生效；
+    //     更糟的是塔面与主体面只差 0.25m —— 近共面 → z-fighting 狂闪。
+    //   · round（圆柱塔）：圆柱内切在方盒里，直接变回一个方盒。
+    //   · row（联排）：各单元被一栋大盒子吞掉，又变回"那一栋"，联排造型失效。
+    // 实测这几个正是剩余 48 对严重重叠里的绝大部分。所以这三种体量必须**跳过主体盒**。
+    const skipBodyMesh = (kind === 'twin' || kind === 'round' || kind === 'row');
+    // twin / round 自带更贴合形状的碰撞盒（塔 / 圆柱），不要再 push 默认的方形主体盒；
+    // row 没有单独的单元碰撞盒，所以它的整体碰撞盒要保留。
+    const skipBodyCollider = (kind === 'twin' || kind === 'round');
+    if (!skipBodyMesh) {
+      const body = new THREE.Mesh(
+        uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
+        buildingBodyMaterial(style));
+      body.position.set(bx, gy + h / 2, bz); scene.add(body);
+    }
     if (kind === 'sky') {
       addSkyGlow(bx, bz, gy, w, d, h);   // 夜里整栋楼会微微发亮，楼脚给路面一点光
       // 摩天楼：顶部收窄尖顶 + 天线 + 红灯（实体：楼顶不穿透、钩爪可抓）
       const crown = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.3, h * 0.12, 4), BLD_M_CROWN);
-      crown.position.set(bx, gy + h + h * 0.06, bz); crown.rotation.y = Math.PI / 4; scene.add(crown);
+      crown.position.set(bx, gy + h + h * 0.06 + 0.03, bz); crown.rotation.y = Math.PI / 4; scene.add(crown);
       const ant = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), BLD_M_ANT);
       ant.position.set(bx, gy + h + h * 0.12 + 3, bz); scene.add(ant);
       const blinker = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff3333 }));
@@ -2437,12 +2483,12 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
     } else if (kind === 'apt') {
       if (Math.random() < 0.5) {
         const pyr = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, d) * 0.5, h * 0.22, 4), BLD_M_PYR);
-        pyr.position.set(bx, gy + h + h * 0.11, bz); pyr.rotation.y = Math.PI / 4; scene.add(pyr);
+        pyr.position.set(bx, gy + h + h * 0.11 + 0.03, bz); pyr.rotation.y = Math.PI / 4; scene.add(pyr);
         const pr = Math.min(w, d) * 0.5;   // 金字塔尖底座半径（实体，楼顶不穿透）
         buildings.push({ minX: bx - pr, maxX: bx + pr, minZ: bz - pr, maxZ: bz + pr, bottom: gy + h, top: gy + h + h * 0.22 });
       } else {
         const parapet = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.5, d * 0.96), BLD_M_CROWN);
-        parapet.position.set(bx, gy + h + 0.25, bz); scene.add(parapet);
+        parapet.position.set(bx, gy + h + 0.28, bz); scene.add(parapet);
         if (Math.random() < 0.5) {
           const tx = bx + (Math.random() - 0.5) * (w - 2), tz = bz + (Math.random() - 0.5) * (d - 2);
           const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.6, 8), BLD_M_TANK);
@@ -2456,16 +2502,16 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       const up = new THREE.Mesh(
         uvBox(w2, h2, d2, Math.max(1, Math.min(4, Math.round(w2 / 7))), Math.max(1, Math.min(6, Math.round(h2 / 12)))),
         buildingBodyMaterial(style));
-      up.position.set(bx, gy + h + h2 / 2, bz); scene.add(up);
+      up.position.set(bx, gy + h + h2 / 2 + 0.03, bz); scene.add(up);
       const slabM = BLD_M_TRIM;
       const par = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.55, d + 0.6), slabM);
-      par.position.set(bx, gy + h + 0.28, bz); scene.add(par);
+      par.position.set(bx, gy + h + 0.31, bz); scene.add(par);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         const col = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.0, 0.55), slabM);
         col.position.set(bx + sx * w2 / 2, gy + h + h2 + 1.0, bz + sz * d2 / 2); scene.add(col);
       }
       const cap2 = new THREE.Mesh(new THREE.BoxGeometry(w2 * 0.46, 0.9, d2 * 0.46), BLD_M_DARK);
-      cap2.position.set(bx, gy + h + h2 + 0.45, bz); scene.add(cap2);
+      cap2.position.set(bx, gy + h + h2 + 0.48, bz); scene.add(cap2);
       buildings.push({ minX: bx - w2 / 2, maxX: bx + w2 / 2, minZ: bz - d2 / 2, maxZ: bz + d2 / 2, bottom: gy + h, top: gy + h + h2 });
     } else if (kind === 'round') {
       // —— 圆柱塔：整栋圆柱（外立面贴图按角度铺开），顶部檐口圈 + 设备层 + 天线 ——
@@ -2474,7 +2520,7 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       cyl.position.set(bx, gy + h / 2, bz); scene.add(cyl);
       const ringM = BLD_M_STEEL;
       const ring = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 1.12, r0 * 1.12, 0.5, 20), ringM);
-      ring.position.set(bx, gy + h + 0.25, bz); scene.add(ring);
+      ring.position.set(bx, gy + h + 0.28, bz); scene.add(ring);
       const cap3 = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.72, r0 * 0.92, 1.5, 16), BLD_M_MECH);
       cap3.position.set(bx, gy + h + 1.25, bz); scene.add(cap3);
       const ant2 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 5, 0.22), BLD_M_ANT);
@@ -2499,7 +2545,7 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       // —— 板式办公楼：平屋顶 + 女儿墙 + 机房 + 两组空调机组 ——
       const slabM2 = BLD_M_TRIM;
       const par2 = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.6, d + 0.4), slabM2);
-      par2.position.set(bx, gy + h + 0.3, bz); scene.add(par2);
+      par2.position.set(bx, gy + h + 0.33, bz); scene.add(par2);
       const mech = new THREE.Mesh(new THREE.BoxGeometry(w * 0.3, 2.2, d * 0.5), BLD_M_MECH);
       mech.position.set(bx - w * 0.2, gy + h + 1.4, bz); scene.add(mech);
       const acM = BLD_M_STEEL;
@@ -2518,7 +2564,9 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
           uvBox(uw * 0.97, uh, d, Math.max(1, Math.min(3, Math.round(uw / 7))), Math.max(1, Math.min(5, Math.round(uh / 12)))),
           buildingBodyMaterial(style));
         u.position.set(ux, gy + uh / 2, bz); scene.add(u);
-        addGableRoof(ux, gy, bz, uw * 0.95, d, uh);      // 人字顶落在该单元顶部
+        // 单元间距只有 uw，而 addGableRoof 内部会给檐口留 +0.6 余量，
+        // 所以这里用 0.78 而不是 0.95 —— 否则相邻单元的屋顶斜板会互相穿插。
+        addGableRoof(ux, gy, bz, uw * 0.78, d, uh);
       }
     } else if (kind === 'corner') {
       // —— 转角楼：主体 + 朝街角切一刀的斜面 + 底部骑楼檐口 ——
@@ -2527,7 +2575,7 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
       cutM.rotation.y = -Math.PI / 4;
       scene.add(cutM);
       const cor = new THREE.Mesh(new THREE.BoxGeometry(w * 0.99, 0.5, d * 0.99), BLD_M_TRIM);
-      cor.position.set(bx, gy + h + 0.25, bz); scene.add(cor);
+      cor.position.set(bx, gy + h + 0.28, bz); scene.add(cor);
       const eave = new THREE.Mesh(new THREE.BoxGeometry(w * 1.12, 0.35, d * 1.12), BLD_M_DARK);
       eave.position.set(bx, gy + 3.4, bz); scene.add(eave);      // 骑楼/雨篷线
       buildings.push({ minX: bx - w * 0.26, maxX: bx + w * 0.26, minZ: bz - d * 0.26, maxZ: bz + d * 0.26, bottom: gy + 3.4, top: gy + 3.75 });
@@ -2581,7 +2629,7 @@ blockMids.forEach(mx => blockMids.forEach(mz => {
     } else if (kind === 'house' && Math.random() < 0.7) {
       addAwning(bx, gy, bz + d / 2, w * 0.6);
     }
-    buildings.push({ minX: bx - w / 2, maxX: bx + w / 2, minZ: bz - d / 2, maxZ: bz + d / 2, bottom: gy, top: gy + h + (kind === 'house' ? 0.4 : 0) });
+    if (!skipBodyCollider) buildings.push({ minX: bx - w / 2, maxX: bx + w / 2, minZ: bz - d / 2, maxZ: bz + d / 2, bottom: gy, top: gy + h + (kind === 'house' ? 0.4 : 0) });
   }
   // 街区绿化：1-2 棵树（限制在街区内部，不落到马路上，也不落到主角房子/车库院里）
   const trees = 1 + (Math.random() * 2 | 0);
@@ -23736,7 +23784,10 @@ function initFlightScenery() {
   for (let gx = CITY_X0 + 60; gx < CITY_X1; gx += 108) {
     for (let gz = CITY_Z0 + 70; gz < CITY_Z1; gz += 108) {
       if (Math.random() < 0.20) continue;                       // 留些空地，不然像一排积木
-      const w = 30 + Math.random() * 44, d = 30 + Math.random() * 44;
+      // 楼宽上限 56：地皮中心距 108、楼中心随机偏移 ±21，最坏情况相邻两楼净距
+      // 108 − 42 = 66，必须大于楼宽才不会叠在一起。
+      // fix43 当初写的是 30 + rand*44 = 最大 74，直接超出 → 新城会叠出闪烁。
+      const w = 26 + Math.random() * 30, d = 26 + Math.random() * 30;
       const h = 24 + Math.random() * 98;
       const b = new THREE.Mesh(
         uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
