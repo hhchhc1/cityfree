@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix53-touch';;;;;
+const BUILD = '20261024-fix54-hezhi';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13488,7 +13488,7 @@ addEventListener('keydown', e => {
   // 【fix43·乘机过场】优先处理"跳过"与"登机"：
   // 过场期间只认空格/Esc（跳过），其余热键全部屏蔽 —— 免得玩家在演出里误开商店/切枪。
   // 平时 E 键先看"是不是站在客机舱门旁、该登机"，不满足才落到原来的 tryToggle()（上车/交互）。
-  if (FLIGHT) { if (k === ' ' || k === 'escape') skipFlightShow(); return; }
+  if (FLIGHT) { return; }   // 【fix54】用户要求：坐上飞机后不能主动中断（原来 Space/Esc 可以跳过整段演出）
   // 【fix47】E 键改成"打开机票对话"而不是直接登机 —— 登机必须先买票。
   // 手机端没有 E 键也没关系：走到光柱旁边会自动弹出同一个面板（面板就是 HTML，可直接点）。
   if (k === 'e' && flightPillarDist() < 12) { openFlightPanel(); return; }
@@ -15459,6 +15459,11 @@ function carsVerticallySeparated(a, b) {
   return carBottomH(a) >= carBottomH(b) + carTopH(b) || carBottomH(b) >= carBottomH(a) + carTopH(a);
 }
 function clampCity(p) {
+  // 【fix54】荷芷市（第二座城，x≈1000~2000）在主城地图之外。
+  // 原来这里**无条件**按主城范围钳制，于是玩家一到荷芷市就会被每帧夹回边界 ——
+  // 表现就是"完全走不动"（用户实测："人物在临海市不能正常行走"）。
+  // 判据用 x > 900：主城 |x|≤500，中间隔着海，不会误判。
+  if (p.x > 900) return;
   p.x = Math.max(-WORLD_LIMIT_X, Math.min(WORLD_LIMIT_X, p.x));
   p.z = Math.max(WORLD_LIMIT_Z_MIN, Math.min(WORLD_LIMIT_Z_MAX, p.z));
 }
@@ -24602,9 +24607,9 @@ function initFlightScenery() {
   cx2.strokeStyle = '#3fa9f5'; cx2.lineWidth = 8; cx2.strokeRect(10, 10, 1004, 236);
   cx2.fillStyle = '#eaf4ff'; cx2.font = 'bold 120px "Microsoft YaHei", sans-serif';
   cx2.textAlign = 'center'; cx2.textBaseline = 'middle';
-  cx2.fillText('临 海 市', 512, 108);
+  cx2.fillText('荷 芷 市', 512, 108);
   cx2.fillStyle = '#7fc4f0'; cx2.font = 'bold 44px Arial, sans-serif';
-  cx2.fillText('LINHAI  ·  占位新城（待开发）', 512, 200);
+  cx2.fillText('HEZHI  ·  河畔新城', 512, 200);
   const signTex = new THREE.CanvasTexture(cvs);
   // 用 Plane + DoubleSide：原来用 Box，从跑道这侧看到的是"背面那张贴图"（镜像文字），
   // 玩家正好是从南边进近，必须保证朝南这面是对的。
@@ -24760,7 +24765,57 @@ function updateBoardPrompt() {
   else hudText(hintTextEl, 'hint', 'WASD/方向键 移动　·　空格 跳跃　·　E 上车　·　B 商店');
 }
 // ---- 开始过场 ----
-function startFlightShow() {
+// ==================== 【fix54】飞行发动机轰鸣（Web Audio 程序化合成） ====================
+// 用户要求"等飞机飞的时候配上那种轻微的发动机轰鸣声"。
+// 单文件 HTML 无法附带音频资源，所以这里**现场合成**：
+//   棕噪声（低频更重，听感像发动机）→ 两级低通滤波 → 增益包络 + 7.5Hz 轻微调制（转速起伏）。
+// 音量刻意压得很低（峰值约 0.085），是"轻微"的底噪而不是轰鸣。
+// 注意：浏览器要求先有用户交互才能出声 —— 玩家是点了"买票"按钮才进来的，所以满足条件。
+var FLIGHT_AUDIO = null;
+function flightAudioStart() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const sr = ctx.sampleRate, len = Math.floor(sr * 2.0);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      last = (last + 0.02 * w) / 1.02;         // 棕噪声积分
+      d[i] = last * 3.2;
+    }
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.8;
+    const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 90;
+    const gain = ctx.createGain(); gain.gain.value = 0.0001;
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 7.5;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.030;
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    src.connect(lp); lp.connect(lp2); lp2.connect(gain); gain.connect(ctx.destination);
+    src.start(); lfo.start();
+    FLIGHT_AUDIO = { ctx: ctx, src: src, lfo: lfo, gain: gain, lp: lp };
+  } catch (e) { console.error('[flight audio]', e); }
+}
+function flightAudioSet(v) {                    // v = 0..1 推力强度
+  const A = FLIGHT_AUDIO; if (!A) return;
+  try {
+    const t = A.ctx.currentTime;
+    A.gain.gain.setTargetAtTime(0.0001 + v * 0.085, t, 0.25);
+    A.lp.frequency.setTargetAtTime(170 + v * 190, t, 0.40);
+  } catch (e) {}
+}
+function flightAudioStop() {
+  const A = FLIGHT_AUDIO; if (!A) return;
+  FLIGHT_AUDIO = null;
+  try {
+    A.gain.gain.setTargetAtTime(0.0001, A.ctx.currentTime, 0.30);
+    setTimeout(function () { try { A.src.stop(); A.lfo.stop(); A.ctx.close(); } catch (e) {} }, 1500);
+  } catch (e) {}
+}function startFlightShow() {
+  flightAudioStart();
+  // 【fix54】用户：
   if (FLIGHT || !AIRLINER) return;
   FLIGHT = {
     t: 0,
@@ -24806,6 +24861,14 @@ function flightPathPoint(u) {
 }
 // ---- 每帧推进（由 update() 开头接管调用）----
 function flightTick(dt) {
+  // 【fix54】发动机声随阶段变化（轻微底噪，不吵）
+  { const _tt = FLIGHT.t; let _vv = 0.30;
+    if (_tt < FLIGHT_T.taxi) _vv = 0.22;
+    else if (_tt < FLIGHT_T.lift) _vv = 0.62;
+    else if (_tt < FLIGHT_T.climb) _vv = 1.00;
+    else if (_tt < FLIGHT_T.descend) _vv = 0.70;
+    else if (_tt < FLIGHT_T.land) _vv = 0.50;
+    flightAudioSet(_vv); }
   const F = FLIGHT; if (!F) return;
   F.t = Math.min(FLIGHT_T.done, F.t + dt);
   const t = F.t;
@@ -24930,6 +24993,8 @@ function flightCamera(t, ks, dt) {
 }
 // ---- 结束/复位 ----
 function endFlightShow() {
+  flightAudioStop();   // 【fix54】飞行结束：淡出并关闭音频上下文
+  const _skR = document.getElementById('skipBtn'); if (_skR) _skR.style.display = '';
   const F = FLIGHT; if (!F) return;
   FLIGHT = null;
   scene.fog.near = F.fogNear; scene.fog.far = F.fogFar;
@@ -24943,7 +25008,7 @@ function endFlightShow() {
   // 碰撞盒摘掉：飞机已经飞走了，留着会在跑道上形成一堵看不见的墙
   const col = AIRLINER && AIRLINER.userData && AIRLINER.userData.collider;
   if (col) { const i = buildings.indexOf(col); if (i >= 0) buildings.splice(i, 1); }
-  if (hintTextEl) hudText(hintTextEl, 'hint', '已抵达 临海市（占位新城） · 后续开发待定');
+  if (hintTextEl) hudText(hintTextEl, 'hint', '已抵达 荷芷市 · 河畔新城');
   saveGame();
   clearInput();
 }
