@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix55-walk';;;;;;
+const BUILD = '20261024-fix56-bound';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15468,8 +15468,12 @@ function clampCity(p) {
   // 表现就是"完全走不动"（用户实测："人物在临海市不能正常行走"）。
   // 判据用 x > 900：主城 |x|≤500，中间隔着海，不会误判。
   if (p.x > 900) return;
-  p.x = Math.max(-WORLD_LIMIT_X, Math.min(WORLD_LIMIT_X, p.x));
-  p.z = Math.max(WORLD_LIMIT_Z_MIN, Math.min(WORLD_LIMIT_Z_MAX, p.z));
+  // 【fix55】主城边界必须和 personGroundY() 的"超出 ±(HALF-100) 就算海"判据对齐。
+  // 原来这里允许走到 615，而 personGroundY 从 400 起就返回海面高度 ——
+  // 中间那 215 米正是用户看到的"左边陆地、右边海、分界线在那里、越过去就泡在海里"。
+  const lim = HALF - 100;
+  p.x = Math.max(-lim, Math.min(lim, p.x));
+  p.z = Math.max(Math.max(WORLD_LIMIT_Z_MIN, -lim), Math.min(Math.min(WORLD_LIMIT_Z_MAX, lim), p.z));
 }
 // ========== 空间网格：加速碰撞/射线检测 ==========
 const GRID_CELL = 40, GRID_MIN_X = -WORLD_LIMIT_X, GRID_MIN_Z = WORLD_LIMIT_Z_MIN;
