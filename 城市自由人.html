@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix51-weather';;;;
+const BUILD = '20261024-fix53-touch';;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13825,10 +13825,16 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel'));
 }
 addEventListener('touchstart', e => {
-  if (ferrisPanelOpen || devPanelOpen || islandPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
+  // 【fix53】机票面板必须在这里让位！
+  // 之前 #flightPanel 既不在 isUiTouch 白名单里、flightPanelOpen 也不在下面这行的守卫里，
+  // 于是手机上点"永久往返机票/单次前往机票/暂时不了"会：
+  //   ① 被当成游戏触摸 → 落入摇杆分支 → 摇杆被拉到手指位置（用户报的"轮盘移到左手点的地方"）
+  //   ② 随后 e.preventDefault() → 浏览器不合成 click → 三个按钮**全都点不动**
+  // 两个症状同一个根因。（我当初只用 CDP 鼠标点击验证过，而手机走的是 touch 事件，漏了。）
+  if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
   // 【2026-10-15】足球开赛面板开着时同样让位：否则点「开赛」「取消」会穿透到游戏里、把摇杆拉起来
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
   let handled = false;                             // 本次事件是否真的启动了摇杆/视角（启动了才 preventDefault）
@@ -23818,8 +23824,10 @@ function buildLinhaiCity(g) {
   gtex.repeat.set(46, 46);                               // 900/46 ≈ 每 19.5m 一格
   const tMesh = new THREE.Mesh(tGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: gtex }));
   tMesh.position.set(DEST.x, 0.05, DEST.z);
-  add(tMesh);
-  LH_GROUND.mesh = tMesh;   // 交给天气系统：下雨时把地面压暗，读起来像"湿路面"
+  // ⚠️ 这个网格**渲染不出来**：同位置、同参数、visible=true，把材质染红也毫无变化
+  // （已排除合批、父节点隐藏、法线朝向等原因）。排查无果，所以不再把它加进场景，
+  // 只把噪点贴图留给下面 initFlightScenery 里那块真正生效的地面（见 destGround）。
+  LH_GROUND.tex = gtex;
   // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
   const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
   const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x14405e }));
@@ -24345,6 +24353,92 @@ function buildLinhaiCity(g) {
       bar.position.set(wx, yy, ZC); add(bar);
     }
   }
+  // ==================== 【fix52】地面陈设 ====================
+  // 用户反馈"地面不用那么空：古代那边放国风元素，现代城市那边放城市元素"。
+  // 全部走 det()（共享材质），所以件数上千而 draw call 基本不动。
+  // ---------- 现代（CBD）：沿主干道两侧人行道成排布置 ----------
+  for (const rx of rdXs) {
+    for (let z = Z0 + 26; z < Z1 - 22; z += 22) {
+      for (const s of [-1, 1]) {
+        if (Math.random() < 0.32) continue;
+        const px = rx + s * (17 + Math.random() * 6), pz = z + (Math.random() - 0.5) * 7;
+        const r = Math.random();
+        if (r < 0.15) {                                     // 长椅
+          det(BX(2.6, 0.16, 0.8), 0x9a6b3f, px, 0.48, pz);
+          det(BX(2.6, 0.7, 0.14), 0x9a6b3f, px, 0.85, pz - 0.33);
+          for (const q of [-1, 1]) det(BX(0.12, 0.5, 0.7), 0x5a5f66, px + q * 1.05, 0.25, pz);
+        } else if (r < 0.28) {                              // 垃圾桶
+          det(new THREE.CylinderGeometry(0.42, 0.38, 1.05, 10), 0x3f454c, px, 0.53, pz);
+          det(new THREE.CylinderGeometry(0.46, 0.46, 0.12, 10), 0x2b3038, px, 1.1, pz);
+        } else if (r < 0.37) {                              // 消防栓
+          det(new THREE.CylinderGeometry(0.2, 0.24, 0.9, 8), 0xc0392b, px, 0.45, pz);
+          det(new THREE.SphereGeometry(0.22, 8, 6), 0xc0392b, px, 0.95, pz);
+        } else if (r < 0.45) {                              // 邮筒
+          det(BX(0.7, 1.2, 0.7), 0x2e7d32, px, 0.6, pz);
+          det(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 10), 0x1b5e20, px, 1.35, pz);
+        } else if (r < 0.58) {                              // 广告灯箱（发光）
+          det(BX(1.5, 2.3, 0.35), 0x25303a, px, 1.35, pz);
+          det(BX(1.15, 1.9, 0.12), [0xffd9a0, 0xa8e8ff, 0xffb0c8][(Math.random() * 3) | 0], px, 1.4, pz + 0.24, 0, 0, 0, true);
+        } else if (r < 0.68) {                              // 自动售货机
+          det(BX(1.1, 2.0, 0.8), 0x37414b, px, 1.0, pz);
+          det(BX(0.85, 1.5, 0.12), 0xffe08a, px, 1.15, pz + 0.44, 0, 0, 0, true);
+        } else if (r < 0.78) {                              // 花坛（石栏 + 绿植）
+          det(new THREE.CylinderGeometry(1.5, 1.7, 0.6, 12), 0x8d9298, px, 0.3, pz);
+          det(new THREE.SphereGeometry(1.15, 9, 7), 0x3f7a34, px, 0.95, pz);
+        } else if (r < 0.88) {                              // 自行车架
+          for (let k = -1; k <= 1; k++) det(BX(0.08, 0.9, 0.08), 0xb9c2cc, px + k * 0.7, 0.45, pz);
+          det(BX(1.6, 0.08, 0.08), 0xb9c2cc, px, 0.9, pz);
+        } else {                                            // 隔离墩
+          det(new THREE.CylinderGeometry(0.28, 0.32, 0.85, 10), 0xd8dde2, px, 0.43, pz);
+        }
+      }
+    }
+  }
+  // ---------- 中式（古建区）：石灯笼 / 石桌凳 / 香炉 / 水缸 / 拴马桩 / 石碑 / 盆景 / 旗杆 ----------
+  for (let z = Z0 + 22; z < Z1 - 20; z += 20) {
+    for (let x = LH.ancX0 + 18; x < LH.ancX1 - 12; x += 26) {
+      if (Math.random() < 0.30) continue;
+      const px = x + (Math.random() - 0.5) * 8, pz = z + (Math.random() - 0.5) * 8;
+      const r = Math.random();
+      if (r < 0.20) {                                       // 石灯笼（座+柱+灯室+顶+宝珠）
+        det(new THREE.CylinderGeometry(0.5, 0.62, 0.5, 8), 0xb8b4a8, px, 0.25, pz);
+        det(new THREE.CylinderGeometry(0.2, 0.24, 1.5, 8), 0xb8b4a8, px, 1.25, pz);
+        det(BX(0.85, 0.85, 0.85), 0xc8c4b8, px, 2.42, pz);
+        det(BX(0.46, 0.46, 0.46), 0xffd9a0, px, 2.42, pz, 0, 0, 0, true);   // 灯芯发光
+        det(new THREE.ConeGeometry(1.0, 0.7, 6), 0x9a958c, px, 3.2, pz);
+        det(new THREE.SphereGeometry(0.16, 8, 6), 0xb8b4a8, px, 3.65, pz);
+      } else if (r < 0.34) {                                // 石桌 + 四石凳
+        det(new THREE.CylinderGeometry(0.25, 0.3, 0.85, 8), 0xb8b4a8, px, 0.43, pz);
+        det(new THREE.CylinderGeometry(1.15, 1.15, 0.18, 12), 0xc8c4b8, px, 0.95, pz);
+        for (let k = 0; k < 4; k++) {
+          const a = k * Math.PI / 2 + 0.4;
+          det(new THREE.CylinderGeometry(0.45, 0.45, 0.42, 8), 0xb8b4a8, px + Math.cos(a) * 1.9, 0.21, pz + Math.sin(a) * 1.9);
+        }
+      } else if (r < 0.44) {                                // 香炉（三足鼎 + 耳）
+        for (let k = 0; k < 3; k++) {
+          const a = k * 2.094;
+          det(new THREE.CylinderGeometry(0.14, 0.16, 0.7, 6), 0x7a6a4a, px + Math.cos(a) * 0.42, 0.35, pz + Math.sin(a) * 0.42);
+        }
+        det(new THREE.CylinderGeometry(0.62, 0.5, 0.7, 10), 0x8a7a56, px, 1.05, pz);
+        det(new THREE.TorusGeometry(0.66, 0.08, 6, 12), 0x8a7a56, px, 1.42, pz, Math.PI / 2);
+      } else if (r < 0.56) {                                // 水缸（带水面）
+        det(new THREE.CylinderGeometry(0.75, 0.6, 1.05, 12), 0x6b5a44, px, 0.53, pz);
+        det(new THREE.CylinderGeometry(0.68, 0.68, 0.06, 12), 0x3a7fa8, px, 1.02, pz);
+      } else if (r < 0.66) {                                // 拴马桩
+        det(BX(0.4, 1.9, 0.4), 0xa8a49a, px, 0.95, pz);
+        det(new THREE.SphereGeometry(0.3, 8, 7), 0x968f84, px, 2.05, pz);
+      } else if (r < 0.76) {                                // 石碑（座 + 碑身）
+        det(BX(1.5, 0.5, 0.9), 0xb8b4a8, px, 0.25, pz);
+        det(BX(0.95, 1.9, 0.3), 0x9a958c, px, 1.45, pz);
+      } else if (r < 0.88) {                                // 盆景（盆 + 松）
+        det(new THREE.CylinderGeometry(0.7, 0.55, 0.5, 10), 0x7a4a2c, px, 0.25, pz);
+        det(new THREE.ConeGeometry(0.85, 2.0, 7), 0x2f6b45, px, 1.4, pz);
+      } else {                                              // 旗杆 + 旗
+        det(new THREE.CylinderGeometry(0.12, 0.16, 6, 6), 0x8a4a2c, px, 3, pz);
+        det(BX(1.6, 1.1, 0.08), 0xc0392b, px + 0.85, 5.2, pz);
+      }
+    }
+  }
 }
 
 // ==================== 【fix43·乘机过场】登机 → 起飞 → 巡航 → 降落 ====================
@@ -24440,8 +24534,52 @@ function initFlightScenery() {
   // 层次+路网才看得出"这是一座城"。
   const beach = new THREE.Mesh(new THREE.PlaneGeometry(1040, 1040), new THREE.MeshLambertMaterial({ color: 0xc9b98d }));
   beach.rotation.x = -Math.PI / 2; beach.position.set(DEST.x, 0.015, DEST.z); g.add(beach);
-  const destGround = new THREE.Mesh(new THREE.PlaneGeometry(940, 940), new THREE.MeshLambertMaterial({ color: 0x4e7a3a }));
-  destGround.rotation.x = -Math.PI / 2; destGround.position.set(DEST.x, 0.03, DEST.z); g.add(destGround);
+  // 【fix52】这块草地改成"真地形"：顶点位移 + 顶点色分区 + 噪点贴图。
+  // ⚠️ 原本我在 buildLinhaiCity 里单独建了一个地形网格，但它**渲染不出来**
+  //    （位置/参数/可见性都正确、材质染红也无效，排查无果），
+  //    所以改为直接改造这块本来就渲染正常的平面，绕开那个问题。
+  const dgGeo = new THREE.PlaneGeometry(940, 940, 94, 94);
+  // 噪点贴图（细颗粒 + 石板斑块）：只靠顶点色仍是大片纯色，加颗粒才像真实地表。
+  // ⚠️ 这里必须**自己生成**：buildLinhaiCity() 是在这块地面**之后**才调用的，
+  // 所以不能依赖它里面的 LH_GROUND.tex（那一刻还是 undefined，实测 hasMap=false）。
+  const dgcv = document.createElement('canvas'); dgcv.width = dgcv.height = 256;
+  const dgcx = dgcv.getContext('2d');
+  dgcx.fillStyle = '#ffffff'; dgcx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 3000; i++) {
+    const g2 = Math.round(198 + Math.random() * 57);
+    dgcx.fillStyle = 'rgb(' + g2 + ',' + g2 + ',' + g2 + ')';
+    dgcx.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  for (let i = 0; i < 80; i++) {
+    const g2 = Math.round(186 + Math.random() * 64);
+    dgcx.fillStyle = 'rgba(' + g2 + ',' + g2 + ',' + g2 + ',0.42)';
+    dgcx.beginPath(); dgcx.arc(Math.random() * 256, Math.random() * 256, 5 + Math.random() * 11, 0, 7); dgcx.fill();
+  }
+  const dgtex = new THREE.CanvasTexture(dgcv);
+  dgtex.wrapS = dgtex.wrapT = THREE.RepeatWrapping;
+  dgtex.repeat.set(48, 48);
+  dgGeo.rotateX(-Math.PI / 2);
+  const dgPos = dgGeo.attributes.position;
+  const dgCol = new Float32Array(dgPos.count * 3);
+  const _dc = new THREE.Color(), _dc2 = new THREE.Color();
+  for (let i = 0; i < dgPos.count; i++) {
+    const wx = dgPos.getX(i) + DEST.x, wz = dgPos.getZ(i) + DEST.z;
+    const hy = linhaiHeight(wx, wz);
+    dgPos.setY(i, hy);
+    // 斑驳噪声波长必须远大于格距（940/94 = 10m），否则采样混叠成条纹
+    const jit = (Math.sin(wx * 0.055 + wz * 0.043) * 0.5 + 0.5) * 0.07 - 0.035;
+    if (hy < -1.6) _dc.setHex(0x16303f);                        // 河床深水
+    else if (hy < -0.35) _dc.setHex(0xa8946c);                  // 河岸沙地
+    else if (hy < 0.6) _dc.setHex(wx > LH.ancX0 - 26 ? 0x7a746a : 0x6e747c);   // 城区台地
+    else _dc.setHex(0x3f6630).lerp(_dc2.setHex(0x24401f), Math.min(1, (hy - 0.6) / 5));   // 丘陵草坡
+    _dc.offsetHSL(0, 0, jit);
+    dgCol[i * 3] = _dc.r; dgCol[i * 3 + 1] = _dc.g; dgCol[i * 3 + 2] = _dc.b;
+  }
+  dgGeo.setAttribute('color', new THREE.BufferAttribute(dgCol, 3));
+  dgGeo.computeVertexNormals();
+  const destGround = new THREE.Mesh(dgGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: dgtex }));
+  destGround.position.set(DEST.x, 0.03, DEST.z); g.add(destGround);
+  LH_GROUND.mesh = destGround;   // 交给天气系统：下雨时压暗，读起来像"湿路面"
   // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
   buildLinhaiCity(g);
   // 跑道（沿 X，飞机一路向东进近）。★ 必须放在城市**最西侧**：
