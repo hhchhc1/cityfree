@@ -725,6 +725,22 @@
     </div>
   </div>
   <div id="devBtn">开发者模式</div>
+<!-- ==================== 【fix47】机票对话面板 ====================
+     用户要求：手机版登不了机（没有键盘 E），改成"在大飞机旁边立一根光柱，
+     走到那里问'少年，你愿意解锁新的旅途吗'，三个选项：永久往返 / 单次前往 / 暂时不了"。
+     为什么这样就修好了手机端：面板是普通 HTML，手机上直接点按钮即可 ——
+     而 fix43 的登机触发是**键盘 E 键**，手机没有键盘，那条路永远走不通。
+     样式全部内联，避免去动已有的 CSS 表。 -->
+<div id="flightPanel" style="display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:70;align-items:center;justify-content:center;background:rgba(4,10,18,0.55)">
+  <div style="width:min(92vw,430px);box-sizing:border-box;background:linear-gradient(180deg,#0e2233,#0a1620);border:1px solid #2f6d8f;border-radius:14px;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.65);color:#dff2ff">
+    <div style="font-size:19px;font-weight:700;color:#8fe3ff;margin-bottom:9px">✈ 新的旅途</div>
+    <div id="flDesc" style="font-size:14px;line-height:1.65;margin-bottom:9px">少年，你愿意解锁新的旅途吗？</div>
+    <div id="flNote" style="font-size:12px;color:#9fc4d8;margin-bottom:14px"></div>
+    <button id="flBuyPerm" style="display:block;width:100%;margin-bottom:9px;padding:12px;border:0;border-radius:10px;font-size:15px;font-weight:700;color:#08202c;background:linear-gradient(180deg,#ffe9a3,#f5c542);cursor:pointer">永久往返机票　10000 金币</button>
+    <button id="flBuyOnce" style="display:block;width:100%;margin-bottom:9px;padding:12px;border:0;border-radius:10px;font-size:15px;font-weight:700;color:#062018;background:linear-gradient(180deg,#a9f0c8,#4fd08a);cursor:pointer">单次前往机票　500 金币</button>
+    <button id="flCancel" style="display:block;width:100%;padding:11px;border:1px solid #3a6076;border-radius:10px;font-size:14px;color:#b7d6e6;background:#12283a;cursor:pointer">暂时不了</button>
+  </div>
+</div>
   <!-- 【2026-10-21·fix31 移植】开发者模式常驻退出按钮 -->
   <div id="devExitBtn">退出开发者模式</div>
   <div id="devPanel" style="display:none">
@@ -872,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix46-autoupdate';
+const BUILD = '20261024-fix47-ticket';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -10562,7 +10578,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false };
+const PROGRESS = { tankUnlocked: false, flightPass: false };   // flightPass=永久往返机票（fix47）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -13469,7 +13485,9 @@ addEventListener('keydown', e => {
   // 过场期间只认空格/Esc（跳过），其余热键全部屏蔽 —— 免得玩家在演出里误开商店/切枪。
   // 平时 E 键先看"是不是站在客机舱门旁、该登机"，不满足才落到原来的 tryToggle()（上车/交互）。
   if (FLIGHT) { if (k === ' ' || k === 'escape') skipFlightShow(); return; }
-  if (k === 'e' && nearAirlinerDoor()) { startFlightShow(); return; }
+  // 【fix47】E 键改成"打开机票对话"而不是直接登机 —— 登机必须先买票。
+  // 手机端没有 E 键也没关系：走到光柱旁边会自动弹出同一个面板（面板就是 HTML，可直接点）。
+  if (k === 'e' && flightPillarDist() < 12) { openFlightPanel(); return; }
   if (k === 'e') tryToggle();
   if (k === ' ') { jump(); _carJumpReq = true; }
   if (k === 'r') reloadWeapon();
@@ -21738,7 +21756,8 @@ function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
   // 常规世界逻辑整段跳过 —— 这样完全不必去碰那 179 处 state 判断，风险最低。
   if (FLIGHT) { flightTick(dt); return; }
-  // 没在过场：玩家站在客机舱门旁就提示「按 E 登机」
+  // 没在过场：先跑光柱（走近自动弹机票对话），再更新舱门提示
+  updateFlightPillar(dt);
   updateBoardPrompt();
   // 【2026-10-21·fix32】每 4 帧 → 每 6 帧（60fps 下 15Hz → 10Hz）。
   // 每次重建要把 _gridW×_gridH（约 31×30 = 930）个格子数组全部清空，纯 CPU 浪费。
@@ -22784,7 +22803,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass },
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
     islandSign: { text: islandSignState.text, board: islandSignState.board, txt: islandSignState.txt, glow: !!islandSignState.glow },   // 【fix16】南岛立牌自定义内容
@@ -22897,7 +22916,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) PROGRESS.tankUnlocked = !!data.progress.tankUnlocked;
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; }   // 【fix47】永久往返机票也要能存下来
   // 任务状态（接取中的任务要恢复进度，完成的任务不再显示绿色光柱）
   // worldDay 要在 deserializeQuestState 之前恢复，冷却判断依赖它
   if (typeof data.worldDay === 'number') worldDay = data.worldDay;
@@ -23588,6 +23607,7 @@ function gamePaused() {
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
       || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel')
       || vis('setPanel')
+      || vis('flightPanel')   // 【fix47】机票对话打开时也要暂停世界（否则对话时人物还能乱跑）
       // 【2026-10-21·fix38】布局编辑模式也要暂停：玩家在摆按钮时世界必须冻住，
       // 否则背后的车流/NPC 照跑，一退出编辑就"世界自己动了半天"。
       || (typeof layoutEditing !== 'undefined' && layoutEditing);
@@ -23883,6 +23903,67 @@ function initFlightScenery() {
   tv.rotation.y = Math.PI;                                     // 让台阶朝 +Z（朝飞机）
   AIRLINER.userData.stairs = tv;
   AIRLINER.userData.stairsDoor = dw.clone();
+  // (6) 【fix47】光柱：走到这里弹出"机票"对话（手机/电脑通用，不再依赖键盘 E）
+  // 位置放在机身的**南侧、机身宽度之外**（免得和登机梯、机身穿插），离舱门约 7m。
+  const pillarX = dw.x, pillarZ = dw.z + 7;
+  const pw = new THREE.Group();
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0x66e0ff, transparent: true, opacity: 0.26, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false
+  });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.38, 9, 18, 1, true), beamMat);
+  beam.position.y = 4.5; pw.add(beam);
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: 0xbdf3ff, transparent: true, opacity: 0.45, depthWrite: false,
+    blending: THREE.AdditiveBlending, fog: false
+  });
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 9, 10), coreMat);
+  core.position.y = 4.5; pw.add(core);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x8ceaff, transparent: true, opacity: 0.5, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.75, 28), ringMat);
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.12; pw.add(ring);
+  // 柱顶一个小飞机图标，一眼知道这里是"去坐飞机"。
+  // ⚠️ 不要用 emoji（\u2708）：设备缺字体时会退化成"豆腐块/菱形"（实测 headless 就是这样），
+  //    所以这里直接用 canvas 路径手绘一个俯视飞机轮廓，任何环境都不依赖字体。
+  const cvz = document.createElement('canvas'); cvz.width = 128; cvz.height = 128;
+  const cz2 = cvz.getContext('2d');
+  cz2.fillStyle = 'rgba(190,244,255,0.95)';
+  cz2.beginPath();
+  cz2.moveTo(64, 16);        // 机头
+  cz2.lineTo(72, 62);        // 右机身
+  cz2.lineTo(114, 80);       // 右翼尖
+  cz2.lineTo(114, 90);
+  cz2.lineTo(72, 80);
+  cz2.lineTo(70, 106);       // 右尾
+  cz2.lineTo(86, 112);
+  cz2.lineTo(64, 116);
+  cz2.lineTo(42, 112);
+  cz2.lineTo(58, 106);
+  cz2.lineTo(56, 80);
+  cz2.lineTo(14, 90);
+  cz2.lineTo(14, 80);
+  cz2.lineTo(56, 62);
+  cz2.closePath();
+  cz2.fill();
+  const signMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cvz), transparent: true, depthWrite: false, fog: false });
+  const planeSign = new THREE.Sprite(signMat);
+  planeSign.scale.set(3.2, 3.2, 1); planeSign.position.y = 10.6; pw.add(planeSign);
+  pw.position.set(pillarX, 0, pillarZ);
+  scene.add(pw);
+  registerDynamicObject(pw);                      // 要自转/脉动，绝不能被静态合批吃掉
+  AIRLINER.userData.pillarGroup = pw;
+  AIRLINER.userData.pillarBeam = beam;
+  AIRLINER.userData.pillarPos = { x: pillarX, z: pillarZ };
+  // 机票面板的三个按钮（只绑一次）
+  const _flPerm = document.getElementById('flBuyPerm');
+  const _flOnce = document.getElementById('flBuyOnce');
+  const _flCancel = document.getElementById('flCancel');
+  if (_flPerm) _flPerm.addEventListener('click', function (e) { e.preventDefault(); flightBuy('perm'); });
+  if (_flOnce) _flOnce.addEventListener('click', function (e) { e.preventDefault(); flightBuy('once'); });
+  if (_flCancel) _flCancel.addEventListener('click', function (e) { e.preventDefault(); flightBuy('cancel'); });
 }
 // ---- 登机提示：玩家走到舱门附近就提示「按 E 登机」----
 // 只在"刚靠近 / 刚离开"时写一次 hint，之后让游戏自己的提示逻辑接管 ——
@@ -23899,7 +23980,7 @@ function updateBoardPrompt() {
   const near = nearAirlinerDoor();
   if (near === boardPromptOn) return;
   boardPromptOn = near;
-  if (near) hudText(hintTextEl, 'hint', '按 E 登机（飞往临海市）');
+  if (near) hudText(hintTextEl, 'hint', '✈ 走到蓝色光柱里购买机票（电脑也可按 E）');
   else hudText(hintTextEl, 'hint', 'WASD/方向键 移动　·　空格 跳跃　·　E 上车　·　B 商店');
 }
 // ---- 开始过场 ----
@@ -24127,6 +24208,110 @@ try { initFlightScenery(); } catch (e) { console.error('[flight scenery]', e); }
   }, 3000);
 })();
 
+// ==================== 【fix47】机票对话：光柱 + 三个选项 ====================
+// 用户反馈与要求："手机版上不能登机，没有所谓的中间按钮。
+// 我感觉你还是在那个大飞机旁边弄一个光柱类似的东西，然后走到那里说
+// '少年，你愿意解锁新的旅途吗'，然后分为 3 个选项：永久往返机票 / 单次前往机票 / 暂时不了，
+// 永久解锁 1 万元，单次 500 元。"
+//
+// 为什么手机原来登不了机（根因）：fix43 的触发条件是**键盘 E 键**
+// （`if (k === 'e' && nearAirlinerDoor()) startFlightShow()`）。
+// 手机根本没有键盘，所以这条路在手机上永远走不通 —— 而 PC 的"上车"之所以手机能用，
+// 是因为它走的是 tryToggle()，手机另有 HUD 按钮。
+// 改成"走到光柱自动弹对话面板"后：面板就是普通 HTML，手机上直接点按钮，两端行为一致。
+var flightPanelOpen = false;
+var flightPillarMiss = 0;                 // 关掉面板后的冷却，避免站在边缘反复弹
+const FLIGHT_PRICE_PERM = 10000;          // 永久往返机票
+const FLIGHT_PRICE_ONCE = 500;            // 单次前往机票
+function flightHasPass() { return !!(PROGRESS && PROGRESS.flightPass); }
+// 玩家到光柱的水平距离（光柱位置由 initFlightScenery 写进 AIRLINER.userData）
+function flightPillarDist() {
+  const pil = AIRLINER && AIRLINER.userData && AIRLINER.userData.pillarPos;
+  if (!pil) return 1e9;
+  return Math.hypot(person.position.x - pil.x, person.position.z - pil.z);
+}
+function openFlightPanel() {
+  const p = document.getElementById('flightPanel');
+  if (!p || flightPanelOpen) return;
+  const permed = flightHasPass();
+  const desc = document.getElementById('flDesc');
+  const note = document.getElementById('flNote');
+  if (desc) desc.textContent = permed
+    ? '少年，机票已经在你名下了 —— 随时可以出发。'
+    : '少年，你愿意解锁新的旅途吗？';
+  if (note) note.textContent = permed
+    ? '当前金币 ' + gold + '　·　永久往返已解锁，往返都不再收费'
+    : '当前金币 ' + gold + '　·　永久往返买一次，以后往返都免费';
+  refreshFlightBtns();
+  // 面板一开就停掉视角滑动/摇杆：否则旧手指会继续转相机、人物继续走
+  lookActive = false; lookId = null; joyActive = false; joyId = null; joyX = 0; joyY = 0;
+  p.style.display = 'flex';
+  flightPanelOpen = true;
+}
+// 按钮状态单独抽出来，**面板开着时每帧刷新** ——
+// fix47 第一版只在打开面板时算一次 disabled，于是"先没钱 → 后来赚到钱"（或开发者模式加钱）时
+// 按钮会一直灰着点不动（实测点击无效、金币扣不掉）。
+function refreshFlightBtns() {
+  const permed = flightHasPass();
+  const permBtn = document.getElementById('flBuyPerm');
+  const onceBtn = document.getElementById('flBuyOnce');
+  if (permBtn) {
+    permBtn.style.display = permed ? 'none' : 'block';
+    permBtn.textContent = '永久往返机票　' + FLIGHT_PRICE_PERM + ' 金币';
+    permBtn.disabled = !permed && gold < FLIGHT_PRICE_PERM;
+    permBtn.style.filter = permBtn.disabled ? 'grayscale(0.8)' : '';
+  }
+  if (onceBtn) {
+    onceBtn.textContent = permed ? '立即登机（已解锁）' : '单次前往机票　' + FLIGHT_PRICE_ONCE + ' 金币';
+    onceBtn.disabled = !permed && gold < FLIGHT_PRICE_ONCE;
+    onceBtn.style.filter = onceBtn.disabled ? 'grayscale(0.8)' : '';
+  }
+}
+function closeFlightPanel() {
+  const p = document.getElementById('flightPanel');
+  if (p) p.style.display = 'none';
+  flightPanelOpen = false;
+  flightPillarMiss = 1.5;    // 关掉后给 1.5 秒冷却：要先走开再回来才会重新弹
+}
+function flightBuy(kind) {
+  if (kind === 'cancel') { closeFlightPanel(); setHint('已取消：想飞的时候再走到光柱这边'); return; }
+  const permed = flightHasPass();
+  if (kind === 'perm' && !permed) {
+    if (gold < FLIGHT_PRICE_PERM) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_PERM - gold) + ' 金币'); return; }
+    addGold(-FLIGHT_PRICE_PERM);
+    PROGRESS.flightPass = true;
+    saveGame();                                   // 花了 1 万，必须立刻落盘
+    floatText('- ' + FLIGHT_PRICE_PERM + ' 金币 · 永久往返机票', '#ffd700');
+    setHint('已购买「永久往返机票」：以后飞临海市都免费（已存档）');
+  } else if (kind === 'once' && !permed) {
+    if (gold < FLIGHT_PRICE_ONCE) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_ONCE - gold) + ' 金币'); return; }
+    addGold(-FLIGHT_PRICE_ONCE);
+    saveGame();
+    floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 单次机票', '#ffd700');
+    setHint('已购买单次机票，出发！');
+  }
+  closeFlightPanel();
+  startFlightShow();                              // 付完款直接进入登机→起飞→降落演出
+}
+// 每帧检查（非过场时）：走到光柱旁就自动弹出对话，走远了自动收起
+function updateFlightPillar(dt) {
+  if (!AIRLINER || FLIGHT) return;
+  const g = AIRLINER.userData.pillarGroup;
+  if (g) {                                        // 光柱缓慢自转 + 亮度脉动：远处更容易被注意到
+    g.rotation.y += dt * 0.7;
+    const ph = performance.now() * 0.001;
+    if (AIRLINER.userData.pillarBeam) AIRLINER.userData.pillarBeam.material.opacity = 0.22 + 0.12 * (0.5 + 0.5 * Math.sin(ph * 2.2));
+  }
+  if (flightPillarMiss > 0) flightPillarMiss -= dt;
+  const d = flightPillarDist();
+  if (flightPanelOpen) {
+    refreshFlightBtns();                          // 金币随时在变，按钮的可用状态要跟着走
+    if (d > 7.0) closeFlightPanel();              // 走出范围自动收起，免得被"粘"在对话里
+    return;
+  }
+  if (d < 3.8 && flightPillarMiss <= 0) openFlightPanel();
+}
+
 const frameLoop = () => {
   // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
   // 既会刷一屏黑，又很容易触发二次丢失（表现为"黑屏闪个不停"）。等 restored 事件恢复后再继续。
@@ -24188,6 +24373,11 @@ const frameLoop = () => {
     if (hint) hint.textContent = '⚠ Error: ' + e.message;
   }
   if (!pausedNow) { try { updateSoccer(dt); } catch (e) {} }   // 【足球】南岛 3v3（弹窗暂停时一并冻结）
+  // 【fix47】机票面板开着时刷新按钮可用状态。
+  // ⚠️ 这一句绝不能挪进 update()/updateFlightPillar()：面板一开 gamePaused() 就是 true，
+  //    那条路径整段不执行，按钮的 disabled 会永远停在"打开面板那一刻"——
+  //    实测症状是"先没钱 → 后来赚到钱（或开发者加钱）→ 按钮还是灰的，点了没反应"。
+  if (flightPanelOpen) { try { refreshFlightBtns(); } catch (e) {} }
   // 【2026-10-20·fix28】updateAutoQuality 必须排在 render **之前**：
   // 它会调 renderer.setPixelRatio() → three.js 内部重新 setSize → **整个 framebuffer 被重分配**。
   // 原来它排在 render 之后，于是这一帧刚画好的内容随旧缓冲区一起被丢掉，

@@ -76,7 +76,7 @@ const BUILD = '20261022-fix41-airport';
 改动前先复制一份主文件，命名为 `城市自由人.html.bak-fixNN`，例如：
 
 ```
-城市自由人.html.bak-fix46-before-autoupdate
+城市自由人.html.bak-fix47-before-ticket
 ```
 
 这类文件已被 `.gitignore` 忽略，不会误提交进仓库。
