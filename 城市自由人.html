@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix44-overlap';
+const BUILD = '20261024-fix45-lamps';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -8908,8 +8908,12 @@ const streetLightPool = [];   // 复用的点光源（只给玩家附近最近�
     for (let d = -CITY; d <= CITY; d += 40) {
       // 路灯只在交叉口附近
       if (Math.abs(d) % 80 < 2) {
+        // 【fix45·用户报"马路中间有路灯/电线杆，撞不到又很突兀"】
+        // 原来写的是 lx = r + side*6、lz = d —— 而 d 正是**东西向道路的中心线**，
+        // 于是灯杆只躲开了南北向车道，却稳稳站在东西向车道的路面正中（看截图非常突兀）。
+        // 路面半宽只有 4.5（ROAD=9），要让灯杆落在"人行道四角"，**两个方向都必须偏出路面**。
         for (const side of [-1, 1]) {
-          const lx = r + side * 6, lz = d;
+          const lx = r + side * 6, lz = d + side * 6;
           const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 5, 6), lightMat);
           pole.position.set(lx, 2.5, lz); scene.add(pole);
           const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), glowMat);
