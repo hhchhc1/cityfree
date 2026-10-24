@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix45-lamps';
+const BUILD = '20261024-fix46-autoupdate';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24092,6 +24092,40 @@ function endFlightShow() {
 }
 // 初始化布景（必须在 AIRLINER 就位之后）
 try { initFlightScenery(); } catch (e) { console.error('[flight scenery]', e); }
+
+// ==================== 【fix46】自动版本守卫 ====================
+// 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
+// 所以**即使我每次都推送更新，浏览器/CDN 也可能在最长 10 分钟内继续用旧文件** ——
+// 表现就是"右上角还显示上一个 build 号""刚修的问题看起来还在"。
+// 守卫的做法：启动后异步取一次"带时间戳"的自身副本（绕开缓存），只取前 64KB
+// （BUILD 常量在文件靠前处，足够覆盖），然后比对版本号：
+//   · 一致      → 什么都不做
+//   · 线上更新了 → 自动带 ?v=<新版本> 重载一次，从而绕开 HTML 缓存
+// 用 sessionStorage 记住"已经为这个版本重载过"，避免刷新死循环。
+(function autoUpdateGuard() {
+  // 只在 http/https 下工作：file:// 直接打开时 fetch 会被拦，跳过即可
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  const KEY = 'cf_build_reloaded';
+  setTimeout(function () {
+    fetch(location.pathname + '?_cb=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Range: 'bytes=0-65535' }      // 只要前 64KB，不用整个 1.2MB
+    })
+      .then(function (r) { return (r.ok || r.status === 206) ? r.text() : ''; })
+      .then(function (t) {
+        if (!t) return;
+        const m = t.match(/const BUILD = '([^']+)'/);
+        if (!m) return;
+        if (m[1] === BUILD) { try { sessionStorage.removeItem(KEY); } catch (e) {} return; }   // 已是最新
+        let already = null;
+        try { already = sessionStorage.getItem(KEY); } catch (e) {}
+        if (already === m[1]) return;            // 这个版本已经重载过 → 不再循环
+        try { sessionStorage.setItem(KEY, m[1]); } catch (e) {}
+        location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]));
+      })
+      .catch(function () {});
+  }, 3000);
+})();
 
 const frameLoop = () => {
   // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
