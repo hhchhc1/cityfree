@@ -1022,6 +1022,10 @@ function nearGangHq(x, z, r) { return gangHqDist(x, z) < r; }
 const WATER_Y = -0.6;
 // 地形高度：城市（含道路）保持平整，外圈乡村丘陵起伏，南侧海滩向水面下坡
 function terrainHeight(x, z) {
+  // 【fix48】临海市：这张地图只覆盖 ±500，地图外原本会被"四面环海"逻辑压到海平面
+  // （WATER_Y ≈ -0.6）。而临海市的地基在 y≈0，于是玩家一走过去就会**陷进地面 0.66m**
+  // （实测相机沉到水下、整屏都是水色）。所以给新城单独一块水平地面。
+  if (x > 980 && x < 2010 && z > -830 && z < 270) return 0;
   const m = Math.max(Math.abs(x), Math.abs(z));   // 用方形判断，保证城市网格（含四角）全平
   const ring = THREE.MathUtils.clamp((m - 205) / 90, 0, 1);   // 城市外才开始丘陵（城市内全平）
   const south = THREE.MathUtils.clamp((z - 190) / 60, 0, 1);  // 南侧压平丘陵，让位给沙滩
@@ -23696,6 +23700,406 @@ function updateAutoQuality() {
 }
 let _lastFrameMs = 0;
 let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于在刚暂停那一帧清一次输入）
+// ==================== 【fix48】临海市：河流 + 西岸 CBD + 东岸中式古建 ====================
+// 用户需求：一条宽阔河流从城市中心穿过，左岸融合涩谷气质的未来科技 CBD，
+// 右岸精美中式古典古建群，两岸隔河相映。
+//
+// 本轮（第 1 期）交付：河流 + 两岸城区 + CBD 超高层天际线（玻璃幕墙/金属/霓虹/LED/街角店铺）
+//                    + 中式古建群（城墙/城楼/飞檐楼阁/亭/曲廊/石桥/灯笼/垂柳/假山）
+//                    + CBD 路网（主干道 + 车道线 + 斑马线 + 路口 + 路灯 + 红绿灯）
+// TODO(第 2 期)：动态天气（晴/多云/阴/小雨 + 湿润反光）、昼夜时段细化
+// TODO(第 3 期)：两岸车流 + 人流 + 过街天桥/地下通道/立交/匝道/地铁站口
+// TODO(第 4 期)：细节深化（斗拱/雕花窗/连廊/LED 内容/亲水平台）
+//
+
+function buildLinhaiCity(g) {
+  const Z0 = LH.z0, Z1 = LH.z1, ZC = (Z0 + Z1) / 2, ZLEN = Z1 - Z0;
+  const add = (m) => { g.add(m); return m; };
+  // ---------- 1) 两岸铺装 ----------
+  const paveM = new THREE.MeshLambertMaterial({ color: 0x8d9298 });   // 西岸：现代石板
+  const ancM = new THREE.MeshLambertMaterial({ color: 0x9d978c });    // 东岸：青砖灰
+  const p1 = new THREE.Mesh(new THREE.PlaneGeometry(LH.cdX1 - LH.cdX0 + 30, ZLEN), paveM);
+  p1.rotation.x = -Math.PI / 2; p1.position.set((LH.cdX0 + LH.cdX1) / 2, 0.055, ZC); add(p1);
+  const p2 = new THREE.Mesh(new THREE.PlaneGeometry(LH.ancX1 - LH.ancX0 + 30, ZLEN), ancM);
+  p2.rotation.x = -Math.PI / 2; p2.position.set((LH.ancX0 + LH.ancX1) / 2, 0.055, ZC); add(p2);
+  // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
+  const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x14405e }));
+  bed.position.set(rwC, -0.18, ZC); add(bed);
+  // 波纹贴图：用 canvas 画随机细波，作为半透明面叠在水上，靠每帧平移 UV 做流动
+  const wcv = document.createElement('canvas'); wcv.width = wcv.height = 256;
+  const wcx = wcv.getContext('2d');
+  wcx.fillStyle = 'rgba(255,255,255,0)'; wcx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * 256, y = Math.random() * 256, w = 10 + Math.random() * 34;
+    wcx.strokeStyle = 'rgba(190,232,255,' + (0.05 + Math.random() * 0.16).toFixed(3) + ')';
+    wcx.lineWidth = 1 + Math.random() * 1.6;
+    wcx.beginPath(); wcx.moveTo(x, y);
+    wcx.bezierCurveTo(x + w * 0.3, y - 2.5, x + w * 0.7, y + 2.5, x + w, y);
+    wcx.stroke();
+  }
+  const wtex = new THREE.CanvasTexture(wcv);
+  wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping;
+  wtex.repeat.set(rwW / 22, ZLEN / 22);
+  const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshLambertMaterial({
+    color: 0x3d86b8, map: wtex, transparent: true, opacity: 0.86, emissive: 0x0a2233
+  }));
+  wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.02, ZC); add(wsurf);
+  registerDynamicObject(wsurf);
+  LH_WATER.mesh = wsurf; LH_WATER.tex = wtex;
+  // 驳岸：两岸石砌矮墙 + 亲水平台踏步
+  const stoneM = new THREE.MeshLambertMaterial({ color: 0x7e8288 });
+  for (const s of [-1, 1]) {
+    const wx = s < 0 ? rw0 : rw1;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, ZLEN), stoneM);
+    wall.position.set(wx + s * 2.2, 0.9, ZC); add(wall);
+    for (let z = Z0 + 30; z < Z1 - 30; z += 120) {          // 每隔一段一个下河踏步
+      const st = new THREE.Mesh(new THREE.BoxGeometry(9, 0.4, 7), stoneM);
+      st.position.set(wx + s * 6.5, 0.25, z); add(st);
+    }
+  }
+  // ---------- 3) 西岸 CBD：路网 + 超高层群 ----------
+  const roadM = new THREE.MeshLambertMaterial({ color: 0x33383d });
+  const lineM = new THREE.MeshLambertMaterial({ color: 0xe9ecf0 });
+  const cbdW = LH.cdX1 - LH.cdX0;
+  // 主干道：沿 Z 三条（含中央大道加宽）、沿 X 每 120m 一条
+  const rdXs = [LH.cdX0 + 26, (LH.cdX0 + LH.cdX1) / 2, LH.cdX1 - 26];
+  for (const rx of rdXs) {
+    const isMain = Math.abs(rx - (LH.cdX0 + LH.cdX1) / 2) < 1;
+    const wdt = isMain ? 22 : 14;
+    const r = new THREE.Mesh(new THREE.BoxGeometry(wdt, 0.08, ZLEN - 20), roadM);
+    r.position.set(rx, 0.1, ZC); add(r);
+    // 车道线：中线双黄 + 两侧白虚线
+    for (let z = Z0 + 20; z < Z1 - 20; z += 14) {
+      const dl = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, isMain ? 8 : 6), lineM);
+      dl.position.set(rx + (isMain ? 0 : 0), 0.16, z);
+      if (isMain) { dl.position.x = rx - 4.4; add(dl); const dr = dl.clone(); dr.position.x = rx + 4.4; add(dr); }
+      else add(dl);
+    }
+  }
+  const rdZs = [];
+  for (let rz = Z0 + 70; rz < Z1 - 40; rz += 120) rdZs.push(rz);
+  for (const rz of rdZs) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(cbdW + 30, 0.08, 16), roadM);
+    r.position.set((LH.cdX0 + LH.cdX1) / 2, 0.1, rz); add(r);
+    for (let x = LH.cdX0 + 16; x < LH.cdX1 - 10; x += 14) {
+      const dl = new THREE.Mesh(new THREE.BoxGeometry(7, 0.1, 0.5), lineM);
+      dl.position.set(x, 0.16, rz); add(dl);
+    }
+  }
+  // 路口斑马线（每个纵横向路口都画）
+  for (const rx of rdXs) for (const rz of rdZs) {
+    for (let k = -3; k <= 3; k++) {
+      const zb = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 4.2), lineM);
+      zb.position.set(rx + k * 1.9, 0.17, rz + 13); add(zb);
+      const zb2 = zb.clone(); zb2.position.z = rz - 13; add(zb2);
+      const xb = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.1, 1.1), lineM);
+      xb.position.set(rx + 15, 0.17, rz + k * 1.9); add(xb);
+      const xb2 = xb.clone(); xb2.position.x = rx - 15; add(xb2);
+    }
+  }
+  // 路灯 + 红绿灯（沿主干道）
+  const lampPoleM = new THREE.MeshLambertMaterial({ color: 0x4a4f55 });
+  const lampHeadM = new THREE.MeshBasicMaterial({ color: 0xfff0bb });
+  for (const rx of rdXs) for (let z = Z0 + 60; z < Z1 - 30; z += 60) {
+    for (const s of [-1, 1]) {
+      const px = rx + s * 12;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 8.5, 6), lampPoleM);
+      pole.position.set(px, 4.3, z); add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 2.0), lampHeadM);
+      head.position.set(px - s * 1.1, 8.4, z); add(head);
+    }
+  }
+  const tlBoxM = new THREE.MeshLambertMaterial({ color: 0x1b1e22 });
+  const tlRed = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+  const tlGrn = new THREE.MeshBasicMaterial({ color: 0x3ddc65 });
+  for (const rx of rdXs) for (const rz of rdZs) {
+    const px = rx + 13, pz = rz + 10;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 6.2, 6), lampPoleM);
+    pole.position.set(px, 3.1, pz); add(pole);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.5, 0.7), tlBoxM);
+    box.position.set(px, 6.0, pz); add(box);
+    const lr = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 6), tlRed);
+    lr.position.set(px, 6.35, pz + 0.4); add(lr);
+    const lg = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 6), tlGrn);
+    lg.position.set(px, 5.68, pz + 0.4); add(lg);
+  }
+  // 超高层 CBD：沿网格铺，尺寸/高度/风格都拉开，避免"一排积木"
+  // LED 大屏用的几张 canvas 贴图（复用同一批，控制绘制调用）
+  const ledTex = [];
+  for (let i = 0; i < 4; i++) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+    const x2 = c.getContext('2d');
+    const base = ['#0b1b3a', '#2a0b2a', '#06222a', '#220b12'][i];
+    x2.fillStyle = base; x2.fillRect(0, 0, 128, 256);
+    for (let k = 0; k < 26; k++) {
+      x2.fillStyle = ['#ff3fa4', '#3ff0ff', '#ffd24a', '#7cff9a', '#ffffff'][(Math.random() * 5) | 0];
+      x2.globalAlpha = 0.35 + Math.random() * 0.6;
+      x2.fillRect(Math.random() * 118, Math.random() * 246, 6 + Math.random() * 46, 3 + Math.random() * 9);
+    }
+    x2.globalAlpha = 1;
+    ledTex.push(new THREE.CanvasTexture(c));
+  }
+  const neonC = [0xff3fa4, 0x3ff0ff, 0x8a2fff, 0xffd24a, 0x44ff9a];
+  const bpals = ['blueglass', 'tower', 'marble', 'brutal', 'glass', 'concrete'];
+  const trimM = new THREE.MeshLambertMaterial({ color: 0x8e949b });
+  let li = 0;
+  for (let z = Z0 + 52; z < Z1 - 52; z += 62) {
+    // 避开横向道路（路宽 16）
+    let skipZ = false;
+    for (const rz of rdZs) if (Math.abs(z - rz) < 26) skipZ = true;
+    if (skipZ) continue;
+    for (let x = LH.cdX0 + 30; x < LH.cdX1 - 26; x += 56) {
+      let skipX = false;
+      for (const rx of rdXs) if (Math.abs(x - rx) < 24) skipX = true;
+      if (skipX) continue;
+      if (Math.random() < 0.12) continue;                      // 留点空地
+      const w = 32 + Math.random() * 14, d = 32 + Math.random() * 14;
+      const h = 34 + Math.random() * 128;                      // 超高层
+      const body = new THREE.Mesh(
+        uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(9, Math.round(h / 12)))),
+        buildingBodyMaterial(bpals[(Math.random() * bpals.length) | 0]));
+      body.position.set(x, h / 2, z); add(body);
+      // 女儿墙 + 屋顶设备（抬高 3cm 避免与楼顶共面闪烁）
+      const par = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.7, d + 0.6), trimM);
+      par.position.set(x, h + 0.38, z); add(par);
+      if (Math.random() < 0.6) {
+        const mech = new THREE.Mesh(new THREE.BoxGeometry(w * 0.34, 2.4, d * 0.34), trimM);
+        mech.position.set(x, h + 1.6, z); add(mech);
+      }
+      // 侧墙霓虹竖条（贴地到楼顶，科技感来源）
+      const nc = neonC[(Math.random() * neonC.length) | 0];
+      const nMat = new THREE.MeshBasicMaterial({ color: nc });
+      for (const s of [-1, 1]) {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.5, h * 0.82, 0.5), nMat);
+        strip.position.set(x + s * (w / 2 + 0.3), h * 0.5, z + d / 2 + 0.3); add(strip);
+      }
+      // 偶尔挂一块巨型 LED 屏（侧墙）
+      if (Math.random() < 0.42) {
+        const t = ledTex[(li++) % ledTex.length];
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, Math.min(h * 0.5, 34)),
+          new THREE.MeshBasicMaterial({ map: t, fog: false }));
+        scr.position.set(x, h * (0.42 + Math.random() * 0.2), z + d / 2 + 0.42); add(scr);
+      }
+      // 街角店铺：底层亮色门面 + 雨篷
+      const shopC = [0xffd9a0, 0xa8e8ff, 0xffb0c8, 0xc0ffd0][(Math.random() * 4) | 0];
+      const front = new THREE.Mesh(new THREE.BoxGeometry(w * 0.82, 3.6, 0.4), new THREE.MeshBasicMaterial({ color: shopC }));
+      front.position.set(x, 2.1, z + d / 2 + 0.25); add(front);
+      const awn = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.25, 1.6), new THREE.MeshLambertMaterial({ color: 0x2b3038 }));
+      awn.position.set(x, 4.2, z + d / 2 + 0.9); add(awn);
+    }
+  }
+  // ---------- 4) 东岸中式古建群 ----------
+  const wallM = new THREE.MeshLambertMaterial({ color: 0x8b8f87 });     // 青灰城墙
+  const tileM = new THREE.MeshLambertMaterial({ color: 0x3f4a52 });     // 青瓦
+  const woodM = new THREE.MeshLambertMaterial({ color: 0x8a4a2c });     // 木构梁柱
+  const woodD = new THREE.MeshLambertMaterial({ color: 0x5e3220 });
+  const roofR = new THREE.MeshLambertMaterial({ color: 0x8c3428 });     // 朱红檐口
+  const lantM = new THREE.MeshBasicMaterial({ color: 0xff5a3c });       // 灯笼
+  const jadeM = new THREE.MeshLambertMaterial({ color: 0x6b7d5a });
+  // 城墙：沿河一侧的长墙 + 箭垛 + 石砌台基
+  const wallX = LH.ancX0 + 6;
+  const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, ZLEN - 60), wallM);
+  cw.position.set(wallX, 4.25, ZC); add(cw);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
+  plinth.position.set(wallX, 0.7, ZC); add(plinth);
+  for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), wallM);
+    m.position.set(wallX - 3.2, 9.2, z); add(m);
+  }
+  // 城楼 / 门楼（3 座，沿城墙分布）
+  function buildGateTower(cz, h) {
+    const bg = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(20, h, 16), wallM);
+    base.position.y = h / 2; bg.add(base);
+    // 门洞（深色内凹）
+    const hole = new THREE.Mesh(new THREE.BoxGeometry(6.5, 5.4, 1.2), new THREE.MeshLambertMaterial({ color: 0x1b1d20 }));
+    hole.position.set(0, 2.7, 8.4); bg.add(hole);
+    // 二层飞檐楼阁
+    for (let L = 0; L < 2; L++) {
+      const ly = h + L * 7.2;
+      const bw = 22 - L * 3.5, bd = 17 - L * 3;
+      const wall2 = new THREE.Mesh(new THREE.BoxGeometry(bw - 4, 5.2, bd - 4), woodM);
+      wall2.position.y = ly + 2.6; bg.add(wall2);
+      for (const cx2 of [-1, 1]) for (const cz2 of [-1, 1]) {           // 木柱
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 5.2, 8), woodD);
+        col.position.set(cx2 * (bw - 4) / 2, ly + 2.6, cz2 * (bd - 4) / 2); bg.add(col);
+      }
+      const eave = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.7, bd), roofR);
+      eave.position.y = ly + 5.5; bg.add(eave);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.72, 3.6, 4), tileM);
+      roof.rotation.y = Math.PI / 4; roof.position.y = ly + 7.6; bg.add(roof);
+      // 四角飞檐翘角
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 2.6), roofR);
+        tip.position.set(sx * bw * 0.42, ly + 5.9, sz * bd * 0.42);
+        tip.rotation.z = sx * 0.42; tip.rotation.x = -sz * 0.42; bg.add(tip);
+      }
+    }
+    if (h > 10) {                                                       // 匾额
+      const bd2 = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 0.4), new THREE.MeshBasicMaterial({ color: 0x2a1c12 }));
+      bd2.position.set(0, h + 3.4, 8.6); bg.add(bd2);
+    }
+    bg.position.set(wallX, 0, cz); add(bg);
+    // 灯笼（两串）
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const ln = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), lantM);
+      ln.scale.y = 0.8;
+      ln.position.set(s * 5.5, h + 5.2 - k * 1.5, 8.2); bg.add(ln);
+    }
+    return bg;
+  }
+  for (const cz of [Z0 + 120, ZC, Z1 - 120]) buildGateTower(cz, 10.5);
+  // 飞檐楼阁（多层殿阁，越往里越高）
+  function buildPagoda(px, pz, levels, baseW) {
+    const pg = new THREE.Group();
+    const podium = new THREE.Mesh(new THREE.BoxGeometry(baseW + 6, 1.6, baseW + 6), stoneM);
+    podium.position.y = 0.8; pg.add(podium);
+    for (let L = 0; L < levels; L++) {
+      const bw = baseW * (1 - L * 0.13), bd = bw;
+      const y0 = 1.6 + L * 6.4;
+      const wall2 = new THREE.Mesh(new THREE.BoxGeometry(bw - 3, 4.8, bd - 3), woodM);
+      wall2.position.y = y0 + 2.4; pg.add(wall2);
+      // 雕花木窗（两侧亮色板）
+      for (const s of [-1, 1]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, bd * 0.5), new THREE.MeshBasicMaterial({ color: 0xffd9a0 }));
+        win.position.set(s * (bw - 3) / 2 - s * 0.1, y0 + 2.6, 0); pg.add(win);
+      }
+      for (const cx2 of [-1, 1]) for (const cz2 of [-1, 1]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 4.8, 8), woodD);
+        col.position.set(cx2 * (bw - 3) / 2, y0 + 2.4, cz2 * (bd - 3) / 2); pg.add(col);
+      }
+      // 斗拱带（檐下一圈小方块）
+      for (let k = -(bw / 2 - 1); k <= bw / 2 - 1; k += 1.4) {
+        for (const s of [-1, 1]) {
+          const dg = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.9), roofR);
+          dg.position.set(k, y0 + 4.9, s * (bd / 2)); pg.add(dg);
+        }
+      }
+      const eave = new THREE.Mesh(new THREE.BoxGeometry(bw + 3.6, 0.7, bd + 3.6), roofR);
+      eave.position.y = y0 + 5.35; pg.add(eave);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry((bw + 3.6) * 0.72, 3.2 + L * 0.3, 4), tileM);
+      roof.rotation.y = Math.PI / 4; roof.position.y = y0 + 7.2; pg.add(roof);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.45, 2.4), roofR);
+        tip.position.set(sx * (bw + 3.6) * 0.42, y0 + 5.7, sz * (bd + 3.6) * 0.42);
+        tip.rotation.z = sx * 0.45; tip.rotation.x = -sz * 0.45; pg.add(tip);
+      }
+      // 栏杆
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(bw + 2.4, 0.28, bd + 2.4), woodD);
+      rail.position.y = y0 + 6.1; pg.add(rail);
+    }
+    pg.position.set(px, 0, pz); add(pg);
+    return pg;
+  }
+  buildPagoda(LH.ancX0 + 96, ZC, 5, 26);                  // 主殿阁
+  buildPagoda(LH.ancX0 + 150, Z0 + 150, 3, 22);
+  buildPagoda(LH.ancX0 + 150, Z1 - 150, 3, 22);
+  buildPagoda(LH.ancX0 + 215, ZC - 90, 2, 19);
+  buildPagoda(LH.ancX0 + 215, ZC + 90, 2, 19);
+  // 六角 / 八角亭
+  function buildPavilion(px, pz, sides, r) {
+    const pv = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(r + 1.2, r + 1.5, 1.1, sides), stoneM);
+    base.position.y = 0.55; pv.add(base);
+    for (let k = 0; k < sides; k++) {
+      const a = k / sides * Math.PI * 2;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 4.2, 7), woodD);
+      col.position.set(Math.cos(a) * r, 3.2, Math.sin(a) * r); pv.add(col);
+    }
+    const eave = new THREE.Mesh(new THREE.CylinderGeometry(r + 1.6, r + 1.6, 0.5, sides), roofR);
+    eave.position.y = 5.3; pv.add(eave);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(r + 1.6, 3.4, sides), tileM);
+    roof.position.y = 7.2; pv.add(roof);
+    const top = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffd24a }));
+    top.position.y = 9.1; pv.add(top);
+    pv.position.set(px, 0, pz); add(pv);
+    return pv;
+  }
+  buildPavilion(LH.ancX0 + 62, Z0 + 250, 6, 6.5);
+  buildPavilion(LH.ancX0 + 62, Z1 - 250, 8, 7.2);
+  buildPavilion(LH.ancX0 + 128, ZC + 250, 6, 6.0);
+  // 曲廊（沿河）
+  for (let z = ZC - 150; z < ZC + 150; z += 12) {
+    const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, 4.0, 0.6), woodD);
+    col.position.set(LH.ancX0 + 34, 2.0, z); add(col);
+  }
+  const corridorRoof = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.6, 312), roofR);
+  corridorRoof.position.set(LH.ancX0 + 34, 4.3, ZC); add(corridorRoof);
+  const corridorTop = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.5, 312), tileM);
+  corridorTop.position.set(LH.ancX0 + 34, 4.75, ZC); add(corridorTop);
+  // 垂柳 / 松柏 / 假山
+  const trunkM = new THREE.MeshLambertMaterial({ color: 0x6b4a33 });
+  const leafM = new THREE.MeshLambertMaterial({ color: 0x4f8a3c });
+  const pineM = new THREE.MeshLambertMaterial({ color: 0x2f6b45 });
+  for (let i = 0; i < 46; i++) {
+    const px = LH.ancX0 + 30 + Math.random() * (LH.ancX1 - LH.ancX0 - 60);
+    const pz = Z0 + 40 + Math.random() * (ZLEN - 80);
+    const gy = 0.06;
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 3.2, 6), trunkM);
+    tr.position.set(px, gy + 1.6, pz); add(tr);
+    if (i % 3 === 0) {                                    // 松柏：锥形
+      const cr = new THREE.Mesh(new THREE.ConeGeometry(2.0, 6.5, 7), pineM);
+      cr.position.set(px, gy + 6.0, pz); add(cr);
+    } else {                                              // 垂柳：扁球冠
+      const cr = new THREE.Mesh(new THREE.SphereGeometry(2.5, 7, 6), leafM);
+      cr.scale.set(1, 0.72, 1); cr.position.set(px, gy + 4.4, pz); add(cr);
+    }
+  }
+  for (let i = 0; i < 12; i++) {                          // 假山：几块斜置方石
+    const px = LH.ancX0 + 40 + Math.random() * 220, pz = Z0 + 60 + Math.random() * (ZLEN - 120);
+    for (let k = 0; k < 4; k++) {
+      const rk = new THREE.Mesh(new THREE.BoxGeometry(2 + Math.random() * 3, 2 + Math.random() * 3.5, 2 + Math.random() * 3), jadeM);
+      rk.position.set(px + (Math.random() - 0.5) * 4, 1 + Math.random() * 1.6, pz + (Math.random() - 0.5) * 4);
+      rk.rotation.set(Math.random() * 0.4, Math.random() * 3, Math.random() * 0.4); add(rk);
+    }
+  }
+  // ---------- 5) 过河石桥（避开跑道延长线，走 z = ZC±220）----------
+  function buildStoneBridge(bz) {
+    const bg = new THREE.Group();
+    const span = rwW + 26;
+    for (let i = 0; i < 7; i++) {                         // 拱券式桥面
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(span / 7 + 0.4, 0.8, 16), stoneM);
+      const u = (i + 0.5) / 7 - 0.5;
+      seg.position.set(u * span, 1.2 + Math.cos(u * Math.PI) * 1.7, 0);
+      bg.add(seg);
+    }
+    for (const s of [-1, 1]) {                            // 石栏杆 + 望柱
+      for (let i = 0; i <= 12; i++) {
+        const u = i / 12 - 0.5;
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.5, 0.55), stoneM);
+        p.position.set(u * span, 2.9 + Math.cos(u * Math.PI) * 1.7, s * 7.6); bg.add(p);
+      }
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(span, 0.45, 0.5), stoneM);
+      rail.position.set(0, 3.5 + 0.4, s * 7.6); bg.add(rail);
+    }
+    // 桥头一对石狮（简化为方座 + 圆身）
+    for (const s of [-1, 1]) {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.4, 2.0), stoneM);
+      base.position.set(s * (span / 2 + 3), 0.9, 8.6); bg.add(base);
+      const lion = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 8), stoneM);
+      lion.position.set(s * (span / 2 + 3), 2.1, 8.6); bg.add(lion);
+    }
+    bg.position.set(rwC, 0, bz); add(bg);
+    return bg;
+  }
+  buildStoneBridge(ZC - 220);
+  buildStoneBridge(ZC + 220);
+  // ---------- 6) 河岸护栏（现代侧：金属栏杆）----------
+  const railBarM = new THREE.MeshLambertMaterial({ color: 0xb9c2cc });
+  for (const s of [-1, 1]) {
+    const wx = s < 0 ? rw0 - 1 : rw1 + 1;
+    for (let z = Z0 + 24; z < Z1 - 24; z += 4) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.15, 0.16), railBarM);
+      post.position.set(wx, 2.55, z); add(post);
+    }
+    for (const yy of [2.6, 3.15]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, ZLEN - 48), railBarM);
+      bar.position.set(wx, yy, ZC); add(bar);
+    }
+  }
+}
+
 // ==================== 【fix43·乘机过场】登机 → 起飞 → 巡航 → 降落 ====================
 // 设计要点（改动前务必读，避免踩已经踩过的坑）：
 // 1) **不新增 state 取值**。全工程有 179 处 `state === '...'` 判断（drive 98 / walk 36），
@@ -23715,6 +24119,20 @@ const FLIGHT_BOARD_END = 4.0;            // 登机段结束（之后飞机开始
 // 一条跑道 + 一片楼群天际线 + 城市名标牌，够飞机降落、够看出"到了另一座城"。
 // TODO(待用户给需求)：把这里换成真正的第二座城市（路网/街区/可交互内容）。
 const DEST = { x: 1550, z: -285, runwayHalf: 200 };
+// 布局（自西向东，全部绝对世界坐标；DEST = 临海市中心）：
+//   x 1010~1230  临海市机场跑道（飞机沿 +X 从西边进近落地）
+//   x 1250~1490  西岸 CBD（现代）
+//   x 1510~1630  河流（宽 120，沿 Z 贯穿全城）
+//   x 1650~1930  东岸中式古建群
+// ⚠️ 跑道必须放在最西侧：原来的跑道（x 1350~1750）会**横跨河流**，是硬冲突。
+const LH = {
+  rwyCx: DEST.x - 430, rwyHalf: 110,
+  cdX0: DEST.x - 300, cdX1: DEST.x - 60,
+  rivX0: DEST.x - 40, rivX1: DEST.x + 80,
+  ancX0: DEST.x + 100, ancX1: DEST.x + 380,
+  z0: DEST.z - 480, z1: DEST.z + 200
+};
+const LH_WATER = { mesh: null, tex: null };   // 水面波纹层（每帧平移 UV）
 // 飞机关键帧：[时刻, x, y, 俯仰角]。y = 5.552 时主轮正好贴地（见 addAirport 里的 PLANE_GEAR_Y）。
 const FLIGHT_KEY_Y = 3.47 * 1.6;
 const FLIGHT_KEYS = [
@@ -23725,11 +24143,11 @@ const FLIGHT_KEYS = [
   [FLIGHT_T.taxi,       62, FLIGHT_KEY_Y, 0.000],   // 全推力滑跑（跑道内）
   [FLIGHT_T.rotate,     94, FLIGHT_KEY_Y, 0.150],   // 抬前轮：机头已起、主轮仍在地面
   [FLIGHT_T.lift,      155, 32,          0.205],    // 离地爬升（起落架收起）
-  [FLIGHT_T.climb,     560, 178,         0.120],    // 持续爬升
-  [FLIGHT_T.cruise,   1080, 190,         0.000],    // 巡航（正好在云层高度附近，会穿云）
-  [FLIGHT_T.descend,  1420, 62,         -0.070],    // 下降进近（起落架放下）
-  [FLIGHT_T.land,     1550, FLIGHT_KEY_Y, 0.000],   // 在占位新城跑道触地
-  [FLIGHT_T.done,     1648, FLIGHT_KEY_Y, 0.000]    // 滑行减速停住
+  [FLIGHT_T.climb,     420, 175,         0.120],    // 持续爬升
+  [FLIGHT_T.cruise,    760, 185,         0.000],    // 巡航（本城与临海市之间的海面上）
+  [FLIGHT_T.descend,   920, 58,         -0.075],    // 下降进近
+  [FLIGHT_T.land,     1120, FLIGHT_KEY_Y, 0.000],   // ★ 临海市机场跑道触地（城市最西侧）
+  [FLIGHT_T.done,     1255, FLIGHT_KEY_Y, 0.000]    // 滑行减速停住（跑道东端）
 ];
 const flightCloud = { group: null, mat: null };
 // ---- 关键帧插值：找到 t 所在区间做 smoothstep，保证速度连续、没有折角 ----
@@ -23776,49 +24194,20 @@ function initFlightScenery() {
   beach.rotation.x = -Math.PI / 2; beach.position.set(DEST.x, 0.015, DEST.z); g.add(beach);
   const destGround = new THREE.Mesh(new THREE.PlaneGeometry(940, 940), new THREE.MeshLambertMaterial({ color: 0x4e7a3a }));
   destGround.rotation.x = -Math.PI / 2; destGround.position.set(DEST.x, 0.03, DEST.z); g.add(destGround);
-  // 城区范围（跑道北侧一大片）
-  const CITY_X0 = DEST.x - 432, CITY_X1 = DEST.x + 432, CITY_Z0 = DEST.z - 620, CITY_Z1 = DEST.z - 110;
-  const pave = new THREE.Mesh(new THREE.PlaneGeometry(CITY_X1 - CITY_X0, CITY_Z1 - CITY_Z0), new THREE.MeshLambertMaterial({ color: 0x8b8f94 }));
-  pave.rotation.x = -Math.PI / 2;
-  pave.position.set((CITY_X0 + CITY_X1) / 2, 0.05, (CITY_Z0 + CITY_Z1) / 2); g.add(pave);
-  // 路网（纵向 + 横向各若干条）—— 纯占位，等用户给真实需求再重做
-  const roadMat = new THREE.MeshLambertMaterial({ color: 0x33383d });
-  for (let rx = CITY_X0 + 60; rx < CITY_X1; rx += 108) {
-    const r = new THREE.Mesh(new THREE.BoxGeometry(14, 0.06, CITY_Z1 - CITY_Z0), roadMat);
-    r.position.set(rx, 0.09, (CITY_Z0 + CITY_Z1) / 2); g.add(r);
-  }
-  for (let rz = CITY_Z0 + 70; rz < CITY_Z1; rz += 108) {
-    const r = new THREE.Mesh(new THREE.BoxGeometry(CITY_X1 - CITY_X0, 0.06, 14), roadMat);
-    r.position.set((CITY_X0 + CITY_X1) / 2, 0.09, rz); g.add(r);
-  }
-  // 跑道（沿 X，和本城跑道同向，飞机一路向东直接进近）
-  const rw = new THREE.Mesh(new THREE.BoxGeometry(DEST.runwayHalf * 2, 0.14, 32), new THREE.MeshLambertMaterial({ color: 0x2e3134 }));
-  rw.position.set(DEST.x, 0.1, DEST.z); g.add(rw);
+  // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
+  buildLinhaiCity(g);
+  // 跑道（沿 X，飞机一路向东进近）。★ 必须放在城市**最西侧**：
+  // 原来的跑道以 DEST.x 为中心，会直接横跨河流 —— 那是硬冲突。
+  const rw = new THREE.Mesh(new THREE.BoxGeometry(LH.rwyHalf * 2, 0.14, 32), new THREE.MeshLambertMaterial({ color: 0x2e3134 }));
+  rw.position.set(LH.rwyCx, 0.1, DEST.z); g.add(rw);
   const rwMid = new THREE.MeshLambertMaterial({ color: 0xe8eaec });
-  for (let x = -DEST.runwayHalf + 14; x <= DEST.runwayHalf - 14; x += 34) {
+  for (let x = -LH.rwyHalf + 14; x <= LH.rwyHalf - 14; x += 34) {
     const d = new THREE.Mesh(new THREE.BoxGeometry(18, 0.16, 0.7), rwMid);
-    d.position.set(DEST.x + x, 0.19, DEST.z); g.add(d);
+    d.position.set(LH.rwyCx + x, 0.19, DEST.z); g.add(d);
   }
   for (const s of [-1, 1]) {
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(DEST.runwayHalf * 2, 0.16, 0.5), rwMid);
-    edge.position.set(DEST.x, 0.19, DEST.z + s * 15); g.add(edge);
-  }
-  // 楼群天际线：沿路网格布置（每个路口一块地皮），像街道两侧的楼
-  const bpal = ['brutal', 'blueglass', 'marble', 'concrete', 'glass', 'tower'];
-  for (let gx = CITY_X0 + 60; gx < CITY_X1; gx += 108) {
-    for (let gz = CITY_Z0 + 70; gz < CITY_Z1; gz += 108) {
-      if (Math.random() < 0.20) continue;                       // 留些空地，不然像一排积木
-      // 楼宽上限 56：地皮中心距 108、楼中心随机偏移 ±21，最坏情况相邻两楼净距
-      // 108 − 42 = 66，必须大于楼宽才不会叠在一起。
-      // fix43 当初写的是 30 + rand*44 = 最大 74，直接超出 → 新城会叠出闪烁。
-      const w = 26 + Math.random() * 30, d = 26 + Math.random() * 30;
-      const h = 24 + Math.random() * 98;
-      const b = new THREE.Mesh(
-        uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
-        buildingBodyMaterial(bpal[Math.random() * bpal.length | 0]));
-      b.position.set(gx + (Math.random() - 0.5) * 42, h / 2, gz + (Math.random() - 0.5) * 42);
-      g.add(b);
-    }
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(LH.rwyHalf * 2, 0.16, 0.5), rwMid);
+    edge.position.set(LH.rwyCx, 0.19, DEST.z + s * 15); g.add(edge);
   }
   // 城市名标牌（占位名，等用户定名）
   const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 256;
@@ -23834,9 +24223,10 @@ function initFlightScenery() {
   // 用 Plane + DoubleSide：原来用 Box，从跑道这侧看到的是"背面那张贴图"（镜像文字），
   // 玩家正好是从南边进近，必须保证朝南这面是对的。
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide }));
-  sign.position.set(DEST.x, 60, DEST.z - 150); g.add(sign);          // Plane 默认法线 +Z → 正好朝南对着跑道
+  // 城市名标牌：立在 CBD 临河一侧（原来的位置 x=DEST.x 正好是**河中央**，会悬在水上）
+  sign.position.set(LH.rivX0 - 44, 60, DEST.z + 130); g.add(sign);
   const signLeg = new THREE.Mesh(new THREE.BoxGeometry(6, 46, 6), new THREE.MeshLambertMaterial({ color: 0x5a6068 }));
-  signLeg.position.set(DEST.x, 23, DEST.z - 150); g.add(signLeg);
+  signLeg.position.set(LH.rivX0 - 44, 23, DEST.z + 130); g.add(signLeg);
   scene.add(g);
   // (3) 云：46 个云团（压扁的球拼出来），整组顶点色融合成 1~2 个网格 —— 否则是近 200 次调用
   const cg = new THREE.Group();
@@ -24159,11 +24549,11 @@ function endFlightShow() {
   scene.fog.near = F.fogNear; scene.fog.far = F.fogFar;
   if (flightCloud.group) flightCloud.group.visible = false;
   if (Math.abs(camera.fov - 60) > 0.05) { camera.fov = 60; camera.updateProjectionMatrix(); }
-  // 玩家下机：站在新城跑道南侧的草地上，**面朝北**——楼群天际线都在跑道北侧，
-// 朝南只能看到一片空草地，完全体会不到"到了另一座城市"。
+  // 玩家下机：站在临海市机场跑道东端的跑道旁，**面朝东** ——
+  // 东边依次是 CBD 天际线 → 河 → 对岸中式古建，一眼就是"到了另一座城"。
   person.visible = true;
-  person.position.set(DEST.x + 96, 0.04, DEST.z + 30);
-  personAngle.v = Math.PI; camYaw = Math.PI; camPitch = 0.06;
+  person.position.set(1262, 0.04, DEST.z + 34);
+  personAngle.v = Math.PI / 2; camYaw = Math.PI / 2; camPitch = 0.06;
   // 碰撞盒摘掉：飞机已经飞走了，留着会在跑道上形成一堵看不见的墙
   const col = AIRLINER && AIRLINER.userData && AIRLINER.userData.collider;
   if (col) { const i = buildings.indexOf(col); if (i >= 0) buildings.splice(i, 1); }
@@ -24378,6 +24768,9 @@ const frameLoop = () => {
   //    那条路径整段不执行，按钮的 disabled 会永远停在"打开面板那一刻"——
   //    实测症状是"先没钱 → 后来赚到钱（或开发者加钱）→ 按钮还是灰的，点了没反应"。
   if (flightPanelOpen) { try { refreshFlightBtns(); } catch (e) {} }
+  // 【fix48】临海市河面流动：每帧平移波纹贴图的 UV（放在 frameLoop 而不是 update，
+  // 这样对话/暂停时水也不会"冻住"）。开销只是一次 texture offset 赋值。
+  if (LH_WATER.tex) { LH_WATER.tex.offset.x += dt * 0.010; LH_WATER.tex.offset.y += dt * 0.018; }
   // 【2026-10-20·fix28】updateAutoQuality 必须排在 render **之前**：
   // 它会调 renderer.setPixelRatio() → three.js 内部重新 setSize → **整个 framebuffer 被重分配**。
   // 原来它排在 render 之后，于是这一帧刚画好的内容随旧缓冲区一起被丢掉，
