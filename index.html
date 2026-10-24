@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix50-drumtower';;;
+const BUILD = '20261024-fix51-weather';;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23819,6 +23819,7 @@ function buildLinhaiCity(g) {
   const tMesh = new THREE.Mesh(tGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: gtex }));
   tMesh.position.set(DEST.x, 0.05, DEST.z);
   add(tMesh);
+  LH_GROUND.mesh = tMesh;   // 交给天气系统：下雨时把地面压暗，读起来像"湿路面"
   // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
   const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
   const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x14405e }));
@@ -24379,6 +24380,7 @@ const LH = {
   z0: DEST.z - 480, z1: DEST.z + 200
 };
 const LH_WATER = { mesh: null, tex: null };   // 水面波纹层（每帧平移 UV）
+const LH_GROUND = { mesh: null };             // 临海市地面（雨天要压暗成"湿路面"）
 // 飞机关键帧：[时刻, x, y, 俯仰角]。y = 5.552 时主轮正好贴地（见 addAirport 里的 PLANE_GEAR_Y）。
 const FLIGHT_KEY_Y = 3.47 * 1.6;
 const FLIGHT_KEYS = [
@@ -24955,6 +24957,95 @@ function updateFlightPillar(dt) {
   if (d < 3.8 && flightPillarMiss <= 0) openFlightPanel();
 }
 
+// ==================== 【fix51·二期】动态天气：晴 / 多云 / 阴 / 小雨 ====================
+// 用户要求"动态天气系统：晴天/多云/阴天/小雨，雨天路面湿润反光、雨滴与涟漪"。
+// 做法：**不另起一套光照**，而是在 updateDayNight 算完"时刻参数"之后乘一个天气系数 ——
+// 这样昼夜与天气可以叠加（黄昏+小雨、正午+多云都成立），也不会和现有昼夜逻辑打架。
+var WEATHER = { kind: 'clear', timer: 0, changeIn: 42 };
+const WEATHER_LIST = ['clear', 'clear', 'cloudy', 'overcast', 'rain'];   // 晴天权重高一些
+const WEATHER_PRESET = {
+  clear:    { fogFar: 1.00, tint: 0xffffff, sun: 1.00, hemi: 0.94, wet: 0.00, name: '晴' },
+  cloudy:   { fogFar: 0.84, tint: 0xdfe6ee, sun: 0.70, hemi: 1.06, wet: 0.00, name: '多云' },
+  overcast: { fogFar: 0.64, tint: 0xc4cbd3, sun: 0.40, hemi: 1.22, wet: 0.18, name: '阴' },
+  rain:     { fogFar: 0.46, tint: 0xa6b3c0, sun: 0.24, hemi: 1.30, wet: 1.00, name: '小雨' }
+};
+const _wxCur = { fogFar: 1, sun: 1, hemi: 1, wet: 0 };
+const _wxTint = new THREE.Color(), _wxMix = new THREE.Color();
+const RAIN = { pts: null, n: 1100 };
+function initRain() {
+  // ⚠️ 用 LineSegments 而不是 Points：PointsMaterial 画出来是**正方形点**，
+  // 实测像"下雪/飘纸片"。雨应该是细长的线，所以每条雨两个端点。
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(RAIN.n * 6);
+  for (let i = 0; i < RAIN.n; i++) {
+    const x = (Math.random() - 0.5) * 90, y = Math.random() * 46, z = (Math.random() - 0.5) * 90;
+    pos[i * 6] = x; pos[i * 6 + 1] = y; pos[i * 6 + 2] = z;
+    pos[i * 6 + 3] = x; pos[i * 6 + 4] = y + 1.7; pos[i * 6 + 5] = z;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xd2e2f2, transparent: true, opacity: 0.46, fog: false });
+  RAIN.pts = new THREE.LineSegments(geo, mat);
+  RAIN.pts.frustumCulled = false;
+  RAIN.pts.visible = false;
+  scene.add(RAIN.pts);
+  registerDynamicObject(RAIN.pts);     // 每帧要下落，绝不能被静态合批吃掉
+}
+// 每帧：推进天气状态机 → 平滑过渡 → 施加到光照 / 雾 / 雨 / 湿地面
+// ⚠️ 必须排在 updateDayNight 之后（它先算出昼夜基准，这里再乘天气系数）。
+function updateWeather(dt) {
+  WEATHER.timer += dt;
+  if (WEATHER.timer >= WEATHER.changeIn) {
+    WEATHER.timer = 0;
+    WEATHER.changeIn = 45 + Math.random() * 80;
+    let k = WEATHER_LIST[(Math.random() * WEATHER_LIST.length) | 0];
+    if (k === WEATHER.kind) k = WEATHER_LIST[(Math.random() * WEATHER_LIST.length) | 0];
+    WEATHER.kind = k;
+  }
+  const P = WEATHER_PRESET[WEATHER.kind];
+  const k = 1 - Math.pow(0.30, dt);                  // 指数平滑：切换不突兀
+  _wxCur.fogFar += (P.fogFar - _wxCur.fogFar) * k;
+  _wxCur.sun += (P.sun - _wxCur.sun) * k;
+  _wxCur.hemi += (P.hemi - _wxCur.hemi) * k;
+  _wxCur.wet += (P.wet - _wxCur.wet) * k;
+  sun.intensity *= _wxCur.sun;
+  hemi.intensity *= _wxCur.hemi;
+  scene.fog.far *= _wxCur.fogFar;
+  // 天空背景也必须跟着天气走：updateDayNight 刚写完 scene.background，
+  // 这里在它之上叠加天气影响（只改雾的话，雨天会变成"晴天但地湿了"）。
+  const dull = Math.min(1, (1 - _wxCur.sun) * 1.05);     // 晴≈0 / 阴≈0.6 / 雨≈0.80
+  _wxTint.setHex(P.tint);
+  scene.background.lerp(_wxTint, dull * 0.62);
+  scene.background.multiplyScalar(1 - dull * 0.22);      // 再整体压暗，阴雨天不该有亮蓝天
+  scene.fog.color.copy(scene.background);                // 雾色跟天空一致，避免两层色
+  const wet = _wxCur.wet;
+  if (LH_GROUND.mesh) {                              // 湿路面：地面压暗、略偏冷
+    const w = 1 - 0.30 * wet;
+    LH_GROUND.mesh.material.color.setRGB(w, w * (1 - 0.03 * wet), w * (1 - 0.06 * wet));
+  }
+  if (RAIN.pts) {
+    const on = wet > 0.32;
+    RAIN.pts.visible = on;
+    if (on) {
+      RAIN.pts.material.opacity = 0.24 + 0.30 * wet;
+      const p = RAIN.pts.geometry.attributes.position, arr = p.array;
+      const dy = dt * (32 + 16 * wet);
+      for (let i = 0; i < RAIN.n; i++) {
+        arr[i * 6 + 1] -= dy; arr[i * 6 + 4] -= dy;
+        if (arr[i * 6 + 1] < -3) {
+          const nx = (Math.random() - 0.5) * 90, nz = (Math.random() - 0.5) * 90;
+          arr[i * 6] = nx; arr[i * 6 + 1] = 46; arr[i * 6 + 2] = nz;
+          arr[i * 6 + 3] = nx; arr[i * 6 + 4] = 47.7; arr[i * 6 + 5] = nz;
+        }
+      }
+      p.needsUpdate = true;
+      RAIN.pts.position.set(camera.position.x, camera.position.y - 20, camera.position.z);
+    }
+  }
+}
+
+// 雨点系统在初始化时建好（1100 个点 = 1 次 draw call，平时 visible=false 不占开销）
+try { initRain(); } catch (e) { console.error('[rain init]', e); }
+
 const frameLoop = () => {
   // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
   // 既会刷一屏黑，又很容易触发二次丢失（表现为"黑屏闪个不停"）。等 restored 事件恢复后再继续。
@@ -25029,6 +25120,10 @@ const frameLoop = () => {
   // 原来它排在 render 之后，于是这一帧刚画好的内容随旧缓冲区一起被丢掉，
   // 浏览器紧接着合成一张**空画布** → 玩家看到的就是"闪一下黑屏"（用户反馈"有时候会闪出黑屏"）。
   // 挪到 render 前面后：改分辨率和画这一帧在同一帧内完成，新缓冲区立刻被填满，不会出现空白帧。
+  // 【fix51·二期】天气必须排在 updateDayNight 之后：后者先算昼夜基准，这里再乘天气系数。
+  // 放在 frameLoop 而不是 update 内部，是因为 update 在乘机过场期间会被整段跳过，
+  // 而天气（尤其雨）在过场里也应该继续。定义是 const，放这里也避开了 TDZ。
+  try { updateWeather(dt); } catch (e) {}
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
   renderer.render(scene, camera);
   updateDebugHud();
