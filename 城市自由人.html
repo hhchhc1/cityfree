@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix54-hezhi';;;;;;
+const BUILD = '20261024-fix55-walk';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1139,6 +1139,10 @@ function personGroundY(x, z) {
   // 桥区域 + 南方新岛区域都不算海洋
   const onBridge = Math.abs(x) <= BRIDGE_HALF_WIDTH && z >= BRIDGE_START_Z && z <= BRIDGE_LIMIT_Z;
   const onIsland = Math.hypot(x - ISLAND_X, z - ISLAND_Z) < ISLAND_WALK_R;  // 新岛半径80+缓冲
+  // 【fix55】荷芷市（x>900）在主城地图之外，**绝不能**套用"超出 ±400 就算海"这条规则 ——
+  // 否则玩家一下飞机就被按到海面高度(WATER_Y+0.9)、而且完全不跟随地形，
+  // 表现就是用户说的"到了新城市还是不能正常行走、还是和在海洋里一样"。
+  if (x > 900) return linhaiHeight(x, z);
   if (m > HALF - 100 && !onBridge && !onIsland) return WATER_Y + 0.9;
   return terrainHeight(x, z);
 }
@@ -24878,7 +24882,7 @@ function flightTick(dt) {
   const ph = t < FLIGHT_BOARD_END ? '登机中…  （空格 / Esc 跳过）'
     : t < FLIGHT_T.taxi ? '滑跑加速…  （空格 / Esc 跳过）'
     : t < FLIGHT_T.lift ? '抬前轮 · 离地…'
-    : t < FLIGHT_T.cruise ? '爬升中…  前往临海市'
+    : t < FLIGHT_T.cruise ? '爬升中…  前往荷芷市'
     : t < FLIGHT_T.descend ? '巡航中…  前方临海市'
     : t < FLIGHT_T.land ? '下降进近…'
     : '着陆滑行…';
@@ -25210,16 +25214,22 @@ function updateWeather(dt) {
   _wxCur.sun += (P.sun - _wxCur.sun) * k;
   _wxCur.hemi += (P.hemi - _wxCur.hemi) * k;
   _wxCur.wet += (P.wet - _wxCur.wet) * k;
-  sun.intensity *= _wxCur.sun;
-  hemi.intensity *= _wxCur.hemi;
-  scene.fog.far *= _wxCur.fogFar;
-  // 天空背景也必须跟着天气走：updateDayNight 刚写完 scene.background，
-  // 这里在它之上叠加天气影响（只改雾的话，雨天会变成"晴天但地湿了"）。
-  const dull = Math.min(1, (1 - _wxCur.sun) * 1.05);     // 晴≈0 / 阴≈0.6 / 雨≈0.80
-  _wxTint.setHex(P.tint);
-  scene.background.lerp(_wxTint, dull * 0.62);
-  scene.background.multiplyScalar(1 - dull * 0.22);      // 再整体压暗，阴雨天不该有亮蓝天
-  scene.fog.color.copy(scene.background);                // 雾色跟天空一致，避免两层色
+  // ⚠️ 下面这些**只在非过场时施加**。乘机过场期间 update() 会直接 return（由 flightTick 接管），
+  //    updateDayNight 不再执行、也就不会把这些值重置回基准 —— 而这里的 *= 和
+  //    lerp / multiplyScalar 都是**就地累积**的，于是天空会一帧比一帧黑，
+  //    表现就是用户实测的"下雨时坐飞机先闪白、然后全黑"。
+  if (!FLIGHT) {
+    sun.intensity *= _wxCur.sun;
+    hemi.intensity *= _wxCur.hemi;
+    scene.fog.far *= _wxCur.fogFar;
+    // 天空背景也必须跟着天气走：updateDayNight 刚写完 scene.background，
+    // 这里在它之上叠加天气影响（只改雾的话，雨天会变成"晴天但地湿了"）。
+    const dull = Math.min(1, (1 - _wxCur.sun) * 1.05);   // 晴≈0 / 阴≈0.6 / 雨≈0.80
+    _wxTint.setHex(P.tint);
+    scene.background.lerp(_wxTint, dull * 0.62);
+    scene.background.multiplyScalar(1 - dull * 0.22);    // 再整体压暗，阴雨天不该有亮蓝天
+    scene.fog.color.copy(scene.background);              // 雾色跟天空一致，避免两层色
+  }
   const wet = _wxCur.wet;
   if (LH_GROUND.mesh) {                              // 湿路面：地面压暗、略偏冷
     const w = 1 - 0.30 * wet;
