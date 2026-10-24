@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix56-bound';;;;;;
+const BUILD = '20261024-fix57-noocean';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1025,7 +1025,7 @@ function terrainHeight(x, z) {
   // 【fix48】临海市：这张地图只覆盖 ±500，地图外原本会被"四面环海"逻辑压到海平面
   // （WATER_Y ≈ -0.6）。而临海市的地基在 y≈0，于是玩家一走过去就会**陷进地面 0.66m**
   // （实测相机沉到水下、整屏都是水色）。所以给新城单独一块水平地面。
-  if (x > 980 && x < 2010 && z > -830 && z < 270) return linhaiHeight(x, z);   // 【fix50】改用地形高度（原先是恒 0 的平地）
+  if (x > 880 && x < 2020 && z > -840 && z < 280) return linhaiHeight(x, z);   // 【fix50】改用地形高度（原先是恒 0 的平地）
   const m = Math.max(Math.abs(x), Math.abs(z));   // 用方形判断，保证城市网格（含四角）全平
   const ring = THREE.MathUtils.clamp((m - 205) / 90, 0, 1);   // 城市外才开始丘陵（城市内全平）
   const south = THREE.MathUtils.clamp((z - 190) / 60, 0, 1);  // 南侧压平丘陵，让位给沙滩
@@ -1038,7 +1038,9 @@ function terrainHeight(x, z) {
   const oceanMargin = 100, oceanStart = HALF - oceanMargin;
   const dx = Math.abs(x), dz = Math.abs(z);
   const maxDist = Math.max(dx, dz);
-  if (maxDist > oceanStart) {
+  // 【fix57】用户要求"先把海洋去掉"：主城**东侧**不再压到海平面，
+  // 而是让陆地向东一直延伸到荷芷市，两城连成一片（既不会"困在海里"，也能直接走过去）。
+  if (maxDist > oceanStart && x < 300) {
     const t = (maxDist - oceanStart) / oceanMargin;
     h = h * (1 - t) + (WATER_Y * t);
   }
@@ -1142,8 +1144,10 @@ function personGroundY(x, z) {
   // 【fix55】荷芷市（x>900）在主城地图之外，**绝不能**套用"超出 ±400 就算海"这条规则 ——
   // 否则玩家一下飞机就被按到海面高度(WATER_Y+0.9)、而且完全不跟随地形，
   // 表现就是用户说的"到了新城市还是不能正常行走、还是和在海洋里一样"。
+  // 【fix57】东侧（x≥300）现在是与荷芷市连成一片的陆地，不能再按『超出即为海』处理，
+  // 否则玩家走在东侧陆地上却仍被按到海面高度（实测 personGroundY(600,0) 返回 0.3）。
   if (x > 900) return linhaiHeight(x, z);
-  if (m > HALF - 100 && !onBridge && !onIsland) return WATER_Y + 0.9;
+  if (m > HALF - 100 && x < 300 && !onBridge && !onIsland) return WATER_Y + 0.9;
   return terrainHeight(x, z);
 }
 // 判断是否在道路/桥面/桥引道上（禁止刷实体阻挡物）
@@ -15467,7 +15471,8 @@ function clampCity(p) {
   // 原来这里**无条件**按主城范围钳制，于是玩家一到荷芷市就会被每帧夹回边界 ——
   // 表现就是"完全走不动"（用户实测："人物在临海市不能正常行走"）。
   // 判据用 x > 900：主城 |x|≤500，中间隔着海，不会误判。
-  if (p.x > 900) return;
+  // 【fix57】东侧现在是连成一片的陆地，不能再按主城范围夹住，否则玩家过不去。
+  if (p.x > 300) { p.x = Math.max(p.x, 300); return; }
   // 【fix55】主城边界必须和 personGroundY() 的"超出 ±(HALF-100) 就算海"判据对齐。
   // 原来这里允许走到 615，而 personGroundY 从 400 起就返回海面高度 ——
   // 中间那 215 米正是用户看到的"左边陆地、右边海、分界线在那里、越过去就泡在海里"。
@@ -15485,7 +15490,16 @@ const _gridCar = new Array(_gridW * _gridH);   // 所有车辆（玩家/交通/�
 const _gridNpc = new Array(_gridW * _gridH);   // 所有NPC
 const _gridCellsStatic = [], _gridCellsBld = [], _gridCellsCar = [], _gridCellsNpc = [], _gridCellsTree = [], _gridCellsPlatform = [], _gridCellsVehicle = [], _gridCellsGas = [], _gridCellsTraffic = [], _gridCellsHeli = [], _gridCellsCarNear = [], _gridCellsHit = [], _gridCellsInter = [], _gridCellsGap = [];
 for (let i = 0; i < _gridW * _gridH; i++) { _gridBld[i] = []; _gridTree[i] = []; _gridCar[i] = []; _gridNpc[i] = []; }
+// 【fix57】荷芷市在地图之外，坐标会被 _gridIdx 钳到**边缘格子**、读到主城边缘的建筑，
+// 于是玩家在那里会撞上
+// 【fix57】荷芷市在地图之外，坐标会被 clamp 到网格**边缘格子**、读到主城边缘的建筑与树木，
+// 于是玩家在那里会撞上『看不见的墙』（用户实测『不能正常走路』）。给它一个专用空槽。
+const _gridEmptyIdx = _gridW * _gridH;
+_gridBld.push([]); _gridTree.push([]); _gridCar.push([]); _gridNpc.push([]);
 function _gridIdx(x, z) {
+  // 【fix57】荷芷市在地图之外：不这样拦一下，坐标会被钳到**边缘格子**、读到主城边缘的
+  // 建筑与树木，玩家在那里就会撞上"看不见的墙"（用户实测"不能正常走路"）。
+  if (x > 900) return _gridEmptyIdx;
   const gx = Math.floor((x - GRID_MIN_X) / GRID_CELL), gz = Math.floor((z - GRID_MIN_Z) / GRID_CELL);
   return (Math.max(0, Math.min(_gridW - 1, gx)) + Math.max(0, Math.min(_gridH - 1, gz)) * _gridW);
 }
