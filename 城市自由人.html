@@ -872,7 +872,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix42-cars-buildings';
+const BUILD = '20261024-fix43-flight';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5809,6 +5809,9 @@ function makeSignPlane(text, w, h, bg, fg, border) {
 //
 // 材质只用 MeshLambertMaterial（航行灯等少量自发光件用 MeshBasicMaterial），
 // 几何体只带 position/normal/uv → 会被 batchStaticScene 按材质合批，不涨 draw call。
+// 【fix43】机场那架客机：由 addAirport 创建后挂到这里，供文件后段的"乘机过场"脚本驱动。
+// 用 var 声明是为了 hoisting —— 过场脚本在文件后段，靠这个模块级变量拿到飞机。
+var AIRLINER = null;
 (function addAirport() {
   // ---- 场地基准（所有坐标都从这 4 个数推出来，改场地只改这里）----
   const CX = 0, CZ = -257;          // 机场中心
@@ -6019,13 +6022,39 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     const metal = new THREE.MeshLambertMaterial({ color: 0xaab2ba });
     const darkM = new THREE.MeshLambertMaterial({ color: 0x33383e });
     const wingM = new THREE.MeshLambertMaterial({ color: livery.body, side: THREE.DoubleSide });
-    const A = (geo, mat, x, y, z, rx, ry, rz) => {
+    // ===== 【fix43·乘机过场】把整机拆成"可控子组" =====
+    // 为什么必须拆：静态合批 batchStaticScene 会把不在 dynamicExtras 里的网格按材质合并，
+    // 合并后原始 mesh 会被从 group 里摘除 —— 飞机就只剩一个空壳，永远动不了。
+    // 拆法：零件照旧用 A() 建，只是默认加进 CUR 指向的子组；需要独立运动的段落切一次 CUR。
+    // 每个子组之后会用顶点色融成 1~2 个网格，所以整机仍然只有个位数 draw call。
+    const bodyG = new THREE.Group();   // 机身 + 主翼 + 固定尾面 + 涂装（不动）
+    const gearG = new THREE.Group();   // 起落架（起飞后收起 / 落地前放下）
+    // 绕"铰链"转动的部件用【枢轴组 + 反向偏移内组】：
+    // 外组摆在铰链点上，内组反向偏移把这个位移抵消回去 ——
+    // 于是零件的坐标一个字都不用改，而旋转外组就等于绕铰链旋转。
+    function pivotGroup(px, py, pz) {
+      const outer = new THREE.Group();
+      outer.position.set(px, py, pz);
+      const inner = new THREE.Group();
+      inner.position.set(-px, -py, -pz);
+      outer.add(inner);
+      return { outer, inner };
+    }
+    const FLAP = pivotGroup(0, -0.66, -1.60);   // 前缘缝翼：铰链在机翼前缘
+    const ELEV = pivotGroup(0, 0.72, -9.70);    // 平尾：铰链在平尾前缘
+    const RUD  = pivotGroup(0, 1.00, -12.20);   // 垂尾（方向舵）：铰链在垂尾后缘附近
+    // 发动机风扇要绕自身轴转，所以左右各一个"轴心组"，叶片用相对轴心的坐标
+    const fanL = new THREE.Group(), fanR = new THREE.Group();
+    fanL.position.set(-4.3, -1.55, 0.9 + 1.76);
+    fanR.position.set(4.3, -1.55, 0.9 + 1.76);
+    let CUR = bodyG;
+    const A = (geo, mat, x, y, z, rx, ry, rz, to) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
       if (rx) m.rotation.x = rx;
       if (ry) m.rotation.y = ry;
       if (rz) m.rotation.z = rz;
-      g.add(m); return m;
+      (to || CUR).add(m); return m;
     };
     const R = 1.28;            // 机身半径（比旧版 1.05 更粗，显得是宽体机）
     const FL = 19;             // 机身圆柱段长度
@@ -6073,8 +6102,8 @@ function makeSignPlane(text, w, h, bg, fg, border) {
       A(sweptWing(s, 9.2, 4.6, 1.5, 0.3, 1.5), wingM, 0, -0.72, 0.6);
       // 翼尖小翼（上翘，带涂装色）
       A(box(0.16, 1.7, 1.2), tailC, s * 9.1, 0.22, 1.0, 0, 0, s * 0.22);
-      // 前缘缝翼（沿前缘的一条薄带）
-      A(box(8.4, 0.14, 0.42), body, s * 4.6, -0.6, -1.75);
+      // 前缘缝翼（沿前缘的一条薄带）—— 归入可动襟翼组，起降时伸出下垂
+      A(box(8.4, 0.14, 0.42), body, s * 4.6, -0.6, -1.75, 0, 0, 0, FLAP.inner);
       // 襟翼滑轨整流罩 ×3
       for (let i = 0; i < 3; i++) A(box(0.5, 0.42, 1.5), darkM, s * (2.4 + i * 2.6), -0.95, 2.35);
       // 翼上扰流板线条
@@ -6087,9 +6116,10 @@ function makeSignPlane(text, w, h, bg, fg, border) {
       A(new THREE.CylinderGeometry(0.78, 0.66, 3.4, 14), body, s * 4.3, -1.55, ez, Math.PI / 2);
       A(new THREE.TorusGeometry(0.78, 0.09, 6, 16), metal, s * 4.3, -1.55, ez + 1.72);
       A(new THREE.CircleGeometry(0.68, 14), win, s * 4.3, -1.55, ez + 1.74);       // 进气口（暗）
-      for (let i = 0; i < 9; i++) {                                                // 风扇叶
+      for (let i = 0; i < 9; i++) {                                                // 风扇叶（绕自身轴转）
         const a = i / 9 * Math.PI * 2;
-        A(box(0.1, 0.44, 0.1), metal, s * 4.3 + Math.cos(a) * 0.34, -1.55 + Math.sin(a) * 0.34, ez + 1.76);
+        // fanL/fanR 已经定位在发动机轴心上，所以叶片用"相对轴心"的坐标，绕 Z 转就是风扇转动
+        A(box(0.1, 0.44, 0.1), metal, Math.cos(a) * 0.34, Math.sin(a) * 0.34, 0, 0, 0, 0, s > 0 ? fanR : fanL);
       }
       A(new THREE.CylinderGeometry(0.5, 0.34, 0.9, 10), darkM, s * 4.3, -1.55, ez - 2.1, Math.PI / 2);  // 尾喷
       A(box(0.22, 0.9, 1.5), metal, s * 4.3, -1.05, ez - 0.2);                     // 挂架
@@ -6107,7 +6137,7 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     finSh.closePath();
     const finGeo = new THREE.ExtrudeGeometry(finSh, { depth: 0.3, bevelEnabled: false });
     finGeo.rotateY(Math.PI / 2);        // Shape.X → 世界 -Z（朝机尾），挤出方向 → 世界 X（厚度）
-    A(finGeo, tailC, -0.15, 1.0, -9.3);
+    A(finGeo, tailC, -0.15, 1.0, -9.3, 0, 0, 0, RUD.inner);   // 垂尾（方向舵）→ 可动组
     // 背鳍整流（根部前缘向前延伸的小三角，让垂尾和机身过渡自然）
     const doralSh = new THREE.Shape();
     doralSh.moveTo(0, 0); doralSh.lineTo(2.4, 0); doralSh.lineTo(0, 1.5); doralSh.closePath();
@@ -6115,14 +6145,15 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     doralGeo.rotateY(Math.PI / 2);
     A(doralGeo, tailC, -0.15, 0.95, -6.9);
     // 方向舵分缝（两侧各一条细线）
-    for (const s of [1, -1]) A(box(0.06, 5.6, 0.12), darkM, s * 0.17, 3.8, -14.3);
+    for (const s of [1, -1]) A(box(0.06, 5.6, 0.12), darkM, s * 0.17, 3.8, -14.3, 0, 0, 0, RUD.inner);
     // 垂尾上的航司色块
-    for (const s of [1, -1]) A(box(0.06, 1.5, 2.0), stripe, s * 0.17, 4.6, -12.3);
+    for (const s of [1, -1]) A(box(0.06, 1.5, 2.0), stripe, s * 0.17, 4.6, -12.3, 0, 0, 0, RUD.inner);
     for (const s of [1, -1]) {
-      A(sweptWing(s, 4.2, 2.2, 0.8, 0.2, 0.7), wingM, 0, 0.72, -9.7);
+      A(sweptWing(s, 4.2, 2.2, 0.8, 0.2, 0.7), wingM, 0, 0.72, -9.7, 0, 0, 0, ELEV.inner);   // 平尾 → 可动组
       A(box(0.16, 0.16, 0.16), M.navW, s * 4.1, 0.85, -9.2);
     }
-    // ---- 起落架：前起落架（双轮）+ 主起落架小车（每侧 4 轮）----
+    // ---- 起落架：前起落架（双轮）+ 主起落架小车（每侧 4 轮）→ 整段归入 gearG，起飞后收起 ----
+    CUR = gearG;
     A(new THREE.CylinderGeometry(0.11, 0.11, 2.0, 6), metal, 0, -1.9, 6.4);
     for (const s of [1, -1]) A(new THREE.CylinderGeometry(0.5, 0.5, 0.32, 12), tire, s * 0.42, -2.95, 6.4, 0, 0, Math.PI / 2);
     for (const s of [1, -1]) {
@@ -6134,6 +6165,7 @@ function makeSignPlane(text, w, h, bg, fg, border) {
         A(new THREE.CylinderGeometry(0.52, 0.52, 0.34, 12), tire, wx, -2.95, wz, 0, 0, Math.PI / 2);
       }
     }
+    CUR = bodyG;   // 起落架段结束，后续零件回到机身组
     // ---- 天线 / 传感器（小刀形，增加细节密度）----
     A(box(0.06, 0.5, 1.1), body, 0, R + 0.2, -2.2);
     A(box(0.06, 0.45, 0.9), body, 0, -R - 0.18, -0.5);
@@ -6144,22 +6176,48 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     A(box(0.18, 0.18, 0.18), M.navW, 0, 0.5, -13.2);
     A(box(0.22, 0.22, 0.22), M.beacon, 0, R + 0.28, -2.2);
     A(box(0.22, 0.22, 0.22), M.beacon, 0, -R - 0.26, 2.2);
+    // ===== 组装子组 + 组内顶点色融合 =====
+    // 零件加起来上百个，不融合的话整机就是上百次绘制调用。
+    // 注意：顶点色合并只保留 position/normal/color，会丢 UV —— 飞机全身没有贴图，安全。
+    g.add(bodyG); g.add(gearG); g.add(FLAP.outer); g.add(ELEV.outer); g.add(RUD.outer);
+    g.add(fanL); g.add(fanR);
+    // 只融合"内组"：外组的枢轴位移必须留着，否则就绕不成铰链了
+    for (const gg of [bodyG, gearG, FLAP.inner, ELEV.inner, RUD.inner, fanL, fanR]) {
+      try { mergeVehicleByVertexColor(gg, null, true); } catch (e) { console.warn('[airliner merge]', e); }
+    }
     g.scale.setScalar(scale || 1);
+    // 把可控子组全部导出（外组，动画改的是外组的 position/rotation）
+    g.userData.parts = { body: bodyG, gear: gearG, flap: FLAP.outer, elev: ELEV.outer, rud: RUD.outer, fanL, fanR };
     return g;
   }
-  // 全机场唯一一架大飞机（放大 1.6 倍）：停在 1 号机位，机头朝东（对着航站楼）。
-  // 旧版是"一架大 + 一架小"两架；用户要求合成一架大的，所以这里只保留这一架并把细节做足。
-  const THE_PLANE = makeAirliner(1.6, { body: 0xf2f5f8, stripe: 0x1a5fb4, stripe2: 0xc9a227, tail: 0xd0342c });
-  THE_PLANE.position.set(CX + 5, 4.75, APRON_Z);        // 轮底 ≈ -4.75*1.6+... 已按 scale 计入
-  THE_PLANE.rotation.y = Math.PI / 2 - 0.05;            // 机头朝 +X，略带角度更自然
+  // ================= 民航客机（全机场唯一一架，停在跑道上准备起飞）=================
+  // 【fix43·乘机过场】从停机坪移到跑道西端，机头朝 +X（东），随时可以起跑。
+  // ★ 必须 registerDynamicObject：否则 batchStaticScene 会按材质把它合并掉、原始 mesh 被
+  //   从 group 里摘除，飞机只剩一个空壳 —— 那样"登机/起飞"动画根本无从谈起。
+  const PLANE_SCALE = 1.6;
+  // 轮底相对机身原点的 y：主轮轮心 -2.95 − 半径 0.52 = -3.47，再乘缩放。
+  // （fix41 当时图省事写了 4.75，其实轮子会陷进地面 0.8m，这次按几何算准。）
+  const PLANE_GEAR_Y = 3.47 * PLANE_SCALE;
+  const TAKEOFF_X = -100;                       // 起飞起始位置：跑道西端
+  THE_PLANE = makeAirliner(PLANE_SCALE, { body: 0xf2f5f8, stripe: 0x1a5fb4, stripe2: 0xc9a227, tail: 0xd0342c });
+  THE_PLANE.position.set(TAKEOFF_X, PLANE_GEAR_Y, RUN_Z);
+  THE_PLANE.rotation.order = 'YXZ';             // ★ 必须！见下
+  THE_PLANE.rotation.set(0, Math.PI / 2, 0);    // 机头朝 +X（沿跑道向东）
+  // 为什么要把欧拉顺序改成 YXZ：机头在这个模型里是沿**局部 +Z**的。
+  // 默认 XYZ 顺序下 R = Rx·Ry·Rz，作用到向量时是先 Rz 再 Ry 再 Rx ——
+  // 而"俯仰"如果写成 rotation.z，绕 Z 轴旋转**根本不改变局部 +Z 的方向**，
+  // 于是抬前轮/爬升的抬头姿态会整个丢掉（实测就是这个症状）。
+  // 改成 YXZ 后 R = Ry·Rx·Rz：先绕局部 X（机体横轴）俯仰、再绕 Y 定航向，
+  // 用 rotation.x = -pitch 就得到"机头抬起"。
   scene.add(THE_PLANE);
-  // 机身碰撞体：只拦机身（不拦机翼 —— 翼展 30m 全拦会堵掉整个机坪，而机翼离地 ~4m，
-  // 人走车开都从翼下过，视觉上不穿帮）。玩家碰撞是高度感知的（person.y < top-0.3 才挡）。
-  const pl = (x, z, hx, hz, top) => buildings.push({ minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, bottom: 0, top, hq: true });
-  pl(CX + 5, APRON_Z, 16.5, 2.4, 5.2);                  // 机身（沿 X 长 33m，宽 4.8m）
-  // 尾翼/机头也各给一个薄碰撞盒，避免"从尾巴穿过去"
-  pl(CX + 5 - 17.5, APRON_Z, 3.0, 2.2, 4.2);            // 尾部
-  pl(CX + 5 + 17.0, APRON_Z, 3.0, 2.0, 4.2);            // 机头
+  registerDynamicObject(THE_PLANE);             // ★ 绝不能省
+  AIRLINER = THE_PLANE;
+  AIRLINER.userData.fx = { scale: PLANE_SCALE, gearY: PLANE_GEAR_Y, runwayZ: RUN_Z, takeoffX: TAKEOFF_X };
+  // 地面碰撞：只拦机身（机翼离地 4m+，翼展 30m 全拦会把跑道堵死，人车从翼下过不穿帮）。
+  // 这个碰撞盒要在起飞时从 buildings 里摘掉，否则跑道上会留下一堵看不见的墙。
+  const planeHull = { minX: TAKEOFF_X - 17.0, maxX: TAKEOFF_X + 17.0, minZ: RUN_Z - 2.4, maxZ: RUN_Z + 2.4, bottom: 0, top: PLANE_GEAR_Y + 1.28 * PLANE_SCALE, hq: true };
+  buildings.push(planeHull);
+  AIRLINER.userData.collider = planeHull;
 
   // ================= 机场围栏（矩形，留一个南向出入口）=================
   // 围栏桩逐根用 terrainHeight 贴地，避免落在压平 blend 带外时浮空/被埋。
@@ -13355,6 +13413,11 @@ addEventListener('keydown', e => {
     lastWTime = now;
   }
   if (e.repeat) return;
+  // 【fix43·乘机过场】优先处理"跳过"与"登机"：
+  // 过场期间只认空格/Esc（跳过），其余热键全部屏蔽 —— 免得玩家在演出里误开商店/切枪。
+  // 平时 E 键先看"是不是站在客机舱门旁、该登机"，不满足才落到原来的 tryToggle()（上车/交互）。
+  if (FLIGHT) { if (k === ' ' || k === 'escape') skipFlightShow(); return; }
+  if (k === 'e' && nearAirlinerDoor()) { startFlightShow(); return; }
   if (k === 'e') tryToggle();
   if (k === ' ') { jump(); _carJumpReq = true; }
   if (k === 'r') reloadWeapon();
@@ -21620,6 +21683,11 @@ function updateDayNight(dt) {
   }
 }
 function update(dt) {
+  // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
+  // 常规世界逻辑整段跳过 —— 这样完全不必去碰那 179 处 state 判断，风险最低。
+  if (FLIGHT) { flightTick(dt); return; }
+  // 没在过场：玩家站在客机舱门旁就提示「按 E 登机」
+  updateBoardPrompt();
   // 【2026-10-21·fix32】每 4 帧 → 每 6 帧（60fps 下 15Hz → 10Hz）。
   // 每次重建要把 _gridW×_gridH（约 31×30 = 930）个格子数组全部清空，纯 CPU 浪费。
   // 网格只用来做"附近有什么"的粗筛，10Hz 对走路/开枪完全够（迟滞另有 40m 兜底，不会闪）。
@@ -23556,6 +23624,420 @@ function updateAutoQuality() {
 }
 let _lastFrameMs = 0;
 let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于在刚暂停那一帧清一次输入）
+// ==================== 【fix43·乘机过场】登机 → 起飞 → 巡航 → 降落 ====================
+// 设计要点（改动前务必读，避免踩已经踩过的坑）：
+// 1) **不新增 state 取值**。全工程有 179 处 `state === '...'` 判断（drive 98 / walk 36），
+//    漏掉任何一处都会出现"人在飞机上但 HUD 还在开车""下车逻辑误触发"这类鬼问题。
+//    改用独立的 FLIGHT 标志，在 update() 开头整段接管并 return —— 常规逻辑一行都不用动。
+// 2) 飞机用**脚本化关键帧**驱动（不用物理）：位置/俯仰按时间轴插值，稳定、可复现、好调。
+// 3) 相机每阶段一个机位，帧间用指数平滑跟过去，避免硬切造成的突兀感。
+// 4) 云 / 远海 / 占位新城在初始化时一次性建好；云平时隐藏（不增加日常开销）。
+// 5) 演出期间每帧 clearInput()，玩家自然动不了，不必去改移动逻辑。
+// 6) 演出期间会把雾推远（否则 1600m 外的新城被雾完全吃掉），结束后恢复原值。
+
+var FLIGHT = null;                       // 过场状态对象（null = 未激活）
+// 各阶段结束时刻（秒）。总时长约 53s，可按空格/Esc 跳过。
+const FLIGHT_T = { taxi: 12.0, rotate: 14.2, lift: 17.5, climb: 24.0, cruise: 35.0, descend: 45.0, land: 50.0, done: 53.0 };
+const FLIGHT_BOARD_END = 4.0;            // 登机段结束（之后飞机开始滑跑）
+// 【占位新城】—— 用户说"另一个城市一会给你说后续的开发"，所以这里先放一座**占位城市**：
+// 一条跑道 + 一片楼群天际线 + 城市名标牌，够飞机降落、够看出"到了另一座城"。
+// TODO(待用户给需求)：把这里换成真正的第二座城市（路网/街区/可交互内容）。
+const DEST = { x: 1550, z: -285, runwayHalf: 200 };
+// 飞机关键帧：[时刻, x, y, 俯仰角]。y = 5.552 时主轮正好贴地（见 addAirport 里的 PLANE_GEAR_Y）。
+const FLIGHT_KEY_Y = 3.47 * 1.6;
+const FLIGHT_KEYS = [
+  [0,                 -100, FLIGHT_KEY_Y, 0.000],   // 停机待发（跑道西端）
+  // ★ 滑跑/抬轮/离地必须压在跑道长度之内：跑道半长只有 105m（x ∈ [-105,105]）。
+  //   fix43 第一版把滑跑终点写到 x=262，结果飞机早就冲出跑道端、在草地上继续加速，
+  //   截图一眼就看出来了。现在滑跑到 62、抬轮到 94（都在跑道上），离地 155（刚过跑道端）。
+  [FLIGHT_T.taxi,       62, FLIGHT_KEY_Y, 0.000],   // 全推力滑跑（跑道内）
+  [FLIGHT_T.rotate,     94, FLIGHT_KEY_Y, 0.150],   // 抬前轮：机头已起、主轮仍在地面
+  [FLIGHT_T.lift,      155, 32,          0.205],    // 离地爬升（起落架收起）
+  [FLIGHT_T.climb,     560, 178,         0.120],    // 持续爬升
+  [FLIGHT_T.cruise,   1080, 190,         0.000],    // 巡航（正好在云层高度附近，会穿云）
+  [FLIGHT_T.descend,  1420, 62,         -0.070],    // 下降进近（起落架放下）
+  [FLIGHT_T.land,     1550, FLIGHT_KEY_Y, 0.000],   // 在占位新城跑道触地
+  [FLIGHT_T.done,     1648, FLIGHT_KEY_Y, 0.000]    // 滑行减速停住
+];
+const flightCloud = { group: null, mat: null };
+// ---- 关键帧插值：找到 t 所在区间做 smoothstep，保证速度连续、没有折角 ----
+function flightSample(t) {
+  const K = FLIGHT_KEYS;
+  if (t <= K[0][0]) return { x: K[0][1], y: K[0][2], pitch: K[0][3] };
+  for (let i = 1; i < K.length; i++) {
+    if (t <= K[i][0]) {
+      const a = K[i - 1], b = K[i];
+      let u = (t - a[0]) / Math.max(1e-6, b[0] - a[0]);
+      u = u * u * (3 - 2 * u);                              // smoothstep
+      return { x: a[1] + (b[1] - a[1]) * u, y: a[2] + (b[2] - a[2]) * u, pitch: a[3] + (b[3] - a[3]) * u };
+    }
+  }
+  const L = K[K.length - 1];
+  return { x: L[1], y: L[2], pitch: L[3] };
+}
+function smooth01(a, b, t) { const u = Math.min(1, Math.max(0, (t - a) / Math.max(1e-6, b - a))); return u * u * (3 - 2 * u); }
+
+// ---- 舱门世界坐标：用矩阵变换算，飞机位置改了也不用改这里 ----
+// 注意返回的是**共享临时向量**，调用方只能立即取数（不要长期持有）——
+// 这个函数每帧都会被"登机提示"的判断调用，顺手 clone 一份就是每帧一次对象分配。
+const _doorTmp = new THREE.Vector3();
+function flightDoorWorld() {
+  // 前客舱门在机身局部 (R+0.03, -0.02, 6.9)
+  return _doorTmp.set(1.28 + 0.03, -0.02, 6.9).applyMatrix4(AIRLINER.matrixWorld);
+}
+// ---- 初始化演出专用布景：远海 + 占位新城 + 云 + 舱门板 + 登机梯 ----
+function initFlightScenery() {
+  // (1) 远海：地图地面只到 ±500，飞出去就是虚空，所以要在**地图之外**铺海面兜住。
+  // ⚠️ 范围只能从 x=500 起，绝不能铺成本城也覆盖的大平面：
+  //    本城乡村丘陵有低于海平面的低谷（地形会到 -4m 左右），海平面一盖上去，
+  //    原本的"绿色洼地"就变成一摊摊蓝色水塘 —— 那是凭空改变本城外观（实测踩过）。
+  //    从 x=500 起还有一个好处：正好接上本城边缘那圈已经沉到 WATER_Y 的 ground mesh。
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), new THREE.MeshLambertMaterial({ color: 0x1d4e6b }));
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(500 + 2500, WATER_Y, DEST.z);
+  scene.add(sea);
+  // (2) 【占位新城】地面 + 沙滩过渡 + 跑道 + 楼群天际线 + 城市名标牌
+  const g = new THREE.Group();
+  // 三层地基：沙滩（最大）→ 草地 → 城区铺装。只铺一块纯绿会像一块塑料板，
+  // 层次+路网才看得出"这是一座城"。
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(1040, 1040), new THREE.MeshLambertMaterial({ color: 0xc9b98d }));
+  beach.rotation.x = -Math.PI / 2; beach.position.set(DEST.x, 0.015, DEST.z); g.add(beach);
+  const destGround = new THREE.Mesh(new THREE.PlaneGeometry(940, 940), new THREE.MeshLambertMaterial({ color: 0x4e7a3a }));
+  destGround.rotation.x = -Math.PI / 2; destGround.position.set(DEST.x, 0.03, DEST.z); g.add(destGround);
+  // 城区范围（跑道北侧一大片）
+  const CITY_X0 = DEST.x - 432, CITY_X1 = DEST.x + 432, CITY_Z0 = DEST.z - 620, CITY_Z1 = DEST.z - 110;
+  const pave = new THREE.Mesh(new THREE.PlaneGeometry(CITY_X1 - CITY_X0, CITY_Z1 - CITY_Z0), new THREE.MeshLambertMaterial({ color: 0x8b8f94 }));
+  pave.rotation.x = -Math.PI / 2;
+  pave.position.set((CITY_X0 + CITY_X1) / 2, 0.05, (CITY_Z0 + CITY_Z1) / 2); g.add(pave);
+  // 路网（纵向 + 横向各若干条）—— 纯占位，等用户给真实需求再重做
+  const roadMat = new THREE.MeshLambertMaterial({ color: 0x33383d });
+  for (let rx = CITY_X0 + 60; rx < CITY_X1; rx += 108) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(14, 0.06, CITY_Z1 - CITY_Z0), roadMat);
+    r.position.set(rx, 0.09, (CITY_Z0 + CITY_Z1) / 2); g.add(r);
+  }
+  for (let rz = CITY_Z0 + 70; rz < CITY_Z1; rz += 108) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(CITY_X1 - CITY_X0, 0.06, 14), roadMat);
+    r.position.set((CITY_X0 + CITY_X1) / 2, 0.09, rz); g.add(r);
+  }
+  // 跑道（沿 X，和本城跑道同向，飞机一路向东直接进近）
+  const rw = new THREE.Mesh(new THREE.BoxGeometry(DEST.runwayHalf * 2, 0.14, 32), new THREE.MeshLambertMaterial({ color: 0x2e3134 }));
+  rw.position.set(DEST.x, 0.1, DEST.z); g.add(rw);
+  const rwMid = new THREE.MeshLambertMaterial({ color: 0xe8eaec });
+  for (let x = -DEST.runwayHalf + 14; x <= DEST.runwayHalf - 14; x += 34) {
+    const d = new THREE.Mesh(new THREE.BoxGeometry(18, 0.16, 0.7), rwMid);
+    d.position.set(DEST.x + x, 0.19, DEST.z); g.add(d);
+  }
+  for (const s of [-1, 1]) {
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(DEST.runwayHalf * 2, 0.16, 0.5), rwMid);
+    edge.position.set(DEST.x, 0.19, DEST.z + s * 15); g.add(edge);
+  }
+  // 楼群天际线：沿路网格布置（每个路口一块地皮），像街道两侧的楼
+  const bpal = ['brutal', 'blueglass', 'marble', 'concrete', 'glass', 'tower'];
+  for (let gx = CITY_X0 + 60; gx < CITY_X1; gx += 108) {
+    for (let gz = CITY_Z0 + 70; gz < CITY_Z1; gz += 108) {
+      if (Math.random() < 0.20) continue;                       // 留些空地，不然像一排积木
+      const w = 30 + Math.random() * 44, d = 30 + Math.random() * 44;
+      const h = 24 + Math.random() * 98;
+      const b = new THREE.Mesh(
+        uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(6, Math.round(h / 12)))),
+        buildingBodyMaterial(bpal[Math.random() * bpal.length | 0]));
+      b.position.set(gx + (Math.random() - 0.5) * 42, h / 2, gz + (Math.random() - 0.5) * 42);
+      g.add(b);
+    }
+  }
+  // 城市名标牌（占位名，等用户定名）
+  const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 256;
+  const cx2 = cvs.getContext('2d');
+  cx2.fillStyle = 'rgba(14,20,28,0.92)'; cx2.fillRect(0, 0, 1024, 256);
+  cx2.strokeStyle = '#3fa9f5'; cx2.lineWidth = 8; cx2.strokeRect(10, 10, 1004, 236);
+  cx2.fillStyle = '#eaf4ff'; cx2.font = 'bold 120px "Microsoft YaHei", sans-serif';
+  cx2.textAlign = 'center'; cx2.textBaseline = 'middle';
+  cx2.fillText('临 海 市', 512, 108);
+  cx2.fillStyle = '#7fc4f0'; cx2.font = 'bold 44px Arial, sans-serif';
+  cx2.fillText('LINHAI  ·  占位新城（待开发）', 512, 200);
+  const signTex = new THREE.CanvasTexture(cvs);
+  // 用 Plane + DoubleSide：原来用 Box，从跑道这侧看到的是"背面那张贴图"（镜像文字），
+  // 玩家正好是从南边进近，必须保证朝南这面是对的。
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide }));
+  sign.position.set(DEST.x, 60, DEST.z - 150); g.add(sign);          // Plane 默认法线 +Z → 正好朝南对着跑道
+  const signLeg = new THREE.Mesh(new THREE.BoxGeometry(6, 46, 6), new THREE.MeshLambertMaterial({ color: 0x5a6068 }));
+  signLeg.position.set(DEST.x, 23, DEST.z - 150); g.add(signLeg);
+  scene.add(g);
+  // (3) 云：46 个云团（压扁的球拼出来），整组顶点色融合成 1~2 个网格 —— 否则是近 200 次调用
+  const cg = new THREE.Group();
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+  for (let i = 0; i < 46; i++) {
+    const cx3 = 120 + Math.random() * 1560, cy = 150 + Math.random() * 180, cz = -1000 + Math.random() * 1300;
+    const n = 3 + (Math.random() * 3 | 0);
+    for (let k = 0; k < n; k++) {
+      const s = 24 + Math.random() * 32;
+      const geo = new THREE.SphereGeometry(s, 7, 5);
+      geo.scale(1, 0.42, 1);
+      const m = new THREE.Mesh(geo, cloudMat);
+      m.position.set(cx3 + (Math.random() - 0.5) * 76, cy + (Math.random() - 0.5) * 18, cz + (Math.random() - 0.5) * 76);
+      cg.add(m);
+    }
+  }
+  try { mergeVehicleByVertexColor(cg, null, true); } catch (e) {}
+  cg.visible = false;
+  scene.add(cg);
+  registerDynamicObject(cg);
+  flightCloud.group = cg;
+  // (4) 舱门板（可开合）：原模型的客舱门是贴在机身上的薄板、且在已合并的机身组里动不了，
+  //     所以在这里单独补一片门、挂在飞机上，登机时绕门轴向外打开。
+  const doorPivot = new THREE.Group();
+  doorPivot.position.set(1.34, -0.02, 6.9 - 0.62);      // 门轴在前门边缘
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 1.25), new THREE.MeshLambertMaterial({ color: 0xf2f5f8 }));
+  doorPanel.position.set(0, 0, 0.62);
+  doorPivot.add(doorPanel);
+  AIRLINER.add(doorPivot);
+  AIRLINER.userData.doorPivot = doorPivot;
+  // (5) 登机梯（可移动客梯车）：飞机停在跑道上，舱门离地 5.5m，必须有梯子人才能上去
+  const tv = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xd8b23a });
+  const steelMat = new THREE.MeshLambertMaterial({ color: 0x8d949b });
+  const car = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 5.0), bodyMat);
+  car.position.set(0, 0.75, 0); tv.add(car);
+  for (let i = 0; i < 4; i++) {
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 10), new THREE.MeshLambertMaterial({ color: 0x15181c }));
+    wh.rotation.z = Math.PI / 2;
+    wh.position.set(i % 2 ? 1.5 : -1.5, 0.42, i < 2 ? 1.9 : -1.9); tv.add(wh);
+  }
+  // 台阶：从地面爬到平台（14 级）
+  const STEPS = 14, stepTopY = 4.95;
+  for (let i = 0; i < STEPS; i++) {
+    const st = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.12, 0.42), steelMat);
+    st.position.set(0, (i + 1) * (stepTopY / STEPS), 1.2 - i * 0.44); tv.add(st);
+  }
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 2.4), steelMat);
+  plat.position.set(0, stepTopY, -4.9); tv.add(plat);
+  for (const s of [-1, 1]) {                                   // 扶手
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 7.4), steelMat);
+    rail.position.set(s * 0.95, stepTopY * 0.62 + 1.0, -1.3);
+    rail.rotation.x = -0.62; tv.add(rail);
+    for (let k = 0; k < 4; k++) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.07), steelMat);
+      p.position.set(s * 0.95, 0.5 + k * 1.1, 0.4 - k * 0.44 * 2.2); tv.add(p);
+    }
+  }
+  scene.add(tv);
+  registerDynamicObject(tv);
+  // 梯车摆位：让"台阶顶部平台"正好对着舱门，台阶朝飞机外侧（世界 -Z，因为门在机身北侧）
+  const dw = flightDoorWorld();
+  tv.position.set(dw.x, 0, dw.z - 5.6);
+  tv.rotation.y = Math.PI;                                     // 让台阶朝 +Z（朝飞机）
+  AIRLINER.userData.stairs = tv;
+  AIRLINER.userData.stairsDoor = dw.clone();
+}
+// ---- 登机提示：玩家走到舱门附近就提示「按 E 登机」----
+// 只在"刚靠近 / 刚离开"时写一次 hint，之后让游戏自己的提示逻辑接管 ——
+// 每帧抢着写会和开车/任务提示打架。
+var boardPromptOn = false;
+function nearAirlinerDoor() {
+  if (!AIRLINER || FLIGHT) return false;
+  if (state !== 'walk') return false;                 // 开着车就别提示登机了
+  const d = flightDoorWorld();
+  return Math.hypot(person.position.x - d.x, person.position.z - d.z) < 15;
+}
+function updateBoardPrompt() {
+  if (!AIRLINER) return;
+  const near = nearAirlinerDoor();
+  if (near === boardPromptOn) return;
+  boardPromptOn = near;
+  if (near) hudText(hintTextEl, 'hint', '按 E 登机（飞往临海市）');
+  else hudText(hintTextEl, 'hint', 'WASD/方向键 移动　·　空格 跳跃　·　E 上车　·　B 商店');
+}
+// ---- 开始过场 ----
+function startFlightShow() {
+  if (FLIGHT || !AIRLINER) return;
+  FLIGHT = {
+    t: 0,
+    path: null, pathLen: 0,
+    camPos: new THREE.Vector3(), camAim: new THREE.Vector3(), camInit: false,
+    fogNear: scene.fog.near, fogFar: scene.fog.far,
+    savedAngle: personAngle.v
+  };
+  // 玩家登机路径：从当前位置 → 梯子**低端** → 平台 → 舱门。
+  // ⚠️ 登机梯挂在飞机的 -Z 侧（世界 -Z，因为舱门在机身北侧），且梯车整体转了 180°，
+  //    所以台阶的世界 z = st.z - 1.2 + i*0.44：**低端在 st.z-1.2 那一侧**。
+  //    fix43 第一版把起点写成 st.z+5.0（那已经是平台高度那一端），玩家等于没爬梯。
+  const d = flightDoorWorld(), st = AIRLINER.userData.stairs;
+  const foot = new THREE.Vector3(d.x, 0, st.position.z - 1.6);
+  const top = new THREE.Vector3(d.x, d.y - 0.55, st.position.z + 4.9);
+  const p = [
+    new THREE.Vector3(person.position.x, person.position.y, person.position.z),
+    foot, top, new THREE.Vector3(d.x, d.y, d.z)
+  ];
+  FLIGHT.path = p;
+  let len = 0;
+  FLIGHT.seg = [];
+  for (let i = 1; i < p.length; i++) { const L = p[i].distanceTo(p[i - 1]); FLIGHT.seg.push(L); len += L; }
+  FLIGHT.pathLen = Math.max(0.001, len);
+  if (hintTextEl) hudText(hintTextEl, 'hint', '登机中…  （空格 / Esc 跳过）');
+  clearInput();
+}
+// ---- 跳过：直接到演出末尾 ----
+function skipFlightShow() { if (FLIGHT) FLIGHT.t = FLIGHT_T.done; }
+// ---- 沿登机路径取点（按累计弧长）----
+const _fpA = new THREE.Vector3(), _fpB = new THREE.Vector3();
+function flightPathPoint(u) {
+  const p = FLIGHT.path, seg = FLIGHT.seg;
+  let d = u * FLIGHT.pathLen;
+  for (let i = 0; i < seg.length; i++) {
+    if (d <= seg[i] || i === seg.length - 1) {
+      const k = Math.min(1, d / Math.max(1e-6, seg[i]));
+      return _fpA.copy(p[i]).lerp(p[i + 1], k);
+    }
+    d -= seg[i];
+  }
+  return _fpA.copy(p[p.length - 1]);
+}
+// ---- 每帧推进（由 update() 开头接管调用）----
+function flightTick(dt) {
+  const F = FLIGHT; if (!F) return;
+  F.t = Math.min(FLIGHT_T.done, F.t + dt);
+  const t = F.t;
+  clearInput();                                   // 演出期间玩家不能操作
+  const ks = flightSample(t);
+  // 阶段提示：只在文案变化时写一次（每帧抢着写没意义，也浪费）
+  const ph = t < FLIGHT_BOARD_END ? '登机中…  （空格 / Esc 跳过）'
+    : t < FLIGHT_T.taxi ? '滑跑加速…  （空格 / Esc 跳过）'
+    : t < FLIGHT_T.lift ? '抬前轮 · 离地…'
+    : t < FLIGHT_T.cruise ? '爬升中…  前往临海市'
+    : t < FLIGHT_T.descend ? '巡航中…  前方临海市'
+    : t < FLIGHT_T.land ? '下降进近…'
+    : '着陆滑行…';
+  if (ph !== F.lastHint) { F.lastHint = ph; if (hintTextEl) hudText(hintTextEl, 'hint', ph); }
+  // 飞机位姿：rotation.order 已在创建时设为 'YXZ'，
+// 所以这里 set(-pitch, π/2, 0) = 先绕机体横轴俯仰、再定航向朝 +X。
+  AIRLINER.position.set(ks.x, ks.y, DEST.z);
+  AIRLINER.rotation.set(-ks.pitch, Math.PI / 2, 0);
+  // ---- 登机段：玩家沿路径走上去 ----
+  if (t < FLIGHT_BOARD_END) {
+    const u = smooth01(0.15, FLIGHT_BOARD_END - 0.15, t);
+    const at = flightPathPoint(u);
+    person.position.copy(at);
+    person.visible = true;
+    // 朝向沿路径水平方向
+    const u2 = Math.min(1, u + 0.02);
+    const ahead = flightPathPoint(u2);
+    const dx = ahead.x - at.x, dz = ahead.z - at.z;
+    if (Math.hypot(dx, dz) > 0.01) personAngle.v = Math.atan2(dx, dz);
+    // 舱门随登机进度打开
+    const dp = AIRLINER.userData.doorPivot;
+    if (dp) dp.rotation.y = -smooth01(0.05, 0.35, t) * 1.15;
+  } else {
+    if (person.visible) { person.visible = false; const dp = AIRLINER.userData.doorPivot; if (dp) dp.rotation.y = 0; }
+  }
+  // ---- 局部动画：起落架 / 襟翼 / 舵面 / 风扇 / 灯光 ----
+  const P = AIRLINER.userData.parts;
+  if (P) {
+    // 起落架：离地后收起（上移 3.2m 后隐藏），下降进近时放下
+    let gearUp = 0;
+    if (t > FLIGHT_T.rotate) gearUp = smooth01(FLIGHT_T.rotate, FLIGHT_T.lift + 1.2, t);
+    if (t > FLIGHT_T.descend - 4) gearUp = 1 - smooth01(FLIGHT_T.descend - 4, FLIGHT_T.descend + 1.5, t);
+    P.gear.position.y = gearUp * 3.2;
+    P.gear.visible = gearUp < 0.94;
+    // 襟翼：滑跑伸出、巡航收起、进近再伸出
+    let flap = smooth01(2.0, FLIGHT_T.taxi, t) * -0.36;
+    if (t > FLIGHT_T.climb) flap = -0.36 * (1 - smooth01(FLIGHT_T.climb, FLIGHT_T.climb + 6, t));
+    if (t > FLIGHT_T.descend - 6) flap = -0.36 * smooth01(FLIGHT_T.descend - 6, FLIGHT_T.descend - 1, t);
+    P.flap.rotation.x = flap;
+    // 平尾：跟随俯仰做配平微动；方向舵：巡航段轻微摆动（有生气）
+    P.elev.rotation.x = -ks.pitch * 0.55;
+    P.rud.rotation.y = Math.sin(t * 0.7) * 0.05 * (t > FLIGHT_T.lift ? 1 : 0.3);
+    // 风扇转速：推力越大转越快
+    const spin = (t > FLIGHT_BOARD_END ? 14 : 3) + (t > FLIGHT_T.taxi && t < FLIGHT_T.climb ? 22 : 0);
+    P.fanL.rotation.z -= spin * dt; P.fanR.rotation.z -= spin * dt;
+  }
+  // ---- 相机：每阶段一个机位，帧间平滑 ----
+  flightCamera(t, ks, dt);
+  // ---- 雾：高空段把 far 推远，否则 1600m 外的新城被雾吃掉 ----
+  const high = smooth01(FLIGHT_T.lift, FLIGHT_T.climb, t) * (1 - smooth01(FLIGHT_T.land, FLIGHT_T.done, t));
+  scene.fog.near = F.fogNear + high * 700;
+  scene.fog.far = F.fogFar + high * 5200;
+  if (flightCloud.group) flightCloud.group.visible = t > FLIGHT_T.lift - 2 && t < FLIGHT_T.descend + 2;
+  // ---- 结束 ----
+  if (t >= FLIGHT_T.done) endFlightShow();
+}
+// ---- 电影化运镜 ----
+const _cA = new THREE.Vector3(), _cB = new THREE.Vector3();
+function flightCamera(t, ks, dt) {
+  const F = FLIGHT;
+  const plane = AIRLINER.position;
+  const PZ = DEST.z;
+  // 机位距离的经验值：机身长 33m、翼展 30m，**相机至少要退到 60~90m** 才能把整机装进画面。
+  // fix43 第一版只退了 26~34m，结果只看到机尾特写，还误以为是"飞机侧翻了"。
+  // 起跑段特意用**固定机位 + 视线跟飞机**：飞机从画面一侧穿过，加速感比跟随镜头强得多。
+  if (t < FLIGHT_BOARD_END) {
+    // 登机：从侧后上方俯视，能同时看到"梯子斜面 → 玩家 → 舱门"这条向上的线。
+    // 原来机位压在正后方 8m，结果大片垂尾糊在画面左边，完全看不出在爬梯。
+    _cA.set(person.position.x - 7.5, person.position.y + 3.2, person.position.z - 10.5);
+    _cB.set(person.position.x, person.position.y + 0.6, person.position.z + 1.5);
+  } else if (t < FLIGHT_T.rotate) {
+    // 起跑：本城跑道北侧的固定低机位（贴地最能体现加速）。
+    // ⚠️ 这里必须用**本城**的 x（跑道在 x∈[-105,105]），不能用 DEST.x ——
+    //    DEST.x 是新城的（1550），fix43 第二版写成 DEST.x-66 后相机直接飞到 1400m 外，
+    //    画面里只剩草地，飞机根本不在镜头里。
+    _cA.set(10, 7.0, PZ - 44);
+    _cB.set(plane.x, ks.y + 3.5, PZ);
+  } else if (t < FLIGHT_T.lift) {
+    // 抬前轮：本城跑道东段侧面稍远（固定），看清机头抬起而主轮仍在地面
+    _cA.set(46, 9.0, PZ - 50);
+    _cB.set(plane.x, ks.y + 4, PZ);
+  } else if (t < FLIGHT_T.climb) {
+    // 离地：侧后方跟随
+    _cA.set(plane.x - 70, ks.y + 16, PZ - 62);
+    _cB.set(plane.x, ks.y + 3, PZ);
+  } else if (t < FLIGHT_T.cruise) {
+    // 爬升：侧后方更远
+    _cA.set(plane.x - 95, ks.y + 26, PZ - 80);
+    _cB.set(plane.x, ks.y + 2, PZ);
+  } else if (t < FLIGHT_T.descend) {
+    // 巡航：侧前方（同时看到机头和机身，背景是云）
+    _cA.set(plane.x + 86, ks.y + 18, PZ - 70);
+    _cB.set(plane.x - 6, ks.y, PZ);
+  } else if (t < FLIGHT_T.land) {
+    // 下降进近：前下方仰视，看飞机迎面下来
+    _cA.set(plane.x + 120, ks.y + 6, PZ - 72);
+    _cB.set(plane.x, ks.y, PZ);
+  } else {
+    // 着陆滑行：新城跑道旁的低机位
+    _cA.set(DEST.x + 130, 3.0, PZ - 58);
+    _cB.set(plane.x, ks.y, PZ);
+  }
+  if (!F.camInit) { F.camPos.copy(_cA); F.camAim.copy(_cB); F.camInit = true; }
+  const k = 1 - Math.pow(0.02, dt);               // 指数平滑（与游戏内相机同一套手感）
+  F.camPos.lerp(_cA, k);
+  F.camAim.lerp(_cB, k);
+  camera.position.copy(F.camPos);
+  camera.lookAt(F.camAim);
+  // 高空时把 FOV 收一点，画面更"远"
+  const wantFov = t > FLIGHT_T.climb && t < FLIGHT_T.land ? 52 : 60;
+  if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = wantFov; camera.updateProjectionMatrix(); }
+}
+// ---- 结束/复位 ----
+function endFlightShow() {
+  const F = FLIGHT; if (!F) return;
+  FLIGHT = null;
+  scene.fog.near = F.fogNear; scene.fog.far = F.fogFar;
+  if (flightCloud.group) flightCloud.group.visible = false;
+  if (Math.abs(camera.fov - 60) > 0.05) { camera.fov = 60; camera.updateProjectionMatrix(); }
+  // 玩家下机：站在新城跑道南侧的草地上，**面朝北**——楼群天际线都在跑道北侧，
+// 朝南只能看到一片空草地，完全体会不到"到了另一座城市"。
+  person.visible = true;
+  person.position.set(DEST.x + 96, 0.04, DEST.z + 30);
+  personAngle.v = Math.PI; camYaw = Math.PI; camPitch = 0.06;
+  // 碰撞盒摘掉：飞机已经飞走了，留着会在跑道上形成一堵看不见的墙
+  const col = AIRLINER && AIRLINER.userData && AIRLINER.userData.collider;
+  if (col) { const i = buildings.indexOf(col); if (i >= 0) buildings.splice(i, 1); }
+  if (hintTextEl) hudText(hintTextEl, 'hint', '已抵达 临海市（占位新城） · 后续开发待定');
+  saveGame();
+  clearInput();
+}
+// 初始化布景（必须在 AIRLINER 就位之后）
+try { initFlightScenery(); } catch (e) { console.error('[flight scenery]', e); }
+
 const frameLoop = () => {
   // 【2026-10-20·fix28】GPU 上下文丢失期间先别画：往一个已经失效的上下文里反复 render，
   // 既会刷一屏黑，又很容易触发二次丢失（表现为"黑屏闪个不停"）。等 restored 事件恢复后再继续。
