@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix49-detail';;
+const BUILD = '20261024-fix50-drumtower';;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1025,7 +1025,7 @@ function terrainHeight(x, z) {
   // 【fix48】临海市：这张地图只覆盖 ±500，地图外原本会被"四面环海"逻辑压到海平面
   // （WATER_Y ≈ -0.6）。而临海市的地基在 y≈0，于是玩家一走过去就会**陷进地面 0.66m**
   // （实测相机沉到水下、整屏都是水色）。所以给新城单独一块水平地面。
-  if (x > 980 && x < 2010 && z > -830 && z < 270) return 0;
+  if (x > 980 && x < 2010 && z > -830 && z < 270) return linhaiHeight(x, z);   // 【fix50】改用地形高度（原先是恒 0 的平地）
   const m = Math.max(Math.abs(x), Math.abs(z));   // 用方形判断，保证城市网格（含四角）全平
   const ring = THREE.MathUtils.clamp((m - 205) / 90, 0, 1);   // 城市外才开始丘陵（城市内全平）
   const south = THREE.MathUtils.clamp((z - 190) / 60, 0, 1);  // 南侧压平丘陵，让位给沙滩
@@ -23719,6 +23719,26 @@ let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于�
 // TODO(第 4 期)：细节深化（斗拱/雕花窗/连廊/LED 内容/亲水平台）
 //
 
+// 【fix50】临海市地形：河床下沉 → 驳岸抬升 → 城区台地 → 城外丘陵。
+// 用户要求"地面别死死的，不一定非要是一块平面，可以设计一些自然的过渡、起伏、转折"。
+// 城区范围刻意保持台地 0 —— 建筑与路网都按水平基准摆的，如果城区也起伏，
+// 每栋楼、每条路都要改成逐点贴地，改动面太大且容易出错。
+function linhaiHeight(x, z) {
+  const rivC = (LH.rivX0 + LH.rivX1) / 2, rivH = (LH.rivX1 - LH.rivX0) / 2;
+  const dr = Math.abs(x - rivC);
+  if (dr < rivH) return -2.6;                                  // 河道内：下沉成河床
+  const t = Math.min(1, (dr - rivH) / 12);                     // 河岸 12m 抬升（带缓坡转折）
+  const e = t * t * (3 - 2 * t);
+  let h = -2.6 + e * 2.6;                                      // → 台地 0
+  const out = Math.max(Math.max(0, Math.abs(x - DEST.x) - 400), Math.max(0, Math.abs(z - DEST.z) - 470));
+  if (out > 0) {                                               // 城区之外：丘陵
+    const k = Math.min(1, out / 150);
+    h += k * k * (3.6
+      + Math.sin(x * 0.031) * Math.cos(z * 0.026) * 2.6
+      + Math.sin((x - z) * 0.017 + 1.1) * 1.5);
+  }
+  return h;
+}
 function buildLinhaiCity(g) {
   const Z0 = LH.z0, Z1 = LH.z1, ZC = (Z0 + Z1) / 2, ZLEN = Z1 - Z0;
   const add = (m) => { g.add(m); return m; };
@@ -23751,12 +23771,54 @@ function buildLinhaiCity(g) {
   }
   const BX = (w, h, d) => new THREE.BoxGeometry(w, h, d);
   // ---------- 1) 两岸铺装 ----------
-  const paveM = new THREE.MeshLambertMaterial({ color: 0x8d9298 });   // 西岸：现代石板
-  const ancM = new THREE.MeshLambertMaterial({ color: 0x9d978c });    // 东岸：青砖灰
-  const p1 = new THREE.Mesh(new THREE.PlaneGeometry(LH.cdX1 - LH.cdX0 + 30, ZLEN), paveM);
-  p1.rotation.x = -Math.PI / 2; p1.position.set((LH.cdX0 + LH.cdX1) / 2, 0.055, ZC); add(p1);
-  const p2 = new THREE.Mesh(new THREE.PlaneGeometry(LH.ancX1 - LH.ancX0 + 30, ZLEN), ancM);
-  p2.rotation.x = -Math.PI / 2; p2.position.set((LH.ancX0 + LH.ancX1) / 2, 0.055, ZC); add(p2);
+  // 【fix50】地面：分段网格 + 顶点位移 + 顶点色分区 —— 取代原来那两块"死平面"。
+  // 地面是单个网格，用顶点色不受静态合批限制，而且始终只占 1 次 draw call。
+  // 颜色按高度/位置分区：河床深水 → 河岸沙地 → 城区台地（CBD 石板灰 / 古建青砖灰）→ 丘陵草坡，
+  // 再叠一层正弦斑驳，避免大片纯色造成的"塑料板"感。
+  const GSZ = 900, SEG = 90;
+  const tGeo = new THREE.PlaneGeometry(GSZ, GSZ, SEG, SEG);
+  tGeo.rotateX(-Math.PI / 2);
+  const tPos = tGeo.attributes.position;
+  const tCol = new Float32Array(tPos.count * 3);
+  const _gc = new THREE.Color(), _gc2 = new THREE.Color();
+  for (let i = 0; i < tPos.count; i++) {
+    const wx = tPos.getX(i) + DEST.x, wz = tPos.getZ(i) + DEST.z;
+    const hy = linhaiHeight(wx, wz);
+    tPos.setY(i, hy);
+    const jit = (Math.sin(wx * 0.055 + wz * 0.043) * 0.5 + 0.5) * 0.07 - 0.035;
+    // ⚠️ 斑驳噪声的波长必须远大于网格格距（900/90 = 10m）。
+    // 第一版用了 0.53 rad/m（波长仅 ~12m），结果采样混叠成一片"波浪条纹"。
+    if (hy < -1.6) _gc.setHex(0x16303f);                        // 河床（深水色）
+    else if (hy < -0.35) _gc.setHex(0xa8946c);                  // 河岸沙地（压暗，别发白）
+    else if (hy < 0.6) _gc.setHex(wx > LH.ancX0 - 26 ? 0x7a746a : 0x6e747c);   // 城区台地（青砖灰 / 石板灰）
+    else _gc.setHex(0x3f6630).lerp(_gc2.setHex(0x24401f), Math.min(1, (hy - 0.6) / 5));   // 丘陵草坡
+    _gc.offsetHSL(0, 0, jit);
+    tCol[i * 3] = _gc.r; tCol[i * 3 + 1] = _gc.g; tCol[i * 3 + 2] = _gc.b;
+  }
+  tGeo.setAttribute('color', new THREE.BufferAttribute(tCol, 3));
+  tGeo.computeVertexNormals();
+  // 再叠一层 canvas 噪点贴图（细颗粒 + 石板斑块）与顶点色相乘 ——
+  // 只靠顶点色仍是大片纯色（用户反馈"地面死死的"），加上颗粒感后才像真实地表。
+  // 贴图平铺 + 单网格材质，依然是 1 次 draw call。
+  const gcv = document.createElement('canvas'); gcv.width = gcv.height = 256;
+  const gcx = gcv.getContext('2d');
+  gcx.fillStyle = '#ffffff'; gcx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 3000; i++) {                       // 细颗粒
+    const g = Math.round(198 + Math.random() * 57);
+    gcx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
+    gcx.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  for (let i = 0; i < 80; i++) {                         // 大一点的斑块（石板/草皮块感）
+    const g = Math.round(186 + Math.random() * 64);
+    gcx.fillStyle = 'rgba(' + g + ',' + g + ',' + g + ',0.42)';
+    gcx.beginPath(); gcx.arc(Math.random() * 256, Math.random() * 256, 5 + Math.random() * 11, 0, 7); gcx.fill();
+  }
+  const gtex = new THREE.CanvasTexture(gcv);
+  gtex.wrapS = gtex.wrapT = THREE.RepeatWrapping;
+  gtex.repeat.set(46, 46);                               // 900/46 ≈ 每 19.5m 一格
+  const tMesh = new THREE.Mesh(tGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: gtex }));
+  tMesh.position.set(DEST.x, 0.05, DEST.z);
+  add(tMesh);
   // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
   const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
   const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x14405e }));
@@ -24067,11 +24129,120 @@ function buildLinhaiCity(g) {
     pg.position.set(px, 0, pz); add(pg);
     return pg;
   }
-  buildPagoda(LH.ancX0 + 96, ZC, 5, 26);                  // 主殿阁
+  // 【fix50·用户要求】鼓楼：依照用户给的真实鼓楼照片（绿琉璃瓦 / 朱红城台 /
+// 中央拱门洞 / 雉堞 / 三层楼阁 / 斗拱 / 蓝底金字匾额 / 翘角脊兽 / 宝顶）。
+// 全部用绝对世界坐标 + det() 细节件（共享材质），所以细节再多也不涨 draw call。
+  function buildDrumTower(px, pz) {
+    const RED = 0xa8342a, RED_D = 0x872a22, TILE = 0x2f7a4a, TILE_D = 0x235f39;
+    const GOLD = 0xe8c45a, BLUE = 0x17356b, WOOD = 0x8a4a2c, WOOD_D = 0x5e3220;
+    const baseW = 48, baseH = 19;
+    // ---- 朱红城台（含上下线脚做收分感）----
+    det(BX(baseW, baseH, baseW), RED, px, baseH / 2, pz);
+    det(BX(baseW + 2.0, 1.4, baseW + 2.0), RED_D, px, 0.7, pz);
+    det(BX(baseW + 1.4, 1.1, baseW + 1.4), RED_D, px, baseH - 0.55, pz);
+    // ---- 中央拱门洞：暗色贯穿 + 一圈砖砌拱券 ----
+    det(BX(10, 13, baseW + 2.4), 0x140f0c, px, 6.5, pz);                   // 洞口（南北贯穿）
+    for (const s of [-1, 1]) {                                             // 拱券（两侧各一圈）
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (i + 0.5) / 9;
+        det(BX(1.7, 1.7, 1.2), RED, px + Math.cos(a) * 5.0, 13 + Math.sin(a) * 3.6, pz + s * (baseW / 2 + 0.5));
+      }
+      det(BX(1.6, 12.4, 1.2), RED, px + 5.6, 6.2, pz + s * (baseW / 2 + 0.5));   // 门洞两侧券脚
+      det(BX(1.6, 12.4, 1.2), RED, px - 5.6, 6.2, pz + s * (baseW / 2 + 0.5));
+    }
+    // ---- 城台顶雉堞（垛口）----
+    for (let k = -(baseW / 2 - 1.4); k <= baseW / 2 - 1.4; k += 3.4) {
+      for (const s of [-1, 1]) {
+        det(BX(2.0, 2.0, 1.3), RED, px + k, baseH + 1.0, pz + s * (baseW / 2 - 0.7));
+        det(BX(1.3, 2.0, 2.0), RED, px + s * (baseW / 2 - 0.7), baseH + 1.0, pz + k);
+      }
+    }
+    // ---- 城台四面匾额（蓝底金字）----
+    for (let q = 0; q < 4; q++) {
+      const rot = q * Math.PI / 2, ox = Math.sin(rot) * (baseW / 2 + 0.5), oz = Math.cos(rot) * (baseW / 2 + 0.5);
+      det(BX(9, 3.0, 0.4), BLUE, px + ox, 15.5, pz + oz, 0, rot, 0);
+      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 17.1, pz + oz, 0, rot, 0, true);
+      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 13.9, pz + oz, 0, rot, 0, true);
+    }
+    // ---- 三层楼阁（逐层收分）----
+    let y = baseH + 1.2;
+    for (let L = 0; L < 3; L++) {
+      const bw = baseW * (1 - L * 0.19), wallH = 7.6 - L * 0.9;
+      det(BX(bw + 6.5, 0.8, bw + 6.5), WOOD_D, px, y + 0.4, pz);                   // 回廊台面
+      det(BX(bw, wallH, bw), L === 0 ? RED : WOOD, px, y + wallH / 2, pz);         // 墙身
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {                        // 四角木柱
+        det(BX(1.0, wallH, 1.0), WOOD_D, px + sx * (bw / 2), y + wallH / 2, pz + sz * (bw / 2));
+      }
+      for (let q = 0; q < 4; q++) {                                                // 四面门窗
+        const rot = q * Math.PI / 2, ox = Math.sin(rot) * (bw / 2 + 0.25), oz = Math.cos(rot) * (bw / 2 + 0.25);
+        det(BX(bw * 0.56, wallH * 0.6, 0.5), 0x140f0c, px + ox, y + wallH * 0.46, pz + oz, 0, rot, 0);
+        det(BX(bw * 0.46, wallH * 0.48, 0.35), 0xffd9a0, px + ox * 1.06, y + wallH * 0.46, pz + oz * 1.06, 0, rot, 0, true);
+      }
+      // 斗拱带（两层，四面）
+      for (let q = 0; q < 4; q++) {
+        const rot = q * Math.PI / 2;
+        const nx = Math.sin(rot), nz = Math.cos(rot), tx = Math.cos(rot), tz = -Math.sin(rot);
+        for (let k = -(bw / 2 - 1.3); k <= bw / 2 - 1.3; k += 1.7) {
+          const cx2 = px + nx * (bw / 2) + tx * k, cz2 = pz + nz * (bw / 2) + tz * k;
+          det(BX(0.95, 0.6, 0.95), 0xc0632f, cx2, y + wallH + 0.32, cz2, 0, rot, 0);
+          det(BX(1.4, 0.48, 1.4), 0xd4763c, cx2, y + wallH + 0.66, cz2, 0, rot, 0);
+        }
+      }
+      // 绿琉璃瓦檐（双层 + 四角翘起 + 脊兽）
+      const ew = bw + 10;
+      det(BX(ew, 0.55, ew), TILE_D, px, y + wallH + 0.95, pz);
+      det(BX(ew - 1.2, 0.95, ew - 1.2), TILE, px, y + wallH + 1.5, pz);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const tip = det(BX(3.6, 0.7, 3.6), 0xd4763c, px + sx * ew * 0.42, y + wallH + 2.0, pz + sz * ew * 0.42);
+        tip.rotation.set(-sz * 0.52, 0, sx * 0.52);
+        det(BX(1.1, 1.7, 1.1), GOLD, px + sx * ew * 0.47, y + wallH + 2.9, pz + sz * ew * 0.47, 0, 0, 0, true);
+      }
+      // 回廊望柱栏杆
+      for (let k = -(bw + 6) / 2; k <= (bw + 6) / 2; k += 2.5) {
+        for (const s of [-1, 1]) det(BX(0.34, 1.15, 0.34), WOOD_D, px + k, y + 1.35, pz + s * (bw + 6.5) / 2);
+      }
+      for (const s of [-1, 1]) {
+        det(BX(bw + 6.5, 0.24, 0.24), WOOD, px, y + 1.95, pz + s * (bw + 6.5) / 2);
+        det(BX(bw + 6.5, 0.18, 0.18), WOOD, px, y + 0.95, pz + s * (bw + 6.5) / 2);
+      }
+      // 每层正面再挂一块匾额
+      det(BX(bw * 0.5, 2.0, 0.4), BLUE, px, y + wallH - 0.5, pz + (bw / 2 + 0.55));
+      det(BX(bw * 0.55, 0.22, 0.5), GOLD, px, y + wallH + 0.6, pz + (bw / 2 + 0.55), 0, 0, 0, true);
+      y += wallH + 1.7;
+    }
+    // ---- 顶部：四角攒尖顶 + 双层宝顶 + 屋脊走兽 ----
+    const tw = baseW * 0.42;
+    det(BX(tw + 4, 0.9, tw + 4), TILE_D, px, y + 0.45, pz);
+    det(new THREE.ConeGeometry(tw * 0.92, 9.5, 4), TILE, px, y + 5.2, pz, 0, Math.PI / 4, 0);
+    det(new THREE.ConeGeometry(tw * 0.66, 4.6, 4), TILE_D, px, y + 10.4, pz, 0, Math.PI / 4, 0);
+    det(new THREE.SphereGeometry(1.1, 10, 8), GOLD, px, y + 13.4, pz, 0, 0, 0, true);
+    det(BX(0.4, 3.6, 0.4), GOLD, px, y + 15.6, pz, 0, 0, 0, true);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {                    // 四条垂脊上的走兽
+      for (let k = 1; k <= 3; k++) {
+        det(BX(0.8, 1.1, 0.8), GOLD, px + sx * (tw * 0.9 / 2 + k * 1.3), y + 5.2 - k * 1.15, pz + sz * (tw * 0.9 / 2 + k * 1.3), 0, 0, 0, true);
+      }
+    }
+    // ---- 台基石栏 + 门前石狮 ----
+    for (let k = -(baseW / 2 + 9); k <= baseW / 2 + 9; k += 3.0) {
+      for (const s of [-1, 1]) {
+        det(BX(0.55, 1.5, 0.55), 0xc8c4b8, px + k, 0.75, pz + s * (baseW / 2 + 9));
+        det(BX(0.55, 1.5, 0.55), 0xc8c4b8, px + s * (baseW / 2 + 9), 0.75, pz + k);
+      }
+    }
+    for (const s of [-1, 1]) {
+      det(BX(baseW + 19, 0.4, 0.5), 0xc8c4b8, px, 1.45, pz + s * (baseW / 2 + 9));
+      det(BX(0.5, 0.4, baseW + 19), 0xc8c4b8, px + s * (baseW / 2 + 9), 1.45, pz);
+      det(BX(2.4, 1.8, 2.4), 0xb8b4a8, px + s * (baseW / 2 + 5), 0.9, pz + baseW / 2 + 11.5);   // 石狮座
+      det(new THREE.SphereGeometry(1.05, 9, 8), 0xc8c4b8, px + s * (baseW / 2 + 5), 2.4, pz + baseW / 2 + 11.5);
+    }
+  }
+  // 鼓楼立在古建城的**正中心**（原中心那座殿阁让位，移到西侧）
+  buildDrumTower(LH.ancX0 + 140, ZC);
+  buildPagoda(LH.ancX0 + 58, ZC, 3, 22);
   buildPagoda(LH.ancX0 + 150, Z0 + 150, 3, 22);
   buildPagoda(LH.ancX0 + 150, Z1 - 150, 3, 22);
-  buildPagoda(LH.ancX0 + 215, ZC - 90, 2, 19);
-  buildPagoda(LH.ancX0 + 215, ZC + 90, 2, 19);
+  buildPagoda(LH.ancX0 + 224, ZC - 90, 2, 19);
+  buildPagoda(LH.ancX0 + 224, ZC + 90, 2, 19);
   // 六角 / 八角亭
   function buildPavilion(px, pz, sides, r) {
     const pv = new THREE.Group();
