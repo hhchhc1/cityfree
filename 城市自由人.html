@@ -724,7 +724,7 @@
       </div>
     </div>
   </div>
-  <div id="devBtn">开发者模式</div>
+  <div id="devBtn">开发者模式</div>`n<div id="signThemeBtn" onclick="cycleSignTheme()" style="position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
 <!-- ==================== 【fix47】机票对话面板 ====================
      用户要求：手机版登不了机（没有键盘 E），改成"在大飞机旁边立一根光柱，
      走到那里问'少年，你愿意解锁新的旅途吗'，三个选项：永久往返 / 单次前往 / 暂时不了"。
@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix69-guards10';;;;;;
+const BUILD = '20261024-fix70-signback';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -10597,7 +10597,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0 };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -13840,7 +13840,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel'));
 }
 addEventListener('touchstart', e => {
   // 【fix53】机票面板必须在这里让位！
@@ -23808,6 +23808,33 @@ function linhaiHeight(x, z) {
   }
   return h;
 }
+// 【fix70】荷芷市路牌配色：用户给的 5 套，可在游戏里循环切换并存档
+// 每套 4 个位置：[底色, 主字, 边框, 副字]
+function drawSignFace(ctx, ti) {
+  const T = [
+    ['#FFF000', '#7B2CBF', '#7B2CBF', '#7B2CBF'],
+    ['#1A1A1D', '#E6397C', '#E6397C', '#E6397C'],
+    ['#00F0FF', '#39CCCC', '#BFFF00', '#666699'],
+    ['#D2042D', '#98FF98', '#666699', '#98FF98'],
+    ['#0247FE', '#F5011A', '#F5011A', '#F5011A']
+  ][((ti | 0) % 5 + 5) % 5];
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, 1024, 256);
+  ctx.fillStyle = T[0]; ctx.fillRect(0, 0, 1024, 256);
+  ctx.strokeStyle = T[2]; ctx.lineWidth = 10; ctx.strokeRect(14, 14, 996, 228);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = T[1]; ctx.font = 'bold 120px Microsoft YaHei, SimHei, sans-serif';
+  ctx.fillText('荷 芷 市', 512, 108);
+  ctx.fillStyle = T[3]; ctx.font = 'bold 44px Arial, sans-serif';
+  ctx.fillText('HEZHI  ·  河畔新城', 512, 200);
+}
+const SIGN_THEME_NAMES = ['阳光黄·帝王紫', '黑曜石·甜酷粉', '火苗蓝·湖光绿', '樱桃红·冰薄荷绿', '电光蓝·霓虹赤'];
+function cycleSignTheme() {
+  PROGRESS.signTheme = ((PROGRESS.signTheme || 0) + 1) % 5;
+  try { if (window.__cfSignApply) window.__cfSignApply(); } catch (e) {}
+  try { saveGame(); } catch (e) {}
+  try { setHint('路牌配色 ' + (PROGRESS.signTheme + 1) + '/5：' + SIGN_THEME_NAMES[PROGRESS.signTheme]); } catch (e) {}
+}
 function buildLinhaiCity(g) {
   const Z0 = LH.z0, Z1 = LH.z1, ZC = (Z0 + Z1) / 2, ZLEN = Z1 - Z0;
   const add = (m) => { g.add(m); return m; };
@@ -24029,10 +24056,12 @@ function buildLinhaiCity(g) {
         uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(9, Math.round(h / 12)))),
         buildingBodyMaterial(bpals[(Math.random() * bpals.length) | 0]));
       body.position.set(x, h / 2, z); add(body);
-      // 【fix65】碰撞盒必须用**裙楼**的尺寸（塔楼 w×d，裙楼 min(w+5,w*1.14)×(d+5)），
-      // 否则裙楼那一圈仍会穿模（用户：『还是稍微有一点穿模，最外边』）。
+      // 【fix70】必须登记**两个**盒子：裙楼（矮而宽）+ 塔楼（高而窄）。
+      // 之前只登记一个（水平尺寸取裙楼、高度却取塔楼全高），碰撞体积和视觉模型对不上 ——
+      // 钩爪算出的"墙面"有一半落在空气里，于是要么卡进墙里、要么直接穿到另一侧（用户实测）。
       const _hw = Math.min(w + 5, w * 1.14) * 0.5, _hd = (d + 5) * 0.5;
-      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, top: h });
+      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, top: 8 });         // 裙楼（约 5.5~8m 高）
+      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, top: h });  // 塔楼（全高）
       // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
       // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
       // 裙楼只比塔楼略宽一点（原来写 w+9、最深到 55，而楼间距只有 56 ——
@@ -24667,13 +24696,10 @@ function initFlightScenery() {
   // 城市名标牌（占位名，等用户定名）
   const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 256;
   const cx2 = cvs.getContext('2d');
-  cx2.fillStyle = 'rgba(14,20,28,0.92)'; cx2.fillRect(0, 0, 1024, 256);
-  cx2.strokeStyle = '#3fa9f5'; cx2.lineWidth = 8; cx2.strokeRect(10, 10, 1004, 236);
-  cx2.fillStyle = '#eaf4ff'; cx2.font = 'bold 120px "Microsoft YaHei", sans-serif';
-  cx2.textAlign = 'center'; cx2.textBaseline = 'middle';
-  cx2.fillText('荷 芷 市', 512, 108);
-  cx2.fillStyle = '#7fc4f0'; cx2.font = 'bold 44px Arial, sans-serif';
-  cx2.fillText('HEZHI  ·  河畔新城', 512, 200);
+  // 【fix70】改用可切换的主题绘制（原来是写死的深蓝底 + 浅蓝字）
+  drawSignFace(cx2, PROGRESS.signTheme || 0);
+  // 换色入口：重绘 canvas 后让贴图重新上传（两块牌面共享同一材质，只需要更新一次）
+  window.__cfSignApply = function () { drawSignFace(cx2, PROGRESS.signTheme || 0); signTex.needsUpdate = true; };
   const signTex = new THREE.CanvasTexture(cvs);
   // 用 Plane + DoubleSide：原来用 Box，从跑道这侧看到的是"背面那张贴图"（镜像文字），
   // 玩家正好是从南边进近，必须保证朝南这面是对的。
@@ -25462,6 +25488,14 @@ const frameLoop = () => {
     if (!isFinite(person.position.x) || !isFinite(person.position.y) || !isFinite(person.position.z)) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       console.warn('[anti-stuck] 位置异常，已拉回主城');
+    }
+  } catch (e) {}
+  // 【fix70】荷芷市回程：跑道东端有一个回程点，走过去就送回主城机场。
+  // （主城的机场光柱只能往荷芷市飞，飞过去之后没有回来的途径。）
+  try {
+    if (!FLIGHT && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
+      person.position.set(-100, 2, -251); vy = 0; onGround = false;
+      setHint('已返回主城机场');
     }
   } catch (e) {}
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
