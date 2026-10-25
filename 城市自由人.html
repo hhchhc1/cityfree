@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix103-strips';;;;;;
+const BUILD = '20261024-fix104-winfn';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1293,7 +1293,7 @@ function isOnOuterRoad(x, z) {
   // 玩家一走出去就掉海、重启后位置被存档记下，于是反复『卡在海里 / 被救回主城』。
   // 这里铺一张 6000×6000 的粗糙地形兜底，任何地方都有地面可站。
   // 在精细地面覆盖区内整体压低 2m 藏起来（2m 足够在远处区分深度，不会闪烁）。
-function addFarGround() {
+window.addFarGround = function () {   // 【fix104】挂到 window：它原本定义在某个函数块内，而调用点在顶层，直接调用会 is not defined
     // 【fix103】远景地面**绝不与精细地面重叠**！
     // fix98/102 是一张 6000×6000 的大平面、在精细区内压低 2m 来"藏"，
     // 但这条路有死结：压低后与 personGroundY 不一致（走远了会悬空），不压低又和精细地面
@@ -1323,7 +1323,7 @@ function addFarGround() {
       m.userData.lodShared = true;
       scene.add(m);
     }
-  }
+  };
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2, 128, 128), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = 0;
   const pos = ground.geometry.attributes.position;
@@ -23881,7 +23881,7 @@ var LH_BRIDGES = [];   // 【fix93】石桥桥面。必须定义在 linhaiHeight
 // 【fix102】远景地面**在这里才铺**：它必须用 terrainHeight（与 personGroundY 同源，
 // 否则玩家走到城外虽看着有地面、实际高度对不上会悬空）；而 terrainHeight → linhaiHeight
 // 依赖 LH 与 LH_BRIDGES，只有执行到这里才都已就绪（之前放在 434 行，直接抛异常）。
-addFarGround();
+window.addFarGround();   // 【fix104】走 window，不受作用域限制
 // 【fix93】同时把桥面高度直接写进 linhaiHeight —— 原来只有 personGroundY 知道桥，
 // 而地形/碰撞等其它地方仍拿到河床 -2.6，两边每帧打架，
 // 表现就是用户说的『人物走上去一直上下浮动、不能正常行动』。
