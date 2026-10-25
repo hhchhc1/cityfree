@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix63-signs';;;;;;
+const BUILD = '20261024-fix64-collide';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21920,6 +21920,10 @@ function update(dt) {
       const p = { x: person.position.x, z: person.position.z };
       const nearCells = []; _gridAround(p.x, p.z, 0.4 + GRID_CELL, nearCells);
       for (const ci of nearCells) for (const b of _gridBld[ci]) if (person.position.y < b.top - 0.3) circleVsAABB(p, 0.4, b);
+      // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
+      // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
+      // 这里单独再查一份荷芷市碰撞盒。
+      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3) circleVsAABB(p, 0.4, _lb);
       collideCarsFast(p, 0.4);
       for (const w of wrecks) circleVsCircle(p, 0.4, { x: w.x, z: w.z }, w.radius);
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
@@ -21977,6 +21981,10 @@ function update(dt) {
       const p = { x: person.position.x, z: person.position.z };
       const nearCells = []; _gridAround(p.x, p.z, 0.4 + GRID_CELL, nearCells);
       for (const ci of nearCells) for (const b of _gridBld[ci]) if (person.position.y < b.top - 0.3) circleVsAABB(p, 0.4, b);
+      // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
+      // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
+      // 这里单独再查一份荷芷市碰撞盒。
+      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3) circleVsAABB(p, 0.4, _lb);
       for (const pl of platforms) if (person.position.y < pl.top - 0.05) circleVsAABB(p, 0.4, pl);
       collideCarsFast(p, 0.4);
       for (const w of wrecks) circleVsCircle(p, 0.4, { x: w.x, z: w.z }, w.radius);
@@ -24010,6 +24018,7 @@ function buildLinhaiCity(g) {
         uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(9, Math.round(h / 12)))),
         buildingBodyMaterial(bpals[(Math.random() * bpals.length) | 0]));
       body.position.set(x, h / 2, z); add(body);
+      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, top: h });   // 【fix64】登记碰撞盒
       // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
       // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
       // 裙楼只比塔楼略宽一点（原来写 w+9、最深到 55，而楼间距只有 56 ——
@@ -24069,6 +24078,7 @@ function buildLinhaiCity(g) {
   const wallX = LH.ancX0 + 6;
   const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, ZLEN - 60), wallM);
   cw.position.set(wallX, 4.25, ZC); add(cw);
+  LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: ZC - (ZLEN - 60) / 2, maxZ: ZC + (ZLEN - 60) / 2, top: 9 });   // 【fix64】城墙碰撞
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
   plinth.position.set(wallX, 0.7, ZC); add(plinth);
   for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
@@ -24517,6 +24527,7 @@ const LH = {
   ancX0: DEST.x + 100, ancX1: DEST.x + 380,
   z0: DEST.z - 480, z1: DEST.z + 200
 };
+var LH_BLD = [];   // 【fix64】荷芷市碰撞盒（程序化生成的楼/城墙等，不在主城网格里）
 const LH_WATER = { mesh: null, tex: null };   // 水面波纹层（每帧平移 UV）
 const LH_GROUND = { mesh: null };             // 临海市地面（雨天要压暗成"湿路面"）
 // 飞机关键帧：[时刻, x, y, 俯仰角]。y = 5.552 时主轮正好贴地（见 addAirport 里的 PLANE_GEAR_Y）。
@@ -25066,7 +25077,15 @@ function endFlightShow() {
   clearInput();
 }
 // 初始化布景（必须在 AIRLINER 就位之后）
-try { initFlightScenery(); } catch (e) { console.error('[flight scenery]', e); }
+try { initFlightScenery(); } catch (e) {
+  console.error('[flight scenery]', e);
+  // 【fix64】把建城异常**显示到屏幕上**：我手动加载一直是正常的，无法复现用户说的
+  // "重启后荷芷市整个消失、人泡在海面"（手机实测）。看不到真实报错就只能靠猜，
+  // 所以这里把它显示出来 —— 用户截图即可精确告诉我出错在哪一步。
+  setTimeout(function () {
+    try { setHint('⚠ 荷芷市建城失败：' + ((e && e.message) || e)); } catch (e2) {}
+  }, 3000);
+}
 // 【fix49·关键】临海市（含 CBD 的超高层与东岸古建）是在 initFlightScenery() 里建的，
 // 而 batchStaticScene() 早在它之前（第 23634 行）就跑过了 ——
 // 结果是新城的几千个细节件**从来没被合批**，draw call 实测 2545（主城才 1000）。
