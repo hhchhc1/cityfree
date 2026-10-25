@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix94-gate';;;;;;
+const BUILD = '20261024-fix95-noskip';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24678,7 +24678,7 @@ function buildLinhaiCity(g) {
 // 6) 演出期间会把雾推远（否则 1600m 外的新城被雾完全吃掉），结束后恢复原值。
 
 var FLIGHT = null;                       // 过场状态对象（null = 未激活）
-// 各阶段结束时刻（秒）。总时长约 53s，可按空格/Esc 跳过。
+// 各阶段结束时刻（秒）。总时长约 53s。【fix54】已按用户要求移除跳过功能。
 const FLIGHT_T = { taxi: 12.0, rotate: 14.2, lift: 17.5, climb: 24.0, cruise: 35.0, descend: 45.0, land: 50.0, done: 53.0 };
 const FLIGHT_BOARD_END = 4.0;            // 登机段结束（之后飞机开始滑跑）
 // 【占位新城】—— 用户说"另一个城市一会给你说后续的开发"，所以这里先放一座**占位城市**：
@@ -25085,7 +25085,7 @@ function flightAudioStop() {
   FLIGHT.seg = [];
   for (let i = 1; i < p.length; i++) { const L = p[i].distanceTo(p[i - 1]); FLIGHT.seg.push(L); len += L; }
   FLIGHT.pathLen = Math.max(0.001, len);
-  if (hintTextEl) hudText(hintTextEl, 'hint', '登机中…  （空格 / Esc 跳过）');
+  if (hintTextEl) hudText(hintTextEl, 'hint', '登机中…');
   clearInput();
 }
 // ---- 跳过：直接到演出末尾 ----
@@ -25120,8 +25120,8 @@ function flightTick(dt) {
   clearInput();                                   // 演出期间玩家不能操作
   const ks = flightSample(t);
   // 阶段提示：只在文案变化时写一次（每帧抢着写没意义，也浪费）
-  const ph = t < FLIGHT_BOARD_END ? '登机中…  （空格 / Esc 跳过）'
-    : t < FLIGHT_T.taxi ? '滑跑加速…  （空格 / Esc 跳过）'
+  const ph = t < FLIGHT_BOARD_END ? '登机中…'
+    : t < FLIGHT_T.taxi ? '滑跑加速…'
     : t < FLIGHT_T.lift ? '抬前轮 · 离地…'
     : t < FLIGHT_T.cruise ? '爬升中…  前往荷芷市'
     : t < FLIGHT_T.descend ? '巡航中…  前方荷芷市'
