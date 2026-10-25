@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix95-noskip';;;;;;
+const BUILD = '20261024-fix96-rescue4';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25652,7 +25652,17 @@ const frameLoop = () => {
     const _inLand = false;   // 【fix88】不再豁免！fix75 这条豁免（x>400 且 z∈[-820,300]）范围太宽，
     // 把「其实站在海上」的位置也当成陆地放过了，于是用户重进后仍被困在海上、还不停跳跃闪烁。
     // 荷芷市本来就靠上面的 x<=900 排除掉了，根本不需要这条豁免。
-    if (state === 'walk' && person.position.x <= 900 && _outMain && !_inLand) {
+    // 【fix96】救援判据改成「脚下到底有没有地面」——这才是唯一正确的标准。
+    // · 主城地形覆盖 |x|,|z| ≤ 500
+    // · 荷芷市地面覆盖 x∈[500,2420]、z∈[-1245,675]（1920 见方、中心 1460/-285）
+    // 这两块之外才是真的没地面（会掉进海），此时才救。
+    // 之前那些坐标豁免 / x<=900 判断都不准：既漏掉「其实站在海上」的情形（用户被困在海上），
+    // 又会把站在中间走廊等**正常位置**的玩家误救回主城
+    //（用户：『本来上次在新城市的，这次又直接刷新到中心公园了』）。
+    const _px = person.position.x, _pz = person.position.z;
+    const _hasGround = (_px >= -(HALF - 40) && _px <= (HALF - 40) && _pz >= -(HALF - 40) && _pz <= (HALF - 40))
+                    || (_px >= 500 && _px <= 2420 && _pz >= -1245 && _pz <= 675);
+    if (state === 'walk' && !_hasGround) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       try { setHint('已从地图外救回主城'); } catch (e3) {}
       console.warn('[anti-stuck] 从地图外救回，原位置', _gx, _gz);
