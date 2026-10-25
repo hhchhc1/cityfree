@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix96-rescue4';;;;;;
+const BUILD = '20261024-fix97-airwall';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23937,7 +23937,12 @@ function buildLinhaiCity(g) {
       if (q.width !== undefined) { _w = q.width || 0; _h = q.height || 0; _d = q.depth || 0; }
       else if (q.radiusTop !== undefined) { _w = _d = Math.max(q.radiusTop || 0, q.radiusBottom || 0) * 2; _h = q.height || 0; }
       else if (q.radius !== undefined) { _w = _d = (q.radius || 0) * 2; _h = q.height || (q.radius || 0) * 2; }
-      if (_h >= 1.5 || _w >= 0.8 || _d >= 0.8) {
+      // 【fix97】只登记**没有旋转**的物体！
+      // 带旋转的物体（飞檐 / 斜撑 / 斗拱 / 斜栏杆）用轴对齐盒子包它，盒子会明显大于实际形状，
+      // 于是贴在建筑周围形成一圈看不见的空气墙 —— 用户实测：
+      // 「那个空气墙是每一个都存在，每一个城墙围墙都存在，每一个古建筑上好像都有」。
+      const _rot = (rx || ry || rz);
+      if (!_rot && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8)) {
         LH_BLD.push({ minX: x - _w / 2, maxX: x + _w / 2, minZ: z - _d / 2, maxZ: z + _d / 2, minY: 0, top: y + _h / 2 });
       }
     } catch (e) {}
@@ -24276,7 +24281,7 @@ function buildLinhaiCity(g) {
   function buildPagoda(px, pz, levels, baseW) {
   // 【fix81】古建也要登记进 buildings（LH_BLD 就是它）—— 之前只有 CBD 楼和城墙进去过，
   // 所以古建区完全不能攀爬（用户：『古代楼房还是没有算到楼房里边，也不能攀爬』）。
-  LH_BLD.push({ minX: px - baseW * 0.62, maxX: px + baseW * 0.62, minZ: pz - baseW * 0.62, maxZ: pz + baseW * 0.62, minY: 0, top: baseW * 0.95 * levels + 5 });
+  LH_BLD.push({ minX: px - baseW * 0.45, maxX: px + baseW * 0.45, minZ: pz - baseW * 0.45, maxZ: pz + baseW * 0.45, minY: 0, top: baseW * 0.95 * levels + 5 });   // 【fix97】0.62→0.45：原来盒子偏大，塔外一圈就是空气墙
     const pg = new THREE.Group();
     const podium = new THREE.Mesh(new THREE.BoxGeometry(baseW + 6, 1.6, baseW + 6), stoneM);
     podium.position.y = 0.8; pg.add(podium);
