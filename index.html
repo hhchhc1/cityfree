@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix65-collide2';;;;;;
+const BUILD = '20261024-fix66-grapple';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19095,6 +19095,10 @@ function hasLineOfSight(x1, z1, x2, z2, ignoreVeh) {
     for (const tr of _gridTree[ci]) if (tr.x + tr.r > rayMinX - margin && tr.x - tr.r < rayMaxX + margin && tr.z + tr.r > rayMinZ - margin && tr.z - tr.r < rayMaxZ + margin) nearTrees.push(tr);
     for (const c of _gridCar[ci]) if (c.x + c.radius > rayMinX - margin && c.x - c.radius < rayMaxX + margin && c.z + c.radius > rayMinZ - margin && c.z - c.radius < rayMaxZ + margin) nearCars.push(c);
   }
+  // 【fix66】荷芷市的楼不在主城网格里（_gridAround 只返回主城格子），这里按同样的包围盒
+  // 条件单独筛进来 —— 否则钩爪勾不到荷芷市的墙面，也就无法像主城那样攀爬
+  //（用户：「楼房虽然是实体的，但是逻辑和主城式的不一样，都不能用钩爪上去攀爬」）。
+  if (rayMaxX > 900) for (const _lb of LH_BLD) if (_lb.maxX > rayMinX - margin && _lb.minX < rayMaxX + margin && _lb.maxZ > rayMinZ - margin && _lb.minZ < rayMaxZ + margin) nearBlds.push(_lb);
   const steps = Math.max(1, Math.ceil(d / 0.5));   // 加大步长到0.5（有预筛选不会漏薄墙）
   for (let i = 1; i < steps; i++) {
     const x = x1 + dx * i / steps, z = z1 + dz * i / steps;
