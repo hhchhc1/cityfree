@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix74-seam';;;;;;
+const BUILD = '20261024-fix75-rescuefix';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6334,7 +6334,7 @@ var AIRLINER = null;
   const zx = 0, zz = 0;
   const parkMat = new THREE.MeshLambertMaterial({ color: 0x3a7a3a });
   const park = new THREE.Mesh(new THREE.CircleGeometry(25, 20), parkMat);
-  park.rotation.x = -Math.PI / 2; park.position.set(zx, 0.04, zz); scene.add(park);
+  park.rotation.x = -Math.PI / 2; park.position.set(zx, 0.14, zz); scene.add(park);   // 【fix75】0.04 与主城地形(y=0)仅差 4cm，远处会 z-fighting（用户：公园四个角白色一直在闪）
   // 池塘
   const pondMat = new THREE.MeshLambertMaterial({ color: 0x2277aa, transparent: true, opacity: 0.6 });
   const pond = new THREE.Mesh(new THREE.CircleGeometry(8, 16), pondMat);
@@ -25507,7 +25507,14 @@ const frameLoop = () => {
     // 位置万一被污染成 NaN，松钩爪也救不回来 —— 直接拉回主城
     // 【fix67】旧存档可能停在主城外的海里（见 clampCity 说明）——发现就拉回主城，
     // 否则玩家重启后永远困在海面、看不到任何城市（用户截图：大本营西南 674m）。
-    if (state === 'walk' && person.position.x <= 900 && Math.max(Math.abs(person.position.x), Math.abs(person.position.z)) > HALF - 40) {
+    // 【fix75】条件必须更严格：荷芷市纬度带 z∈[-820,300]、西侧走廊 x∈[500,900] 都是
+    // **已开发的陆地**，绝不是地图外。上一版只用 x<=900 && |max|>460 判断，
+    // 结果玩家在荷芷市偏西一带（x<=900）存档、重进后被误判成卡在地图外，
+    // 直接拉回主城中心公园（用户实测：'退出网站再重新进入，玩家刷新到了主城中心公园'）。
+    // 注意豁免只在东侧（x>400）生效 —— 主城**西边**的海仍然要救。
+    const _outMain = Math.max(Math.abs(person.position.x), Math.abs(person.position.z)) > HALF - 40;
+    const _inLand = person.position.x > 400 && person.position.z > -820 && person.position.z < 300;
+    if (state === 'walk' && person.position.x <= 900 && _outMain && !_inLand) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       try { setHint('已从地图外救回主城'); } catch (e3) {}
     }
