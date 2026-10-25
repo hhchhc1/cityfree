@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix84-noswim';;;;;;
+const BUILD = '20261024-fix85-skynight';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25094,6 +25094,12 @@ function flightTick(dt) {
   // ---- 相机：每阶段一个机位，帧间平滑 ----
   flightCamera(t, ks, dt);
   // ---- 雾：高空段把 far 推远，否则 1600m 外的新城被雾吃掉 ----
+  // 【fix85】过场里也必须更新昼夜！过场期间 update() 直接 return，updateDayNight 不再执行，
+  // 于是天空/雾色/光照会**一直沿用『登机那一刻』的值** —— 若正好在阴雨天登机，那一刻
+  // 天空是浅灰、雾色也跟着浅灰，整段过场就都是灰白（用户：『怎么有时候还是屏幕全白』，
+  // 关键就在『有时候』= 取决于当时天气）。这里补上，让过场的天空与当前时段同步。
+  // ⚠️ 必须放在下面设置过场雾之前 —— 否则 updateDayNight 会把 near/far 覆盖回去。
+  try { updateDayNight(dt); } catch (e) {}
   const high = smooth01(FLIGHT_T.lift, FLIGHT_T.climb, t) * (1 - smooth01(FLIGHT_T.land, FLIGHT_T.done, t));
   scene.fog.near = 1400 + high * 3000;   // 【fix61】原来用 F.fogNear(≈120)+high*700，滑跑时 high≈0 → 雾太近，整座城被涂成白色剪影
   scene.fog.far = 3200 + high * 7000;     // 【fix61】同上：far 也只有 540，一两百米外全白
