@@ -11,8 +11,13 @@
     position: fixed; top: 10px; left: 0; right: 0; text-align: center; z-index: 10;
     color: #fff; font-family: sans-serif; pointer-events: none; text-shadow: 0 1px 3px #000;
   }
-  #hud .line1 { font-size: 16px; font-weight: bold; }
-  #hud .line2 { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+  /* 【fix77】给两行都**固定宽度**并自身居中。
+     原来 #hud 是 left:0;right:0 全屏 + text-align:center，文本靠"内容宽度"居中 ——
+     而 line2 的「黄色指引 … 161m」里 Math.round(d) 每帧都在变、line1 的「坦克/步行中」长度也不同，
+     于是容器宽度一变、整行就左右同时伸缩，看起来就是"一直变大变长变短"（用户实测）。
+     宽度用 vw 固定后，内容再变也不会影响布局。 */
+  #hud .line1 { font-size: 16px; font-weight: bold; width: 64vw; margin-left: auto; margin-right: auto; }
+  #hud .line2 { font-size: 12px; opacity: 0.85; margin-top: 2px; width: 64vw; margin-left: auto; margin-right: auto; }
   /* 血量/耐力条移到右上角独立面板：原来它们在 #hud 里靠 margin:auto 居中，
      和顶部的任务追踪条(#questTracker)上下重叠，接任务时任务文字直接盖住血条，
      血少了根本看不见。现在拆到右侧，血条永远不被任务栏挡住。 */
@@ -888,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix76-grapple2';;;;;;
+const BUILD = '20261024-fix77-hud';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
