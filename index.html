@@ -638,7 +638,7 @@
     #__bootLoader .bl-city i{display:block;width:34px;height:var(--h);background:linear-gradient(180deg,#0f2033,#0a1626);border-top:2px solid #2b4a6b;border-radius:2px 2px 0 0;box-shadow:inset 0 -18px 0 rgba(255,214,120,.05)}
     #__bootLoader .bl-road{position:absolute;left:0;right:0;bottom:24px;height:10px;background:#10161f;border-top:1px solid #263141}
     #__bootLoader .bl-road::after{content:'';position:absolute;top:4px;left:0;right:0;height:2px;background:repeating-linear-gradient(90deg,#9fb4cc 0 18px,transparent 18px 36px);animation:blDash .5s linear infinite}
-    #__bootLoader .bl-car{position:absolute;bottom:20px;font-size:26px;left:-40px;animation:blDrive 2.6s linear infinite}
+    #__bootLoader .bl-car{position:absolute;bottom:20px;font-size:26px;left:-40px;animation:blDrive 2.6s linear infinite;transform:scaleX(-1)}   /* 【fix80】🚗 emoji 车头朝左，而 blDrive 是「从左往右开」→ 看起来在倒着开；水平翻转即可（动画走 left，与 transform 不冲突） */
     @keyframes blPulse{0%,100%{opacity:1}50%{opacity:.72}}
     @keyframes blSlide{0%{transform:translateX(-110%)}100%{transform:translateX(340%)}}
     @keyframes blDash{to{background-position:-36px 0}}
@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix79-bldalias';;;;;;
+const BUILD = '20261024-fix80-carturn';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
