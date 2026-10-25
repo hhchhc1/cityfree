@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix75-rescuefix';;;;;;
+const BUILD = '20261024-fix76-grapple2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -2826,7 +2826,10 @@ var MAIN_ROAD_DASHES = markMainRoads();
     function boxHitsBuildings(cx, cz, w, d, rot) {
       // 用旋转后 AABB 的外接半径做粗略重叠检测（宁可少放也不要叠在一起）
       const rad = Math.hypot(w, d) / 2;
-      for (const b of buildings) {
+      // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
+    // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
+    // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
+    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
         const nx = Math.max(b.minX, Math.min(cx, b.maxX));
         const nz = Math.max(b.minZ, Math.min(cz, b.maxZ));
         if ((nx - cx) * (nx - cx) + (nz - cz) * (nz - cz) < rad * rad) return true;
@@ -13376,7 +13379,10 @@ function spawnTrashCans() {
     const z = (Math.random() * 2 - 1) * (CITY - 14);
     if (Math.abs(x % 40) < 6 || Math.abs(z % 40) < 6) continue;   // 不在马路上
     let inside = false;
-    for (const b of buildings) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
+    // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
+    // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
+    // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
+    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
     if (inside) continue;   // 不在建筑内
     let onTree = false;
     for (const tr of treeObstacles) { if (Math.hypot(x - tr.x, z - tr.z) < 1.2) { onTree = true; break; } }
@@ -13414,7 +13420,10 @@ spawnTrashCans();
       if (Math.abs(x % 40) < 6 || Math.abs(z % 40) < 6) continue;   // 不在马路上
       if (isOnRoadOrBridge(x, z)) continue;                          // 不在桥/公路上
       let inside = false;
-      for (const b of buildings) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
+      // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
+    // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
+    // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
+    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
       if (inside) continue;
       let onTree = false;
       for (const tr of treeObstacles) { if (Math.hypot(x - tr.x, z - tr.z) < 1.2) { onTree = true; break; } }
@@ -14119,7 +14128,10 @@ function grappleTarget() {
   // 建筑（含高处楼顶）——3D 射线求交：贴墙攀爬 / 送顶
   if (ro) {
     let bh = null, bt = 150, hx = 0, hy = 0, hz = 0, hnx = 0, hnz = 0, hroof = false;
-    for (const b of buildings) {
+    // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
+    // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
+    // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
+    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
       const hit = rayBoxHit(ro, rd, b);
       if (hit && hit.t < bt) { bt = hit.t; bh = b; hx = hit.x; hy = hit.y; hz = hit.z; hnx = hit.nx; hnz = hit.nz; hroof = hit.roof; }
     }
@@ -14132,7 +14144,10 @@ function grappleTarget() {
   const aim = aimDirection(); const fx = aim.x, fz = aim.z;
   for (let d = 1; d <= 40; d += 1) {
     const wx = px + fx * d, wz = pz + fz * d;
-    for (const b of buildings) {
+    // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
+    // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
+    // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
+    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
       if (wx > b.minX && wx < b.maxX && wz > b.minZ && wz < b.maxZ) {
         const stop = Math.max(1, d - 1.5);
         const lx = px + fx * stop, lz = pz + fz * stop;
@@ -24082,8 +24097,8 @@ function buildLinhaiCity(g) {
       // 之前只登记一个（水平尺寸取裙楼、高度却取塔楼全高），碰撞体积和视觉模型对不上 ——
       // 钩爪算出的"墙面"有一半落在空气里，于是要么卡进墙里、要么直接穿到另一侧（用户实测）。
       const _hw = Math.min(w + 5, w * 1.14) * 0.5, _hd = (d + 5) * 0.5;
-      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, top: 8 });         // 裙楼（约 5.5~8m 高）
-      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, top: h });  // 塔楼（全高）
+      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, minY: 0, top: 8 });         // 裙楼（约 5.5~8m 高）
+      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: h });  // 塔楼（全高）
       // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
       // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
       // 裙楼只比塔楼略宽一点（原来写 w+9、最深到 55，而楼间距只有 56 ——
@@ -24143,7 +24158,7 @@ function buildLinhaiCity(g) {
   const wallX = LH.ancX0 + 6;
   const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, ZLEN - 60), wallM);
   cw.position.set(wallX, 4.25, ZC); add(cw);
-  LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: ZC - (ZLEN - 60) / 2, maxZ: ZC + (ZLEN - 60) / 2, top: 9 });   // 【fix64】城墙碰撞
+  LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: ZC - (ZLEN - 60) / 2, maxZ: ZC + (ZLEN - 60) / 2, minY: 0, top: 9 });   // 【fix64】城墙碰撞
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
   plinth.position.set(wallX, 0.7, ZC); add(plinth);
   for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
