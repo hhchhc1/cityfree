@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix61-fog';;;;;;
+const BUILD = '20261024-fix62-inwater';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21850,7 +21850,11 @@ function update(dt) {
     const m = Math.max(Math.abs(person.position.x), Math.abs(person.position.z));
     const onBridge = Math.abs(person.position.x) <= BRIDGE_HALF_WIDTH && person.position.z >= BRIDGE_START_Z && person.position.z <= BRIDGE_LIMIT_Z;
     const onIsland = Math.hypot(person.position.x - ISLAND_X, person.position.z - ISLAND_Z) < ISLAND_WALK_R;
-    inWater = (m > HALF - 100 && !onBridge && !onIsland);
+    // 【fix62】★真正的根因★ 必须加 person.position.x < 900：
+  // 荷芷市（x≈1000~2000）在主城地图之外，绝不是『水』！原来这里只看距离，
+  // 于是玩家一到荷芷市就被判定成在水中 —— 速度减半 + 切成游泳姿势，
+  // 用户描述的『还是不能正常行动、和在水里一样』就是这个。
+  inWater = (person.position.x < 900 && m > HALF - 100 && !onBridge && !onIsland);
     if (inWater) {
       // 水中：速度减半，姿势改为游泳（前倾划水）
       const len = Math.hypot(mx, mz);
@@ -25381,7 +25385,11 @@ const frameLoop = () => {
     const wantMove = (joyActive && (Math.abs(joyX) > 0.25 || Math.abs(joyY) > 0.25))
       || keys['w'] || keys['a'] || keys['s'] || keys['d'];
     const px = person.position.x, pz = person.position.z;
-    if (!wantMove || !isFinite(px) || !isFinite(pz)) {
+    // 【fix62】只在**确实挂着钩爪、且处于步行状态**时才干预！
+    // 之前是『有移动输入但位置不变 1.5 秒就复位』，结果把**开车**也误伤了：
+    // 上车后按前进键、车没动（没给油/手刹）→ 保险判定卡住 → 强制 state='walk'
+    // → 玩家被『自动下车』，而且下车流程没走完，人就消失了（用户电脑版实测）。
+    if (!grapple || (typeof state !== 'undefined' && state !== 'walk') || !wantMove || !isFinite(px) || !isFinite(pz)) {
       A.t = 0; A.x = px; A.z = pz;
     } else if (Math.hypot(px - A.x, pz - A.z) > 0.30) {
       A.t = 0; A.x = px; A.z = pz;
