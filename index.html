@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix90-marble';;;;;;
+const BUILD = '20261024-fix92-samesrc';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23952,7 +23952,11 @@ function buildLinhaiCity(g) {
   const _gc = new THREE.Color(), _gc2 = new THREE.Color();
   for (let i = 0; i < tPos.count; i++) {
     const wx = tPos.getX(i) + DEST.x, wz = tPos.getZ(i) + DEST.z;
-    const hy = linhaiHeight(wx, wz);
+    // 【fix91】x<900 必须用 terrainHeight，与主城地形**完全同源**！
+    // 之前这里一律用 linhaiHeight，而主城地形用的是 terrainHeight —— 接缝处高度并不相等；
+    // 加上两块网格分段不同（主城 7.8m/格、这里 15m/格），那条边就一直在 z-fighting。
+    let hy = (wx < 900) ? terrainHeight(wx, wz) : linhaiHeight(wx, wz);
+    if (wx < 508) hy += 0.30;   // 边缘窄带再抬高 0.3m：稳稳压在主城地形之上，深度差足够
     tPos.setY(i, hy);
     const jit = (Math.sin(wx * 0.055 + wz * 0.043) * 0.5 + 0.5) * 0.07 - 0.035;
     // ⚠️ 斑驳噪声的波长必须远大于网格格距（900/90 = 10m）。
@@ -24771,7 +24775,11 @@ function initFlightScenery() {
   const _dc = new THREE.Color(), _dc2 = new THREE.Color();
   for (let i = 0; i < dgPos.count; i++) {
     const wx = dgPos.getX(i) + DEST.x, wz = dgPos.getZ(i) + DEST.z;
-    const hy = linhaiHeight(wx, wz);
+    // 【fix91】x<900 必须用 terrainHeight，与主城地形**完全同源**！
+    // 之前这里一律用 linhaiHeight，而主城地形用的是 terrainHeight —— 接缝处高度并不相等；
+    // 加上两块网格分段不同（主城 7.8m/格、这里 15m/格），那条边就一直在 z-fighting。
+    let hy = (wx < 900) ? terrainHeight(wx, wz) : linhaiHeight(wx, wz);
+    if (wx < 508) hy += 0.30;   // 边缘窄带再抬高 0.3m：稳稳压在主城地形之上，深度差足够
     dgPos.setY(i, hy);
     // 斑驳噪声波长必须远大于格距（940/94 = 10m），否则采样混叠成条纹
     const jit = (Math.sin(wx * 0.055 + wz * 0.043) * 0.5 + 0.5) * 0.07 - 0.035;
@@ -24790,7 +24798,7 @@ function initFlightScenery() {
   // 这里 128 段/每格 15m）→ 接缝两侧的顶点 z 位置并不重合，两块面互相交错，
   // 就会一直闪（用户截图：荷芷市地面西北角那块）。现在重叠 5m 且低 6cm，
   // 主城地形压在上面，接缝彻底看不见。
-  destGround.position.set(DEST.x - 95, -0.06, DEST.z);   // 【fix74】中心 1470→1460、y 0.03→0：覆盖 x∈[500,2420] 且与主城地形同高，消除间隙与闪烁 g.add(destGround);
+  destGround.position.set(DEST.x - 95, 0, DEST.z);   // 【fix74】中心 1470→1460、y 0.03→0：覆盖 x∈[500,2420] 且与主城地形同高，消除间隙与闪烁 g.add(destGround);
   LH_GROUND.mesh = destGround;   // 交给天气系统：下雨时压暗，读起来像"湿路面"
   // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
   buildLinhaiCity(g);
