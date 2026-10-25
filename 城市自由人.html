@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix97-airwall';;;;;;
+const BUILD = '20261024-fix99-gate2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1159,7 +1159,9 @@ function personGroundY(x, z) {
   // 于是玩家走到地图外就**悬在半空、脚下什么都没有**（用户第 4 张截图：周围只有海面和星空）。
   // 恢复原逻辑：海洋区域站在水面下 0.9m（原注释："人物在海洋区域半个身体没入水中"），
   // 这样人在任何地方都有"可站立的高度"，能正常走动。
-  if (m > HALF - 100 && !onBridge && !onIsland) return WATER_Y + 0.9;
+  // 【fix98】不再返回『海洋高度』——现在全图都有地面（见 addFarGround），
+  // 统一交给 terrainHeight 即可（它内部已含荷芷市的 linhaiHeight 分支）。
+  // 这样『出界掉海』从根上不存在，也就不需要任何救援逻辑了。
   return terrainHeight(x, z);
 }
 // 判断是否在道路/桥面/桥引道上（禁止刷实体阻挡物）
@@ -1286,6 +1288,29 @@ function isOnOuterRoad(x, z) {
     ctx.stroke();
   }
 
+  // 【fix98】远景地面：把**整个地图**都变成可站立陆地（用户建议：不要再分旧城/新城、
+  // 不要设什么界限）。主城精细地形只有 ±500、荷芷市地面只有 1920 见方，之外全是海面 ——
+  // 玩家一走出去就掉海、重启后位置被存档记下，于是反复『卡在海里 / 被救回主城』。
+  // 这里铺一张 6000×6000 的粗糙地形兜底，任何地方都有地面可站。
+  // 在精细地面覆盖区内整体压低 2m 藏起来（2m 足够在远处区分深度，不会闪烁）。
+  (function addFarGround() {
+    const FSZ = 6000;
+    const fgeo = new THREE.PlaneGeometry(FSZ, FSZ, 120, 120);
+    const fp = fgeo.attributes.position;
+    for (let i = 0; i < fp.count; i++) {
+      const fx = fp.getX(i), fz = -fp.getY(i);
+      let fh = terrainHeight(fx, fz);
+      const inMain = Math.abs(fx) < 505 && Math.abs(fz) < 505;
+      const inHezhi = fx > 495 && fx < 2425 && fz > -1250 && fz < 680;
+      if (inMain || inHezhi) fh -= 2.0;
+      fp.setZ(i, fh);
+    }
+    fgeo.computeVertexNormals();
+    const fmesh = new THREE.Mesh(fgeo, new THREE.MeshLambertMaterial({ color: 0x4e7a3a }));
+    fmesh.rotation.x = -Math.PI / 2; fmesh.position.y = -0.02;
+    fmesh.userData.lodShared = true;
+    scene.add(fmesh);
+  })();
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2, 128, 128), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = 0;
   const pos = ground.geometry.attributes.position;
@@ -24223,10 +24248,10 @@ function buildLinhaiCity(g) {
     for (const _gz of _gates) {
       const _a = Math.max(_zA, _gz - 15), _b = Math.min(_zB, _gz + 15);
       if (_b <= _cur) continue;
-      if (_a > _cur) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _a, minY: 0, top: 9 });
+      if (_a > _cur) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _a, minY: 0, top: 8.5 });
       _cur = _b;
     }
-    if (_cur < _zB) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _zB, minY: 0, top: 9 });
+    if (_cur < _zB) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _zB, minY: 0, top: 8.5 });
   }   // 【fix64】城墙碰撞
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
   plinth.position.set(wallX, 0.7, ZC); add(plinth);
@@ -24236,6 +24261,9 @@ function buildLinhaiCity(g) {
   }
   // 城楼 / 门楼（3 座，沿城墙分布）
   function buildGateTower(cz, h) {
+  // 【fix99】城门楼也要登记！原来它完全没登记碰撞 —— 用户：『这个古建筑是虚拟的，
+  // 直接就可以走进去』。城门楼比城墙厚实，单独给一个 18m 见方的盒子。
+  LH_BLD.push({ minX: wallX - 9, maxX: wallX + 9, minZ: cz - 9, maxZ: cz + 9, minY: 0, top: h + 8 });
     const bg = new THREE.Group();
     const base = new THREE.Mesh(new THREE.BoxGeometry(20, h, 16), wallM);
     base.position.y = h / 2; bg.add(base);
