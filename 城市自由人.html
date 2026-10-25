@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix93-bridge2';;;;;;
+const BUILD = '20261024-fix94-gate';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24207,7 +24207,22 @@ function buildLinhaiCity(g) {
   const wallX = LH.ancX0 + 6;
   const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, ZLEN - 60), wallM);
   cw.position.set(wallX, 4.25, ZC); add(cw);
-  LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: ZC - (ZLEN - 60) / 2, maxZ: ZC + (ZLEN - 60) / 2, minY: 0, top: 9 });   // 【fix64】城墙碰撞
+  // 【fix94】城墙碰撞盒必须**在城门处留门洞**！原来是一整条连续碰撞（minZ→maxZ），
+  // 把 3 座城门也一起堵死了 —— 用户：『那边的古建筑怎么还是勾不过去啊？那个城墙
+  // 给我挡住了，我也进不去，钩爪上过去就直接吸附到底下的城墙那儿了』。
+  // 城门在 Z0+120 / ZC / Z1-120 三处（见下面 buildGateTower 的调用），每处留 30m 门洞。
+  {
+    const _zA = ZC - (ZLEN - 60) / 2, _zB = ZC + (ZLEN - 60) / 2;
+    const _gates = [Z0 + 120, ZC, Z1 - 120].sort((a, b) => a - b);
+    let _cur = _zA;
+    for (const _gz of _gates) {
+      const _a = Math.max(_zA, _gz - 15), _b = Math.min(_zB, _gz + 15);
+      if (_b <= _cur) continue;
+      if (_a > _cur) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _a, minY: 0, top: 9 });
+      _cur = _b;
+    }
+    if (_cur < _zB) LH_BLD.push({ minX: wallX - 3.5, maxX: wallX + 3.5, minZ: _cur, maxZ: _zB, minY: 0, top: 9 });
+  }   // 【fix64】城墙碰撞
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
   plinth.position.set(wallX, 0.7, ZC); add(plinth);
   for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
