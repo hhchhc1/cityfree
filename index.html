@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix60-ground';;;;;;
+const BUILD = '20261024-fix61-fog';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24913,7 +24913,7 @@ function flightTick(dt) {
     : t < FLIGHT_T.taxi ? '滑跑加速…  （空格 / Esc 跳过）'
     : t < FLIGHT_T.lift ? '抬前轮 · 离地…'
     : t < FLIGHT_T.cruise ? '爬升中…  前往荷芷市'
-    : t < FLIGHT_T.descend ? '巡航中…  前方临海市'
+    : t < FLIGHT_T.descend ? '巡航中…  前方荷芷市'
     : t < FLIGHT_T.land ? '下降进近…'
     : '着陆滑行…';
   if (ph !== F.lastHint) { F.lastHint = ph; if (hintTextEl) hudText(hintTextEl, 'hint', ph); }
@@ -24963,11 +24963,11 @@ function flightTick(dt) {
   flightCamera(t, ks, dt);
   // ---- 雾：高空段把 far 推远，否则 1600m 外的新城被雾吃掉 ----
   const high = smooth01(FLIGHT_T.lift, FLIGHT_T.climb, t) * (1 - smooth01(FLIGHT_T.land, FLIGHT_T.done, t));
-  scene.fog.near = F.fogNear + high * 700;
-  scene.fog.far = F.fogFar + high * 5200;
+  scene.fog.near = 1400 + high * 3000;   // 【fix61】原来用 F.fogNear(≈120)+high*700，滑跑时 high≈0 → 雾太近，整座城被涂成白色剪影
+  scene.fog.far = 3200 + high * 7000;     // 【fix61】同上：far 也只有 540，一两百米外全白
   // 【fix60】near 也必须一起拉远！只拉 far 的话，飞机离城只有一两百米、正好落在
   // 雾的有效区间内，整座城市会被雾涂成**白色剪影**（用户截图：雨天飞行全白）。
-  scene.fog.near = F.fogNear + high * 3000;
+  scene.fog.near = 1400 + high * 3000;   // 【fix61】上一版这行仍沿用小基准，等于没修上
   if (flightCloud.group) flightCloud.group.visible = t > FLIGHT_T.lift - 2 && t < FLIGHT_T.descend + 2;
   // ---- 结束 ----
   if (t >= FLIGHT_T.done) endFlightShow();
@@ -25167,7 +25167,7 @@ function flightBuy(kind) {
     PROGRESS.flightPass = true;
     saveGame();                                   // 花了 1 万，必须立刻落盘
     floatText('- ' + FLIGHT_PRICE_PERM + ' 金币 · 永久往返机票', '#ffd700');
-    setHint('已购买「永久往返机票」：以后飞临海市都免费（已存档）');
+    setHint('已购买「永久往返机票」：以后飞荷芷市都免费（已存档）');
   } else if (kind === 'once' && !permed) {
     if (gold < FLIGHT_PRICE_ONCE) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_ONCE - gold) + ' 金币'); return; }
     addGold(-FLIGHT_PRICE_ONCE);
