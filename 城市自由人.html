@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix64-collide';;;;;;
+const BUILD = '20261024-fix65-collide2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24018,7 +24018,10 @@ function buildLinhaiCity(g) {
         uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(9, Math.round(h / 12)))),
         buildingBodyMaterial(bpals[(Math.random() * bpals.length) | 0]));
       body.position.set(x, h / 2, z); add(body);
-      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, top: h });   // 【fix64】登记碰撞盒
+      // 【fix65】碰撞盒必须用**裙楼**的尺寸（塔楼 w×d，裙楼 min(w+5,w*1.14)×(d+5)），
+      // 否则裙楼那一圈仍会穿模（用户：『还是稍微有一点穿模，最外边』）。
+      const _hw = Math.min(w + 5, w * 1.14) * 0.5, _hd = (d + 5) * 0.5;
+      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, top: h });
       // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
       // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
       // 裙楼只比塔楼略宽一点（原来写 w+9、最深到 55，而楼间距只有 56 ——
@@ -25083,7 +25086,9 @@ try { initFlightScenery(); } catch (e) {
   // "重启后荷芷市整个消失、人泡在海面"（手机实测）。看不到真实报错就只能靠猜，
   // 所以这里把它显示出来 —— 用户截图即可精确告诉我出错在哪一步。
   setTimeout(function () {
-    try { setHint('⚠ 荷芷市建城失败：' + ((e && e.message) || e)); } catch (e2) {}
+    // 【fix65】必须用 alert：setHint 显示的内容会被下一帧的常规提示（WASD/方向键移动…）覆盖，
+    // 用户根本来不及看见 —— 这就是上一版加了提示却没有任何反馈的原因。
+    try { alert('⚠ 荷芷市建城失败：' + ((e && e.message) || e)); } catch (e2) {}
   }, 3000);
 }
 // 【fix49·关键】临海市（含 CBD 的超高层与东岸古建）是在 initFlightScenery() 里建的，
