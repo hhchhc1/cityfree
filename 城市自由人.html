@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix86-solid';;;;;;
+const BUILD = '20261024-fix87-seam2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24754,7 +24754,12 @@ function initFlightScenery() {
   dgGeo.setAttribute('color', new THREE.BufferAttribute(dgCol, 3));
   dgGeo.computeVertexNormals();
   const destGround = new THREE.Mesh(dgGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: dgtex }));
-  destGround.position.set(DEST.x - 90, 0, DEST.z);   // 【fix74】中心 1470→1460、y 0.03→0：覆盖 x∈[500,2420] 且与主城地形同高，消除间隙与闪烁 g.add(destGround);
+  // 【fix87】改成「向左重叠 5m + 下沉 6cm」，不再和主城地形精确接壤！
+  // 原来两块地面在 x=500 精确接壤，但两者**分段不同**（主城 128 段/每格 7.8m，
+  // 这里 128 段/每格 15m）→ 接缝两侧的顶点 z 位置并不重合，两块面互相交错，
+  // 就会一直闪（用户截图：荷芷市地面西北角那块）。现在重叠 5m 且低 6cm，
+  // 主城地形压在上面，接缝彻底看不见。
+  destGround.position.set(DEST.x - 95, -0.06, DEST.z);   // 【fix74】中心 1470→1460、y 0.03→0：覆盖 x∈[500,2420] 且与主城地形同高，消除间隙与闪烁 g.add(destGround);
   LH_GROUND.mesh = destGround;   // 交给天气系统：下雨时压暗，读起来像"湿路面"
   // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
   buildLinhaiCity(g);
