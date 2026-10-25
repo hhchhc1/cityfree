@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix66-grapple';;;;;;
+const BUILD = '20261024-fix68-quest';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -11209,17 +11209,10 @@ document.getElementById('questTracker').addEventListener('click', e => {
   e.stopPropagation();
   const id = b.getAttribute('data-abort');
   const q = QUESTS.find(v => v.id === id);
-  if (q) setHint('放弃【' + q.name + '】？再点一次「确认放弃」以免手滑。');
-  b.textContent = '确认放弃';
-  let armed = true;
-  const onSecond = e2 => {
-    const b2 = e2.target && e2.target.closest ? e2.target.closest('[data-abort]') : null;
-    if (!b2 || b2.getAttribute('data-abort') !== id || !armed) return;
-    armed = false;
-    document.getElementById('questTracker').removeEventListener('click', onSecond, true);
-    abortQuest(id);
-  };
-  document.getElementById('questTracker').addEventListener('click', onSecond, true);
+  // 【fix68】用户反馈"大本营的任务，点取消按钮没有用"：原来这里是**两段式** ——
+  // 第一次点只把按钮文字改成「确认放弃」、要再点第二次才真的放弃，
+  // 手机上很容易以为没生效（按钮在任务条右端、文字变化也不明显）。改成一次点击直接放弃。
+  if (q) abortQuest(id);
 });
 
 // ---- 每帧更新 ----
@@ -13104,7 +13097,15 @@ function hurtPlayer(n, byCop) {
   const hx = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const hz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
   spawnBurst(hx, hz, 0xcc1111, 6);   // 血花溅出（在玩家实际位置）
-  if (player.hp <= 0) { killedByCop = !!byCop; arrest(); }
+  if (player.hp <= 0) {
+    killedByCop = !!byCop;
+    // 【fix68】用户要求：『执行任务的时候死了一次还能执行任务，如果死了就代表任务失败』
+    try {
+      const _aq = QUESTS.find(v => v.state === 'active');
+      if (_aq) { abortQuest(_aq.id); setHint('已死亡 —— 任务失败：' + _aq.name); }
+    } catch (e) {}
+    arrest();
+  }
 }
 // ========== 清空通缉 + 清空所有人对玩家的仇恨 ==========
 // 【2026-10-13 用户要求】商店「消星卡」要的就是这套效果，所以从 arrest() 里抽成公共函数：
@@ -15479,11 +15480,18 @@ function clampCity(p) {
   // 表现就是"完全走不动"（用户实测："人物在临海市不能正常行走"）。
   // 判据用 x > 900：主城 |x|≤500，中间隔着海，不会误判。
   // 【fix57】东侧现在是连成一片的陆地，不能再按主城范围夹住，否则玩家过不去。
-  if (p.x > 300) { p.x = Math.max(p.x, 300); return; }
+  // 【fix67】分区夹取 —— fix58 把范围整体放到 ±3000 是错的：
+  // 它让玩家能走到主城**南边的海里**（z 无限制增长），而存档又把这个位置记了下来，
+  // 于是『重启后城市不见、人在海里游泳』（用户截图：大本营西南 674m ≈ (-126, 786)）。
+  // 正确做法是按区域分别限制：
+  //  · 荷芷市（x>900）：按它自己的纬度带
+  //  · 东侧走廊（x>300）：x 放行以便走到荷芷市，但 z 仍限在主城纬度带内
+  if (p.x > 900) { p.z = Math.max(-820, Math.min(300, p.z)); return; }
+  if (p.x > 300) { p.x = Math.max(p.x, 300); p.z = Math.max(-(HALF - 100), Math.min(HALF - 100, p.z)); return; }
   // 【fix55】主城边界必须和 personGroundY() 的"超出 ±(HALF-100) 就算海"判据对齐。
   // 原来这里允许走到 615，而 personGroundY 从 400 起就返回海面高度 ——
   // 中间那 215 米正是用户看到的"左边陆地、右边海、分界线在那里、越过去就泡在海里"。
-  const lim = 3000;   // 【fix58】用户要求去掉海洋、并抱怨在南边(码头)被卡住：放宽到 ±3000，覆盖主城+中间地带+荷芷市
+  const lim = HALF - 100;   // 【fix67】主城恢复 ±400（±3000 会把玩家放进海里）
   p.x = Math.max(-lim, Math.min(lim, p.x));
   p.z = Math.max(Math.max(WORLD_LIMIT_Z_MIN, -lim), Math.min(Math.min(WORLD_LIMIT_Z_MAX, lim), p.z));
 }
@@ -25446,6 +25454,12 @@ const frameLoop = () => {
       }
     }
     // 位置万一被污染成 NaN，松钩爪也救不回来 —— 直接拉回主城
+    // 【fix67】旧存档可能停在主城外的海里（见 clampCity 说明）——发现就拉回主城，
+    // 否则玩家重启后永远困在海面、看不到任何城市（用户截图：大本营西南 674m）。
+    if (state === 'walk' && person.position.x <= 900 && Math.max(Math.abs(person.position.x), Math.abs(person.position.z)) > HALF - 40) {
+      person.position.set(0, 2, 0); vy = 0; onGround = false;
+      try { setHint('已从地图外救回主城'); } catch (e3) {}
+    }
     if (!isFinite(person.position.x) || !isFinite(person.position.y) || !isFinite(person.position.z)) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       console.warn('[anti-stuck] 位置异常，已拉回主城');
