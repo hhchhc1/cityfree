@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix73-signnear';;;;;;
+const BUILD = '20261024-fix74-seam';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24658,7 +24658,7 @@ function initFlightScenery() {
   // ⚠️ 原本我在 buildLinhaiCity 里单独建了一个地形网格，但它**渲染不出来**
   //    （位置/参数/可见性都正确、材质染红也无效，排查无果），
   //    所以改为直接改造这块本来就渲染正常的平面，绕开那个问题。
-  const dgGeo = new THREE.PlaneGeometry(1900, 1900, 120, 120);
+  const dgGeo = new THREE.PlaneGeometry(1920, 1920, 128, 128)   // 【fix74】1900→1920、分段120→128：与主城地形(±500)精确接壤;
   // 噪点贴图（细颗粒 + 石板斑块）：只靠顶点色仍是大片纯色，加颗粒才像真实地表。
   // ⚠️ 这里必须**自己生成**：buildLinhaiCity() 是在这块地面**之后**才调用的，
   // 所以不能依赖它里面的 LH_GROUND.tex（那一刻还是 undefined，实测 hasMap=false）。
@@ -24698,7 +24698,7 @@ function initFlightScenery() {
   dgGeo.setAttribute('color', new THREE.BufferAttribute(dgCol, 3));
   dgGeo.computeVertexNormals();
   const destGround = new THREE.Mesh(dgGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: dgtex }));
-  destGround.position.set(DEST.x - 80, 0.03, DEST.z); g.add(destGround);
+  destGround.position.set(DEST.x - 90, 0, DEST.z);   // 【fix74】中心 1470→1460、y 0.03→0：覆盖 x∈[500,2420] 且与主城地形同高，消除间隙与闪烁 g.add(destGround);
   LH_GROUND.mesh = destGround;   // 交给天气系统：下雨时压暗，读起来像"湿路面"
   // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
   buildLinhaiCity(g);
