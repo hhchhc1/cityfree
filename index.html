@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix87-seam2';;;;;;
+const BUILD = '20261024-fix89-climb';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25559,7 +25559,13 @@ const frameLoop = () => {
     // 之前是『有移动输入但位置不变 1.5 秒就复位』，结果把**开车**也误伤了：
     // 上车后按前进键、车没动（没给油/手刹）→ 保险判定卡住 → 强制 state='walk'
     // → 玩家被『自动下车』，而且下车流程没走完，人就消失了（用户电脑版实测）。
-    if (!grapple || (typeof state !== 'undefined' && state !== 'walk') || !wantMove || !isFinite(px) || !isFinite(pz)) {
+    // 【fix89】攀爬（grapple.mode === 'wall'）时**绝不能**干预！
+    // 玩家按 W 向上爬时**水平位置几乎不动**，会被下面的判据误当成卡住，
+    // 1.5 秒后强制 releaseGrapple() → 人从墙上掉下来
+    //（用户：『攀爬到楼房的墙壁上之后只能攀爬 2 秒，然后就自动掉下来』）。
+    // 攀爬是完全正常的操作，这里直接排除。
+    if (grapple && grapple.mode === 'wall') { A.t = 0; A.x = px; A.z = pz; }
+    else if (!grapple || (typeof state !== 'undefined' && state !== 'walk') || !wantMove || !isFinite(px) || !isFinite(pz)) {
       A.t = 0; A.x = px; A.z = pz;
     } else if (Math.hypot(px - A.x, pz - A.z) > 0.30) {
       A.t = 0; A.x = px; A.z = pz;
@@ -25584,7 +25590,9 @@ const frameLoop = () => {
     // 直接拉回主城中心公园（用户实测：'退出网站再重新进入，玩家刷新到了主城中心公园'）。
     // 注意豁免只在东侧（x>400）生效 —— 主城**西边**的海仍然要救。
     const _outMain = Math.max(Math.abs(person.position.x), Math.abs(person.position.z)) > HALF - 40;
-    const _inLand = person.position.x > 400 && person.position.z > -820 && person.position.z < 300;
+    const _inLand = false;   // 【fix88】不再豁免！fix75 这条豁免（x>400 且 z∈[-820,300]）范围太宽，
+    // 把「其实站在海上」的位置也当成陆地放过了，于是用户重进后仍被困在海上、还不停跳跃闪烁。
+    // 荷芷市本来就靠上面的 x<=900 排除掉了，根本不需要这条豁免。
     if (state === 'walk' && person.position.x <= 900 && _outMain && !_inLand) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       try { setHint('已从地图外救回主城'); } catch (e3) {}
