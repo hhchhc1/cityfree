@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix77-hud';;;;;;
+const BUILD = '20261024-fix78-pxfix';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -2834,7 +2834,7 @@ var MAIN_ROAD_DASHES = markMainRoads();
       // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
     // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
     // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
-    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
+    for (const b of (person.position.x > 900 ? buildings.concat(LH_BLD) : buildings)) {
         const nx = Math.max(b.minX, Math.min(cx, b.maxX));
         const nz = Math.max(b.minZ, Math.min(cz, b.maxZ));
         if ((nx - cx) * (nx - cx) + (nz - cz) * (nz - cz) < rad * rad) return true;
@@ -13387,7 +13387,7 @@ function spawnTrashCans() {
     // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
     // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
     // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
-    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
+    for (const b of (person.position.x > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
     if (inside) continue;   // 不在建筑内
     let onTree = false;
     for (const tr of treeObstacles) { if (Math.hypot(x - tr.x, z - tr.z) < 1.2) { onTree = true; break; } }
@@ -13428,7 +13428,7 @@ spawnTrashCans();
       // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
     // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
     // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
-    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
+    for (const b of (person.position.x > 900 ? buildings.concat(LH_BLD) : buildings)) { if (x > b.minX - 0.6 && x < b.maxX + 0.6 && z > b.minZ - 0.6 && z < b.maxZ + 0.6) { inside = true; break; } }
       if (inside) continue;
       let onTree = false;
       for (const tr of treeObstacles) { if (Math.hypot(x - tr.x, z - tr.z) < 1.2) { onTree = true; break; } }
@@ -14136,7 +14136,7 @@ function grappleTarget() {
     // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
     // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
     // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
-    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
+    for (const b of (person.position.x > 900 ? buildings.concat(LH_BLD) : buildings)) {
       const hit = rayBoxHit(ro, rd, b);
       if (hit && hit.t < bt) { bt = hit.t; bh = b; hx = hit.x; hy = hit.y; hz = hit.z; hnx = hit.nx; hnz = hit.nz; hroof = hit.roof; }
     }
@@ -14152,7 +14152,7 @@ function grappleTarget() {
     // 【fix76】荷芷市的楼从来不在 buildings 数组里（那是主城建的），所以钩爪
     // 永远勾不到荷芷市的墙面 —— 用户：『跟随箭头勾到哪里，就附着到哪个楼房上边』。
     // 这里的盒子格式（minX/maxX/minZ/maxZ/top）与 buildings 完全一致，直接合并遍历即可。
-    for (const b of (px > 900 ? buildings.concat(LH_BLD) : buildings)) {
+    for (const b of (person.position.x > 900 ? buildings.concat(LH_BLD) : buildings)) {
       if (wx > b.minX && wx < b.maxX && wz > b.minZ && wz < b.maxZ) {
         const stop = Math.max(1, d - 1.5);
         const lx = px + fx * stop, lz = pz + fz * stop;
@@ -26020,7 +26020,9 @@ window.focus();
     try {
       (0, eval)(boot.textContent);           // 间接 eval → 在**全局作用域**执行，var/function 正确挂到全局
     } catch (e) {
-      fail('加载失败：' + ((e && e.message) || String(e))); return;
+      // 【fix78】把堆栈前几行也显示出来：这类加载期 ReferenceError 只看 message 完全
+      // 不知道出在哪一行（这次的 px is not defined 就排查了很久）。
+      fail('加载失败：' + ((e && e.message) || String(e)) + (e && e.stack ? ' @ ' + String(e.stack).split('\n').slice(1, 4).join(' | ') : '')); return;
     }
     // 主循环已在 eval 里启动；再等两帧，确保至少渲染出一帧真实画面，再淡出加载层
     requestAnimationFrame(function () { requestAnimationFrame(function () {
