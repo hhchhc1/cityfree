@@ -724,7 +724,7 @@
       </div>
     </div>
   </div>
-  <div id="devBtn">开发者模式</div>`n<div id="signThemeBtn" onclick="cycleSignTheme()" style="position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
+  <div id="devBtn">开发者模式</div>`n<div id="signThemeBtn" onclick="cycleSignTheme()" style="display:none;position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
 <!-- ==================== 【fix47】机票对话面板 ====================
      用户要求：手机版登不了机（没有键盘 E），改成"在大飞机旁边立一根光柱，
      走到那里问'少年，你愿意解锁新的旅途吗'，三个选项：永久往返 / 单次前往 / 暂时不了"。
@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix71-depth';;;;;;
+const BUILD = '20261024-fix73-signnear';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19085,6 +19085,28 @@ function fireNpcShot(r, dx, dz) {
   sfxNear('shoot', r.x, r.z, 50);
   spawnTracer(r.x + dx * 1.2, 1.3, r.z + dz * 1.2, r.x + dx * 18, 0.8, r.z + dz * 18, 'pistol');
   spawnBurst(r.x + dx * 1.2, r.z + dz * 1.2, 0xffff88, 4);
+  // 【fix72】补上伤害判定 —— 原来这个函数**只有视觉效果**（音效 + 曳光弹 + 火花），
+  // 完全没有伤害计算，所以帮派之间只会互相"表演"开枪、永远打不死对方
+  //（用户实测："帮派争夺的时候，怎么他们互相打不死对方"）。
+  // 做法：沿开火方向找最近的**敌对阵营** NPC（射程 18m 与开火条件一致、垂直偏差 < 0.8m 视为命中）。
+  const dmg = 6 + Math.random() * 6;
+  let best = null, bestT = 18;
+  const _cells = []; _gridAround(r.x, r.z, 18, _cells);
+  for (const ci of _cells) for (const o of _gridNpc[ci]) {
+    if (o === r || !o.alive || o.down || o.faction < 0 || o.faction === r.faction) continue;
+    const enemies = FACTION_ENEMIES[r.faction] || [];
+    if (!enemies.includes(o.faction)) continue;
+    const vx = o.x - r.x, vz = o.z - r.z;
+    const t2 = vx * dx + vz * dz;
+    if (t2 < 0.5 || t2 > bestT) continue;
+    if (Math.abs(vx * dz - vz * dx) > 0.8) continue;   // 垂直偏差过大 = 没打中
+    bestT = t2; best = o;
+  }
+  if (best) {
+    best.hp -= dmg;
+    if (best.hp <= 0) killResident(best, r);
+    else spawnBurst(best.x, best.z, 0xff4444, 5);
+  }
 }
 // ignoreVeh：忽略某辆车（玩家自己开的车），不把它当障碍物。
 // 否则 NPC 朝玩家的车开枪时，车身会把射线挡掉，玩家在车里永远不受伤。
@@ -25500,6 +25522,15 @@ const frameLoop = () => {
     if (!FLIGHT && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
       person.position.set(-100, 2, -251); vy = 0; onGround = false;
       setHint('已返回主城机场');
+    }
+  } catch (e) {}
+  // 【fix73】路牌配色按钮只在**走近路牌**时出现（用户要求：不要一直常驻屏幕）
+  try {
+    const _sb = document.getElementById('signThemeBtn');
+    if (_sb) {
+      const _nearSign = !FLIGHT && Math.hypot(person.position.x - (LH.rivX0 - 44), person.position.z - (DEST.z + 130)) < 22;
+      const _want = _nearSign ? 'block' : 'none';
+      if (_sb.style.display !== _want) _sb.style.display = _want;
     }
   } catch (e) {}
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
