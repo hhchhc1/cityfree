@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix101-farground';;;;;;
+const BUILD = '20261024-fix103-strips';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1293,30 +1293,37 @@ function isOnOuterRoad(x, z) {
   // 玩家一走出去就掉海、重启后位置被存档记下，于是反复『卡在海里 / 被救回主城』。
   // 这里铺一张 6000×6000 的粗糙地形兜底，任何地方都有地面可站。
   // 在精细地面覆盖区内整体压低 2m 藏起来（2m 足够在远处区分深度，不会闪烁）。
-  (function addFarGround() {
-    const FSZ = 6000;
-    const fgeo = new THREE.PlaneGeometry(FSZ, FSZ, 120, 120);
-    const fp = fgeo.attributes.position;
-    for (let i = 0; i < fp.count; i++) {
-      const fx = fp.getX(i), fz = -fp.getY(i);
-      // 【fix100】远景地面用**自己的简单公式**，绝不调用 terrainHeight！
-      // 它在加载早期（434 行）执行，而 terrainHeight → linhaiHeight 依赖 LH / LH_BRIDGES，
-      // 那时它们还没赋值（var 提升但值为 undefined；const LH 更是 TDZ），
-      // 一访问就抛异常、整个游戏加载失败（用户看到的『加载失败: reading length』）。
-      // 这块地面只在『没有精细地面』的区域可见，起伏简单一点完全没关系。
-      let fh = Math.sin(fx * 0.011) * Math.cos(fz * 0.009) * 3.2
-             + Math.sin((fx - fz) * 0.021 + 0.7) * 1.6 + 1.5;
-      const inMain = Math.abs(fx) < 505 && Math.abs(fz) < 505;
-      const inHezhi = fx > 495 && fx < 2425 && fz > -1250 && fz < 680;
-      if (inMain || inHezhi) fh -= 2.0;
-      fp.setZ(i, fh);
+function addFarGround() {
+    // 【fix103】远景地面**绝不与精细地面重叠**！
+    // fix98/102 是一张 6000×6000 的大平面、在精细区内压低 2m 来"藏"，
+    // 但这条路有死结：压低后与 personGroundY 不一致（走远了会悬空），不压低又和精细地面
+    // 共面/顶出来 —— 用户看到的"地上好多这种绿色的东西"就是压低判定的边界陡坎。
+    // 正解：几何上就避开精细地面区，用**四块矩形拼接**，彼此零重叠、零共面。
+    const fmat = new THREE.MeshLambertMaterial({ color: 0x4e7a3a });
+    const strips = [
+      [-3000, -520, -3000,  3000],   // 西
+      [ 2450,  3000, -3000,  3000],  // 东
+      [ -520,  2450, -3000, -1280],  // 北
+      [ -520,  2450,   700,  3000]   // 南
+    ];
+    for (const st of strips) {
+      const x0 = st[0], x1 = st[1], z0 = st[2], z1 = st[3];
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const segX = Math.max(2, Math.round((x1 - x0) / 50));
+      const segZ = Math.max(2, Math.round((z1 - z0) / 50));
+      const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0, segX, segZ);
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        p.setZ(i, terrainHeight(p.getX(i) + cx, -p.getY(i) + cz));
+      }
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, fmat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(cx, -0.02, cz);
+      m.userData.lodShared = true;
+      scene.add(m);
     }
-    fgeo.computeVertexNormals();
-    const fmesh = new THREE.Mesh(fgeo, new THREE.MeshLambertMaterial({ color: 0x4e7a3a }));
-    fmesh.rotation.x = -Math.PI / 2; fmesh.position.y = -0.02;
-    fmesh.userData.lodShared = true;
-    scene.add(fmesh);
-  })();
+  }
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2, 128, 128), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = 0;
   const pos = ground.geometry.attributes.position;
@@ -23871,6 +23878,10 @@ let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于�
 // 城区范围刻意保持台地 0 —— 建筑与路网都按水平基准摆的，如果城区也起伏，
 // 每栋楼、每条路都要改成逐点贴地，改动面太大且容易出错。
 var LH_BRIDGES = [];   // 【fix93】石桥桥面。必须定义在 linhaiHeight **之前**：地形生成期就会调用它。
+// 【fix102】远景地面**在这里才铺**：它必须用 terrainHeight（与 personGroundY 同源，
+// 否则玩家走到城外虽看着有地面、实际高度对不上会悬空）；而 terrainHeight → linhaiHeight
+// 依赖 LH 与 LH_BRIDGES，只有执行到这里才都已就绪（之前放在 434 行，直接抛异常）。
+addFarGround();
 // 【fix93】同时把桥面高度直接写进 linhaiHeight —— 原来只有 personGroundY 知道桥，
 // 而地形/碰撞等其它地方仍拿到河床 -2.6，两边每帧打架，
 // 表现就是用户说的『人物走上去一直上下浮动、不能正常行动』。
