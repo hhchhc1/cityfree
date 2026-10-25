@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix99-gate2';;;;;;
+const BUILD = '20261024-fix101-farground';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1299,7 +1299,13 @@ function isOnOuterRoad(x, z) {
     const fp = fgeo.attributes.position;
     for (let i = 0; i < fp.count; i++) {
       const fx = fp.getX(i), fz = -fp.getY(i);
-      let fh = terrainHeight(fx, fz);
+      // 【fix100】远景地面用**自己的简单公式**，绝不调用 terrainHeight！
+      // 它在加载早期（434 行）执行，而 terrainHeight → linhaiHeight 依赖 LH / LH_BRIDGES，
+      // 那时它们还没赋值（var 提升但值为 undefined；const LH 更是 TDZ），
+      // 一访问就抛异常、整个游戏加载失败（用户看到的『加载失败: reading length』）。
+      // 这块地面只在『没有精细地面』的区域可见，起伏简单一点完全没关系。
+      let fh = Math.sin(fx * 0.011) * Math.cos(fz * 0.009) * 3.2
+             + Math.sin((fx - fz) * 0.021 + 0.7) * 1.6 + 1.5;
       const inMain = Math.abs(fx) < 505 && Math.abs(fz) < 505;
       const inHezhi = fx > 495 && fx < 2425 && fz > -1250 && fz < 680;
       if (inMain || inHezhi) fh -= 2.0;
@@ -23874,7 +23880,10 @@ function linhaiHeight(x, z) {
   // 这一处同时修掉了两个症状：
   //  · 走上去「一直上下浮动、不能正常行动」（personGroundY 说桥面、linhaiHeight 说河床，每帧打架）
   //  · 桥「是虚体的」（地形/碰撞拿到的都是 -2.6，人直接沉下去）
-  for (let _bi = 0; _bi < LH_BRIDGES.length; _bi++) {
+  // 【fix100】必须加 LH_BRIDGES 存在性守卫！var 会提升但**赋值**在 23856 行，
+  // 而 addFarGround（434 行）在加载早期就会经 terrainHeight 调到这里 ——
+  // 那时 LH_BRIDGES 还是 undefined，读 .length 直接抛异常、整个游戏加载失败。
+  for (let _bi = 0; LH_BRIDGES && _bi < LH_BRIDGES.length; _bi++) {
     const _br = LH_BRIDGES[_bi];
     if (Math.abs(x - _br.x) < _br.halfX && Math.abs(z - _br.z) < 8.5) {
       const _u = Math.max(-0.5, Math.min(0.5, (x - _br.x) / _br.span));
