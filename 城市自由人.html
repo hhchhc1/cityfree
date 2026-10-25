@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix80-carturn';;;;;;
+const BUILD = '20261024-fix82-climbtop';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24102,7 +24102,11 @@ function buildLinhaiCity(g) {
       // 之前只登记一个（水平尺寸取裙楼、高度却取塔楼全高），碰撞体积和视觉模型对不上 ——
       // 钩爪算出的"墙面"有一半落在空气里，于是要么卡进墙里、要么直接穿到另一侧（用户实测）。
       const _hw = Math.min(w + 5, w * 1.14) * 0.5, _hd = (d + 5) * 0.5;
-      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, minY: 0, top: 8 });         // 裙楼（约 5.5~8m 高）
+      // 【fix82】裙楼盒子的 top 也要用**整栋楼的高度 h**，不能只到 8m！
+      // 钩爪从外侧看时命中的是更宽的裙楼盒子（离得更近），若它的 top 只有 8，
+      // 玩家爬到 8m 就没有立足点、直接掉下来（用户：『有个楼房爬不到顶端就自动掉下来了』）。
+      // 代价是 8m 以上会沿裙楼外沿悬空爬约 2.5m，但「能爬到顶」远比这点视觉偏差重要。
+      LH_BLD.push({ minX: x - _hw, maxX: x + _hw, minZ: z - _hd, maxZ: z + _hd, minY: 0, top: h });
       LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: h });  // 塔楼（全高）
       // —— 【fix49】精细化：裙楼 / 竖挺 / 横线脚 / 楼冠 / 空中连廊 / 招牌 ——
       // 全部走 det()（共享顶点色材质），所以细节量翻几倍而 draw call 基本不动。
@@ -24215,6 +24219,9 @@ function buildLinhaiCity(g) {
   for (const cz of [Z0 + 120, ZC, Z1 - 120]) buildGateTower(cz, 10.5);
   // 飞檐楼阁（多层殿阁，越往里越高）
   function buildPagoda(px, pz, levels, baseW) {
+  // 【fix81】古建也要登记进 buildings（LH_BLD 就是它）—— 之前只有 CBD 楼和城墙进去过，
+  // 所以古建区完全不能攀爬（用户：『古代楼房还是没有算到楼房里边，也不能攀爬』）。
+  LH_BLD.push({ minX: px - baseW * 0.62, maxX: px + baseW * 0.62, minZ: pz - baseW * 0.62, maxZ: pz + baseW * 0.62, minY: 0, top: baseW * 0.95 * levels + 5 });
     const pg = new THREE.Group();
     const podium = new THREE.Mesh(new THREE.BoxGeometry(baseW + 6, 1.6, baseW + 6), stoneM);
     podium.position.y = 0.8; pg.add(podium);
@@ -24281,6 +24288,9 @@ function buildLinhaiCity(g) {
 // 中央拱门洞 / 雉堞 / 三层楼阁 / 斗拱 / 蓝底金字匾额 / 翘角脊兽 / 宝顶）。
 // 全部用绝对世界坐标 + det() 细节件（共享材质），所以细节再多也不涨 draw call。
   function buildDrumTower(px, pz) {
+  // 【fix81】鼓楼也登记：底座宽、塔身高，分两个盒子更贴近外形
+  LH_BLD.push({ minX: px - 11, maxX: px + 11, minZ: pz - 11, maxZ: pz + 11, minY: 0, top: 8 });
+  LH_BLD.push({ minX: px - 7, maxX: px + 7, minZ: pz - 7, maxZ: pz + 7, minY: 0, top: 24 });
     const RED = 0xa8342a, RED_D = 0x872a22, TILE = 0x2f7a4a, TILE_D = 0x235f39;
     const GOLD = 0xe8c45a, BLUE = 0x17356b, WOOD = 0x8a4a2c, WOOD_D = 0x5e3220;
     const baseW = 48, baseH = 19;
@@ -24393,6 +24403,8 @@ function buildLinhaiCity(g) {
   buildPagoda(LH.ancX0 + 224, ZC + 90, 2, 19);
   // 六角 / 八角亭
   function buildPavilion(px, pz, sides, r) {
+  // 【fix81】亭子也登记
+  LH_BLD.push({ minX: px - r * 1.15, maxX: px + r * 1.15, minZ: pz - r * 1.15, maxZ: pz + r * 1.15, minY: 0, top: 8 });
     const pv = new THREE.Group();
     const base = new THREE.Mesh(new THREE.CylinderGeometry(r + 1.2, r + 1.5, 1.1, sides), stoneM);
     base.position.y = 0.55; pv.add(base);
@@ -24944,7 +24956,7 @@ function flightAudioSet(v) {                    // v = 0..1 推力强度
   const A = FLIGHT_AUDIO; if (!A) return;
   try {
     const t = A.ctx.currentTime;
-    A.gain.gain.setTargetAtTime(0.0001 + v * 0.085, t, 0.25);
+    A.gain.gain.setTargetAtTime(0.0001 + v * 0.32, t, 0.25);   // 【fix81】用户：『飞机的轰鸣声有点小，听不见』（原 0.085 太轻）
     A.lp.frequency.setTargetAtTime(170 + v * 190, t, 0.40);
   } catch (e) {}
 }
@@ -25159,7 +25171,11 @@ function endFlightShow() {
   // 东边依次是 CBD 天际线 → 河 → 对岸中式古建，一眼就是"到了另一座城"。
   person.visible = true;
   person.position.set(1262, 0.04, DEST.z + 34);
-  personAngle.v = Math.PI / 2; camYaw = Math.PI / 2; camPitch = 0.06;
+  personAngle.v = Math.PI / 2;   // 【fix81】只设人物朝向，**不再强行重置 camYaw/camPitch** ——
+  // 原来这里把镜头硬切回固定角度，而相机上一帧还跟着飞机，于是出现
+  // 『先移动一下视角、然后再归位』的卡顿（用户实测）。保持镜头连续即可。
+  if (!isFinite(camYaw)) camYaw = Math.PI / 2;
+  if (!isFinite(camPitch)) camPitch = 0.06;
   // 碰撞盒摘掉：飞机已经飞走了，留着会在跑道上形成一堵看不见的墙
   const col = AIRLINER && AIRLINER.userData && AIRLINER.userData.collider;
   if (col) { const i = buildings.indexOf(col); if (i >= 0) buildings.splice(i, 1); }
