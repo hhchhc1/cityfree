@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix62-inwater';;;;;;
+const BUILD = '20261024-fix63-signs';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5036,6 +5036,7 @@ function refreshDevBtnText() {
 }
 function setDevMode(on) {
   devMode = !!on;
+  PROGRESS.devMode = !!on;   // 【fix63】写进存档，重启后不再默认退出（用户要求）
   if (devMode) {
     // 【fix15】进入前先记下金币和技能点（只在第一次进入时备份，退出会清空，
     // 避免重复进出把备份覆盖成"进模式后的 999999"）。
@@ -10596,7 +10597,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false };   // flightPass=永久往返机票（fix47）
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -22856,7 +22857,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode },
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
     islandSign: { text: islandSignState.text, board: islandSignState.board, txt: islandSignState.txt, glow: !!islandSignState.glow },   // 【fix16】南岛立牌自定义内容
@@ -22969,7 +22970,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; }   // 【fix47】永久往返机票也要能存下来
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）
   // 任务状态（接取中的任务要恢复进度，完成的任务不再显示绿色光柱）
   // worldDay 要在 deserializeQuestState 之前恢复，冷却判断依赖它
   if (typeof data.worldDay === 'number') worldDay = data.worldDay;
@@ -24653,7 +24654,12 @@ function initFlightScenery() {
   // 玩家正好是从南边进近，必须保证朝南这面是对的。
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide }));
   // 城市名标牌：立在 CBD 临河一侧（原来的位置 x=DEST.x 正好是**河中央**，会悬在水上）
-  sign.position.set(LH.rivX0 - 44, 60, DEST.z + 130); g.add(sign);
+  sign.position.set(LH.rivX0 - 44, 60, DEST.z + 130.06); g.add(sign);
+  // 【fix63】牌子原是单面 DoubleSide，从背面看字是**镜像反的**（用户截图）。
+  // 补一块朝里的牌面（同一张贴图、旋转 180°），这样两面看到的都是正字。
+  const signBack = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), sign.material.clone());
+  signBack.position.set(LH.rivX0 - 44, 60, DEST.z + 129.94);
+  signBack.rotation.y = Math.PI; g.add(signBack);
   const signLeg = new THREE.Mesh(new THREE.BoxGeometry(6, 46, 6), new THREE.MeshLambertMaterial({ color: 0x5a6068 }));
   signLeg.position.set(LH.rivX0 - 44, 23, DEST.z + 130); g.add(signLeg);
   scene.add(g);
@@ -24853,6 +24859,10 @@ function flightAudioStop() {
   } catch (e) {}
 }function startFlightShow() {
   flightAudioStart();
+  // 【fix63】相机远平面必须一起拉远！它固定是 560（new THREE.PerspectiveCamera(...,0.5,560)），
+  // 上一版我把过场雾设到 3200+high*7000，但 560 以外全被相机裁掉 ——
+  // 用户说的『可见范围只有那一点、天空占太多』就是这个原因。
+  camera.far = 22000; camera.updateProjectionMatrix();
   // 【fix54】用户：
   if (FLIGHT || !AIRLINER) return;
   FLIGHT = {
@@ -25035,6 +25045,8 @@ function flightCamera(t, ks, dt) {
 // ---- 结束/复位 ----
 function endFlightShow() {
   flightAudioStop();   // 【fix54】飞行结束：淡出并关闭音频上下文
+  camera.far = 560; camera.updateProjectionMatrix();   // 【fix63】恢复常规远平面
+  if (window.__cfSkyFar) { window.__cfSkyFar = 0; }
   const _skR = document.getElementById('skipBtn'); if (_skR) _skR.style.display = '';
   const F = FLIGHT; if (!F) return;
   FLIGHT = null;
