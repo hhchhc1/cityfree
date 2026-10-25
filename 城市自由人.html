@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix59-antistuck';;;;;;
+const BUILD = '20261024-fix60-ground';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1147,7 +1147,13 @@ function personGroundY(x, z) {
   // 【fix57】东侧（x≥300）现在是与荷芷市连成一片的陆地，不能再按『超出即为海』处理，
   // 否则玩家走在东侧陆地上却仍被按到海面高度（实测 personGroundY(600,0) 返回 0.3）。
   if (x > 900) return linhaiHeight(x, z);
-  // 【fix58】不再把地图外判成海（用户要求『把海洋去掉』）
+  // 【fix60】**恢复**海洋区域的落地高度 —— 用户："我怕是让你把海洋的掉入海中之后
+  // 无法正常行走的那个代码删了。"  确实是 fix58 我删掉的。
+  // 原因：主城的地形网格只覆盖 ±500，而 terrainHeight() 能无限延伸返回丘陵高度(3~6m)，
+  // 于是玩家走到地图外就**悬在半空、脚下什么都没有**（用户第 4 张截图：周围只有海面和星空）。
+  // 恢复原逻辑：海洋区域站在水面下 0.9m（原注释："人物在海洋区域半个身体没入水中"），
+  // 这样人在任何地方都有"可站立的高度"，能正常走动。
+  if (m > HALF - 100 && !onBridge && !onIsland) return WATER_Y + 0.9;
   return terrainHeight(x, z);
 }
 // 判断是否在道路/桥面/桥引道上（禁止刷实体阻挡物）
@@ -24571,7 +24577,7 @@ function initFlightScenery() {
   // ⚠️ 原本我在 buildLinhaiCity 里单独建了一个地形网格，但它**渲染不出来**
   //    （位置/参数/可见性都正确、材质染红也无效，排查无果），
   //    所以改为直接改造这块本来就渲染正常的平面，绕开那个问题。
-  const dgGeo = new THREE.PlaneGeometry(940, 940, 94, 94);
+  const dgGeo = new THREE.PlaneGeometry(1900, 1900, 120, 120);
   // 噪点贴图（细颗粒 + 石板斑块）：只靠顶点色仍是大片纯色，加颗粒才像真实地表。
   // ⚠️ 这里必须**自己生成**：buildLinhaiCity() 是在这块地面**之后**才调用的，
   // 所以不能依赖它里面的 LH_GROUND.tex（那一刻还是 undefined，实测 hasMap=false）。
@@ -24590,7 +24596,7 @@ function initFlightScenery() {
   }
   const dgtex = new THREE.CanvasTexture(dgcv);
   dgtex.wrapS = dgtex.wrapT = THREE.RepeatWrapping;
-  dgtex.repeat.set(48, 48);
+  dgtex.repeat.set(96, 96);
   dgGeo.rotateX(-Math.PI / 2);
   const dgPos = dgGeo.attributes.position;
   const dgCol = new Float32Array(dgPos.count * 3);
@@ -24611,7 +24617,7 @@ function initFlightScenery() {
   dgGeo.setAttribute('color', new THREE.BufferAttribute(dgCol, 3));
   dgGeo.computeVertexNormals();
   const destGround = new THREE.Mesh(dgGeo, new THREE.MeshLambertMaterial({ vertexColors: true, map: dgtex }));
-  destGround.position.set(DEST.x, 0.03, DEST.z); g.add(destGround);
+  destGround.position.set(DEST.x - 80, 0.03, DEST.z); g.add(destGround);
   LH_GROUND.mesh = destGround;   // 交给天气系统：下雨时压暗，读起来像"湿路面"
   // ---------- 城区（临海市）：河流 + 两岸 + CBD 路网与天际线 + 中式古建群 ----------
   buildLinhaiCity(g);
@@ -24959,6 +24965,9 @@ function flightTick(dt) {
   const high = smooth01(FLIGHT_T.lift, FLIGHT_T.climb, t) * (1 - smooth01(FLIGHT_T.land, FLIGHT_T.done, t));
   scene.fog.near = F.fogNear + high * 700;
   scene.fog.far = F.fogFar + high * 5200;
+  // 【fix60】near 也必须一起拉远！只拉 far 的话，飞机离城只有一两百米、正好落在
+  // 雾的有效区间内，整座城市会被雾涂成**白色剪影**（用户截图：雨天飞行全白）。
+  scene.fog.near = F.fogNear + high * 3000;
   if (flightCloud.group) flightCloud.group.visible = t > FLIGHT_T.lift - 2 && t < FLIGHT_T.descend + 2;
   // ---- 结束 ----
   if (t >= FLIGHT_T.done) endFlightShow();
@@ -25384,6 +25393,8 @@ const frameLoop = () => {
         state = 'walk';
         _wasPaused = false;
         console.warn('[anti-stuck] 强制复位：松开钩爪 / 回到 walk');
+        // 让玩家看得见（用户截图就能告诉我这道保险有没有在工作）
+        try { setHint('⚠ 检测到卡住，已自动复位（松开钩爪 / 恢复行走）'); } catch (e2) {}
       }
     }
     // 位置万一被污染成 NaN，松钩爪也救不回来 —— 直接拉回主城
