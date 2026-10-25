@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix92-samesrc';;;;;;
+const BUILD = '20261024-fix93-bridge2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1140,7 +1140,6 @@ function terrainHeight(x, z) {
   }
   return h;
 }
-var LH_BRIDGES = [];   // 【fix90】荷芷市石桥的桥面登记（personGroundY 据此让玩家真正走在桥上）
 // 人物在海洋区域半个身体没入水中，陆地上走地面
 function personGroundY(x, z) {
   const m = Math.max(Math.abs(x), Math.abs(z));
@@ -1152,18 +1151,8 @@ function personGroundY(x, z) {
   // 表现就是用户说的"到了新城市还是不能正常行走、还是和在海洋里一样"。
   // 【fix57】东侧（x≥300）现在是与荷芷市连成一片的陆地，不能再按『超出即为海』处理，
   // 否则玩家走在东侧陆地上却仍被按到海面高度（实测 personGroundY(600,0) 返回 0.3）。
-  if (x > 900) {
-    // 【fix90】荷芷市石桥：走上去要真的踩在桥面上。原来这里直接返回地形（河床 -2.6），
-    // 所以玩家一上桥就掉进河里 —— 这就是用户说的『桥梁是虚体的』。
-    for (let _bi = 0; _bi < LH_BRIDGES.length; _bi++) {
-      const _br = LH_BRIDGES[_bi];
-      if (Math.abs(x - _br.x) < _br.halfX && Math.abs(z - _br.z) < 8.5) {
-        const _u = Math.max(-0.5, Math.min(0.5, (x - _br.x) / _br.span));
-        return 1.2 + Math.cos(_u * Math.PI) * 1.7 + 0.4;   // 拱券桥面顶
-      }
-    }
-    return linhaiHeight(x, z);
-  }
+  // 【fix93】荷芷市的桥面高度已统一写进 linhaiHeight 本身，这里直接委托即可。
+  if (x > 900) return linhaiHeight(x, z);
   // 【fix60】**恢复**海洋区域的落地高度 —— 用户："我怕是让你把海洋的掉入海中之后
   // 无法正常行走的那个代码删了。"  确实是 fix58 我删掉的。
   // 原因：主城的地形网格只覆盖 ±500，而 terrainHeight() 能无限延伸返回丘陵高度(3~6m)，
@@ -23850,7 +23839,23 @@ let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于�
 // 用户要求"地面别死死的，不一定非要是一块平面，可以设计一些自然的过渡、起伏、转折"。
 // 城区范围刻意保持台地 0 —— 建筑与路网都按水平基准摆的，如果城区也起伏，
 // 每栋楼、每条路都要改成逐点贴地，改动面太大且容易出错。
+var LH_BRIDGES = [];   // 【fix93】石桥桥面。必须定义在 linhaiHeight **之前**：地形生成期就会调用它。
+// 【fix93】同时把桥面高度直接写进 linhaiHeight —— 原来只有 personGroundY 知道桥，
+// 而地形/碰撞等其它地方仍拿到河床 -2.6，两边每帧打架，
+// 表现就是用户说的『人物走上去一直上下浮动、不能正常行动』。
 function linhaiHeight(x, z) {
+  // 【fix93】石桥桥面**优先**判断！桥横跨河道，而下面第 3 行对河道是直接 return -2.6 的 ——
+  // 所以桥必须放在它**之前**，否则玩家一上桥就被按回河床。
+  // 这一处同时修掉了两个症状：
+  //  · 走上去「一直上下浮动、不能正常行动」（personGroundY 说桥面、linhaiHeight 说河床，每帧打架）
+  //  · 桥「是虚体的」（地形/碰撞拿到的都是 -2.6，人直接沉下去）
+  for (let _bi = 0; _bi < LH_BRIDGES.length; _bi++) {
+    const _br = LH_BRIDGES[_bi];
+    if (Math.abs(x - _br.x) < _br.halfX && Math.abs(z - _br.z) < 8.5) {
+      const _u = Math.max(-0.5, Math.min(0.5, (x - _br.x) / _br.span));
+      return 1.2 + Math.cos(_u * Math.PI) * 1.7 + 0.4;   // 拱券桥面顶
+    }
+  }
   const rivC = (LH.rivX0 + LH.rivX1) / 2, rivH = (LH.rivX1 - LH.rivX0) / 2;
   const dr = Math.abs(x - rivC);
   if (dr < rivH) return -2.6;                                  // 河道内：下沉成河床
@@ -24502,9 +24507,9 @@ function buildLinhaiCity(g) {
     // 【fix90】用户："这个新城市的桥梁是虚体的，这个灰色的，你把它弄成实体的、可以在上面走，
     // 然后并且弄成那种汉白玉的，精美一点的，有台阶，然后上面颜色不要过于单一"
     // 原来桥身用 stoneM = 0x7e8288（灰），这里换成汉白玉三色层次：
-    const marbleA = new THREE.MeshLambertMaterial({ color: 0xeae4d8 });   // 桥身主体：汉白玉暖白
-    const marbleB = new THREE.MeshLambertMaterial({ color: 0xd6cebd });   // 栏杆 / 台阶：略深，压出轮廓
-    const marbleC = new THREE.MeshLambertMaterial({ color: 0xf7f2e8 });   // 望柱 / 石狮：最亮，做点缀
+    const marbleA = new THREE.MeshLambertMaterial({ color: 0xd9d1c0 });   // 桥身主体：汉白玉（【fix93】按用户要求稍微加深）
+    const marbleB = new THREE.MeshLambertMaterial({ color: 0xc2b8a4 });   // 栏杆 / 台阶：略深，压出轮廓
+    const marbleC = new THREE.MeshLambertMaterial({ color: 0xe8e0d0 });   // 望柱 / 石狮：最亮，做点缀
     for (let i = 0; i < 7; i++) {                         // 拱券式桥面
       const seg = new THREE.Mesh(new THREE.BoxGeometry(span / 7 + 0.4, 0.8, 16), marbleA);
       const u = (i + 0.5) / 7 - 0.5;
