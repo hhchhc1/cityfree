@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix70-signback';;;;;;
+const BUILD = '20261024-fix71-depth';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24913,7 +24913,11 @@ function flightAudioStop() {
   // 【fix63】相机远平面必须一起拉远！它固定是 560（new THREE.PerspectiveCamera(...,0.5,560)），
   // 上一版我把过场雾设到 3200+high*7000，但 560 以外全被相机裁掉 ——
   // 用户说的『可见范围只有那一点、天空占太多』就是这个原因。
-  camera.far = 22000; camera.updateProjectionMatrix();
+  // 【fix71】必须**同时**调 near！上一版只把 far 拉到 22000 而 near 还是 0.5，
+  // far/near = 44000 → 深度缓冲精度严重不足，远处物体的深度值几乎相同，
+  // 整片城市被渲染成**白色剪影**（用户截图：滑跑加速时整个屏幕又变白了）。
+  // 现在 near=2 / far=6000（比值 3000，比原来好 15 倍），雾 far 收在 3200 以内。
+  camera.near = 2; camera.far = 6000; camera.updateProjectionMatrix();
   // 【fix54】用户：
   if (FLIGHT || !AIRLINER) return;
   FLIGHT = {
@@ -25032,7 +25036,7 @@ function flightTick(dt) {
   scene.fog.far = 3200 + high * 7000;     // 【fix61】同上：far 也只有 540，一两百米外全白
   // 【fix60】near 也必须一起拉远！只拉 far 的话，飞机离城只有一两百米、正好落在
   // 雾的有效区间内，整座城市会被雾涂成**白色剪影**（用户截图：雨天飞行全白）。
-  scene.fog.near = 1400 + high * 3000;   // 【fix61】上一版这行仍沿用小基准，等于没修上
+  // （fix60 曾在这里重复设过一次 near，已合并到上面两行，避免同一帧写两遍）
   if (flightCloud.group) flightCloud.group.visible = t > FLIGHT_T.lift - 2 && t < FLIGHT_T.descend + 2;
   // ---- 结束 ----
   if (t >= FLIGHT_T.done) endFlightShow();
@@ -25096,7 +25100,7 @@ function flightCamera(t, ks, dt) {
 // ---- 结束/复位 ----
 function endFlightShow() {
   flightAudioStop();   // 【fix54】飞行结束：淡出并关闭音频上下文
-  camera.far = 560; camera.updateProjectionMatrix();   // 【fix63】恢复常规远平面
+  camera.near = 0.5; camera.far = 560; camera.updateProjectionMatrix();   // 【fix71】恢复常规近/远平面
   if (window.__cfSkyFar) { window.__cfSkyFar = 0; }
   const _skR = document.getElementById('skipBtn'); if (_skR) _skR.style.display = '';
   const F = FLIGHT; if (!F) return;
