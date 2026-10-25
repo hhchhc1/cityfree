@@ -888,7 +888,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix68-quest';;;;;;
+const BUILD = '20261024-fix69-guards10';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -11708,11 +11708,10 @@ spawnFixedLimo(1);
     // ---- 以下为扩充的 7 个站位 ----
     { name: 'driveL',  dx: -13,  dz: 26,   angle: Math.PI,        melee: 'sword', ranged: 'smg',    hp: 120 },  // 车道左侧
     { name: 'driveR',  dx: 13,   dz: 26,   angle: Math.PI,        melee: 'sword', ranged: 'smg',    hp: 120 },  // 车道右侧
-    { name: 'wallW',   dx: -17,  dz:  4,   angle: Math.PI / 2,    melee: 'bat',   ranged: 'pistol', hp: 105 },  // 西侧围墙
-    { name: 'wallE',   dx: 17,   dz: -4,   angle: -Math.PI / 2,   melee: 'bat',   ranged: 'pistol', hp: 105 },  // 东侧围墙
-    { name: 'garden',  dx: 23,   dz: 34,   angle: Math.PI * 0.75, melee: 'sword', ranged: 'smg',    hp: 115 },  // 花园
-    { name: 'roadOutL',dx: -10,  dz: 60,   angle: Math.PI,        melee: 'bat',   ranged: 'pistol', hp: 100 },  // 门外公路左
-    { name: 'roadOutR',dx: 10,   dz: 62,   angle: Math.PI,        melee: 'bat',   ranged: 'pistol', hp: 100 }   // 门外公路右
+    // 【fix68】用户要求"把所需要击杀的 15 个人改成 10 个人"：
+    // 这里删掉 5 个扩充站位（西侧围墙 / 东侧围墙 / 花园 / 门外公路左右），
+    // 保留 8 个基础站位 + 车道左右 = 10 人。
+    // ⚠️ 任务进度与总数都取 GANG_HQ_GUARDS.length，所以**不需要改任何计数**。
   ];
   GANG_HQ_POSTS.forEach((post, i) => {
     const nx = hx + post.dx, nz = hz + post.dz;
