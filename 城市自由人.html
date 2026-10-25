@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix85-skynight';;;;;;
+const BUILD = '20261024-fix86-solid';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23909,6 +23909,21 @@ function buildLinhaiCity(g) {
     if (ry) m.rotation.y = ry;
     if (rz) m.rotation.z = rz;
     (to || g).add(m);
+    // 【fix86】用户要求：「只要能看见的东西都是实体的，都可以被碰撞」。
+    // det() 建的陈设（灯箱 / 广告牌 / 石凳 / 花坛 / 灯柱 / 石狮…）以前**完全没有碰撞**，
+    // 能直接穿过去 —— 截图里圈出的那个浅蓝发光灯箱就是这样。
+    // 这里按几何体尺寸自动登记：只收「够大或够高」的，避免一地小摆件把路堵死。
+    // 用 geo.parameters（Box / Cylinder / Sphere 都带）比算包围盒更省，而且拿得到真实尺寸。
+    try {
+      const q = geo.parameters || {};
+      let _w = 0, _h = 0, _d = 0;
+      if (q.width !== undefined) { _w = q.width || 0; _h = q.height || 0; _d = q.depth || 0; }
+      else if (q.radiusTop !== undefined) { _w = _d = Math.max(q.radiusTop || 0, q.radiusBottom || 0) * 2; _h = q.height || 0; }
+      else if (q.radius !== undefined) { _w = _d = (q.radius || 0) * 2; _h = q.height || (q.radius || 0) * 2; }
+      if (_h >= 1.5 || _w >= 0.8 || _d >= 0.8) {
+        LH_BLD.push({ minX: x - _w / 2, maxX: x + _w / 2, minZ: z - _d / 2, maxZ: z + _d / 2, minY: 0, top: y + _h / 2 });
+      }
+    } catch (e) {}
     return m;
   }
   const BX = (w, h, d) => new THREE.BoxGeometry(w, h, d);
