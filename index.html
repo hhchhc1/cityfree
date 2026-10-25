@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix82-climbtop';;;;;;
+const BUILD = '20261024-fix84-noswim';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21908,7 +21908,11 @@ function update(dt) {
   // 荷芷市（x≈1000~2000）在主城地图之外，绝不是『水』！原来这里只看距离，
   // 于是玩家一到荷芷市就被判定成在水中 —— 速度减半 + 切成游泳姿势，
   // 用户描述的『还是不能正常行动、和在水里一样』就是这个。
-  inWater = (person.position.x < 900 && m > HALF - 100 && !onBridge && !onIsland);
+  // 【fix84】用户明确要求：『直接把这个触发游泳时这种减速、还有不能正常移动的代码去掉』。
+  // 原来只要走出主城范围就被判成水中，速度减半（spd = 3 * runSpeed）、姿势切成游泳 ——
+  // 这正是用户反复说的『和在水里一样、不能正常行走』的真凶（不是走不了，是被减速了）。
+  // 现在恒为 false：任何地方都按陆地速度正常行走。
+  inWater = false;
     if (inWater) {
       // 水中：速度减半，姿势改为游泳（前倾划水）
       const len = Math.hypot(mx, mz);
@@ -25558,6 +25562,7 @@ const frameLoop = () => {
     if (state === 'walk' && person.position.x <= 900 && _outMain && !_inLand) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       try { setHint('已从地图外救回主城'); } catch (e3) {}
+      console.warn('[anti-stuck] 从地图外救回，原位置', _gx, _gz);
     }
     if (!isFinite(person.position.x) || !isFinite(person.position.y) || !isFinite(person.position.z)) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
