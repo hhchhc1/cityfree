@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261027-fix111-southgarden';;;;;;
+const BUILD = '20261028-fix112-ground-sky';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -913,6 +913,178 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 56
 // 540~800 之间的物体已经被雾染成天空色、肉眼完全看不见，却依然要参与整帧渲染。
 // 收到 560（略大于雾边界）后这部分物体直接被视锥裁掉，零视觉损失。
 camera.position.set(0, 6, -10);
+
+// ===== 【fix112】地面贴图工厂：沥青 / 混凝土 / 草地 / 石板 =====
+// 起因：用户看了"云上川大校园导览"的截图，说"新城市的地上太单一了"。
+// 原来荷芷市的路面、人行道、铺装底座全是**纯色块**（det 只吃颜色），远看就是几片灰；
+// 参考图里同一种地面有颗粒、有色差、有接缝 —— 这里用 canvas 生成可平铺贴图补上。
+const _groundTexCache = {};
+function groundTexture(kind) {
+  if (_groundTexCache[kind]) return _groundTexCache[kind];
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const R = (a, b) => a + Math.random() * (b - a);
+  if (kind === 'asphalt') {
+    g.fillStyle = '#3b4045'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 11000; i++) {                    // 骨料颗粒
+      const v = (44 + Math.random() * 78) | 0;
+      g.fillStyle = 'rgba(' + v + ',' + (v + 3) + ',' + (v + 5) + ',' + R(0.12, 0.5).toFixed(2) + ')';
+      g.fillRect(Math.random() * S, Math.random() * S, R(0.6, 1.9), R(0.6, 1.9));
+    }
+    for (let i = 0; i < 8; i++) {                         // 深浅补丁（补过的路面）
+      const x = Math.random() * S, y = Math.random() * S, r = R(16, 54);
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, 'rgba(26,29,32,0.42)'); rg.addColorStop(1, 'rgba(26,29,32,0)');
+      g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    g.strokeStyle = 'rgba(22,24,26,0.5)';                 // 细裂缝
+    for (let i = 0; i < 5; i++) {
+      g.lineWidth = R(0.5, 1.3); g.beginPath();
+      let x = Math.random() * S, y = Math.random() * S; g.moveTo(x, y);
+      for (let k = 0; k < 6; k++) { x += R(-24, 24); y += R(-24, 24); g.lineTo(x, y); }
+      g.stroke();
+    }
+  } else if (kind === 'concrete') {                       // 人行道 / 广场铺装
+    g.fillStyle = '#7c7e78'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 9000; i++) {
+      const v = (96 + Math.random() * 62) | 0;
+      g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v - 4) + ',' + R(0.1, 0.42).toFixed(2) + ')';
+      g.fillRect(Math.random() * S, Math.random() * S, R(0.6, 2.0), R(0.6, 2.0));
+    }
+    g.strokeStyle = 'rgba(104,104,100,0.6)'; g.lineWidth = 1.8;   // 铺装接缝（2m 一格）
+    for (let k = 0; k <= 2; k++) {
+      const p = k * S / 2;
+      g.beginPath(); g.moveTo(p, 0); g.lineTo(p, S); g.stroke();
+      g.beginPath(); g.moveTo(0, p); g.lineTo(S, p); g.stroke();
+    }
+    for (let i = 0; i < 26; i++) {                        // 污渍
+      const x = Math.random() * S, y = Math.random() * S, r = R(8, 30);
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, 'rgba(96,94,88,0.18)'); rg.addColorStop(1, 'rgba(96,94,88,0)');
+      g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  } else if (kind === 'grass') {                          // 草坪：饱和绿 + 明暗团块
+    g.fillStyle = '#487f31'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 60; i++) {                        // 大团色斑
+      const x = Math.random() * S, y = Math.random() * S, r = R(30, 96);
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      const c = ['rgba(96,148,58,0.30)', 'rgba(56,104,40,0.30)', 'rgba(112,164,70,0.24)', 'rgba(70,116,44,0.28)'][i % 4];
+      rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(72,127,49,0)');
+      g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    for (let i = 0; i < 16000; i++) {                     // 细草粒
+      const v = (58 + Math.random() * 84) | 0;
+      g.fillStyle = 'rgba(' + (v - 20) + ',' + v + ',' + ((v * 0.45) | 0) + ',' + R(0.1, 0.42).toFixed(2) + ')';
+      g.fillRect(Math.random() * S, Math.random() * S, R(0.5, 1.6), R(0.8, 2.6));
+    }
+  } else if (kind === 'stone') {                          // 园路石板
+    g.fillStyle = '#8f8a7e'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 7000; i++) {
+      const v = (118 + Math.random() * 62) | 0;
+      g.fillStyle = 'rgba(' + v + ',' + (v - 6) + ',' + (v - 20) + ',' + R(0.1, 0.38).toFixed(2) + ')';
+      g.fillRect(Math.random() * S, Math.random() * S, R(0.6, 1.8), R(0.6, 1.8));
+    }
+    // 石板缝：横平竖直为主（原来画成随机折线，一铺开像满地树枝）
+    g.strokeStyle = 'rgba(140,132,118,0.7)'; g.lineWidth = 2.2;
+    for (let i = 1; i < 4; i++) {
+      const y = i * S / 4 + R(-6, 6);
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+    }
+    for (let i = 0; i < 4; i++) {
+      const x0 = i * S / 4 + R(-8, 8);
+      g.beginPath(); g.moveTo(x0, 0); g.lineTo(x0 + R(-10, 10), S); g.stroke();
+    }
+    g.strokeStyle = 'rgba(150,144,130,0.35)'; g.lineWidth = 1;
+    for (let i = 0; i < 18; i++) {                        // 细裂纹
+      g.beginPath();
+      let x = R(0, S), y = R(0, S); g.moveTo(x, y);
+      for (let k = 0; k < 4; k++) { x += R(-26, 26); y += R(-26, 26); g.lineTo(x, y); }
+      g.stroke();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  _groundTexCache[kind] = t;
+  return t;
+}
+const _groundMatCache = {};
+function groundMaterial(kind) {
+  if (!_groundMatCache[kind]) _groundMatCache[kind] = new THREE.MeshLambertMaterial({ map: groundTexture(kind) });
+  return _groundMatCache[kind];
+}
+
+// ===== 【fix112】带云的天空穹顶 =====
+// 原来是纯色 scene.background（一片平蓝），用户要参考图那种"蓝天 + 大朵积云"。
+// 做法：内翻的半球 + canvas 贴图，depthTest 关掉、renderOrder 拉到最前 → 永远铺在最后面。
+let skyDome = null;
+const _skyTint = new THREE.Color();
+const _skyTintWhite = new THREE.Color(0xffffff);
+const _skyTintNight = new THREE.Color(0x101a30);
+const _skyTintDusk = new THREE.Color(0xffa060);
+function initSkyDome() {
+  const W = 2048, H = 1024;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0.00, '#2a6cc6');    // 天顶深蓝
+  grad.addColorStop(0.40, '#5fa0dc');
+  grad.addColorStop(0.68, '#8fc0e8');
+  grad.addColorStop(0.86, '#bcdcef');    // 近地平线泛白（和雾色衔接）
+  grad.addColorStop(1.00, '#cbe3f4');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  // 积云：每朵由 8~14 个径向渐变球堆成，底部压暗、顶部提亮
+  // 注意 wrap：贴图是横向平铺的，画在画布边缘的云要**在另一侧再画一遍**，
+  // 否则天空会出现一条竖着的"断云缝"（u=0/1 接缝）。
+  const puffW = (x, y, r, a, top) => {
+    puff(x, y, r, a, top);
+    if (x < 160) puff(x + W, y, r, a, top);
+    if (x > W - 160) puff(x - W, y, r, a, top);
+  };
+  const puff = (x, y, r, a, top) => {
+    const rg = g.createRadialGradient(x, y - r * 0.25, r * 0.1, x, y, r);
+    rg.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+    rg.addColorStop(0.55, 'rgba(' + (top ? 252 : 226) + ',' + (top ? 254 : 232) + ',' + (top ? 255 : 242) + ',' + (a * 0.72).toFixed(2) + ')');
+    rg.addColorStop(1, 'rgba(210,226,240,0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  };
+  for (let i = 0; i < 105; i++) {
+    const cx = Math.random() * W;
+    // 云带落在"仰角约 12°~70°"：站在地面平视/抬头都能看到大朵积云（参考图就是这样）
+    const cy = 90 + Math.random() * 860;
+    const sc = 0.45 + Math.random() * 0.95;
+    const n = 9 + (Math.random() * 8 | 0);
+    for (let k = 0; k < n; k++) {
+      const dx = (Math.random() - 0.5) * 190 * sc;
+      const dy = (Math.random() - 0.42) * 78 * sc;
+      puffW(cx + dx, cy + dy, (24 + Math.random() * 36) * sc, 0.46 + Math.random() * 0.3, dy < 0);
+    }
+    // 云底阴影
+    for (let k = 0; k < 4; k++) {
+      const dx = (Math.random() - 0.5) * 170 * sc;
+      puffW(cx + dx, cy + 34 * sc, (40 + Math.random() * 46) * sc, 0.16, false);
+    }
+  }
+  // 地平线附近一层薄雾，避免云和地面之间出现硬边
+  const hz = g.createLinearGradient(0, H * 0.86, 0, H);
+  hz.addColorStop(0, 'rgba(198,222,240,0)'); hz.addColorStop(1, 'rgba(206,228,244,0.95)');
+  g.fillStyle = hz; g.fillRect(0, H * 0.86, W, H * 0.14);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
+  // ⚠️ 必须关掉 flipY：球面 UV 的 v=1 在天顶，而 CanvasTexture 默认把图片上下翻过来，
+  // 结果"深蓝天顶"被翻到了地平线、画布底部的白雾铺满整个天空 —— 之前天空一片惨白就是这个坑。
+  tex.flipY = false;
+  tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false, depthTest: false });
+  const geo = new THREE.SphereGeometry(420, 40, 22, 0, Math.PI * 2, 0, Math.PI * 0.56);
+  skyDome = new THREE.Mesh(geo, mat);
+  skyDome.renderOrder = -1000;
+  skyDome.frustumCulled = false;
+  skyDome.userData.isSky = true;
+  registerDynamicObject(skyDome);
+  scene.add(skyDome);
+}
 
 const coarsePointer = matchMedia('(pointer: coarse)').matches;
 const isMobile = coarsePointer || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
@@ -21888,6 +22060,14 @@ function updateDayNight(dt) {
   scene.fog.color.copy(_skyTmp);
   scene.fog.near = 120 + d * 45;
   scene.fog.far = 360 + d * 180;
+  // 【fix112】云天天穹：跟着相机走（否则走到地图边缘会看到球壳），并按昼夜/黄昏调色
+  if (!skyDome) initSkyDome();
+  if (skyDome) {
+    skyDome.position.copy(camera.position);
+    _skyTint.copy(_skyTintWhite).lerp(_skyTintNight, 1 - d);
+    _skyTint.lerp(_skyTintDusk, dusk * 0.45);
+    skyDome.material.color.copy(_skyTint);
+  }
   dayLightF = dayF;
   lampBulbMat.color.setHex(dayF > 0.55 ? 0x9a9482 : 0xfff2cc);     // 夜晚灯光更亮
   // 星空淡入淡出 + 月亮绕行
@@ -24832,19 +25012,52 @@ function buildLinhaiCity(g) {
     }
   })();
 
-  // ---- ② 南岸新区：两纵三横路网 + 霓虹楼群（西岸 x 965~1518 / z -22~318）----
+  // ---- 【fix112】贴图地面 + 精致乔木（南区 / 园林共用）----
+  // 参考用户给的"云上川大校园导览"：地面有颗粒和接缝、树是分层树冠而不是一个球
+  function pbox(w, h, d, kind, x, y, z, tile) {
+    tile = tile || 8;
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / tile), uv.getY(i) * (d / tile));
+    const m = new THREE.Mesh(geo, groundMaterial(kind));
+    m.position.set(x, y, z); add(m); return m;
+  }
+  const TREE_LEAF = [0x3f7a2e, 0x4f8f36, 0x5da33f];
+  function lushTree(x, z, s, leaf) {
+    s = s || 1;
+    const H = (4.0 + Math.random() * 1.5) * s;
+    det(new THREE.CylinderGeometry(0.15 * s, 0.34 * s, H, 7), 0x6a4a30, x, H / 2, z);
+    for (const a of [0.7, 2.5]) {                      // 两根斜出的枝
+      const len = (1.5 + Math.random() * 0.8) * s;
+      det(new THREE.CylinderGeometry(0.06 * s, 0.15 * s, len, 5), 0x5e4128,
+        x + Math.cos(a) * len * 0.33, H * 0.8, z + Math.sin(a) * len * 0.33,
+        -Math.sin(a) * 0.72, 0, Math.cos(a) * 0.72);
+    }
+    const blobs = [[0, 1.05, 0, 2.15], [1.3, 0.45, 0.55, 1.55], [-1.2, 0.62, -0.62, 1.65],
+                   [0.45, 2.1, -0.85, 1.45], [-0.5, 2.2, 0.95, 1.35]];
+    blobs.forEach(([dx, dy, dz, r], i) => {
+      det(new THREE.IcosahedronGeometry(r * s, 1), (leaf === undefined ? TREE_LEAF : leaf)[i % 3],
+        x + dx * s, H + dy * s, z + dz * s);
+    });
+  }
+
+  // ---- ② 南岸新区：两纵三横路网 + 霓虹楼群（西岸 x 965~1518 / z -80~318）----
   (function buildSouthDistrict() {
     const DX0 = 965, DX1 = 1518, DZ0 = -80, DZ1 = 318;
     const AVX = [1080, 1400], STZ = [30, 155, 280];   // 两条南北主干道 + 三条东西街道
     const AVW = 20, STW = 16;
     // 【关键】先铺一整块"城区铺装"底座：荷芷市原本压在沙滩平面（y=0.01、1040 见方）上，
     // 只铺路的话，楼与路之间会露出一片沙地，看起来像沙漠里的城市。
-    det(BX(DX1 - DX0 + 2, 0.05, DZ1 - DZ0 + 2), 0x4a4f55, (DX0 + DX1) / 2, 0.02, (DZ0 + DZ1) / 2);
+    // 【fix112】底座/人行道/路面全部换成 canvas 贴图（颗粒 + 接缝），不再是一片纯灰
+    pbox(DX1 - DX0 + 2, 0.05, DZ1 - DZ0 + 2, 'asphalt', (DX0 + DX1) / 2, 0.02, (DZ0 + DZ1) / 2, 12);
     // 先把人行道铺宽一层（比路面宽 6m），路面再压在上面 4cm —— 自然形成 3m 路肩
-    for (const rx of AVX) det(BX(AVW + 6, 0.1, DZ1 - DZ0), 0x8d939a, rx, 0.05, (DZ0 + DZ1) / 2);
-    for (const rz of STZ) det(BX(DX1 - DX0, 0.1, STW + 6), 0x8d939a, (DX0 + DX1) / 2, 0.05, rz);
-    for (const rx of AVX) det(BX(AVW, 0.08, DZ1 - DZ0), 0x2f343a, rx, 0.1, (DZ0 + DZ1) / 2);
-    for (const rz of STZ) det(BX(DX1 - DX0, 0.08, STW), 0x2f343a, (DX0 + DX1) / 2, 0.1, rz);
+    for (const rx of AVX) pbox(AVW + 6, 0.1, DZ1 - DZ0, 'concrete', rx, 0.05, (DZ0 + DZ1) / 2, 6);
+    for (const rz of STZ) pbox(DX1 - DX0, 0.1, STW + 6, 'concrete', (DX0 + DX1) / 2, 0.05, rz, 6);
+    for (const rx of AVX) pbox(AVW, 0.08, DZ1 - DZ0, 'asphalt', rx, 0.1, (DZ0 + DZ1) / 2, 8);
+    for (const rz of STZ) pbox(DX1 - DX0, 0.08, STW, 'asphalt', (DX0 + DX1) / 2, 0.1, rz, 8);
+    // 白色路缘石：参考图里人行道边上那一圈白边，街景立刻就"立"起来了
+    for (const rx of AVX) for (const s of [-1, 1]) det(BX(0.36, 0.34, DZ1 - DZ0), 0xd9d7cf, rx + s * (AVW / 2 + 0.18), 0.17, (DZ0 + DZ1) / 2);
+    for (const rz of STZ) for (const s of [-1, 1]) det(BX(DX1 - DX0, 0.34, 0.36), 0xd9d7cf, (DX0 + DX1) / 2, 0.17, rz + s * (STW / 2 + 0.18));
     // 车道虚线：主干道中央 + 两侧，街道同理
     for (const rx of AVX) {
       for (let z = DZ0 + 10; z < DZ1 - 10; z += 12) {
@@ -24881,11 +25094,20 @@ function buildLinhaiCity(g) {
       det(BX(2.2, 0.28, 0.6), 0x4a4f55, x, 8.1, pz - s * 1.1);
       det(BX(1.2, 0.12, 1.6), 0xfff0bb, x, 8.0, pz - s * 1.8, 0, 0, 0, true);
     }
-    // 行道树
+    // 【fix112】人行道外侧的绿化带（3.2m 宽，树就种在里面）—— 参考图里"草地+路缘石+柏油路"的层次
+    const zcuts = [DZ0];
+    for (const rz of STZ) zcuts.push(rz - STW / 2 - 8, rz + STW / 2 + 8);
+    zcuts.push(DZ1);
+    for (let i = 0; i < zcuts.length; i += 2) {
+      const z0 = zcuts[i], z1 = zcuts[i + 1];
+      if (z1 - z0 < 5) continue;
+      for (const rx of AVX) for (const s of [-1, 1]) pbox(3.2, 0.06, z1 - z0, 'grass', rx + s * 14.4, 0.12, (z0 + z1) / 2, 4);
+    }
+    // 行道树（fix112：换成有树池草坪、分层树冠的乔木，和主城那种"一根杆一个球"区分开）
     for (const rx of AVX) for (let z = DZ0 + 40; z < DZ1 - 20; z += 40) for (const s of [-1, 1]) {
       const px = rx + s * (AVW / 2 + 5.2);
-      det(treeTrunkGeo, 0x6b4a2b, px, 1.0, z);
-      det(treeCrownGeo, 0x3f7d2e, px, 2.5, z);
+      pbox(4.6, 0.08, 4.6, 'grass', px, 0.13, z, 4);
+      lushTree(px, z, 0.92);
     }
     // LED 大屏贴图（4 张，复用，控制 draw call）
     const bbTex = [];
@@ -24959,7 +25181,8 @@ function buildLinhaiCity(g) {
       LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: WALL_H + 0.36 });
     }
     // 园内地面：先铺一层"苔绿 + 石屑"的园地，不然会直接看到城区的灰色沥青
-    det(BX(GX1 - GX0 - 1.4, 0.08, GZ1 - GZ0 - 1.4), 0x7d8a63, (GX0 + GX1) / 2, 0.04, (GZ0 + GZ1) / 2);
+    // fix112：换成草地贴图（参考图那种一块深一块浅的草坪），不再是单色平面
+    pbox(GX1 - GX0 - 1.4, 0.08, GZ1 - GZ0 - 1.4, 'grass', (GX0 + GX1) / 2, 0.04, (GZ0 + GZ1) / 2, 13);
     // 北墙中间留 8m 给月洞门（圆环外径 6.8m，正好盖住洞口）；其余三面整面
     wallSeg((GX0 + 1866) / 2, GZ0, 1866 - GX0, 0.7);
     wallSeg((1874 + GX1) / 2, GZ0, GX1 - 1874, 0.7);
@@ -24981,11 +25204,10 @@ function buildLinhaiCity(g) {
     }
     // 园前小广场（月洞门外）：铺石板 + 两排树，接住从城里走过来的路，
     // 否则门口是一片沙滩，很出戏
-    det(BX(120, 0.07, 58), 0xb5b0a2, 1870, 0.03, -19);
+    pbox(120, 0.07, 58, 'stone', 1870, 0.03, -19, 2.5);
     for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
       const tx = 1870 + s * 26, tz = -44 + k * 15;
-      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0, tz);
-      det(treeCrownGeo, 0x3f7d2e, tx, 2.5, tz);
+      lushTree(tx, tz, 0.95);
     }
     // 水池：不规则多边形（Shape → 平放），水面 + 一圈石岸
     const PC = { x: 1878, z: 178 }, PRX = 42, PRZ = 34;
@@ -25115,12 +25337,10 @@ function buildLinhaiCity(g) {
     }
     // 石径：月洞门 → 水榭 → 曲桥 → 六角亭
     const path = [[1870, 22, 5, 56], [1870, 96, 5, 40], [1838, 112, 34, 4], [1800, 150, 4, 40], [1800, 200, 4, 36], [1816, 240, 72, 4]];
-    for (const [px2, pz2, pw, pd] of path) det(BX(pw, 0.08, pd), PAVE, px2, 0.12, pz2);
-    // 几棵垂柳（复用全局树几何，压扁树冠做出下垂感）
+    for (const [px2, pz2, pw, pd] of path) pbox(pw, 0.08, pd, 'stone', px2, 0.12, pz2, 2.5);
+    // 几棵垂柳（fix112：统一换成分层树冠的乔木，颜色偏黄绿，和园子更搭）
     for (const [tx, tz] of [[1952, 108], [1978, 236], [1728, 268], [1932, 60], [1746, 168]]) {
-      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0, tz);
-      det(treeCrownGeo, 0x4c7f3a, tx, 2.4, tz, 0, 0, 0, false);
-      det(new THREE.ConeGeometry(2.3, 3.6, 8), 0x3f7a35, tx, 3.2, tz);
+      lushTree(tx, tz, 1.15, [0x5d8f3a, 0x6aa344, 0x4c7f2e]);
     }
     // 沿墙补一圈乔木 / 花木，把"空旷的草坪感"压下去
     const grove = [
@@ -25129,10 +25349,8 @@ function buildLinhaiCity(g) {
       [2006, 262], [1820, 268], [1866, 272], [1998, 96]
     ];
     for (const [tx, tz] of grove) {
-      const s = 0.9 + Math.random() * 0.5;
-      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0 * s, tz, 0, 0, 0);
-      det(treeCrownGeo, 0x3f7d2e, tx, 2.6 * s, tz);
-      det(new THREE.SphereGeometry(1.1 * s, 8, 6), 0x4f8a36, tx + 0.6, 3.4 * s, tz - 0.4);
+      const s = 0.9 + Math.random() * 0.55;
+      lushTree(tx, tz, s);
     }
   })();
 }
