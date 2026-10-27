@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix104-winfn';;;;;;
+const BUILD = '20261024-fix105-phase1';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23907,7 +23907,7 @@ function linhaiHeight(x, z) {
   const t = Math.min(1, (dr - rivH) / 12);                     // 河岸 12m 抬升（带缓坡转折）
   const e = t * t * (3 - 2 * t);
   let h = -2.6 + e * 2.6;                                      // → 台地 0
-  const out = Math.max(Math.max(0, Math.abs(x - DEST.x) - 400), Math.max(0, Math.abs(z - DEST.z) - 470));
+  const out = Math.max(Math.max(0, Math.abs(x - DEST.x) - 620), Math.max(0, Math.abs(z - DEST.z) - 620));   // 【fix105】400/470→620：给古建城东扩留出台地，否则新院落/木塔会落在丘陵上
   if (out > 0) {                                               // 城区之外：丘陵
     const k = Math.min(1, out / 150);
     h += k * k * (3.6
@@ -24618,6 +24618,76 @@ function buildLinhaiCity(g) {
   }
   buildStoneBridge(ZC - 220);
   buildStoneBridge(ZC + 220);
+
+  // ==================== 【fix105·第一批】古建城扩建 ====================
+  // 参考用户提供的照片：山西传统院落 / 六角木柱井亭 / 应县木塔式楼阁。
+  // 全部登记 LH_BLD（= buildings）→ 有实体碰撞、也能用钩爪攀爬，与主城楼房完全一致。
+  const CY_BRICK = 0x8f887c, CY_TILE = 0x565b61, CY_BEAM = 0x7c4c2c, CY_PAVE = 0x6f6b63, CY_RED = 0x8a2f2a;
+
+  // ---- ① 六角井亭（石台基 + 六根木柱 + 攒尖瓦顶 + 宝顶 + 一对红灯笼）----
+  function buildWell(cx, cz, r) {
+    det(new THREE.CylinderGeometry(r * 1.2, r * 1.26, 0.55, 6), 0xbdb6a6, cx, 0.27, cz);
+    det(new THREE.CylinderGeometry(r * 0.42, r * 0.42, 0.14, 12), 0x3a3f45, cx, 0.62, cz);
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      det(new THREE.CylinderGeometry(0.24, 0.26, 3.6, 8), CY_BEAM, cx + Math.cos(a) * r, 2.35, cz + Math.sin(a) * r);
+    }
+    det(new THREE.ConeGeometry(r * 1.75, 1.7, 6), CY_TILE, cx, 4.85, cz);
+    det(new THREE.SphereGeometry(0.34, 10, 8), 0xc8a24a, cx, 5.9, cz, 0, 0, 0, true);
+    for (const s of [-1, 1]) det(BX(1.5, 1.3, 0.26), CY_RED, cx + s * r * 0.6, 3.2, cz + r * 0.6);
+    LH_BLD.push({ minX: cx - r * 1.26, maxX: cx + r * 1.26, minZ: cz - r * 1.26, maxZ: cz + r * 1.26, minY: 0, top: 5.2 });
+  }
+
+  // ---- ② 传统院落（四合院：高院墙 + 门楼 + 两层正房 + 两厢 + 院内青砖）----
+  function buildCourt(cx, cz, W, D) {
+    const WH = 3.6;
+    for (const s of [-1, 1]) {                                   // 东西院墙
+      det(BX(0.8, WH, D), CY_BRICK, cx + s * W / 2, WH / 2, cz);
+      LH_BLD.push({ minX: cx + s * W / 2 - 0.5, maxX: cx + s * W / 2 + 0.5, minZ: cz - D / 2, maxZ: cz + D / 2, minY: 0, top: WH });
+    }
+    for (const s of [-1, 1]) {                                   // 南北院墙（南面中间留门洞出入）
+      det(BX(W / 2 - 2.2, WH, 0.8), CY_BRICK, cx + s * (W / 4 + 1.1), WH / 2, cz + s * D / 2);
+      LH_BLD.push({ minX: cx + s * (W / 4 + 1.1) - (W / 4 - 1.1), maxX: cx + s * (W / 4 + 1.1) + (W / 4 - 1.1), minZ: cz + s * D / 2 - 0.5, maxZ: cz + s * D / 2 + 0.5, minY: 0, top: WH });
+    }
+    det(BX(4.6, 5.0, 1.3), CY_BEAM, cx, 2.5, cz - D / 2);        // 门楼
+    det(BX(5.8, 0.55, 2.4), CY_TILE, cx, 5.35, cz - D / 2);
+    det(BX(W * 0.58, 7.4, 7.5), CY_BRICK, cx, 3.7, cz + D / 2 - 4.2);   // 正房（两层）
+    det(BX(W * 0.63, 0.55, 8.7), CY_TILE, cx, 7.65, cz + D / 2 - 4.2);
+    for (const s of [-1, 1]) {                                   // 两厢
+      det(BX(6.2, 4.6, D * 0.46), CY_BRICK, cx + s * (W / 2 - 3.7), 2.3, cz);
+      det(BX(7.3, 0.5, D * 0.5), CY_TILE, cx + s * (W / 2 - 3.7), 4.85, cz);
+    }
+    det(BX(W - 3, 0.1, D - 3), CY_PAVE, cx, 0.09, cz);           // 院内青砖铺装
+    LH_BLD.push({ minX: cx - W * 0.30, maxX: cx + W * 0.30, minZ: cz + D / 2 - 8, maxZ: cz + D / 2, minY: 0, top: 7.4 });
+    for (const s of [-1, 1]) LH_BLD.push({ minX: cx + s * (W / 2 - 3.7) - 3.2, maxX: cx + s * (W / 2 - 3.7) + 3.2, minZ: cz - D * 0.24, maxZ: cz + D * 0.24, minY: 0, top: 4.6 });
+  }
+
+  // ---- ③ 楼阁式木塔（应县木塔风格：五层逐层收分、每层出檐 + 平座栏杆、塔刹）----
+  function buildWoodPagoda(cx, cz, B) {
+    const LV = 5; let y = 0;
+    det(new THREE.CylinderGeometry(B * 1.5, B * 1.72, 1.6, 8), 0xb8b2a4, cx, 0.8, cz);       // 石台基
+    for (let L = 0; L < LV; L++) {
+      const bw = B * (1 - L * 0.085), hh = 5.2 - L * 0.28;
+      det(BX(bw, hh, bw), CY_BEAM, cx, y + 1.6 + hh / 2, cz);                                  // 塔身
+      for (const s of [-1, 1]) {                                                               // 平座栏杆
+        det(BX(bw * 1.34, 0.9, 0.22), 0x6b4a2e, cx, y + 1.6 + hh + 0.45, cz + s * bw * 0.67);
+        det(BX(0.22, 0.9, bw * 1.34), 0x6b4a2e, cx + s * bw * 0.67, y + 1.6 + hh + 0.45, cz);
+      }
+      det(new THREE.ConeGeometry(bw * 1.18, 1.5, 4), CY_TILE, cx, y + 1.6 + hh + 1.5, cz, 0, Math.PI / 4);   // 出檐
+      y += hh + 1.15;
+    }
+    det(new THREE.CylinderGeometry(0.42, 0.62, 3.4, 8), 0xc8a24a, cx, y + 1.6 + 1.9, cz);     // 塔刹
+    det(new THREE.SphereGeometry(0.55, 10, 8), 0xe8c45a, cx, y + 1.6 + 3.9, cz, 0, 0, 0, true);
+    LH_BLD.push({ minX: cx - B * 1.25, maxX: cx + B * 1.25, minZ: cz - B * 1.25, maxZ: cz + B * 1.25, minY: 0, top: y + 1.6 + 4.6 });
+  }
+
+  // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
+  buildWoodPagoda(2055, ZC - 150, 11);
+  buildCourt(1990, ZC + 45, 30, 26);
+  buildCourt(2125, ZC + 125, 26, 24);
+  buildWell(1955, ZC - 35, 3.4);
+  buildWell(2085, ZC + 10, 3.4);
+  buildWell(2165, ZC - 95, 3.0);
   // ---------- 6) 河岸护栏（现代侧：金属栏杆）----------
   const railBarM = new THREE.MeshLambertMaterial({ color: 0xb9c2cc });
   for (const s of [-1, 1]) {
@@ -24748,7 +24818,7 @@ const LH = {
   rwyCx: DEST.x - 430, rwyHalf: 110,
   cdX0: DEST.x - 300, cdX1: DEST.x - 60,
   rivX0: DEST.x - 40, rivX1: DEST.x + 80,
-  ancX0: DEST.x + 100, ancX1: DEST.x + 380,
+  ancX0: DEST.x + 100, ancX1: DEST.x + 630,   // 【fix105】380→630：古建城东扩，给传统院落/木塔留地
   z0: DEST.z - 480, z1: DEST.z + 200
 };
 // 【fix79】直接**指向 buildings 数组**，而不是另建一个列表！
