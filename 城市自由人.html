@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix112-ground-sky';
+const BUILD = '20261028-fix113-hero-buildings';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25109,19 +25109,138 @@ function buildLinhaiCity(g) {
       pbox(4.6, 0.08, 4.6, 'grass', px, 0.13, z, 4);
       lushTree(px, z, 0.92);
     }
-    // LED 大屏贴图（4 张，复用，控制 draw call）
+    // ===== 【fix113】科技城：重做霓虹楼 =====
+    // 用户：「那边霓虹楼你做的不是很好，可以给我重做一下，有很大的空地，放一些更好的建筑」
+    // 原来是一根方盒子 + 3 条灯带 + 1 块屏。现在照新宿/涩谷的街景重做：
+    //   裙楼底商（暖黄橱窗 + 雨棚）→ 三段退台塔身 → 角部竖挺 + 发光腰线 →
+    //   竖向招牌 + 大幅广告牌 → 屋顶设备 + 航标灯
+    // 大幅广告牌（6 张，横向）
     const bbTex = [];
-    for (let i = 0; i < 4; i++) {
-      const c = document.createElement('canvas'); c.width = 256; c.height = 128;
-      const x2 = c.getContext('2d');
-      x2.fillStyle = ['#0b0620', '#061420', '#1a0612', '#04180f'][i]; x2.fillRect(0, 0, 256, 128);
-      for (let k = 0; k < 46; k++) {
-        x2.fillStyle = ['#ff2d95', '#39f6ff', '#ffd23f', '#7cff9a', '#ffffff', '#ff5a3c'][(Math.random() * 6) | 0];
-        x2.globalAlpha = 0.35 + Math.random() * 0.65;
-        x2.fillRect(Math.random() * 240, Math.random() * 118, 6 + Math.random() * 70, 2 + Math.random() * 9);
+    for (let i = 0; i < 6; i++) {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 144;
+      const q = c.getContext('2d');
+      const pal = [['#0b0620', '#ff2d95'], ['#061420', '#39f6ff'], ['#1a0612', '#ffd23f'],
+                   ['#04180f', '#7cff9a'], ['#1a1206', '#ff5a3c'], ['#0a0a12', '#8a6bff']][i];
+      q.fillStyle = pal[0]; q.fillRect(0, 0, 256, 144);
+      q.fillStyle = pal[1]; q.fillRect(0, 0, 256, 30);                 // 顶部色带（店名）
+      q.fillStyle = '#ffffff'; q.fillRect(12, 8, 96, 14);               // 标题白条
+      q.fillStyle = 'rgba(255,255,255,0.85)'; q.fillRect(150, 10, 54, 10);
+      for (let k = 0; k < 22; k++) {                                    // 画面：碎色块
+        q.globalAlpha = 0.35 + Math.random() * 0.6;
+        q.fillStyle = ['#ff2d95', '#39f6ff', '#ffd23f', '#7cff9a', '#ffffff', '#ff5a3c'][(Math.random() * 6) | 0];
+        q.fillRect(8 + Math.random() * 236, 40 + Math.random() * 92, 4 + Math.random() * 46, 3 + Math.random() * 12);
       }
-      x2.globalAlpha = 1;
+      q.globalAlpha = 1;
+      q.fillStyle = '#101014'; q.fillRect(0, 126, 256, 18);              // 底部字幕条
+      q.fillStyle = '#f2f2f2'; q.fillRect(10, 131, 120, 8);
       bbTex.push(new THREE.CanvasTexture(c));
+    }
+    // 竖向招牌（8 张，竖排"文字块"）
+    const signTex = [];
+    for (let i = 0; i < 8; i++) {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+      const q = c.getContext('2d');
+      const bg = ['#f4f1e6', '#14161b', '#c9161b', '#0d2a5c', '#f5c400', '#0b0d10', '#e8e8ea', '#122e1e'][i];
+      const light = (i === 0 || i === 4 || i === 6);
+      q.fillStyle = bg; q.fillRect(0, 0, 64, 256);
+      q.fillStyle = light ? '#1b1b1b' : '#ffffff';
+      for (let k = 0; k < 6; k++) {
+        const y0 = 14 + k * 38;
+        q.fillRect(16, y0, 32, 3);                                       // 字块
+        q.fillRect(16, y0 + 6, 32, 3);
+        q.fillRect(26, y0 + 4, 12, 12);
+        if ((i + k) % 3 === 0) { q.fillStyle = light ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.22)'; q.fillRect(8, y0 - 4, 48, 30); q.fillStyle = light ? '#1b1b1b' : '#ffffff'; }
+      }
+      q.strokeStyle = light ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.55)';
+      q.lineWidth = 4; q.strokeRect(2, 2, 60, 252);
+      signTex.push(new THREE.CanvasTexture(c));
+    }
+    const signMats = signTex.map((t) => new THREE.MeshBasicMaterial({ map: t }));
+    const bbMats = bbTex.map((t) => new THREE.MeshBasicMaterial({ map: t }));
+    // 贴面广告牌（自带发光感，不需要灯光）
+    function adPanel(w, h, mat, x, y, z, ry) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      m.position.set(x, y, z);
+      if (ry) m.rotation.y = ry;
+      add(m);
+      return m;
+    }
+    // 一栋"精细霓虹塔"：裙楼 + 三段退台 + 竖挺腰线 + 招牌 + 屋顶设备
+    function heroTower(x, z, w, d, h, idx) {
+      const style = styles[idx % styles.length];
+      const podW = w + 10, podD = d + 10, podH = 9;
+      const neon = neonC[idx % neonC.length];
+      // —— 裙楼 + 底商
+      det(BX(podW, podH, podD), 0x3a4148, x, podH / 2, z);
+      det(BX(podW + 0.8, 1.2, podD + 0.8), 0x4d555e, x, 0.6, z);
+      det(BX(podW + 1.6, 0.8, podD + 1.6), 0x525a63, x, podH + 0.2, z);
+      for (const sz of [-1, 1]) {
+        const n = Math.max(3, Math.round(podW / 8));
+        for (let k = 0; k < n; k++) {
+          const px = x - podW / 2 + (k + 0.5) * podW / n;
+          det(BX(podW / n - 1.8, 3.8, 0.3), 0xffd8a2, px, 3.0, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
+        }
+        det(BX(podW, 0.5, 2.0), 0x1b1f25, x, 5.6, z + sz * (podD / 2 + 1.0));   // 雨棚
+      }
+      for (const sx of [-1, 1]) {
+        const n = Math.max(3, Math.round(podD / 8));
+        for (let k = 0; k < n; k++) {
+          const pz2 = z - podD / 2 + (k + 0.5) * podD / n;
+          det(BX(0.3, 3.8, podD / n - 1.8), 0xffd8a2, x + sx * (podW / 2 + 0.2), 3.0, pz2, 0, 0, 0, true);
+        }
+      }
+      // —— 塔身三段退台
+      const h1 = h * 0.50, h2 = h * 0.30, h3 = h * 0.20;
+      const w2 = w * 0.82, d2 = d * 0.82, w3 = w * 0.62, d3 = d * 0.62;
+      const t1 = new THREE.Mesh(uvBox(w, h1, d, Math.max(1, Math.round(w / 7)), Math.max(1, Math.round(h1 / 12))), buildingBodyMaterial(style));
+      t1.position.set(x, podH + h1 / 2, z); add(t1);
+      const t2 = new THREE.Mesh(uvBox(w2, h2, d2, Math.max(1, Math.round(w2 / 7)), Math.max(1, Math.round(h2 / 12))), buildingBodyMaterial(style));
+      t2.position.set(x, podH + h1 + h2 / 2, z); add(t2);
+      const t3 = new THREE.Mesh(uvBox(w3, h3, d3, Math.max(1, Math.round(w3 / 7)), Math.max(1, Math.round(h3 / 12))), buildingBodyMaterial(styles[(idx + 2) % styles.length]));
+      t3.position.set(x, podH + h1 + h2 + h3 / 2, z); add(t3);
+      // 退台腰线（浅色石板 + 一条发光边）
+      for (const [yy, ww, dd] of [[podH + h1, w2 + 2.4, d2 + 2.4], [podH + h1 + h2, w3 + 2.2, d3 + 2.2]]) {
+        det(BX(ww, 0.55, dd), 0x5d6670, x, yy, z);
+        det(BX(ww + 0.5, 0.18, dd + 0.5), neon, x, yy + 0.36, z, 0, 0, 0, true);
+      }
+      // 角部竖挺
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        det(BX(0.95, h1, 0.95), 0x23272d, x + sx * (w / 2 - 0.1), podH + h1 / 2, z + sz * (d / 2 - 0.1));
+      }
+      // 竖向霓虹（正背面各两条 + 两侧各一条）
+      for (const sz of [-1, 1]) for (const k of [-1, 1]) {
+        det(BX(0.42, h1 * 0.86, 0.32), neonC[(idx + (k > 0 ? 1 : 0)) % neonC.length], x + k * (w / 4.4), podH + h1 / 2 + 0.4, z + sz * (d / 2 + 0.22), 0, 0, 0, true);
+      }
+      for (const sx of [-1, 1]) {
+        det(BX(0.32, h1 * 0.8, 0.42), neonC[(idx + 2) % neonC.length], x + sx * (w / 2 + 0.22), podH + h1 / 2, z, 0, 0, 0, true);
+      }
+      // 竖向招牌
+      const nSign = 2 + (idx % 2);
+      for (let k = 0; k < nSign; k++) {
+        const sw = 2.6, sh = 6.5 + ((idx + k) % 5);
+        const sy = podH + 7 + k * (h1 / (nSign + 1)) + (idx % 3);
+        const mat = signMats[(idx * 3 + k) % signMats.length];
+        if (k % 2 === 0) {
+          adPanel(sw, sh, mat, x - w / 2 + 4 + k * (w - 8) / Math.max(1, nSign - 1), sy, z + d / 2 + 0.32, 0);
+        } else {
+          adPanel(sw, sh, mat, x + w / 2 + 0.32, sy, z - d / 2 + 4 + k * (d - 8) / 2, Math.PI / 2);
+        }
+      }
+      // 裙楼大屏
+      if (idx % 3 !== 2) {
+        const bw = Math.min(podW - 6, 24), bh = 7 + (idx % 3) * 2;
+        adPanel(bw, bh, bbMats[idx % bbMats.length], x, podH + bh / 2 + 0.6, z + podD / 2 + 0.36, 0);
+      }
+      // —— 屋顶
+      const yTop = podH + h1 + h2 + h3;
+      det(BX(w3 + 1.4, 1.5, d3 + 1.4), 0x3c424a, x, yTop + 0.75, z);
+      det(BX(7, 3.2, 5), 0x767e88, x - w3 * 0.22, yTop + 3.1, z);
+      det(BX(5, 2.4, 4), 0x767e88, x + w3 * 0.24, yTop + 2.7, z + 2);
+      det(new THREE.CylinderGeometry(0.18, 0.32, 10, 6), 0x9aa2ab, x + w3 * 0.3, yTop + 7.5, z - d3 * 0.3);
+      det(new THREE.SphereGeometry(0.55, 8, 6), 0xff2b2b, x + w3 * 0.3, yTop + 12.6, z - d3 * 0.3, 0, 0, 0, true);
+      // 碰撞：裙楼 + 塔身两个盒子（爬顶时不会卡在台阶缝里）
+      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: yTop });
+      LH_BLD.push({ minX: x - podW / 2, maxX: x + podW / 2, minZ: z - podD / 2, maxZ: z + podD / 2, minY: 0, top: yTop });
     }
     const styles = ['blueglass', 'tower', 'marble', 'brutal', 'glass', 'concrete'];
     const neonC = [0xff3fa4, 0x3ff0ff, 0x8a2fff, 0xffd24a, 0x44ff9a];
@@ -25140,34 +25259,40 @@ function buildLinhaiCity(g) {
         if (hit) continue;
         if (used.some((u) => Math.abs(x - u.x) < (w + u.w) / 2 + 4 && Math.abs(z - u.z) < (d + u.d) / 2 + 4)) continue;
         used.push({ x, z, w, d });
-        const h = 26 + Math.random() * 86 + (Math.random() < 0.14 ? 40 : 0);
-        const body = new THREE.Mesh(
-          uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(10, Math.round(h / 12)))),
-          buildingBodyMaterial(styles[bi % styles.length]));
-        body.position.set(x, h / 2, z); add(body);
+        const h = 30 + Math.random() * 96 + (Math.random() < 0.16 ? 44 : 0);
+        heroTower(x, z, w, d, h, bi);
         bi++;
-        LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: h });
-        // 裙楼
-        det(BX(w + 5, 5.6, d + 5), 0x9aa1a8, x, 2.8, z);
-        det(BX(w + 6.4, 0.6, d + 6.4), 0xb3bac2, x, 5.9, z);
-        // 竖向霓虹灯带（前后面各三条）
-        for (const s of [-1, 1]) for (let k = -1; k <= 1; k++) {
-          det(BX(0.6, h * 0.72, 0.6), neonC[(bi + k + (s > 0 ? 1 : 0)) % neonC.length], x + k * (w / 3.2), h * 0.52, z + s * (d / 2 + 0.3), 0, 0, 0, true);
-        }
-        // 楼顶霓虹招牌
-        const sw = w * 0.72;
-        det(BX(sw, 6.5, 0.7), 0x181b20, x, h + 3.2, z + d / 2 - 0.6);
-        det(BX(sw - 1.2, 5.0, 0.3), 0x0d1014, x, h + 3.2, z + d / 2 - 0.2);
-        for (let k = 0; k < 5; k++) det(BX(sw - 3.2, 0.5, 0.2), neonC[(bi + k) % neonC.length], x, h + 1.4 + k * 0.9, z + d / 2 - 0.05, 0, 0, 0, true);
-        // 面向街道的 LED 大屏（贴着裙楼）
-        if (Math.random() < 0.55) {
-          const bw = Math.min(w - 4, 18), bh = 6 + Math.random() * 4;
-          const bb = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshBasicMaterial({ map: bbTex[bi % 4] }));
-          bb.position.set(x, 7.6 + bh / 2, z + d / 2 + 0.35);
-          add(bb);
-        }
       }
     }
+
+    // ---- 地标：电视塔（新宿/东京那种细高塔） + 塔前广场 ----
+    (function tvTower() {
+      const cx = 1240, cz = 300;
+      pbox(96, 0.14, 96, 'concrete', cx, 0.11, cz, 6);
+      det(new THREE.CylinderGeometry(14, 16, 0.9, 20), 0xb9bcc0, cx, 0.5, cz);   // 台座
+      det(new THREE.CylinderGeometry(3.2, 7.5, 96, 16), 0xdfe3e8, cx, 48, cz);   // 塔身
+      // 塔身竖向装饰肋
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        det(BX(0.7, 92, 0.7), 0xaeb4bb, cx + Math.cos(a) * 5.4, 48, cz + Math.sin(a) * 5.4, 0, 0, 0);
+      }
+      for (const y of [26, 52, 74]) {                                            // 三层观景环廊
+        det(new THREE.CylinderGeometry(9.5, 9.5, 1.4, 20), 0x9aa2ab, cx, y, cz);
+        det(new THREE.CylinderGeometry(9.9, 9.9, 0.3, 20), 0x3ff0ff, cx, y + 0.85, cz, 0, 0, 0, true);
+      }
+      det(new THREE.SphereGeometry(9.2, 16, 12), 0x6d7f92, cx, 86, cz);          // 顶部观景球
+      det(new THREE.CylinderGeometry(4.2, 4.2, 1.0, 16), 0x3ff0ff, cx, 78.5, cz, 0, 0, 0, true);
+      det(new THREE.CylinderGeometry(0.6, 1.6, 30, 8), 0xb9c0c8, cx, 105, cz);   // 天线
+      det(new THREE.SphereGeometry(1.0, 8, 6), 0xff2b2b, cx, 121, cz, 0, 0, 0, true);
+      LH_BLD.push({ minX: cx - 8, maxX: cx + 8, minZ: cz - 8, maxZ: cz + 8, minY: 0, top: 96 });
+      // 广场上的花坛与座椅
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + 0.3;
+        const fx = cx + Math.cos(a) * 30, fz = cz + Math.sin(a) * 30;
+        det(new THREE.CylinderGeometry(3.0, 3.2, 0.8, 8), 0xb0aa9a, fx, 0.45, fz);
+        det(new THREE.SphereGeometry(2.1, 9, 7), 0x466b34, fx, 2.1, fz);
+      }
+    })();
   })();
 
   // ---- ③ 苏州园林：白墙黛瓦 + 月洞门 + 水池荷花 + 假山 + 水榭 + 六角亭 ----
@@ -25249,57 +25374,192 @@ function buildLinhaiCity(g) {
         det(BX(bw > bd ? bw : 0.16, 0.9, bw > bd ? 0.16 : bd), WOOD, lx, 0.95, lz);
       }
     }
-    // 水榭（平台 + 四柱 + 攒尖顶 + 美人靠）
+    // ===== 【fix113】古建重做：正经的中式屋顶 / 木格窗 / 斗拱 / 楼阁 =====
+    // 用户：「新城区的古建筑做得不是很好，重做一下」。原来屋顶是个四棱锥（太矮、没出檐、没翘角），
+    // 现在统一走 cnRoof()：出檐薄板 + 椽底 + 四坡屋面 + 正脊 + 四角起翘。
+    const roofMat = new THREE.MeshLambertMaterial({ color: TILE });
+    function cnRoof(cx, cz, w, d, y0, rh) {
+      det(BX(w + 3.6, 0.42, d + 3.6), 0x3a3f45, cx, y0 + 0.21, cz);                 // 檐口
+      const under = new THREE.Mesh(BX(w + 3.0, 0.26, d + 3.0), new THREE.MeshLambertMaterial({ color: 0x6a5140 }));
+      under.position.set(cx, y0 - 0.14, cz); add(under);                             // 椽底
+      const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.72, 1, 4, 1), roofMat);
+      roof.rotation.y = Math.PI / 4;
+      roof.scale.set((w + 1.6) / 1.018, rh, (d + 1.6) / 1.018);
+      roof.position.set(cx, y0 + 0.42 + rh / 2, cz);
+      add(roof);
+      const along = w >= d;
+      det(BX(along ? w * 0.5 : 0.5, 0.5, along ? 0.5 : d * 0.5), 0x2b3036, cx, y0 + 0.44 + rh + 0.12, cz);   // 正脊
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        // 四角起翘：沿 45° 斜出的小翘角
+        det(BX(3.4, 0.24, 0.55), 0x2f343a, cx + sx * (w / 2 + 0.9), y0 + 0.66, cz + sz * (d / 2 + 0.9), 0, sx * sz * Math.PI / 4, sz * 0.30);
+      }
+      return y0 + 0.42 + rh;
+    }
+    // 木格窗：深色窗芯 + 竖棂 3 根 + 横棂 2 根 + 木框
+    function latticeWin(x, y, z, w, h, faceZ) {
+      det(BX(w, h, 0.22), 0x2b3138, x, y, z + faceZ * 0.02);                       // 窗芯
+      det(BX(w + 0.5, 0.18, 0.26), 0x7a4a2a, x, y + h / 2, z + faceZ * 0.08);       // 上框
+      det(BX(w + 0.5, 0.18, 0.26), 0x7a4a2a, x, y - h / 2, z + faceZ * 0.08);       // 下框
+      for (let k = -1; k <= 1; k++) det(BX(0.14, h, 0.24), 0xc9a06a, x + k * w / 3.2, y, z + faceZ * 0.10);
+      for (let k = -1; k <= 1; k += 2) det(BX(w, 0.12, 0.24), 0xc9a06a, x, y + k * h / 4, z + faceZ * 0.10);
+    }
+    // 两字匾额（黑底 + 金边 + 两枚"字"）
+    function plaque(x, y, z, w, h) {
+      det(BX(w, h, 0.26), 0x1e1a14, x, y, z);
+      det(BX(w + 0.4, 0.16, 0.3), 0xc8a24a, x, y + h / 2, z);
+      det(BX(w + 0.4, 0.16, 0.3), 0xc8a24a, x, y - h / 2, z);
+      for (const s of [-1, 1]) det(BX(w * 0.22, h * 0.5, 0.3), 0xd8b45c, x + s * w * 0.2, y, z + 0.03);
+    }
+    // 水榭（平台 + 四柱 + 美人靠 + 歇山顶）
     (function waterside() {
       const px = 1832, pz = 139;
       det(BX(15, 0.6, 11), 0xb9b4a6, px, 0.3, pz);
+      det(BX(16, 0.2, 12), 0xa8a294, px, 0.62, pz);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        det(new THREE.CylinderGeometry(0.26, 0.28, 3.4, 8), WOOD, px + sx * 6.2, 2.3, pz + sz * 4.2);
+        det(new THREE.CylinderGeometry(0.28, 0.3, 3.6, 8), WOOD, px + sx * 6.2, 2.5, pz + sz * 4.2);
       }
-      det(BX(14, 0.5, 10), 0x5a3b26, px, 4.05, pz);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(9.6, 3.0, 4), new THREE.MeshLambertMaterial({ color: TILE }));
-      roof.position.set(px, 5.8, pz); roof.rotation.y = Math.PI / 4; add(roof);
-      det(new THREE.SphereGeometry(0.42, 10, 8), 0xc8a24a, px, 7.5, pz, 0, 0, 0, true);
-      for (const sz of [-1, 1]) det(BX(12.4, 1.0, 0.3), WOOD, px, 1.5, pz + sz * 4.2);
-      LH_BLD.push({ minX: px - 7.5, maxX: px + 7.5, minZ: pz - 5.5, maxZ: pz + 5.5, minY: 0, top: 4.4 });
+      det(BX(14.4, 0.55, 10.4), 0x5a3b26, px, 4.4, pz);                            // 檐枋
+      for (let k = -2; k <= 2; k++) {                                              // 斗拱（小方块 + 挑出）
+        det(BX(0.5, 0.5, 0.5), 0x8a5a34, px + k * 3.0, 4.85, pz + 4.6);
+        det(BX(0.35, 0.35, 1.4), 0x8a5a34, px + k * 3.0, 4.85, pz + 5.2);
+        det(BX(0.5, 0.5, 0.5), 0x8a5a34, px + k * 3.0, 4.85, pz - 4.6);
+        det(BX(0.35, 0.35, 1.4), 0x8a5a34, px + k * 3.0, 4.85, pz - 5.2);
+      }
+      cnRoof(px, pz, 14.4, 10.4, 5.15, 3.1);
+      det(new THREE.SphereGeometry(0.42, 10, 8), 0xc8a24a, px, 9.4, pz, 0, 0, 0, true);   // 宝顶
+      // 美人靠（靠椅栏杆）：横杆 + 细竖条
+      for (const sz of [-1, 1]) {
+        det(BX(12.6, 0.16, 0.16), WOOD, px, 1.55, pz + sz * 4.3);
+        det(BX(12.6, 0.14, 0.14), WOOD, px, 2.35, pz + sz * 4.3);
+        for (let k = -6; k <= 6; k++) det(BX(0.12, 0.8, 0.12), WOOD, px + k * 1.0, 1.95, pz + sz * 4.3);
+      }
+      LH_BLD.push({ minX: px - 7.5, maxX: px + 7.5, minZ: pz - 5.5, maxZ: pz + 5.5, minY: 0, top: 4.6 });
     })();
-    // 主厅（厅堂：白墙 + 木格窗 + 歇山顶 + 前廊）—— 园林里体量最大的那座
+    // 主厅（三开间厅堂：台基 + 前廊红柱 + 白墙木格窗 + 斗拱 + 歇山顶 + 匾额）
     (function mainHall() {
-      const px = 1962, pz = 248, HW = 26, HD = 15;
-      det(BX(HW + 3, 0.5, HD + 3), 0xb9b4a6, px, 0.25, pz);          // 台基
-      det(BX(HW, 7.2, HD), WHITE, px, 3.6, pz);                       // 墙身
-      det(BX(HW + 0.6, 0.4, HD + 0.6), 0x6a5140, px, 7.4, pz);        // 檐口
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(HW / 2 + 2.5, 6.6, 4), new THREE.MeshLambertMaterial({ color: TILE }));
-      roof.position.set(px, 10.5, pz); roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, (HD + 2) / (HW + 5)); add(roof);
-      det(new THREE.BoxGeometry(2.2, 1.6, 2.2), 0x6a5140, px, 13.9, pz);
-      // 木格窗（正面 6 扇）+ 两扇门
-      for (let k = -3; k <= 3; k++) {
-        if (k === 0) continue;
-        det(BX(2.0, 3.0, 0.25), 0x8a5a34, px + k * 3.4, 4.2, pz - HD / 2 - 0.15);
-        det(BX(3.2, 0.5, 0.3), 0x6a5140, px + k * 3.4, 2.6, pz - HD / 2 - 0.2);
+      const px = 1962, pz = 248, HW = 26, HD = 15, WALL_H = 7.0;
+      det(BX(HW + 6, 0.9, HD + 6), 0xb9b4a6, px, 0.45, pz);                        // 台基
+      det(BX(HW + 6.6, 0.28, HD + 6.6), 0xa8a294, px, 1.04, pz);
+      for (let k = 0; k < 4; k++) {                                                // 正面台阶
+        det(BX(9.0, 0.24, 1.3), STONE, px, 0.14 + k * 0.23, pz - HD / 2 - 4.2 - (3 - k) * 1.2);
       }
-      det(BX(3.4, 4.6, 0.3), 0x6a4030, px, 2.3, pz - HD / 2 - 0.2);
-      // 前廊柱
-      for (let k = -2; k <= 2; k++) det(new THREE.CylinderGeometry(0.28, 0.3, 4.2, 8), WOOD, px + k * 6.2, 2.1, pz - HD / 2 - 3.2);
-      det(BX(HW, 0.4, 6.4), 0x5a3b26, px, 4.3, pz - HD / 2 - 3.2);
-      // 台阶
-      for (let k = 0; k < 3; k++) det(BX(7, 0.22, 1.2), STONE, px, 0.11 + k * 0.02, pz - HD / 2 - 4.2 - k * 1.1);
-      LH_BLD.push({ minX: px - HW / 2 - 1.5, maxX: px + HW / 2 + 1.5, minZ: pz - HD / 2 - 1.5, maxZ: pz + HD / 2 + 1.5, minY: 0, top: 7.6 });
+      det(BX(HW, WALL_H, HD), WHITE, px, 1.18 + WALL_H / 2, pz);                    // 墙身
+      det(BX(HW + 0.36, 2.0, HD + 0.36), 0x8a5a34, px, 1.18 + 1.0, pz);             // 木裙板
+      det(BX(HW + 0.5, 0.35, HD + 0.5), 0x6a5140, px, 1.18 + WALL_H, pz);           // 檐枋
+      // 正面木格窗（左右各 3 扇）+ 中间大门
+      for (const k of [-3, -2, -1, 1, 2, 3]) {
+        latticeWin(px + k * 3.6, 1.18 + 4.3, pz - HD / 2 - 0.16, 2.8, 3.4, -1);
+      }
+      det(BX(4.4, 5.4, 0.3), 0x6a4030, px, 1.18 + 2.7, pz - HD / 2 - 0.2);          // 大门
+      det(BX(4.9, 0.3, 0.4), 0x8a5a34, px, 1.18 + 5.5, pz - HD / 2 - 0.2);
+      plaque(px, 1.18 + 6.6, pz - HD / 2 - 0.3, 5.0, 1.3);
+      // 前廊：一排红柱 + 挂落
+      for (let k = -3; k <= 3; k++) {
+        det(new THREE.CylinderGeometry(0.34, 0.36, 4.6, 10), 0x9a3b2c, px + k * 4.3, 1.18 + 2.3, pz - HD / 2 - 3.6);
+      }
+      // 廊顶：向外倾斜的坡屋面 + 檐口（原来是一块平板"雨棚"，近看很假）
+      det(BX(HW + 2, 0.4, 8.6), TILE, px, 1.18 + 5.15, pz - HD / 2 - 3.4, -0.19, 0, 0);
+      det(BX(HW + 2.8, 0.22, 0.55), 0x3a3f45, px, 1.18 + 4.4, pz - HD / 2 - 7.5, -0.19, 0, 0);
+      det(BX(HW + 2, 0.3, 0.4), 0x6a5140, px, 1.18 + 5.9, pz - HD / 2 + 0.4);       // 与墙交接的脊
+      // 斗拱带
+      for (let k = -6; k <= 6; k++) {
+        det(BX(0.55, 0.55, 0.55), 0x8a5a34, px + k * 2.0, 1.18 + WALL_H + 0.45, pz - HD / 2 - 0.4);
+        det(BX(0.4, 0.36, 1.6), 0x8a5a34, px + k * 2.0, 1.18 + WALL_H + 0.45, pz - HD / 2 - 1.0);
+      }
+      cnRoof(px, pz - 1.2, HW + 2, HD + 2, 1.18 + WALL_H + 0.7, 7.0);
+      det(new THREE.SphereGeometry(0.5, 10, 8), 0xc8a24a, px, 1.18 + WALL_H + 7.9, pz - 1.2, 0, 0, 0, true);
+      // 廊下灯笼（夜里暖光）
+      for (const k of [-2, 2]) {
+        det(new THREE.SphereGeometry(0.42, 8, 6), 0xffd070, px + k * 8.2, 1.18 + 4.1, pz - HD / 2 - 3.6, 0, 0, 0, true);
+      }
+      LH_BLD.push({ minX: px - HW / 2 - 2, maxX: px + HW / 2 + 2, minZ: pz - HD / 2 - 5.5, maxZ: pz + HD / 2 + 1.5, minY: 0, top: 1.2 + WALL_H });
     })();
-    // 六角亭（建在假山台基上）
+    // 六角亭（假山台基 + 六柱 + 翘角攒尖顶 + 宝顶 + 坐凳）
     (function hexPavilion() {
       const px = 1772, pz = 232;
       det(new THREE.CylinderGeometry(5.2, 5.6, 1.1, 6), STONE, px, 0.55, pz);
+      det(new THREE.CylinderGeometry(4.9, 4.9, 0.2, 6), 0xa8a294, px, 1.15, pz);
       for (let i = 0; i < 6; i++) {
-        const a = i * Math.PI / 3;
-        det(new THREE.CylinderGeometry(0.22, 0.24, 3.4, 8), WOOD, px + Math.cos(a) * 3.9, 2.8, pz + Math.sin(a) * 3.9);
+        const a = i * Math.PI / 3 + Math.PI / 6;
+        det(new THREE.CylinderGeometry(0.24, 0.26, 3.4, 8), 0x9a3b2c, px + Math.cos(a) * 3.9, 2.9, pz + Math.sin(a) * 3.9);
+        // 坐凳
+        det(BX(3.0, 0.16, 0.5), WOOD, px + Math.cos(a) * 4.3, 1.75, pz + Math.sin(a) * 4.3, 0, -a + Math.PI / 2, 0);
       }
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(6.4, 2.7, 6), new THREE.MeshLambertMaterial({ color: TILE }));
-      roof.position.set(px, 5.6, pz); add(roof);
-      det(new THREE.SphereGeometry(0.36, 10, 8), 0xc8a24a, px, 7.2, pz, 0, 0, 0, true);
-      LH_BLD.push({ minX: px - 5.6, maxX: px + 5.6, minZ: pz - 5.6, maxZ: pz + 5.6, minY: 0, top: 6.9 });
+      det(new THREE.CylinderGeometry(4.3, 4.3, 0.5, 6), 0x5a3b26, px, 4.75, pz);   // 檐枋
+      cnRoof(px, pz, 8.4, 8.4, 5.0, 3.0);
+      det(new THREE.SphereGeometry(0.4, 10, 8), 0xc8a24a, px, 9.1, pz, 0, 0, 0, true);
+      LH_BLD.push({ minX: px - 5.6, maxX: px + 5.6, minZ: pz - 5.6, maxZ: pz + 5.6, minY: 0, top: 5.2 });
     })();
-    // 石灯（夜里给园子一点光：灯罩用发光材质，不额外加点光源，省性能）
+    // 三层楼阁（园子里最高的那座：台基 + 三层木构 + 三重檐 + 塔刹）
+    (function pagoda() {
+      const px = 1930, pz = 126;
+      let y = 0;
+      det(BX(18, 1.0, 18), 0xb0aa9a, px, 0.5, pz);                                  // 台基
+      det(BX(19, 0.26, 19), 0xa8a294, px, 1.13, pz);
+      y = 1.26;
+      const tiers = [[14, 14, 3.8], [11.4, 11.4, 3.4], [9, 9, 3.0]];
+      for (let t = 0; t < tiers.length; t++) {
+        const [tw, td, th] = tiers[t];
+        det(BX(tw, th, td), WHITE, px, y + th / 2, pz);                              // 墙体
+        det(BX(tw + 0.3, 1.2, td + 0.3), 0x8a5a34, px, y + 0.6, pz);                 // 木裙板
+        for (const s of [-1, 1]) {
+          latticeWin(px + s * tw * 0.28, y + th * 0.62, pz - td / 2 - 0.14, tw * 0.3, th * 0.5, -1);
+          latticeWin(px + s * tw * 0.28, y + th * 0.62, pz + td / 2 + 0.14, tw * 0.3, th * 0.5, 1);
+        }
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {                         // 角柱
+          det(new THREE.CylinderGeometry(0.26, 0.28, th, 8), 0x9a3b2c, px + sx * (tw / 2 - 0.2), y + th / 2, pz + sz * (td / 2 - 0.2));
+        }
+        y += th;
+        cnRoof(px, pz, tw + 3.0, td + 3.0, y, 2.4);                                   // 每层一圈檐
+        y += 1.1;
+      }
+      det(new THREE.CylinderGeometry(0.16, 0.3, 5.0, 8), 0xc8a24a, px, y + 2.4, pz);  // 塔刹
+      for (let k = 0; k < 4; k++) det(new THREE.SphereGeometry(0.42 - k * 0.06, 8, 6), 0xd8b45c, px, y + 0.6 + k * 0.9, pz);
+      LH_BLD.push({ minX: px - 9, maxX: px + 9, minZ: pz - 9, maxZ: pz + 9, minY: 0, top: y });
+    })();
+    // 桥亭（曲桥中段起一座小亭子）
+    (function bridgePavilion() {
+      const px = 1863, pz = 166;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        det(new THREE.CylinderGeometry(0.2, 0.22, 2.8, 8), 0x9a3b2c, px + sx * 3.0, 1.8, pz + sz * 3.0);
+      }
+      det(BX(7.4, 0.4, 7.4), 0x5a3b26, px, 3.4, pz);
+      cnRoof(px, pz, 7.0, 7.0, 3.6, 1.9);
+      det(new THREE.SphereGeometry(0.34, 9, 7), 0xc8a24a, px, 6.4, pz, 0, 0, 0, true);
+    })();
+    // 茶室（西侧草坪：小三间 + 前檐 + 木格窗，把大片空草坪填住）
+    (function teaHouse() {
+      const px = 1736, pz = 256, HW = 15, HD = 10, WH = 4.6;
+      det(BX(HW + 4, 0.7, HD + 4), 0xb9b4a6, px, 0.35, pz);
+      det(BX(HW, WH, HD), WHITE, px, 0.7 + WH / 2, pz);
+      det(BX(HW + 0.3, 1.4, HD + 0.3), 0x8a5a34, px, 0.7 + 0.7, pz);
+      for (const k of [-1, 1]) {
+        latticeWin(px + k * 4.2, 0.7 + 2.9, pz - HD / 2 - 0.15, 3.4, 2.4, -1);
+        latticeWin(px + k * 4.2, 0.7 + 2.9, pz + HD / 2 + 0.15, 3.4, 2.4, 1);
+      }
+      for (const k of [-2, -1, 0, 1, 2]) {
+        det(new THREE.CylinderGeometry(0.24, 0.26, 3.6, 8), 0x9a3b2c, px + k * 3.6, 0.7 + 1.8, pz - HD / 2 - 2.4);
+      }
+      det(BX(HW + 1.6, 0.36, 5.2), TILE, px, 0.7 + 3.9, pz - HD / 2 - 2.4, -0.16, 0, 0);
+      det(BX(HW + 1.4, 0.32, HD + 1.4), 0x6a5140, px, 0.7 + WH, pz);
+      cnRoof(px, pz, HW + 1.4, HD + 1.4, 0.7 + WH + 0.3, 3.4);
+      LH_BLD.push({ minX: px - HW / 2 - 2, maxX: px + HW / 2 + 2, minZ: pz - HD / 2 - 3.5, maxZ: pz + HD / 2 + 1, minY: 0, top: 0.7 + WH });
+    })();
+    // 牌楼（月洞门前的入口标志：四柱三间 + 三重檐 + 匾额）
+    (function paifang() {
+      const px = 1870, pz = -4, RH = 7.6;
+      for (const sx of [-1, 1]) for (const k of [2.6, 6.6]) {
+        det(new THREE.CylinderGeometry(0.42, 0.46, RH, 10), 0x9a3b2c, px + sx * k, RH / 2, pz);
+        det(BX(1.3, 0.4, 1.3), 0x9aa0a4, px + sx * k, 0.2, pz);
+      }
+      det(BX(16.6, 0.55, 1.1), 0x6a5140, px, 5.3, pz);
+      for (let k = -4; k <= 4; k++) det(BX(0.3, 0.55, 0.9), 0x8a5a34, px + k * 1.8, 5.9, pz);
+      cnRoof(px, pz, 9.0, 3.6, 7.2, 2.6);
+      cnRoof(px - 6.6, pz, 4.4, 3.4, 5.7, 1.9);
+      cnRoof(px + 6.6, pz, 4.4, 3.4, 5.7, 1.9);
+      plaque(px, 6.4, pz - 0.62, 4.2, 1.2);
+      LH_BLD.push({ minX: px - 7.8, maxX: px + 7.8, minZ: pz - 1.3, maxZ: pz + 1.3, minY: 0, top: RH });
+    })();    // 石灯（夜里给园子一点光：灯罩用发光材质，不额外加点光源，省性能）
     for (const [lx, lz] of [[1870, 40], [1870, 92], [1832, 120], [1908, 120], [1812, 196], [1946, 214], [1794, 258], [1930, 96]]) {
       det(new THREE.CylinderGeometry(0.5, 0.62, 0.45, 6), 0x9a958c, lx, 0.22, lz);
       det(new THREE.CylinderGeometry(0.22, 0.26, 1.5, 6), 0x9a958c, lx, 1.1, lz);
