@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix109-noocean';;;;;;
+const BUILD = '20261027-fix110-pitchlight';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -3121,7 +3121,7 @@ function updateSoccerPitchLights() {
     const pl = socPitchLights[i];
     if (!on) { pl.visible = false; pl.intensity = 0; continue; }
     pl.visible = true;
-    pl.intensity = (pl.userData.base || 10) * nightF;
+    pl.intensity = (pl.userData.base || 0.6) * nightF;
   }
 }
 
@@ -7618,7 +7618,13 @@ var socPitchLights = []; // 【2026-10-19·fix22】南岛球场四角泛光灯�
       const bulb = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.16, 0.72), bulbM); bulb.position.y = 8.3; g.add(bulb);   // 灯面板，永远"发光"观感
       const pl = new THREE.PointLight(0xffeec2, 0, 66, 1.2);   // 初值 0：白天熄灭；夜里由 updater 给到 base*nightF
       pl.position.set(0, 7.6, 0);
-      pl.userData.base = 10;                                   // 夜间满强度
+      // 【fix110·2026-10-27】夜间满强度 10 → 0.6。用户反馈"灯光太亮、根本看不清"。
+      // 根因：r128 的点光源是**旧版衰减模型**（distance 截断 + pow 衰减，不是物理正确的 1/d²），
+      // intensity 10 落到草地上约等于 8 倍亮度，四盏叠加直接把整块场地打到纯白。
+      // 实测（无头 Edge 截图测像素）：改前站在南侧看台外看球场，画面 96% 的像素 >248 已过曝；
+      // 0.6 时过曝像素 0%，草皮、白线、球和门前区都能分辨。distance 66 保持不变，
+      // 否则远角会明显比近角暗（四角灯打的是同一块 24×20 的场地）。
+      pl.userData.base = 0.6;                                  // 夜间满强度
       pl.visible = false;
       g.add(pl);
       scene.add(g);
