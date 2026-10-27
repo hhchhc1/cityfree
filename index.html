@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261027-fix110-pitchlight';;;;;;
+const BUILD = '20261027-fix111-southgarden';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24803,6 +24803,338 @@ function buildLinhaiCity(g) {
       }
     }
   }
+
+  // ==================== 【fix111】南岸新区（现代）+ 苏州园林（古建） ====================
+  // 用户 2026-10-27 给了 10 张参考照片，要求：
+  //  · 荷芷市"发达城市那边"扩大面积，补城市群 / 道路交通体系 / 霓虹灯楼（涩谷、新宿那种）；
+  //  · 古建城那一侧补"苏州园林"（白墙黛瓦、月洞门、水池荷花、假山、水榭、六角亭）。
+  //    （传统院落 / 六角井亭 / 楼阁式木塔 fix105 已经做过，见上面 buildCourt / buildWell / buildWoodPagoda）
+  //
+  // 选址依据：linhaiHeight 的城区台地是 |x-1550|≤620 且 |z+285|≤620，即 x 930~2170、z -905~335。
+  // 原城区只占 z -765~-85，所以**南侧 z -85~335 是一整条空地**（东西两侧被河分开）。
+  // 两块新地都落在台地上，不用改地形；唯一要补的是河 —— 水面原来只铺到 z1=-85，
+  // 南区会露出一条没有水的干河床（linhaiHeight 里河道是按 x 判定的，与 z 无关）。
+
+  // ---- ① 河道向南延伸 ----
+  (function extendRiverSouth() {
+    const rwW = LH.rivX1 - LH.rivX0, rwC = (LH.rivX0 + LH.rivX1) / 2;
+    const zA = Z1, zB = 322, zC = (zA + zB) / 2, zL = zB - zA;
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, zL), new THREE.MeshLambertMaterial({ color: 0x14405e }));
+    bed.position.set(rwC, -0.18, zC); add(bed);
+    const surf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, zL), new THREE.MeshLambertMaterial({
+      color: 0x3d86b8, transparent: true, opacity: 0.86, emissive: 0x0a2233, depthWrite: false
+    }));
+    surf.rotation.x = -Math.PI / 2; surf.position.set(rwC, 0.02, zC); add(surf);
+    for (const s of [-1, 1]) {
+      const wx = s < 0 ? LH.rivX0 : LH.rivX1;
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, zL), new THREE.MeshLambertMaterial({ color: 0x7e8288 }));
+      wall.position.set(wx + s * 2.2, 0.9, zC); add(wall);
+    }
+  })();
+
+  // ---- ② 南岸新区：两纵三横路网 + 霓虹楼群（西岸 x 965~1518 / z -22~318）----
+  (function buildSouthDistrict() {
+    const DX0 = 965, DX1 = 1518, DZ0 = -80, DZ1 = 318;
+    const AVX = [1080, 1400], STZ = [30, 155, 280];   // 两条南北主干道 + 三条东西街道
+    const AVW = 20, STW = 16;
+    // 【关键】先铺一整块"城区铺装"底座：荷芷市原本压在沙滩平面（y=0.01、1040 见方）上，
+    // 只铺路的话，楼与路之间会露出一片沙地，看起来像沙漠里的城市。
+    det(BX(DX1 - DX0 + 2, 0.05, DZ1 - DZ0 + 2), 0x4a4f55, (DX0 + DX1) / 2, 0.02, (DZ0 + DZ1) / 2);
+    // 先把人行道铺宽一层（比路面宽 6m），路面再压在上面 4cm —— 自然形成 3m 路肩
+    for (const rx of AVX) det(BX(AVW + 6, 0.1, DZ1 - DZ0), 0x8d939a, rx, 0.05, (DZ0 + DZ1) / 2);
+    for (const rz of STZ) det(BX(DX1 - DX0, 0.1, STW + 6), 0x8d939a, (DX0 + DX1) / 2, 0.05, rz);
+    for (const rx of AVX) det(BX(AVW, 0.08, DZ1 - DZ0), 0x2f343a, rx, 0.1, (DZ0 + DZ1) / 2);
+    for (const rz of STZ) det(BX(DX1 - DX0, 0.08, STW), 0x2f343a, (DX0 + DX1) / 2, 0.1, rz);
+    // 车道虚线：主干道中央 + 两侧，街道同理
+    for (const rx of AVX) {
+      for (let z = DZ0 + 10; z < DZ1 - 10; z += 12) {
+        det(BX(0.45, 0.1, 5.5), 0xe9ecf0, rx, 0.16, z);
+        for (const s of [-1, 1]) det(BX(0.35, 0.1, 3.0), 0xe9ecf0, rx + s * 6.4, 0.16, z + 6);
+      }
+    }
+    for (const rz of STZ) {
+      for (let x = DX0 + 10; x < DX1 - 10; x += 12) {
+        det(BX(5.5, 0.1, 0.45), 0xe9ecf0, x, 0.16, rz);
+        for (const s of [-1, 1]) det(BX(3.0, 0.1, 0.35), 0xe9ecf0, x + 6, 0.16, rz + s * 5.2);
+      }
+    }
+    // 斑马线（每个路口四个方向）
+    for (const rx of AVX) for (const rz of STZ) {
+      for (let k = -3; k <= 3; k++) {
+        det(BX(1.1, 0.1, 4.4), 0xe9ecf0, rx + k * 2.0, 0.17, rz + 12);
+        det(BX(1.1, 0.1, 4.4), 0xe9ecf0, rx + k * 2.0, 0.17, rz - 12);
+        det(BX(4.4, 0.1, 1.1), 0xe9ecf0, rx + 14, 0.17, rz + k * 2.0);
+        det(BX(4.4, 0.1, 1.1), 0xe9ecf0, rx - 14, 0.17, rz + k * 2.0);
+      }
+    }
+    // 路灯（沿两条主干道，两侧交错）
+    for (const rx of AVX) for (let z = DZ0 + 24; z < DZ1 - 12; z += 48) for (const s of [-1, 1]) {
+      const px = rx + s * (AVW / 2 + 1.6);
+      det(new THREE.CylinderGeometry(0.14, 0.2, 8.4, 6), 0x4a4f55, px, 4.2, z);
+      det(BX(0.6, 0.28, 2.2), 0x4a4f55, px - s * 1.1, 8.5, z);
+      det(BX(1.6, 0.12, 0.9), 0xfff0bb, px - s * 1.8, 8.36, z, 0, 0, 0, true);
+    }
+    // 东西向街道的路灯（原来只给两条主干道装了灯，横街夜里是**全黑**的）
+    for (const rz of STZ) for (let x = DX0 + 34; x < DX1 - 22; x += 56) for (const s of [-1, 1]) {
+      const pz = rz + s * (STW / 2 + 1.7);
+      det(new THREE.CylinderGeometry(0.14, 0.2, 8.0, 6), 0x4a4f55, x, 4.0, pz);
+      det(BX(2.2, 0.28, 0.6), 0x4a4f55, x, 8.1, pz - s * 1.1);
+      det(BX(1.2, 0.12, 1.6), 0xfff0bb, x, 8.0, pz - s * 1.8, 0, 0, 0, true);
+    }
+    // 行道树
+    for (const rx of AVX) for (let z = DZ0 + 40; z < DZ1 - 20; z += 40) for (const s of [-1, 1]) {
+      const px = rx + s * (AVW / 2 + 5.2);
+      det(treeTrunkGeo, 0x6b4a2b, px, 1.0, z);
+      det(treeCrownGeo, 0x3f7d2e, px, 2.5, z);
+    }
+    // LED 大屏贴图（4 张，复用，控制 draw call）
+    const bbTex = [];
+    for (let i = 0; i < 4; i++) {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+      const x2 = c.getContext('2d');
+      x2.fillStyle = ['#0b0620', '#061420', '#1a0612', '#04180f'][i]; x2.fillRect(0, 0, 256, 128);
+      for (let k = 0; k < 46; k++) {
+        x2.fillStyle = ['#ff2d95', '#39f6ff', '#ffd23f', '#7cff9a', '#ffffff', '#ff5a3c'][(Math.random() * 6) | 0];
+        x2.globalAlpha = 0.35 + Math.random() * 0.65;
+        x2.fillRect(Math.random() * 240, Math.random() * 118, 6 + Math.random() * 70, 2 + Math.random() * 9);
+      }
+      x2.globalAlpha = 1;
+      bbTex.push(new THREE.CanvasTexture(c));
+    }
+    const styles = ['blueglass', 'tower', 'marble', 'brutal', 'glass', 'concrete'];
+    const neonC = [0xff3fa4, 0x3ff0ff, 0x8a2fff, 0xffd24a, 0x44ff9a];
+    const used = [];
+    let bi = 0;
+    for (let z = DZ0 + 34; z < DZ1 - 24; z += 56) {
+      for (let x = DX0 + 30; x < DX1 - 28; x += 56) {
+        if (Math.random() < 0.10) continue;
+        const w = 28 + Math.random() * 12, d = 28 + Math.random() * 10;
+        // 【必须】先按"楼的实际半宽 + 12m 退界"判是否压到路：
+        // 原来写死 |x-rx|<24，而楼宽能到 42（半宽 21），于是楼会直接压上 16m 宽的人行道，
+        // 街道被夹成一条黑缝（夜里站在横街上什么都看不见）
+        let hit = false;
+        for (const rx of AVX) if (Math.abs(x - rx) < w / 2 + 12) hit = true;
+        for (const rz of STZ) if (Math.abs(z - rz) < d / 2 + 12) hit = true;
+        if (hit) continue;
+        if (used.some((u) => Math.abs(x - u.x) < (w + u.w) / 2 + 4 && Math.abs(z - u.z) < (d + u.d) / 2 + 4)) continue;
+        used.push({ x, z, w, d });
+        const h = 26 + Math.random() * 86 + (Math.random() < 0.14 ? 40 : 0);
+        const body = new THREE.Mesh(
+          uvBox(w, h, d, Math.max(1, Math.min(4, Math.round(w / 7))), Math.max(1, Math.min(10, Math.round(h / 12)))),
+          buildingBodyMaterial(styles[bi % styles.length]));
+        body.position.set(x, h / 2, z); add(body);
+        bi++;
+        LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: h });
+        // 裙楼
+        det(BX(w + 5, 5.6, d + 5), 0x9aa1a8, x, 2.8, z);
+        det(BX(w + 6.4, 0.6, d + 6.4), 0xb3bac2, x, 5.9, z);
+        // 竖向霓虹灯带（前后面各三条）
+        for (const s of [-1, 1]) for (let k = -1; k <= 1; k++) {
+          det(BX(0.6, h * 0.72, 0.6), neonC[(bi + k + (s > 0 ? 1 : 0)) % neonC.length], x + k * (w / 3.2), h * 0.52, z + s * (d / 2 + 0.3), 0, 0, 0, true);
+        }
+        // 楼顶霓虹招牌
+        const sw = w * 0.72;
+        det(BX(sw, 6.5, 0.7), 0x181b20, x, h + 3.2, z + d / 2 - 0.6);
+        det(BX(sw - 1.2, 5.0, 0.3), 0x0d1014, x, h + 3.2, z + d / 2 - 0.2);
+        for (let k = 0; k < 5; k++) det(BX(sw - 3.2, 0.5, 0.2), neonC[(bi + k) % neonC.length], x, h + 1.4 + k * 0.9, z + d / 2 - 0.05, 0, 0, 0, true);
+        // 面向街道的 LED 大屏（贴着裙楼）
+        if (Math.random() < 0.55) {
+          const bw = Math.min(w - 4, 18), bh = 6 + Math.random() * 4;
+          const bb = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshBasicMaterial({ map: bbTex[bi % 4] }));
+          bb.position.set(x, 7.6 + bh / 2, z + d / 2 + 0.35);
+          add(bb);
+        }
+      }
+    }
+  })();
+
+  // ---- ③ 苏州园林：白墙黛瓦 + 月洞门 + 水池荷花 + 假山 + 水榭 + 六角亭 ----
+  (function buildSuzhouGarden() {
+    const GX0 = 1700, GX1 = 2040, GZ0 = 10, GZ1 = 292;
+    const WHITE = 0xefeade, TILE = 0x474b51, WOOD = 0x7c4a2c, STONE = 0x9aa0a4, PAVE = 0xc3bdaf;
+    const WALL_H = 3.4;
+    function wallSeg(x, z, w, d) {
+      det(BX(w, WALL_H, d), WHITE, x, WALL_H / 2, z);
+      det(BX(w + 0.5, 0.36, d + 0.5), TILE, x, WALL_H + 0.18, z);        // 压顶瓦
+      LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: WALL_H + 0.36 });
+    }
+    // 园内地面：先铺一层"苔绿 + 石屑"的园地，不然会直接看到城区的灰色沥青
+    det(BX(GX1 - GX0 - 1.4, 0.08, GZ1 - GZ0 - 1.4), 0x7d8a63, (GX0 + GX1) / 2, 0.04, (GZ0 + GZ1) / 2);
+    // 北墙中间留 8m 给月洞门（圆环外径 6.8m，正好盖住洞口）；其余三面整面
+    wallSeg((GX0 + 1866) / 2, GZ0, 1866 - GX0, 0.7);
+    wallSeg((1874 + GX1) / 2, GZ0, GX1 - 1874, 0.7);
+    wallSeg((GX0 + GX1) / 2, GZ1, GX1 - GX0, 0.7);
+    wallSeg(GX0, (GZ0 + GZ1) / 2, 0.7, GZ1 - GZ0);
+    wallSeg(GX1, (GZ0 + GZ1) / 2, 0.7, GZ1 - GZ0);
+    // 月洞门：白色圆环 + 石门槛
+    const ringM = new THREE.MeshLambertMaterial({ color: WHITE });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.6, 8, 26), ringM);
+    ring.position.set(1870, 3.4, GZ0); add(ring);
+    det(BX(7.4, 0.22, 3.0), STONE, 1870, 0.11, GZ0);
+    // 花窗（南墙 4 个：白框 + 深色窗芯 + 十字棂条）
+    for (let i = 0; i < 4; i++) {
+      const wx = GX0 + 60 + i * 70;
+      det(BX(3.2, 3.2, 0.35), 0xf7f3e8, wx, 2.0, GZ1 - 0.45);
+      det(BX(2.4, 2.4, 0.3), 0x2b3138, wx, 2.0, GZ1 - 0.62);
+      det(BX(0.24, 2.2, 0.2), 0xf7f3e8, wx, 2.0, GZ1 - 0.7);
+      det(BX(2.2, 0.24, 0.2), 0xf7f3e8, wx, 2.0, GZ1 - 0.7);
+    }
+    // 园前小广场（月洞门外）：铺石板 + 两排树，接住从城里走过来的路，
+    // 否则门口是一片沙滩，很出戏
+    det(BX(120, 0.07, 58), 0xb5b0a2, 1870, 0.03, -19);
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
+      const tx = 1870 + s * 26, tz = -44 + k * 15;
+      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0, tz);
+      det(treeCrownGeo, 0x3f7d2e, tx, 2.5, tz);
+    }
+    // 水池：不规则多边形（Shape → 平放），水面 + 一圈石岸
+    const PC = { x: 1878, z: 178 }, PRX = 42, PRZ = 34;
+    const pts = [];
+    for (let i = 0; i < 30; i++) {
+      const a = i / 30 * Math.PI * 2;
+      const k = 1 + Math.sin(a * 3 + 0.7) * 0.12 + Math.cos(a * 2 - 0.4) * 0.08;
+      pts.push(new THREE.Vector2(Math.cos(a) * PRX * k, Math.sin(a) * PRZ * k));
+    }
+    const waterShape = new THREE.Shape(pts);
+    const waterGeo = new THREE.ShapeGeometry(waterShape);
+    waterGeo.rotateX(-Math.PI / 2);
+    const water = new THREE.Mesh(waterGeo, new THREE.MeshLambertMaterial({ color: 0x24544a, transparent: true, opacity: 0.95, emissive: 0x06100d, depthWrite: false }));
+    water.position.set(PC.x, 0.10, PC.z); add(water);
+    const rimOuter = new THREE.Shape(pts.map((p) => {
+      // 沿"椭圆外法线"外扩 1.4m：不能用 sign(x) 平移，否则会在 x≈0 处出现锯齿
+      const nx = p.x / PRX, ny = p.y / PRZ, l = Math.hypot(nx, ny) || 1;
+      return new THREE.Vector2(p.x + (nx / l) * 1.4, p.y + (ny / l) * 1.4);
+    }));
+    rimOuter.holes.push(new THREE.Path(pts));
+    const rimGeo = new THREE.ExtrudeGeometry(rimOuter, { depth: 0.34, bevelEnabled: false, curveSegments: 4 });
+    rimGeo.rotateX(-Math.PI / 2);
+    const rim = new THREE.Mesh(rimGeo, new THREE.MeshLambertMaterial({ color: 0x8e8a7d }));
+    rim.position.set(PC.x, 0.40, PC.z); add(rim);   // 挤出方向是 -Y，所以基准放在 0.40（顶面 = 石岸面）
+    // 荷叶 + 荷花
+    for (let i = 0; i < 46; i++) {
+      const rr = Math.sqrt(Math.random()) * 0.84, aa = Math.random() * Math.PI * 2;
+      const lx = PC.x + Math.cos(aa) * PRX * rr, lz = PC.z + Math.sin(aa) * PRZ * rr;
+      det(new THREE.CircleGeometry(0.7 + Math.random() * 0.8, 7), 0x3f7a44, lx, 0.13, lz, -Math.PI / 2);
+      if (i % 4 === 0) det(new THREE.SphereGeometry(0.34, 7, 6), 0xf2a6c8, lx, 0.36, lz);
+    }
+    // 曲桥（三段折线）+ 栏杆
+    const bridge = [[1852, 158, 4, 18, 0], [1863, 166, 22, 4, 0], [1876, 182, 4, 22, 0]];
+    for (const [bx, bz, bw, bd] of bridge) {
+      det(BX(bw, 0.34, bd), 0xb9b4a6, bx, 0.36, bz);
+      for (const s of [-1, 1]) {
+        const lx = bw > bd ? bx : bx + s * (bw / 2 - 0.2);
+        const lz = bw > bd ? bz + s * (bd / 2 - 0.2) : bz;
+        det(BX(bw > bd ? bw : 0.16, 0.9, bw > bd ? 0.16 : bd), WOOD, lx, 0.95, lz);
+      }
+    }
+    // 水榭（平台 + 四柱 + 攒尖顶 + 美人靠）
+    (function waterside() {
+      const px = 1832, pz = 139;
+      det(BX(15, 0.6, 11), 0xb9b4a6, px, 0.3, pz);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        det(new THREE.CylinderGeometry(0.26, 0.28, 3.4, 8), WOOD, px + sx * 6.2, 2.3, pz + sz * 4.2);
+      }
+      det(BX(14, 0.5, 10), 0x5a3b26, px, 4.05, pz);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(9.6, 3.0, 4), new THREE.MeshLambertMaterial({ color: TILE }));
+      roof.position.set(px, 5.8, pz); roof.rotation.y = Math.PI / 4; add(roof);
+      det(new THREE.SphereGeometry(0.42, 10, 8), 0xc8a24a, px, 7.5, pz, 0, 0, 0, true);
+      for (const sz of [-1, 1]) det(BX(12.4, 1.0, 0.3), WOOD, px, 1.5, pz + sz * 4.2);
+      LH_BLD.push({ minX: px - 7.5, maxX: px + 7.5, minZ: pz - 5.5, maxZ: pz + 5.5, minY: 0, top: 4.4 });
+    })();
+    // 主厅（厅堂：白墙 + 木格窗 + 歇山顶 + 前廊）—— 园林里体量最大的那座
+    (function mainHall() {
+      const px = 1962, pz = 248, HW = 26, HD = 15;
+      det(BX(HW + 3, 0.5, HD + 3), 0xb9b4a6, px, 0.25, pz);          // 台基
+      det(BX(HW, 7.2, HD), WHITE, px, 3.6, pz);                       // 墙身
+      det(BX(HW + 0.6, 0.4, HD + 0.6), 0x6a5140, px, 7.4, pz);        // 檐口
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(HW / 2 + 2.5, 6.6, 4), new THREE.MeshLambertMaterial({ color: TILE }));
+      roof.position.set(px, 10.5, pz); roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, (HD + 2) / (HW + 5)); add(roof);
+      det(new THREE.BoxGeometry(2.2, 1.6, 2.2), 0x6a5140, px, 13.9, pz);
+      // 木格窗（正面 6 扇）+ 两扇门
+      for (let k = -3; k <= 3; k++) {
+        if (k === 0) continue;
+        det(BX(2.0, 3.0, 0.25), 0x8a5a34, px + k * 3.4, 4.2, pz - HD / 2 - 0.15);
+        det(BX(3.2, 0.5, 0.3), 0x6a5140, px + k * 3.4, 2.6, pz - HD / 2 - 0.2);
+      }
+      det(BX(3.4, 4.6, 0.3), 0x6a4030, px, 2.3, pz - HD / 2 - 0.2);
+      // 前廊柱
+      for (let k = -2; k <= 2; k++) det(new THREE.CylinderGeometry(0.28, 0.3, 4.2, 8), WOOD, px + k * 6.2, 2.1, pz - HD / 2 - 3.2);
+      det(BX(HW, 0.4, 6.4), 0x5a3b26, px, 4.3, pz - HD / 2 - 3.2);
+      // 台阶
+      for (let k = 0; k < 3; k++) det(BX(7, 0.22, 1.2), STONE, px, 0.11 + k * 0.02, pz - HD / 2 - 4.2 - k * 1.1);
+      LH_BLD.push({ minX: px - HW / 2 - 1.5, maxX: px + HW / 2 + 1.5, minZ: pz - HD / 2 - 1.5, maxZ: pz + HD / 2 + 1.5, minY: 0, top: 7.6 });
+    })();
+    // 六角亭（建在假山台基上）
+    (function hexPavilion() {
+      const px = 1772, pz = 232;
+      det(new THREE.CylinderGeometry(5.2, 5.6, 1.1, 6), STONE, px, 0.55, pz);
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        det(new THREE.CylinderGeometry(0.22, 0.24, 3.4, 8), WOOD, px + Math.cos(a) * 3.9, 2.8, pz + Math.sin(a) * 3.9);
+      }
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(6.4, 2.7, 6), new THREE.MeshLambertMaterial({ color: TILE }));
+      roof.position.set(px, 5.6, pz); add(roof);
+      det(new THREE.SphereGeometry(0.36, 10, 8), 0xc8a24a, px, 7.2, pz, 0, 0, 0, true);
+      LH_BLD.push({ minX: px - 5.6, maxX: px + 5.6, minZ: pz - 5.6, maxZ: pz + 5.6, minY: 0, top: 6.9 });
+    })();
+    // 石灯（夜里给园子一点光：灯罩用发光材质，不额外加点光源，省性能）
+    for (const [lx, lz] of [[1870, 40], [1870, 92], [1832, 120], [1908, 120], [1812, 196], [1946, 214], [1794, 258], [1930, 96]]) {
+      det(new THREE.CylinderGeometry(0.5, 0.62, 0.45, 6), 0x9a958c, lx, 0.22, lz);
+      det(new THREE.CylinderGeometry(0.22, 0.26, 1.5, 6), 0x9a958c, lx, 1.1, lz);
+      det(new THREE.BoxGeometry(0.95, 0.85, 0.95), 0xfff2c2, lx, 2.15, lz, 0, 0, 0, true);
+      det(new THREE.ConeGeometry(0.85, 0.55, 4), 0x4a4f55, lx, 2.85, lz, 0, Math.PI / 4, 0);
+    }
+    // 假山（湖石：几块多面体，深浅错落）
+    const rockC = [0x8d938f, 0x7b817d, 0x9aa09b];
+    for (let i = 0; i < 16; i++) {
+      const rx2 = 1792 + Math.random() * 62, rz2 = 198 + Math.random() * 52;
+      const r = 1.8 + Math.random() * 3.0;
+      det(new THREE.IcosahedronGeometry(r, 0), rockC[i % 3], rx2, r * 0.72, rz2, Math.random(), Math.random(), Math.random());
+    }
+    LH_BLD.push({ minX: 1788, maxX: 1858, minZ: 194, maxZ: 254, minY: 0, top: 4.6 });
+    // 长廊（贴东墙：柱 + 坡顶 + 坐凳栏杆）
+    for (let z = 62; z <= 244; z += 6) {
+      det(new THREE.CylinderGeometry(0.16, 0.18, 3.2, 6), WOOD, 2016, 1.6, z);
+      det(new THREE.CylinderGeometry(0.16, 0.18, 3.2, 6), WOOD, 2024, 1.6, z);
+      det(BX(1.8, 0.5, 6.2), WOOD, 2020, 0.55, z + 3);
+    }
+    det(BX(11, 0.42, 190), TILE, 2020, 3.55, 153, 0, 0, 0.06);
+    // 花坛（石砌矮边 + 修剪成球的灌木）—— 江南园林里"一步一景"靠的就是这些
+    for (const [fx, fz] of [[1745, 96], [1745, 150], [1745, 204], [1925, 96], [1925, 204], [1890, 262]]) {
+      det(new THREE.CylinderGeometry(2.6, 2.8, 0.7, 8), 0xb0aa9a, fx, 0.35, fz);
+      det(new THREE.CylinderGeometry(2.3, 2.3, 0.2, 8), 0x4a3b28, fx, 0.72, fz);
+      det(new THREE.SphereGeometry(2.0, 9, 7), 0x466b34, fx, 1.9, fz);
+      det(new THREE.SphereGeometry(1.3, 8, 6), 0x517a3a, fx, 3.1, fz);
+    }
+    // 竹林（细竹竿 + 顶叶）
+    for (let i = 0; i < 46; i++) {
+      const bx = 1718 + Math.random() * 52, bz = 44 + Math.random() * 62;
+      const bh = 4 + Math.random() * 3;
+      det(new THREE.CylinderGeometry(0.09, 0.11, bh, 5), 0x5d8f45, bx, bh / 2, bz);
+      det(new THREE.ConeGeometry(0.9, 1.5, 6), 0x4f8f4a, bx, bh + 0.4, bz, Math.random(), Math.random(), 0);
+    }
+    // 石径：月洞门 → 水榭 → 曲桥 → 六角亭
+    const path = [[1870, 22, 5, 56], [1870, 96, 5, 40], [1838, 112, 34, 4], [1800, 150, 4, 40], [1800, 200, 4, 36], [1816, 240, 72, 4]];
+    for (const [px2, pz2, pw, pd] of path) det(BX(pw, 0.08, pd), PAVE, px2, 0.12, pz2);
+    // 几棵垂柳（复用全局树几何，压扁树冠做出下垂感）
+    for (const [tx, tz] of [[1952, 108], [1978, 236], [1728, 268], [1932, 60], [1746, 168]]) {
+      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0, tz);
+      det(treeCrownGeo, 0x4c7f3a, tx, 2.4, tz, 0, 0, 0, false);
+      det(new THREE.ConeGeometry(2.3, 3.6, 8), 0x3f7a35, tx, 3.2, tz);
+    }
+    // 沿墙补一圈乔木 / 花木，把"空旷的草坪感"压下去
+    const grove = [
+      [1722, 44], [1752, 52], [1980, 44], [2010, 60], [1730, 120], [1722, 210],
+      [1968, 150], [2000, 190], [1962, 120], [1738, 246], [1786, 64], [1902, 226],
+      [2006, 262], [1820, 268], [1866, 272], [1998, 96]
+    ];
+    for (const [tx, tz] of grove) {
+      const s = 0.9 + Math.random() * 0.5;
+      det(treeTrunkGeo, 0x6b4a2b, tx, 1.0 * s, tz, 0, 0, 0);
+      det(treeCrownGeo, 0x3f7d2e, tx, 2.6 * s, tz);
+      det(new THREE.SphereGeometry(1.1 * s, 8, 6), 0x4f8a36, tx + 0.6, 3.4 * s, tz - 0.4);
+    }
+  })();
 }
 
 // ==================== 【fix43·乘机过场】登机 → 起飞 → 巡航 → 降落 ====================
