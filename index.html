@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix108-island2';;;;;;
+const BUILD = '20261024-fix109-noocean';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1040,15 +1040,11 @@ function terrainHeight(x, z) {
   const beach = THREE.MathUtils.clamp((z - 380) / 90, 0, 1);
   h += -beach * beach * 2.5;
   // 四面环海：距边界100单位内开始向海面下坡，海面下完全没陆地
-  const oceanMargin = 100, oceanStart = HALF - oceanMargin;
   const dx = Math.abs(x), dz = Math.abs(z);
   const maxDist = Math.max(dx, dz);
-  // 【fix57】用户要求"先把海洋去掉"：主城**东侧**不再压到海平面，
-  // 而是让陆地向东一直延伸到荷芷市，两城连成一片（既不会"困在海里"，也能直接走过去）。
-  if (false && maxDist > oceanStart && x < 300) {   // 【fix58】用户要求『把海洋去掉』：整块地图外都是陆地
-    const t = (maxDist - oceanStart) / oceanMargin;
-    h = h * (1 - t) + (WATER_Y * t);
-  }
+  // 【fix109】用户要求：『从现在开始不要判定海洋了，把城市中的海洋逻辑去掉』。
+  // 这里原来有一段『超出 oceanStart 就把地形压向海平面』的逻辑（主城四面环海），
+  // fix58 起已被 if (false) 停用，现在**整段删除** —— 地图上不再有任何海洋判定。
   // 黑社会山丘：庭院区域+坡道方向升高，其他方向平地被围墙挡住
   const bhx = x - GANG_HQ_X, bhz = z - GANG_HQ_Z, bhd = Math.hypot(bhx, bhz);
   if (bhd < GANG_HQ_HILL_R) {
@@ -10633,7 +10629,10 @@ let fallWind = 0;             // 风声节流计时
 const FALL_STEP_MAX = 0.7;
 const FALL_GRAVITY = 34;      // 走落下来时的重力（跳跃仍是 22，保持原来的跳跃手感）
 const FALL_TERMINAL = -52;    // 终端速度：再高也不会无限加速，保留滞空与可控感
-let inWater = false;   // 是否在水中
+let inWater = false;   // 【fix109】恒为 false：用户要求『从现在开始不要判定海洋了、也不会再触发游泳』。
+                       // 下方 if (inWater) 那整段（水中速度减半 + 游泳前倾姿势）从此永不执行。
+                       // 与之配套的还有：personGroundY 不再返回海洋高度（fix98）、
+                       // terrainHeight 的四面环海压平已整段删除（fix109）。
 let regenCd = 0;   // 受伤后延迟自动回血的计时
 let flip = 0, flipping = false;   // 跳跃后空翻
 let grapple = null, gvx = 0, gvy = 0, gvz = 0;   // 钩爪摆荡状态
