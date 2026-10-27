@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261024-fix107-clampz';;;;;;
+const BUILD = '20261024-fix108-island2';;;;;;
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25795,7 +25795,11 @@ const frameLoop = () => {
     //（用户：『本来上次在新城市的，这次又直接刷新到中心公园了』）。
     const _px = person.position.x, _pz = person.position.z;
     const _hasGround = (_px >= -(HALF - 40) && _px <= (HALF - 40) && _pz >= -(HALF - 40) && _pz <= (HALF - 40))
-                    || (_px >= 500 && _px <= 2420 && _pz >= -1245 && _pz <= 675);
+                    || (_px >= 500 && _px <= 2420 && _pz >= -1245 && _pz <= 675)
+                    // 【fix108】南岛也必须算『有地面』！岛中心 z=470、半径 90 → z∈[380,560]，
+                    // 而上面主城那条只到 |z|≤460，于是岛的中北部被判成『地图外』，
+                    // 玩家一走到岛中间就被当卡住救回主城（用户实测：『走到南岛的中间位置就直接给我卡回中心公园了』）。
+                    || (Math.hypot(_px - ISLAND_X, _pz - ISLAND_Z) < ISLAND_WALK_R + 8);
     if (state === 'walk' && !_hasGround) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       try { setHint('已从地图外救回主城'); } catch (e3) {}
