@@ -894,7 +894,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix117-night-glow';
+const BUILD = '20261028-fix118-glow-pool';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22048,7 +22048,7 @@ function updateTowerGlow(f) {
   const v = Math.max(0, Math.min(1.15, f * 1.05));
   if (Math.abs(v - towerGlowMats[0].emissiveIntensity) < 0.02) return;
   for (let i = 0; i < towerGlowMats.length; i++) towerGlowMats[i].emissiveIntensity = v;
-  if (towerPoolMat) towerPoolMat.opacity = v * 0.42;
+  if (towerPoolMat) towerPoolMat.opacity = v * 0.55;
 }
 function updateDayNight(dt) {
   // 白天（0.25~0.75）推进慢、夜晚推进快 —— 让白天占据更长的时间，见 DAY_SPEED_DAY/NIGHT 的说明
@@ -25310,8 +25310,16 @@ function buildLinhaiCity(g) {
       return t;
     }
     // 塔楼脚下的暖光地贴：白天 opacity=0 完全看不见，入夜渐亮
+    const poolCv = document.createElement('canvas'); poolCv.width = poolCv.height = 128;
+    const pq = poolCv.getContext('2d');
+    const pgr = pq.createRadialGradient(64, 64, 4, 64, 64, 62);
+    pgr.addColorStop(0, 'rgba(255,226,168,0.95)');
+    pgr.addColorStop(0.45, 'rgba(255,200,130,0.45)');
+    pgr.addColorStop(1, 'rgba(255,190,120,0)');
+    pq.fillStyle = pgr; pq.fillRect(0, 0, 128, 128);
+    const poolTex = new THREE.CanvasTexture(poolCv);
     towerPoolMat = new THREE.MeshBasicMaterial({
-      color: 0x4a3a20, transparent: true, opacity: 0,
+      map: poolTex, color: 0xffffff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false
     });
     const stoneMats = [];
