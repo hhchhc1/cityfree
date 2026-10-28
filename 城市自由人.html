@@ -43,6 +43,8 @@
   #cardurfill { height: 100%; width: 100%; background: #2ecc71; transition: width 0.2s, background 0.2s; }
   /* 窄屏（手机竖屏/小窗）太占地方，缩窄一点，仍然不回到中间 */
   @media (max-width: 520px) { #vitals { width: 128px; padding: 6px 8px; } }
+  /* 【fix128】手机版小地图缩小一圈（110 → 88），少占屏幕 */
+  #minimap { width: 88px !important; height: 88px !important; }
   #crosshair {
  position: fixed; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%,-50%); pointer-events: none; z-index: 15; }
   /* 【2026-10-21·fix36 用户要求】准星改成绿色（原来白色），在灰蓝天色/路面上更容易看清 */
@@ -732,7 +734,7 @@
   <div id="devBtn">开发者模式</div>
 <div id="signThemeBtn" onclick="cycleSignTheme()" style="display:none;position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
 <!-- 【fix119】一键切白天/夜晚：专门用来看新城区的夜间灯光 -->
-<div id="dnBtn" onclick="toggleDayNight()" style="position:fixed;left:12px;top:150px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none;box-shadow:0 2px 10px rgba(0,0,0,.35)">🌙 切到夜晚</div>
+<!-- 【fix128】用户要求去掉一键切昼夜按钮：让昼夜自然循环（updateDayNight 本来每帧都在跑） -->
 <!-- ==================== 【fix47】机票对话面板 ====================
      用户要求：手机版登不了机（没有键盘 E），改成"在大飞机旁边立一根光柱，
      走到那里问'少年，你愿意解锁新的旅途吗'，三个选项：永久往返 / 单次前往 / 暂时不了"。
@@ -896,7 +898,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix127-cam-ground';
+const BUILD = '20261028-fix128-brick-wall';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -921,7 +923,49 @@ camera.position.set(0, 6, -10);
 // 起因：用户看了"云上川大校园导览"的截图，说"新城市的地上太单一了"。
 // 原来荷芷市的路面、人行道、铺装底座全是**纯色块**（det 只吃颜色），远看就是几片灰；
 // 参考图里同一种地面有颗粒、有色差、有接缝 —— 这里用 canvas 生成可平铺贴图补上。
-const _groundTexCache = {};
+// ===== 【fix128】青砖贴图：给新城古建城的城墙用，做出"一块一块砖"的感觉 =====
+// 用户拿了真实城墙照片对比："最好能做成一块一块的砖组成的那个感觉"。
+// 做法：canvas 画错缝砌法（一行 8 块、上下错半块）+ 每块砖的色差 + 灰缝 + 砖面颗粒，
+// 再按墙体尺寸设置 repeat，让砖的实际上墙尺寸约 0.5m × 0.33m。
+const _brickCache = {};
+function brickTexture() {
+  if (_brickCache.main) return _brickCache.main;
+  const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  // 灰缝底色
+  g.fillStyle = '#8d8b83'; g.fillRect(0, 0, S, S);
+  const rows = 8, bw = S / 8, bh = S / rows;
+  for (let r = 0; r < rows; r++) {
+    const off = (r % 2) ? bw * 0.5 : 0;              // 错缝
+    for (let c = -1; c <= 8; c++) {
+      const x = c * bw + off + 2.5, y = r * bh + 2.5, w = bw - 5, h = bh - 5;
+      const t2 = Math.random();
+      let base;
+      if (t2 < 0.68) base = [101, 104, 101];          // 青灰（主色）
+      else if (t2 < 0.84) base = [110, 106, 97];      // 偏土的旧砖
+      else if (t2 < 0.94) base = [88, 93, 96];        // 深青砖
+      else base = [124, 121, 113];                    // 泛白的旧砖
+      const jit = (Math.random() - 0.5) * 9;
+      g.fillStyle = 'rgb(' + Math.round(base[0] + jit) + ',' + Math.round(base[1] + jit) + ',' + Math.round(base[2] + jit) + ')';
+      g.fillRect(x, y, w, h);
+      // 砖面颗粒（麻点）
+      for (let k = 0; k < 26; k++) {
+        const v = (Math.random() < 0.5) ? 0 : 255;
+        g.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + (0.03 + Math.random() * 0.07).toFixed(2) + ')';
+        g.fillRect(x + Math.random() * w, y + Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
+      }
+      // 砖的下沿/右沿压一点暗边，立体感
+      g.fillStyle = 'rgba(40,44,44,0.18)';
+      g.fillRect(x, y + h - 1.5, w, 1.5);
+      g.fillRect(x + w - 1.2, y, 1.2, h);
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  _brickCache.main = tex;
+  return tex;
+}const _groundTexCache = {};
 function groundTexture(kind) {
   if (_groundTexCache[kind]) return _groundTexCache[kind];
   const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S;
@@ -24469,7 +24513,16 @@ function buildLinhaiCity(g) {
     }
   }
   // ---------- 4) 东岸中式古建群 ----------
-  const wallM = new THREE.MeshLambertMaterial({ color: 0x8b8f87 });     // 青灰城墙
+  // 【fix128】城墙改为"青砖砌筑"：三种 repeat 对应长墙 / 箭垛 / 城楼台基，砖的实际尺寸都约 0.5m×0.33m
+  function _brickMat(rx, ry) {
+    const tx = brickTexture().clone(); tx.needsUpdate = true;
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.repeat.set(rx, ry);
+    return new THREE.MeshLambertMaterial({ map: tx });
+  }
+  const wallM = _brickMat(172, 7.1);        // 长墙 620m × 8.5m（砖约 0.45m × 0.15m）
+  const merlonM = _brickMat(0.42, 1.25);    // 箭垛 1.5m 见方
+  const towerM = _brickMat(5.6, 5.8);       // 城门楼台基 20m × h
   const tileM = new THREE.MeshLambertMaterial({ color: 0x3f4a52 });     // 青瓦
   const woodM = new THREE.MeshLambertMaterial({ color: 0x8a4a2c });     // 木构梁柱
   const woodD = new THREE.MeshLambertMaterial({ color: 0x5e3220 });
@@ -24514,7 +24567,7 @@ function buildLinhaiCity(g) {
   }  const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
   plinth.position.set(wallX, 0.7, ZC); add(plinth);
   for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
-    const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), wallM);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), merlonM);
     m.position.set(wallX - 3.2, 9.2, z); add(m);
   }
   // 城楼 / 门楼（3 座，沿城墙分布）
@@ -24523,7 +24576,7 @@ function buildLinhaiCity(g) {
   // 直接就可以走进去』。城门楼比城墙厚实，单独给一个 18m 见方的盒子。
   LH_BLD.push({ minX: wallX - 9, maxX: wallX + 9, minZ: cz - 9, maxZ: cz + 9, minY: 0, top: h + 8 });
     const bg = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.BoxGeometry(20, h, 16), wallM);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(20, h, 16), towerM);
     base.position.y = h / 2; bg.add(base);
     // 门洞（深色内凹）
     const hole = new THREE.Mesh(new THREE.BoxGeometry(6.5, 5.4, 1.2), new THREE.MeshLambertMaterial({ color: 0x1b1d20 }));
