@@ -731,6 +731,8 @@
   </div>
   <div id="devBtn">开发者模式</div>
 <div id="signThemeBtn" onclick="cycleSignTheme()" style="display:none;position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
+<!-- 【fix119】一键切白天/夜晚：专门用来看新城区的夜间灯光 -->
+<div id="dnBtn" onclick="toggleDayNight()" style="position:fixed;left:12px;top:150px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none;box-shadow:0 2px 10px rgba(0,0,0,.35)">🌙 切到夜晚</div>
 <!-- ==================== 【fix47】机票对话面板 ====================
      用户要求：手机版登不了机（没有键盘 E），改成"在大飞机旁边立一根光柱，
      走到那里问'少年，你愿意解锁新的旅途吗'，三个选项：永久往返 / 单次前往 / 暂时不了"。
@@ -894,7 +896,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix118-glow-pool';
+const BUILD = '20261028-fix119-daynight-button';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22049,6 +22051,15 @@ function updateTowerGlow(f) {
   if (Math.abs(v - towerGlowMats[0].emissiveIntensity) < 0.02) return;
   for (let i = 0; i < towerGlowMats.length; i++) towerGlowMats[i].emissiveIntensity = v;
   if (towerPoolMat) towerPoolMat.opacity = v * 0.55;
+}
+// 【fix119】一键切白天/夜晚 —— 只是把时间拨过去，不影响任何玩法
+function toggleDayNight() {
+  const isNight = (worldTime >= 0.75 || worldTime < 0.25);
+  worldTime = isNight ? 0.42 : 0.97;
+  prevWorldTime = worldTime;
+  const b = document.getElementById('dnBtn');
+  if (b) b.textContent = isNight ? '🌙 切到夜晚' : '☀ 切到白天';
+  try { setHint(isNight ? '已切到白天' : '已切到夜晚 —— 去看新城区的楼'); } catch (e) {}
 }
 function updateDayNight(dt) {
   // 白天（0.25~0.75）推进慢、夜晚推进快 —— 让白天占据更长的时间，见 DAY_SPEED_DAY/NIGHT 的说明
