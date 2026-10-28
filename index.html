@@ -894,7 +894,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix116-neon-color';
+const BUILD = '20261028-fix117-night-glow';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -3271,6 +3271,8 @@ var FERRIS_MUSIC_SRC = 'music/FerrisRomantic.mp3';
 
 // ---- 底部 LED 灯圈的点光源（夜里 + 玩家靠近才点亮）----
 var ferrisNightLights = [];
+var towerGlowMats = [];   // 【fix117】新城区塔楼夜里点亮的材质（由 buildSouthDistrict 填充）
+var towerPoolMat = null;     // 【fix117】塔楼脚下的暖光地贴（夜里才显示）
 function updateFerrisLights() {
   if (!ferrisNightLights.length) return;
   const nightF = Math.max(0, Math.min(1, 1 - dayLightF * 1.7));
@@ -22040,6 +22042,14 @@ function updateHeadlights() {
   // 否则会留一盏聚光灯照着空气，看起来像鬼影。
   if (!playerLit) headSpot.intensity = 0;
 }
+// 【fix117】新城区塔楼夜里点灯：竖挺灯带 + 零星办公室灯火，随夜色渐亮
+function updateTowerGlow(f) {
+  if (!towerGlowMats || !towerGlowMats.length) return;
+  const v = Math.max(0, Math.min(1.15, f * 1.05));
+  if (Math.abs(v - towerGlowMats[0].emissiveIntensity) < 0.02) return;
+  for (let i = 0; i < towerGlowMats.length; i++) towerGlowMats[i].emissiveIntensity = v;
+  if (towerPoolMat) towerPoolMat.opacity = v * 0.42;
+}
 function updateDayNight(dt) {
   // 白天（0.25~0.75）推进慢、夜晚推进快 —— 让白天占据更长的时间，见 DAY_SPEED_DAY/NIGHT 的说明
   const isDayPhase = (worldTime >= 0.25 && worldTime < 0.75);
@@ -22079,6 +22089,7 @@ function updateDayNight(dt) {
   moon.position.set(Math.sin(mA) * 400, -Math.cos(mA) * 400, 120).add(camera.position);
   moon.material.opacity = nightF;
   moon.visible = nightF > 0.02;
+  updateTowerGlow(nightF);      // 【fix117】新城区塔楼夜里点亮
   // 【2026-10-20·fix29 手机 CPU】灯光类更新降频到每 2 帧：
   // updateStreetLights 每帧要遍历全城 110 盏灯还要排序，updateHeadlights 每帧要收集候选车再排序。
   // 灯光亮度/位置的 1 帧之差肉眼根本看不出来，纯白花的 CPU 在手机上就是掉帧。
@@ -25240,8 +25251,34 @@ function buildLinhaiCity(g) {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       return t;
     }
+    // 【fix117】夜里点亮：每栋楼的竖挺灯带写进 emissiveMap，白天 intensity=0 完全不亮
+    function facadeEmisTex(styleIdx) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+      const q = c.getContext('2d');
+      const P = NEON_PAIRS[styleIdx % NEON_PAIRS.length];
+      q.fillStyle = '#000'; q.fillRect(0, 0, 128, 256);
+      for (let x = 0; x < 128; x += 8) {
+        q.fillStyle = P[0]; q.globalAlpha = (x % 16 === 0) ? 0.95 : 0.5;
+        q.fillRect(x, 0, 2, 256);
+      }
+      q.globalAlpha = 1;
+      for (let y = 0; y < 256; y += 16) { q.fillStyle = P[1]; q.globalAlpha = 0.5; q.fillRect(0, y + 12, 128, 2); }
+      q.globalAlpha = 1;
+      for (let y = 0; y < 256; y += 16) for (let x = 0; x < 128; x += 16) {
+        if (Math.random() < 0.22) { q.fillStyle = 'rgba(255,243,214,0.85)'; q.fillRect(x + 2, y + 2, 12, 10); }
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return t;
+    }
     const cbdMats = [];
-    for (let k = 0; k < NEON_PAIRS.length; k++) cbdMats.push(new THREE.MeshLambertMaterial({ map: facadeTex(k) }));
+    for (let k = 0; k < NEON_PAIRS.length; k++) {
+      cbdMats.push(new THREE.MeshLambertMaterial({
+        map: facadeTex(k), emissive: 0xffffff,
+        emissiveMap: facadeEmisTex(k), emissiveIntensity: 0
+      }));
+      towerGlowMats.push(cbdMats[k]);
+    }
     // 少量白色石材楼（留一点对比，不然整城太花）
     function stoneTex(k) {
       const c = document.createElement('canvas'); c.width = 128; c.height = 256;
@@ -25261,8 +25298,30 @@ function buildLinhaiCity(g) {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       return t;
     }
+    function stoneEmisTex(k) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+      const q = c.getContext('2d');
+      q.fillStyle = '#000'; q.fillRect(0, 0, 128, 256);
+      for (let y = 8; y < 248; y += 18) for (let x = 6; x < 128; x += 18) {
+        if (Math.random() < 0.5) { q.fillStyle = 'rgba(255,236,190,' + (0.45 + Math.random() * 0.4).toFixed(2) + ')'; q.fillRect(x, y, 11, 12); }
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return t;
+    }
+    // 塔楼脚下的暖光地贴：白天 opacity=0 完全看不见，入夜渐亮
+    towerPoolMat = new THREE.MeshBasicMaterial({
+      color: 0x4a3a20, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
     const stoneMats = [];
-    for (let k = 0; k < 3; k++) stoneMats.push(new THREE.MeshLambertMaterial({ map: stoneTex(k) }));
+    for (let k = 0; k < 3; k++) {
+      stoneMats.push(new THREE.MeshLambertMaterial({
+        map: stoneTex(k), emissive: 0xffffff,
+        emissiveMap: stoneEmisTex(k), emissiveIntensity: 0
+      }));
+      towerGlowMats.push(stoneMats[k]);
+    }
 
     function tileUV(geo, ru, rv) {
       const uv = geo.attributes.uv;
@@ -25305,6 +25364,15 @@ function buildLinhaiCity(g) {
         for (let k = 0; k < n; k++) {
           const pz2 = z - podD / 2 + (k + 0.5) * podD / n;
           det(BX(0.3, 3.4, podD / n - 1.8), 0xd6e6f2, x + sx * (podW / 2 + 0.2), 2.5, pz2, 0, 0, 0, true);
+        }
+      }
+      if (towerPoolMat) {
+        for (const sz of [-1, 1]) {
+          const pool = new THREE.Mesh(new THREE.CircleGeometry(podW * 0.42, 16), towerPoolMat);
+          pool.rotation.x = -Math.PI / 2;
+          pool.position.set(x, 0.14, z + sz * (podD * 0.5 + 7));
+          pool.scale.z = 0.55;
+          add(pool);
         }
       }
       return podH;
