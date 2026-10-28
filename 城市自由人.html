@@ -896,7 +896,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix126-city-ground';
+const BUILD = '20261028-fix127-cam-ground';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27017,8 +27017,19 @@ function endFlightShow() {
   personAngle.v = Math.PI / 2;   // 【fix81】只设人物朝向，**不再强行重置 camYaw/camPitch** ——
   // 原来这里把镜头硬切回固定角度，而相机上一帧还跟着飞机，于是出现
   // 『先移动一下视角、然后再归位』的卡顿（用户实测）。保持镜头连续即可。
-  if (!isFinite(camYaw)) camYaw = Math.PI / 2;
-  if (!isFinite(camPitch)) camPitch = 0.06;
+  // 【fix127】下飞机时相机必须**直接就位**：原来只把飞机镜头交给常规相机，
+  // 而 camPos 还停在登机前（本城机场，隔着 1500m），常规相机再平滑追过来
+  // → 玩家看到"视角先在很远的地方，然后猛地卡回飞机旁边"。
+  // 这里直接把 camYaw/camPitch/camPos 算成"站在人物背后"的最终位置，一帧到位。
+  camYaw = personAngle.v;
+  camPitch = 0.06;
+  {
+    const _cp = Math.cos(camPitch), _sp = Math.sin(camPitch);
+    const _fx = Math.sin(camYaw) * _cp, _fz = Math.cos(camYaw) * _cp;
+    camPos.set(person.position.x - _fx * 6, person.position.y + 3.8 + 6 * _sp, person.position.z - _fz * 6);
+    camera.position.copy(camPos);
+    camera.lookAt(person.position.x, person.position.y + 1.5, person.position.z);
+  }
   // 碰撞盒摘掉：飞机已经飞走了，留着会在跑道上形成一堵看不见的墙
   const col = AIRLINER && AIRLINER.userData && AIRLINER.userData.collider;
   if (col) { const i = buildings.indexOf(col); if (i >= 0) buildings.splice(i, 1); }
@@ -27045,6 +27056,57 @@ try { initFlightScenery(); } catch (e) {
 // 重复运行是安全的：合批对"已经合并过的网格"再合并一次结果相同（幂等），
 // 而所有需要单独驱动的对象（水面/云/光柱/飞机/梯车）都已经 registerDynamicObject 排除在外。
 try { batchStaticScene(); } catch (error) { console.error('[Static batch 2 error]', error); }
+
+// ===== 【fix127】河畔新城的地面兜底 =====
+// 现象：新城市（机场/CBD/古建城）脚下的地面在很多机器上"漏空"，直接露出底下那片海，
+// 于是整片地看起来是蓝的（用户：『刚下飞机那块地面都是蓝色的』）。
+// 历史上这里是靠一块 1040×1040 的沙色平板垫着（也就是用户嫌丑的那片浅黄）。
+// 现在换成：一张带**铺装接缝 + 颗粒 + 大块色差**的程序化地面，铺在整块新城底下，
+// 颜色是暖石灰，靠近河岸带一点沙色、外围带一点草色，不再是单一纯色。
+(function districtGroundPatch() {
+  const DW = 1920, DCX = DEST.x - 95, DCZ = DEST.z;
+  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const cx = cv.getContext('2d');
+  // 1) 底色：暖石灰
+  cx.fillStyle = '#5e5c55'; cx.fillRect(0, 0, S, S);
+  // 2) 大块色差（每块 60~200px）：让远处看不是一整片死色
+  for (let i = 0; i < 120; i++) {
+    const w = 60 + Math.random() * 190, h = 60 + Math.random() * 190;
+    const x = Math.random() * S, y = Math.random() * S;
+    const t2 = Math.random();
+    let col;
+    if (t2 < 0.42) col = 'rgba(96,94,88,';                // 偏冷的深灰
+    else if (t2 < 0.72) col = 'rgba(142,136,124,';         // 偏暖的浅灰
+    else if (t2 < 0.88) col = 'rgba(126,120,96,';          // 土黄
+    else col = 'rgba(88,112,66,';                          // 草色斑块
+    cx.fillStyle = col + (0.16 + Math.random() * 0.22).toFixed(2) + ')';
+    cx.beginPath();
+    cx.ellipse(x, y, w / 2, h / 2, Math.random() * 3.14, 0, 7);
+    cx.fill();
+  }
+  // 3) 细颗粒
+  for (let i = 0; i < 26000; i++) {
+    const v = (110 + Math.random() * 70) | 0;
+    cx.fillStyle = 'rgba(' + v + ',' + (v - 2) + ',' + (v - 8) + ',' + (0.08 + Math.random() * 0.2).toFixed(2) + ')';
+    cx.fillRect(Math.random() * S, Math.random() * S, 1, 1 + Math.random() * 2);
+  }
+  // 4) 铺装接缝（每 64px ≈ 8m 一格，非常淡，只在近处看得出）
+  cx.strokeStyle = 'rgba(70,68,62,0.16)'; cx.lineWidth = 1.2;
+  for (let k = 0; k <= S; k += 64) {
+    cx.beginPath(); cx.moveTo(k, 0); cx.lineTo(k, S); cx.stroke();
+    cx.beginPath(); cx.moveTo(0, k); cx.lineTo(S, k); cx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(12, 12);
+  tex.anisotropy = 4;
+  const gm = new THREE.Mesh(new THREE.PlaneGeometry(DW, DW), new THREE.MeshLambertMaterial({ map: tex }));
+  gm.rotation.x = -Math.PI / 2;
+  gm.position.set(DCX, -0.06, DCZ);
+  gm.userData.lodShared = true;
+  gm.renderOrder = -1;
+  scene.add(gm);
+})();
 
 // ==================== 【fix46】自动版本守卫 ====================
 // 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
