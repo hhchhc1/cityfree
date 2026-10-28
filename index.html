@@ -896,7 +896,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix124-folk-village';
+const BUILD = '20261028-fix125-save-sea-flicker';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1167,6 +1167,10 @@ const PITCH = { x: -17.25, z: 454.75, hw: 12, hd: 10, gy: 1.55, goalZ: 3.0 };
 const BRIDGE_HALF_WIDTH = 6, BRIDGE_START_Z = 160, BRIDGE_DECK_START_Z = 210;
 const BRIDGE_END_Z = ISLAND_Z - ISLAND_R, BRIDGE_RAMP_END_Z = BRIDGE_END_Z + 50, BRIDGE_LIMIT_Z = 520;
 const OCEAN_HALF = HALF * 1.25, WORLD_LIMIT_X = OCEAN_HALF - 10;
+// 【fix125】存档坐标的合法范围：原来的 ±WORLD_LIMIT_X(±615) 只包住主城，
+// 玩家在荷芷市(x 965~1518) 或古建区(x 1700~2040) 存档后，读档会被夹到 x=615 ——
+// 那里正好是主城东边海岸的浅水区，于是『一退出重进就掉到那片闪烁的水里』。
+const SAVE_LIMIT_X = 2450, SAVE_LIMIT_Z_MIN = -1250, SAVE_LIMIT_Z_MAX = 700;
 const WORLD_LIMIT_Z_MIN = -WORLD_LIMIT_X, WORLD_LIMIT_Z_MAX = ISLAND_Z + ISLAND_WALK_R + 10;
 const roads = []; for (let r = -CITY; r <= CITY; r += 40) roads.push(r); // 道路中心线（只在城市核心）
 // ========== 阵营配色（同阵营同色，必须在 makeTrafficVehicle 之前定义） ==========
@@ -23191,7 +23195,7 @@ function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function applyVehicleState(v, data) {
-  const p = { x: saveNumber(data.x, v.x, -WORLD_LIMIT_X, WORLD_LIMIT_X), z: saveNumber(data.z, v.z, WORLD_LIMIT_Z_MIN, WORLD_LIMIT_Z_MAX) };
+  const p = { x: saveNumber(data.x, v.x, -SAVE_LIMIT_X, SAVE_LIMIT_X), z: saveNumber(data.z, v.z, SAVE_LIMIT_Z_MIN, SAVE_LIMIT_Z_MAX) };
   v.x = p.x; v.z = p.z; v.angle = saveNumber(data.angle, 0, -Math.PI * 4, Math.PI * 4);
   v.radius = saveNumber(data.radius, v.radius, 0.3, 5); v.topSpeed = saveNumber(data.topSpeed, v.topSpeed, 1, 200); v.accel = saveNumber(data.accel, v.accel, 1, 100);
   v.rideH = saveNumber(data.rideH, v.rideH || 0, 0, 5); v.durability = saveNumber(data.durability, v.durability || 15, 1, 1000);
@@ -23232,7 +23236,7 @@ function makeSavedVehicle(data) {
   }
   const durability = saveNumber(data.durability, (spec && spec.durability) || (kind === 'bicycle' ? 8 : 15), 1, 1000);
   const v = {
-    group, x: saveNumber(data.x, 0, -WORLD_LIMIT_X, WORLD_LIMIT_X), z: saveNumber(data.z, 0, WORLD_LIMIT_Z_MIN, WORLD_LIMIT_Z_MAX), angle: saveNumber(data.angle, 0, -Math.PI * 4, Math.PI * 4),
+    group, x: saveNumber(data.x, 0, -SAVE_LIMIT_X, SAVE_LIMIT_X), z: saveNumber(data.z, 0, SAVE_LIMIT_Z_MIN, SAVE_LIMIT_Z_MAX), angle: saveNumber(data.angle, 0, -Math.PI * 4, Math.PI * 4),
     radius, topSpeed, accel, rideH, durability, damage: saveNumber(data.damage, 0, 0, Math.max(0, durability - 1)), carKey: data.carKey || null,
     burn: saveNumber(data.burn, 0, 0, FIRE_BOOM_AT + 1), burnT: saveNumber(data.burnT, 0, 0, 3600),
     saveId: data.id, saveKind: kind, saveColor: color, owned: !!data.owned, fixed: !!data.fixed, isLimo,
@@ -23303,7 +23307,7 @@ function restoreSaveGame() {
   try { deserializeQuestState(data.questState); } catch (e) { console.error('[Quest restore error]', e); }
   applyClothing(); updateWeaponModel();
   state = 'walk'; currentCar = null; speed.v = 0; person.visible = true;
-  person.position.set(saveNumber(pos.x, person.position.x, -WORLD_LIMIT_X, WORLD_LIMIT_X), saveNumber(pos.y, person.position.y, -100, 200), saveNumber(pos.z, person.position.z, WORLD_LIMIT_Z_MIN, WORLD_LIMIT_Z_MAX));
+  person.position.set(saveNumber(pos.x, person.position.x, -SAVE_LIMIT_X, SAVE_LIMIT_X), saveNumber(pos.y, person.position.y, -100, 200), saveNumber(pos.z, person.position.z, SAVE_LIMIT_Z_MIN, SAVE_LIMIT_Z_MAX));
   personAngle.v = saveNumber(pos.angle, 0, -Math.PI * 4, Math.PI * 4); player.x = person.position.x; player.z = person.position.z;
   const savedIds = new Set();
   for (const s of data.vehicles) {
@@ -26482,9 +26486,13 @@ function initFlightScenery() {
   //    本城乡村丘陵有低于海平面的低谷（地形会到 -4m 左右），海平面一盖上去，
   //    原本的"绿色洼地"就变成一摊摊蓝色水塘 —— 那是凭空改变本城外观（实测踩过）。
   //    从 x=500 起还有一个好处：正好接上本城边缘那圈已经沉到 WATER_Y 的 ground mesh。
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), new THREE.MeshLambertMaterial({ color: 0x1d4e6b }));
+  // 【fix125】远海平面：地图边缘的地面正好沉到 WATER_Y，两者共面 → 起飞过场里
+  // 那片浅蓝一直在闪（z-fighting）。压低 0.3m + polygonOffset 往后推，彻底不打架。
+  const seaMat = new THREE.MeshLambertMaterial({ color: 0x1d4e6b });
+  seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
   sea.rotation.x = -Math.PI / 2;
-  sea.position.set(500 + 2500, WATER_Y, DEST.z);
+  sea.position.set(500 + 2500, WATER_Y - 0.3, DEST.z);
   scene.add(sea);
   // (2) 【占位新城】地面 + 沙滩过渡 + 跑道 + 楼群天际线 + 城市名标牌
   const g = new THREE.Group();
