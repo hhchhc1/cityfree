@@ -893,7 +893,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix113-hero-buildings';
+const BUILD = '20261028-fix114-cbd-towers';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25165,83 +25165,189 @@ function buildLinhaiCity(g) {
       add(m);
       return m;
     }
-    // 一栋"精细霓虹塔"：裙楼 + 三段退台 + 竖挺腰线 + 招牌 + 屋顶设备
+    // ===== 【fix114】CBD 塔楼：彻底不再是"方盒子" =====
+    // 用户：「还是一种长方体正方体，没有 CBD 的感觉」。于是换成 5 种真实写字楼体形：
+    //   0 椭圆玻璃塔（24 边形 + 收头 + 尖顶）
+    //   1 八棱锥塔（下大上小，越往上越细）
+    //   2 切角方塔（四角切掉 → 八边形平面，正面仍有大玻璃面）
+    //   3 梭形塔（LatheGeometry 曲面，中间鼓、上下收，最不像盒子）
+    //   4 双塔 + 空中连桥
+    // 幕墙贴图也重做：竖挺 + 层间梁 + 反光渐变 + 零星亮窗
+    function cbdGlassTex(k) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+      const q = c.getContext('2d');
+      const pal = [['#a9cbe6', '#2a4f74'], ['#c3d8e8', '#3b6483'], ['#93aecb', '#20303f'],
+                   ['#dbe3e9', '#5c6d7a'], ['#a8c6da', '#274659'], ['#cdd8e2', '#48596a']][k % 6];
+      const g1 = q.createLinearGradient(0, 0, 0, 256);
+      g1.addColorStop(0, pal[0]); g1.addColorStop(0.5, pal[0]); g1.addColorStop(0.62, pal[1]); g1.addColorStop(1, pal[1]);
+      q.fillStyle = g1; q.fillRect(0, 0, 128, 256);
+      for (let y = 0; y < 256; y += 16) {
+        // 每层楼板深浅随机：原来 16 层齐刷刷一条线，远看像"千层饼/轮胎"
+        q.fillStyle = 'rgba(20,30,44,' + (0.05 + Math.random() * 0.15).toFixed(2) + ')';
+        q.fillRect(0, y + 13, 128, 3);
+        if (Math.random() < 0.14) { q.fillStyle = pal[0]; q.fillRect(0, y + 1, 128, 15); }   // 偶尔一整层通高玻璃
+        if (Math.random() < 0.22) { q.fillStyle = 'rgba(255,255,255,0.05)'; q.fillRect(0, y, 128, 1); }
+      }
+      for (let x = 0; x < 128; x += 8) {                        // 竖挺
+        q.fillStyle = (x % 16 === 0) ? 'rgba(20,30,42,0.5)' : 'rgba(20,30,42,0.2)';
+        q.fillRect(x, 0, 2, 256);
+      }
+      for (let y = 0; y < 256; y += 16) for (let x = 0; x < 128; x += 16) {
+        if (Math.random() < 0.14) { q.fillStyle = 'rgba(255,230,178,' + (0.22 + Math.random() * 0.38).toFixed(2) + ')'; q.fillRect(x + 2, y + 2, 12, 11); }
+      }
+      for (let i = 0; i < 7; i++) {                             // 斜向反光
+        q.fillStyle = 'rgba(255,255,255,0.13)';
+        q.fillRect(Math.random() * 120, 0, 3 + Math.random() * 12, 256);
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return t;
+    }
+    const cbdMats = [];
+    for (let k = 0; k < 6; k++) cbdMats.push(new THREE.MeshLambertMaterial({ map: cbdGlassTex(k) }));
+    // 给任意几何体按"米"平铺 UV（圆柱/棱柱/车削体都能用）
+    function tileUV(geo, ru, rv) {
+      const uv = geo.attributes.uv;
+      if (uv) for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
+      return geo;
+    }
+    // 一栋 CBD 塔：裙楼 + 变体塔身 + 楼冠 + 招牌 + 屋顶设备
     function heroTower(x, z, w, d, h, idx) {
-      const style = styles[idx % styles.length];
-      const podW = w + 10, podD = d + 10, podH = 9;
+      const shape = idx % 5;
+      const mat = cbdMats[idx % cbdMats.length];
       const neon = neonC[idx % neonC.length];
-      // —— 裙楼 + 底商
-      det(BX(podW, podH, podD), 0x3a4148, x, podH / 2, z);
-      det(BX(podW + 0.8, 1.2, podD + 0.8), 0x4d555e, x, 0.6, z);
-      det(BX(podW + 1.6, 0.8, podD + 1.6), 0x525a63, x, podH + 0.2, z);
+      const podW = w + 12, podD = d + 12, podH = 8.6;
+      // —— 裙楼（八边形平面，不再是纯长方体）
+      const podR = podW / 1.8478;
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(podR, podR * 1.02, podH, 8), new THREE.MeshLambertMaterial({ color: 0x6b737d }));
+      pod.rotation.y = Math.PI / 8; pod.scale.z = podD / podW;
+      pod.position.set(x, podH / 2, z); add(pod);
+      det(new THREE.CylinderGeometry(podR + 0.7, podR + 0.7, 0.5, 8), 0x818a95, x, podH + 0.25, z, 0, Math.PI / 8, 0);
+      det(new THREE.CylinderGeometry(podR + 1.0, podR + 1.2, 1.1, 8), 0x5d656f, x, 0.55, z, 0, Math.PI / 8, 0);
+      // 底商橱窗（沿四边）
       for (const sz of [-1, 1]) {
-        const n = Math.max(3, Math.round(podW / 8));
+        const n = Math.max(4, Math.round(podW / 5.5));
         for (let k = 0; k < n; k++) {
           const px = x - podW / 2 + (k + 0.5) * podW / n;
-          det(BX(podW / n - 1.8, 3.8, 0.3), 0xffd8a2, px, 3.0, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
+          det(BX(podW / n - 1.8, 3.4, 0.3), 0xffc078, px, 2.5, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
+          det(BX(1.1, 6.4, 0.5), 0x505862, px + podW / n / 2, 3.2, z + sz * (podD / 2 + 0.15));
+          det(BX(podW / n - 2.2, 1.5, 0.25), 0x8fb6d4, px, 6.5, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
         }
-        det(BX(podW, 0.5, 2.0), 0x1b1f25, x, 5.6, z + sz * (podD / 2 + 1.0));   // 雨棚
+        det(BX(podW, 0.5, 2.0), 0x2b323b, x, 5.7, z + sz * (podD / 2 + 1.0));
       }
       for (const sx of [-1, 1]) {
-        const n = Math.max(3, Math.round(podD / 8));
+        const n = Math.max(4, Math.round(podD / 5.5));
         for (let k = 0; k < n; k++) {
           const pz2 = z - podD / 2 + (k + 0.5) * podD / n;
-          det(BX(0.3, 3.8, podD / n - 1.8), 0xffd8a2, x + sx * (podW / 2 + 0.2), 3.0, pz2, 0, 0, 0, true);
+          det(BX(0.3, 3.4, podD / n - 1.8), 0xffc078, x + sx * (podW / 2 + 0.2), 2.5, pz2, 0, 0, 0, true);
+          det(BX(0.25, 1.5, podD / n - 2.2), 0x8fb6d4, x + sx * (podW / 2 + 0.2), 6.5, pz2, 0, 0, 0, true);
         }
       }
-      // —— 塔身三段退台
-      const h1 = h * 0.50, h2 = h * 0.30, h3 = h * 0.20;
-      const w2 = w * 0.82, d2 = d * 0.82, w3 = w * 0.62, d3 = d * 0.62;
-      const t1 = new THREE.Mesh(uvBox(w, h1, d, Math.max(1, Math.round(w / 7)), Math.max(1, Math.round(h1 / 12))), buildingBodyMaterial(style));
-      t1.position.set(x, podH + h1 / 2, z); add(t1);
-      const t2 = new THREE.Mesh(uvBox(w2, h2, d2, Math.max(1, Math.round(w2 / 7)), Math.max(1, Math.round(h2 / 12))), buildingBodyMaterial(style));
-      t2.position.set(x, podH + h1 + h2 / 2, z); add(t2);
-      const t3 = new THREE.Mesh(uvBox(w3, h3, d3, Math.max(1, Math.round(w3 / 7)), Math.max(1, Math.round(h3 / 12))), buildingBodyMaterial(styles[(idx + 2) % styles.length]));
-      t3.position.set(x, podH + h1 + h2 + h3 / 2, z); add(t3);
-      // 退台腰线（浅色石板 + 一条发光边）
-      for (const [yy, ww, dd] of [[podH + h1, w2 + 2.4, d2 + 2.4], [podH + h1 + h2, w3 + 2.2, d3 + 2.2]]) {
-        det(BX(ww, 0.55, dd), 0x5d6670, x, yy, z);
-        det(BX(ww + 0.5, 0.18, dd + 0.5), neon, x, yy + 0.36, z, 0, 0, 0, true);
+      const r = Math.min(w, d) / 2;
+      let yTop = podH + h;
+      // ---- 体形 0：椭圆玻璃塔 ----
+      if (shape === 0) {
+        const g = tileUV(new THREE.CylinderGeometry(r * 0.86, r, h, 24, 1), Math.max(10, Math.round(6.28 * r / 3.4)), Math.max(3, Math.round(h / 4)));
+        const m = new THREE.Mesh(g, mat); m.scale.z = d / w; m.position.set(x, podH + h / 2, z); add(m);
+        const cap = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(r * 0.46, r * 0.86, 9, 24, 1), 16, 2), mat);
+        cap.scale.z = d / w; cap.position.set(x, podH + h + 4.5, z); add(cap);
+        const ring0 = det(new THREE.TorusGeometry(r * 0.46, 0.32, 6, 26), neon, x, podH + h + 9.1, z, -Math.PI / 2, 0, 0, true); ring0.scale.z = d / w;
+        det(new THREE.CylinderGeometry(r * 0.43, r * 0.46, 1.6, 24), 0x3d444c, x, podH + h + 10.0, z, 0, 0, 0);
+        det(new THREE.CylinderGeometry(0.22, 0.7, 15, 8), 0xb9c0c8, x, podH + h + 17, z);
+        det(new THREE.SphereGeometry(0.5, 8, 6), 0xff2b2b, x, podH + h + 25, z, 0, 0, 0, true);
+        for (const fy of [0.26, 0.5, 0.74]) {
+          const rg = det(new THREE.TorusGeometry(r * (1.0 - 0.14 * fy), 0.26, 6, 28), glow3(idx, 1), x, podH + h * fy, z, -Math.PI / 2, 0, 0, true); rg.scale.z = d / w;
+        }
+        yTop = podH + h + 9;
+      } else if (shape === 1) {   // ---- 八棱锥塔 ----
+        const rr = Math.max(w, d) / 2;
+        const g = tileUV(new THREE.CylinderGeometry(rr * 0.40, rr, h, 8, 1), Math.max(8, Math.round(6.28 * rr / 4.2)), Math.max(3, Math.round(h / 4)));
+        const m = new THREE.Mesh(g, mat); m.position.set(x, podH + h / 2, z); m.rotation.y = Math.PI / 8; add(m);
+        const crown = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(0.8, rr * 0.44, 12, 8), 8, 2), mat);
+        crown.position.set(x, podH + h + 6, z); crown.rotation.y = Math.PI / 8; add(crown);
+        det(new THREE.TorusGeometry(1.6, 0.3, 6, 16), neon, x, podH + h + 12.1, z, -Math.PI / 2, 0, 0, true);
+        det(new THREE.CylinderGeometry(0.18, 0.5, 12, 6), 0xb9c0c8, x, podH + h + 19, z);
+        det(new THREE.SphereGeometry(0.45, 8, 6), 0xff2b2b, x, podH + h + 25.5, z, 0, 0, 0, true);
+        for (const fy of [0.3, 0.58, 0.84]) {
+          det(new THREE.TorusGeometry(rr * (1 - 0.6 * fy) * 1.02, 0.26, 6, 10), glow3(idx, 2), x, podH + h * fy, z, -Math.PI / 2, Math.PI / 8, 0, true);
+        }
+        yTop = podH + h + 12;
+      } else if (shape === 2) {   // ---- 切角方塔 ----
+        const rr = w / 1.8478;
+        const g = tileUV(new THREE.CylinderGeometry(rr * 0.94, rr, h, 8, 1), Math.max(8, Math.round(6.28 * rr / 4.0)), Math.max(3, Math.round(h / 4)));
+        const m = new THREE.Mesh(g, mat); m.scale.z = d / w; m.rotation.y = Math.PI / 8;
+        m.position.set(x, podH + h / 2, z); add(m);
+        const slab = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(rr * 0.9, rr * 0.98, 8, 8), 10, 2), mat);
+        slab.scale.z = d / w; slab.rotation.y = Math.PI / 8; slab.position.set(x, podH + h + 4, z); add(slab);
+        det(new THREE.TorusGeometry(rr * 0.8, 0.34, 6, 8), neon, x, podH + h + 8.1, z, -Math.PI / 2, Math.PI / 8, 0, true);
+        det(new THREE.CylinderGeometry(rr * 0.78, rr * 0.9, 1.4, 8), 0x3d444c, x, podH + h + 8.9, z, 0, Math.PI / 8, 0);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {   // 四角竖挺（换成圆柱，不是方块）
+          det(new THREE.CylinderGeometry(0.75, 0.75, h, 10), 0x2a3038, x + sx * (w / 2 - 0.6), podH + h / 2, z + sz * (d / 2 - 0.6));
+        }
+        for (const sz of [-1, 1]) for (const k of [-1, 1]) {
+          det(BX(0.4, h * 0.92, 0.35), glow3(idx, 0), x + k * (w / 4), podH + h / 2, z + sz * (d / 2 + 0.1), 0, 0, 0, true);
+        }
+        yTop = podH + h + 8;
+      } else if (shape === 3) {   // ---- 梭形（腰鼓）塔：车削曲面 ----
+        const pts2 = [];
+        const N = 9;
+        for (let i = 0; i <= N; i++) {
+          const t = i / N;
+          const rr2 = r * (0.70 + 0.36 * Math.sin(Math.PI * Math.pow(t, 0.9)));
+          pts2.push(new THREE.Vector2(Math.max(0.5, rr2), t * h));
+        }
+        const g = tileUV(new THREE.LatheGeometry(pts2, 28), Math.max(10, Math.round(6.28 * r / 3.4)), Math.max(3, Math.round(h / 4)));
+        const m = new THREE.Mesh(g, mat); m.scale.z = d / w; m.position.set(x, podH, z); add(m);
+        const cap2 = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(r * 0.34, r * 0.72, 7, 20), 12, 2), mat);
+        cap2.scale.z = d / w; cap2.position.set(x, podH + h + 3.5, z); add(cap2);
+        const ring3 = det(new THREE.TorusGeometry(r * 0.35, 0.28, 6, 24), neon, x, podH + h + 7.0, z, -Math.PI / 2, 0, 0, true); ring3.scale.z = d / w;
+        det(new THREE.CylinderGeometry(r * 0.33, r * 0.36, 1.4, 20), 0x3d444c, x, podH + h + 7.8, z, 0, 0, 0);
+        det(new THREE.CylinderGeometry(0.2, 0.6, 13, 8), 0xb9c0c8, x, podH + h + 14, z);
+        det(new THREE.SphereGeometry(0.45, 8, 6), 0xff2b2b, x, podH + h + 20.8, z, 0, 0, 0, true);
+        for (const [fy, rw] of [[0.3, 0.985], [0.55, 1.06], [0.8, 0.86]]) {
+          const rg = det(new THREE.TorusGeometry(r * rw, 0.24, 6, 28), glow3(idx, 0), x, podH + h * fy, z, -Math.PI / 2, 0, 0, true); rg.scale.z = d / w;
+        }
+        yTop = podH + h + 7;
+      } else {                    // ---- 双塔 + 空中连桥 ----
+        const w2 = w * 0.44, d2 = d * 0.52, h2 = h * 0.92;
+        for (const s of [-1, 1]) {
+          const rr = w2 / 1.8478;
+          const g = tileUV(new THREE.CylinderGeometry(rr * 0.9, rr, h2, 8, 1), Math.max(5, Math.round(6.28 * rr / 4.0)), Math.max(3, Math.round(h2 / 4)));
+          const m = new THREE.Mesh(g, mat); m.scale.z = d2 / w2; m.rotation.y = Math.PI / 8;
+          m.position.set(x + s * (w * 0.27), podH + h2 / 2, z); add(m);
+          det(new THREE.TorusGeometry(rr * 0.86, 0.3, 6, 8), neon, x + s * (w * 0.27), podH + h2 + 0.1, z, -Math.PI / 2, Math.PI / 8, 0, true);
+          det(new THREE.CylinderGeometry(0.18, 0.5, 10, 6), 0xb9c0c8, x + s * (w * 0.27), podH + h2 + 5.4, z);
+          det(new THREE.SphereGeometry(0.42, 8, 6), 0xff2b2b, x + s * (w * 0.27), podH + h2 + 10.8, z, 0, 0, 0, true);
+          for (const sz of [-1, 1]) det(BX(0.35, h2 * 0.9, 0.3), glow3(idx, s > 0 ? 0 : 1), x + s * (w * 0.27) + (w2 / 2 + 0.15) * 0, podH + h2 / 2, z + sz * (d2 / 2 + 0.1), 0, 0, 0, true);
+        }
+        // 空中连桥（两道，一道高一道低）
+        for (const [fy, fh] of [[0.58, 4.2], [0.76, 3.0]]) {
+          det(BX(w * 0.5, fh, d2 * 0.55), 0x2f353d, x, podH + h2 * fy, z);
+          det(BX(w * 0.5 + 0.6, 0.35, d2 * 0.55 + 0.6), neon, x, podH + h2 * fy - fh / 2, z, 0, 0, 0, true);
+          for (let k = -3; k <= 3; k++) det(BX(1.6, fh * 0.5, 0.25), 0x9fd8ff, x + k * w * 0.07, podH + h2 * fy, z + d2 * 0.28, 0, 0, 0, true);
+        }
+        yTop = podH + h2 + 10;
       }
-      // 角部竖挺
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        det(BX(0.95, h1, 0.95), 0x23272d, x + sx * (w / 2 - 0.1), podH + h1 / 2, z + sz * (d / 2 - 0.1));
-      }
-      // 竖向霓虹（正背面各两条 + 两侧各一条）
-      for (const sz of [-1, 1]) for (const k of [-1, 1]) {
-        det(BX(0.42, h1 * 0.86, 0.32), neonC[(idx + (k > 0 ? 1 : 0)) % neonC.length], x + k * (w / 4.4), podH + h1 / 2 + 0.4, z + sz * (d / 2 + 0.22), 0, 0, 0, true);
-      }
-      for (const sx of [-1, 1]) {
-        det(BX(0.32, h1 * 0.8, 0.42), neonC[(idx + 2) % neonC.length], x + sx * (w / 2 + 0.22), podH + h1 / 2, z, 0, 0, 0, true);
-      }
-      // 竖向招牌
+      // 竖向招牌（贴在塔身正面）
       const nSign = 2 + (idx % 2);
       for (let k = 0; k < nSign; k++) {
         const sw = 2.6, sh = 6.5 + ((idx + k) % 5);
-        const sy = podH + 7 + k * (h1 / (nSign + 1)) + (idx % 3);
-        const mat = signMats[(idx * 3 + k) % signMats.length];
-        if (k % 2 === 0) {
-          adPanel(sw, sh, mat, x - w / 2 + 4 + k * (w - 8) / Math.max(1, nSign - 1), sy, z + d / 2 + 0.32, 0);
-        } else {
-          adPanel(sw, sh, mat, x + w / 2 + 0.32, sy, z - d / 2 + 4 + k * (d - 8) / 2, Math.PI / 2);
-        }
+        const sy = podH + 8 + k * (h * 0.22) + (idx % 3);
+        adPanel(sw, sh, signMats[(idx * 3 + k) % signMats.length], x - w / 3 + k * (w * 0.33), sy, z + d / 2 + 0.5, 0);
       }
       // 裙楼大屏
       if (idx % 3 !== 2) {
-        const bw = Math.min(podW - 6, 24), bh = 7 + (idx % 3) * 2;
-        adPanel(bw, bh, bbMats[idx % bbMats.length], x, podH + bh / 2 + 0.6, z + podD / 2 + 0.36, 0);
+        const bw = Math.min(podW - 8, 24), bh = 7 + (idx % 3) * 2;
+        adPanel(bw, bh, bbMats[idx % bbMats.length], x, podH + bh / 2 + 0.8, z + podD / 2 + 0.5, 0);
       }
-      // —— 屋顶
-      const yTop = podH + h1 + h2 + h3;
-      det(BX(w3 + 1.4, 1.5, d3 + 1.4), 0x3c424a, x, yTop + 0.75, z);
-      det(BX(7, 3.2, 5), 0x767e88, x - w3 * 0.22, yTop + 3.1, z);
-      det(BX(5, 2.4, 4), 0x767e88, x + w3 * 0.24, yTop + 2.7, z + 2);
-      det(new THREE.CylinderGeometry(0.18, 0.32, 10, 6), 0x9aa2ab, x + w3 * 0.3, yTop + 7.5, z - d3 * 0.3);
-      det(new THREE.SphereGeometry(0.55, 8, 6), 0xff2b2b, x + w3 * 0.3, yTop + 12.6, z - d3 * 0.3, 0, 0, 0, true);
-      // 碰撞：裙楼 + 塔身两个盒子（爬顶时不会卡在台阶缝里）
+      // 屋顶设备（只在够宽的塔上用）
+      det(new THREE.CylinderGeometry(3.2, 3.6, 2.6, 12), 0x6d757f, x + w * 0.14, yTop + 1.2, z - d * 0.12);
+      det(BX(4.2, 2.0, 3.4), 0x6d757f, x - w * 0.12, yTop + 0.9, z + d * 0.1);
       LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: 0, top: yTop });
       LH_BLD.push({ minX: x - podW / 2, maxX: x + podW / 2, minZ: z - podD / 2, maxZ: z + podD / 2, minY: 0, top: yTop });
     }
+    // 小工具：轮换霓虹色（避免每栋楼一模一样）
+    function glow3(base, k) { return neonC[(base + k * 2) % neonC.length]; }
     const styles = ['blueglass', 'tower', 'marble', 'brutal', 'glass', 'concrete'];
     const neonC = [0xff3fa4, 0x3ff0ff, 0x8a2fff, 0xffd24a, 0x44ff9a];
     const used = [];
@@ -25259,7 +25365,7 @@ function buildLinhaiCity(g) {
         if (hit) continue;
         if (used.some((u) => Math.abs(x - u.x) < (w + u.w) / 2 + 4 && Math.abs(z - u.z) < (d + u.d) / 2 + 4)) continue;
         used.push({ x, z, w, d });
-        const h = 30 + Math.random() * 96 + (Math.random() < 0.16 ? 44 : 0);
+        const h = 40 + Math.random() * 150 + (Math.random() < 0.14 ? 80 : 0);
         heroTower(x, z, w, d, h, bi);
         bi++;
       }
@@ -25277,6 +25383,7 @@ function buildLinhaiCity(g) {
         det(BX(0.7, 92, 0.7), 0xaeb4bb, cx + Math.cos(a) * 5.4, 48, cz + Math.sin(a) * 5.4, 0, 0, 0);
       }
       for (const y of [26, 52, 74]) {                                            // 三层观景环廊
+        det(new THREE.CylinderGeometry(7.6, 8.2, 0.9, 20), 0x8f979f, cx, y - 1.0, cz);
         det(new THREE.CylinderGeometry(9.5, 9.5, 1.4, 20), 0x9aa2ab, cx, y, cz);
         det(new THREE.CylinderGeometry(9.9, 9.9, 0.3, 20), 0x3ff0ff, cx, y + 0.85, cz, 0, 0, 0, true);
       }
