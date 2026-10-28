@@ -898,7 +898,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix128-brick-wall';
+const BUILD = '20261028-fix129-roof-climb';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15891,10 +15891,43 @@ function collideTreesFast(p, r) {
   _gridAround(p.x, p.z, r + GRID_CELL, _gridCellsTree);
   for (const ci of _gridCellsTree) for (const tr of _gridTree[ci]) pushCircle(p, r, tr, tr.r);
 }
+// ===== 【fix129】新城（x>900）的"屋顶/可站立面"专用网格 =====
+// 起因：主城空间网格 _gridIdx() 对 x>900 直接返回空槽（fix57 为了防止钳到边缘格子、
+// 在新城撞上"看不见的墙"）。副作用是 platformTopAt() 在新城永远只返回地形高度，
+// 于是：钩爪能爬上新城的楼、城墙、霓虹楼，但一到顶就**站不住、直接掉下来**。
+// 也就是用户说的"新城的建筑都爬不到楼顶，城墙也是，霓虹楼也是"。
+// 这里给新城单独建一张 64m 网格，只服务 platformTopAt（碰撞另有 fix64 的线性扫描）。
+const NC_CELL = 64, NC_X0 = 880, NC_Z0 = -1320, NC_W = 26, NC_H = 32;
+const _ncGrid = new Array(NC_W * NC_H);
+for (let _i = 0; _i < _ncGrid.length; _i++) _ncGrid[_i] = [];
+function ncBuildGrid() {
+  for (let _i = 0; _i < _ncGrid.length; _i++) _ncGrid[_i].length = 0;
+  for (const b of buildings) {
+    if (b.minX < NC_X0) continue;
+    const gx0 = Math.max(0, Math.floor((b.minX - NC_X0) / NC_CELL));
+    const gx1 = Math.min(NC_W - 1, Math.floor((b.maxX - NC_X0) / NC_CELL));
+    const gz0 = Math.max(0, Math.floor((b.minZ - NC_Z0) / NC_CELL));
+    const gz1 = Math.min(NC_H - 1, Math.floor((b.maxZ - NC_Z0) / NC_CELL));
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) _ncGrid[gx + gz * NC_W].push(b);
+    }
+  }
+}
+function ncTopAt(x, z) {
+  const gx = Math.floor((x - NC_X0) / NC_CELL), gz = Math.floor((z - NC_Z0) / NC_CELL);
+  if (gx < 0 || gz < 0 || gx >= NC_W || gz >= NC_H) return -Infinity;
+  let t = -Infinity;
+  for (const b of _ncGrid[gx + gz * NC_W]) {
+    if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && b.top > t) t = b.top;
+  }
+  return t;
+}
 // 快速 platformTopAt：只检查附近建筑
 function platformTopAt(x, z) {
   let t = terrainHeight(x, z);
   for (const pl of platforms) if (x > pl.minX && x < pl.maxX && z > pl.minZ && z < pl.maxZ) t = Math.max(t, pl.top);
+  // 【fix129】新城（x>900）走自己的网格：主城网格在那里是空的，不补就会踩空、爬上去也站不住
+  if (x > 900) { const _nt = ncTopAt(x, z); return _nt > t ? _nt : t; }
   _gridAround(x, z, GRID_CELL, _gridCellsPlatform);
   for (const ci of _gridCellsPlatform) for (const b of _gridBld[ci]) if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ) t = Math.max(t, b.top);
   return t;
@@ -27160,6 +27193,8 @@ try { batchStaticScene(); } catch (error) { console.error('[Static batch 2 error
   gm.renderOrder = -1;
   scene.add(gm);
 })();
+// 【fix129】新城建筑已全部登记进 buildings，这里把它们的可站立面网格建起来
+try { ncBuildGrid(); } catch (e) { console.error('[nc grid]', e); }
 
 // ==================== 【fix46】自动版本守卫 ====================
 // 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
