@@ -894,7 +894,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix115-cbd-mix';
+const BUILD = '20261028-fix116-neon-color';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25170,73 +25170,100 @@ function buildLinhaiCity(g) {
     // 用户：「不要全是圆筒，圆的也不好看，主要是墙面颜色和搭配、外观形状，弄点创新」
     // 并给了一组配色（珍珠白/炭灰/银灰、暖米杏/灰蓝、藏青、香槟金、海军蓝、幕墙玻璃…）。
     // 现在的做法：8 组配色 × 3 种墙面做法（石材打孔窗 / 玻璃幕墙 / 竖向遮阳板）× 7 种体形。
-    const CBD_PAL = [
-      ['#F4F3EF', '#33363A', '#8A9199'],   // 珍珠白 · 炭灰 · 银灰
-      ['#E8E2D6', '#70828E', '#C6C9CC'],   // 暖米杏 · 灰蓝 · 浅灰
-      ['#D8DCE0', '#2A3B52', '#222427'],   // 冷浅灰 · 藏青 · 哑光黑
-      ['#D3D0C9', '#33363A', '#B89B68'],   // 浅暖灰 · 炭灰 · 古铜香槟金
-      ['#F7F7F7', '#94979C', '#1E2023'],   // 米白 · 中灰 · 炭黑
-      ['#F2EFE7', '#243B53', '#C9B8A3'],   // 柔米白 · 海军蓝 · 浅驼
-      ['#F5F2EC', '#3A3E42', '#596657'],   // 暖米 · 炭灰 · 灰橄榄绿
-      ['#99B2CC', '#D8DCE0', '#2A3B52']    // 幕墙玻璃 · 冷浅灰 · 藏青
+    // ===== 【fix116】霓虹配色：15 组撞色 =====
+    // 用户：不要灰棕色一片，用这些亮色
+    //   #002CE6+#FFE76F 克莱因蓝+亮黄 …… 一共 15 组，每栋楼取一组，
+    //   A 色做主色（幕墙竖挺、玻璃底色、楼冠光环），B 色做撞色（层间带、亮窗、灯带）。
+    const NEON_PAIRS = [
+      ['#002CE6', '#FFE76F'],   // 克莱因蓝 + 亮黄
+      ['#FF2D78', '#0066FF'],   // 艳粉 + 电光蓝
+      ['#FF8A00', '#0047AB'],   // 亮橙 + 钴蓝
+      ['#FFD400', '#7B2FF7'],   // 明黄 + 紫
+      ['#00C2A8', '#FF6B5A'],   // 青碧 + 珊瑚橙
+      ['#E52165', '#0D1137'],   // 玫红 + 藏青黑
+      ['#F9CD12', '#BE1E2E'],   // 亮金橘 + 酒红
+      ['#ED35F9', '#04A5F9'],   // 亮紫玫 + 湖蓝
+      ['#FF3F42', '#78D1E5'],   // 正红 + 浅青蓝
+      ['#B826D2', '#00E0C7'],   // 紫晶 + 薄荷青
+      ['#FF770F', '#000026'],   // 爱马仕橙 + 极深海军蓝
+      ['#F34718', '#0096FF'],   // 榴花红 + 晴空蓝
+      ['#9A5CFF', '#00FF9D'],   // 香芋紫 + 荧光草绿
+      ['#E25822', '#00FFFF'],   // 火焰橙 + 赛博青
+      ['#FF57B9', '#4D6AFF']    // 桃粉 + 靛蓝
     ];
+    // 把 #RRGGBB 按系数变亮/变暗（f<1 变暗，f>1 变亮）
+    function neonShade(hex, f) {
+      const n = parseInt(hex.slice(1), 16);
+      const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+      const g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+      const b = Math.min(255, Math.round((n & 255) * f));
+      return (r << 16) | (g << 8) | b;
+    }
     const cbdHex = (s) => parseInt(s.slice(1), 16);
+    // 一栋楼的幕墙贴图：深底玻璃 + 亮色竖挺 + 撞色层间带
     function facadeTex(styleIdx) {
       const c = document.createElement('canvas'); c.width = 128; c.height = 256;
       const q = c.getContext('2d');
-      const P = CBD_PAL[styleIdx % 8];
-      const kind = styleIdx % 3;          // 0 石材打孔窗  1 玻璃幕墙  2 竖向遮阳板
-      if (kind === 0) {
-        // —— 石材 / 铝板：实墙 + 规整窗洞（国贸那一片最常见的样子）
-        const g1 = q.createLinearGradient(0, 0, 0, 256);
-        g1.addColorStop(0, P[0]); g1.addColorStop(0.6, P[0]); g1.addColorStop(1, P[2]);
-        q.fillStyle = g1; q.fillRect(0, 0, 128, 256);
-        for (let i = 0; i < 240; i++) {   // 板材纹理
-          q.fillStyle = 'rgba(0,0,0,' + (0.015 + Math.random() * 0.03).toFixed(3) + ')';
-          q.fillRect(Math.random() * 128, Math.random() * 256, 3 + Math.random() * 12, 1 + Math.random() * 2);
-        }
-        for (let y = 8; y < 248; y += 18) for (let x = 6; x < 128; x += 18) {
-          q.fillStyle = P[1]; q.fillRect(x, y, 11, 12);                        // 窗洞（深色玻璃）
-          q.fillStyle = 'rgba(255,255,255,' + (0.28 + Math.random() * 0.4).toFixed(2) + ')';
-          q.fillRect(x + 1, y + 1, 9, 3);                                       // 玻璃上沿反光
-          if (Math.random() < 0.10) { q.fillStyle = 'rgba(255,236,196,0.6)'; q.fillRect(x + 1, y + 4, 9, 7); }
-        }
-        for (let y = 0; y < 256; y += 18) { q.fillStyle = 'rgba(0,0,0,0.10)'; q.fillRect(0, y + 15, 128, 1); }
-      } else if (kind === 1) {
-        // —— 玻璃幕墙：深色玻璃 + 细竖挺 + 层间梁
-        const g1 = q.createLinearGradient(0, 0, 0, 256);
-        g1.addColorStop(0, P[1]); g1.addColorStop(0.55, P[1]); g1.addColorStop(1, P[2]);
-        q.fillStyle = g1; q.fillRect(0, 0, 128, 256);
-        for (let y = 0; y < 256; y += 16) {
-          q.fillStyle = 'rgba(255,255,255,' + (0.04 + Math.random() * 0.07).toFixed(2) + ')';
-          q.fillRect(0, y, 128, 3);
-          q.fillStyle = 'rgba(0,0,0,0.22)'; q.fillRect(0, y + 13, 128, 2);
-        }
-        for (let x = 0; x < 128; x += 8) {
-          q.fillStyle = (x % 16 === 0) ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.14)';
-          q.fillRect(x, 0, 1.6, 256);
-        }
-        for (let i = 0; i < 5; i++) { q.fillStyle = 'rgba(255,255,255,0.10)'; q.fillRect(Math.random() * 120, 0, 4 + Math.random() * 12, 256); }
-        for (let y = 0; y < 256; y += 16) for (let x = 0; x < 128; x += 16) {
-          if (Math.random() < 0.12) { q.fillStyle = 'rgba(255,238,200,' + (0.25 + Math.random() * 0.4).toFixed(2) + ')'; q.fillRect(x + 2, y + 2, 12, 11); }
-        }
-      } else {
-        // —— 竖向遮阳板（银灰/白）：亮色竖板 + 深色玻璃缝
-        q.fillStyle = P[1]; q.fillRect(0, 0, 128, 256);
-        for (let x = 0; x < 128; x += 14) {
-          q.fillStyle = P[0]; q.fillRect(x, 0, 8, 256);
-          q.fillStyle = 'rgba(255,255,255,0.40)'; q.fillRect(x, 0, 2.4, 256);
-          q.fillStyle = 'rgba(0,0,0,0.22)'; q.fillRect(x + 8, 0, 2, 256);
-        }
-        for (let y = 0; y < 256; y += 14) { q.fillStyle = 'rgba(0,0,0,0.16)'; q.fillRect(0, y + 11, 128, 2); }
-        for (let i = 0; i < 18; i++) { q.fillStyle = 'rgba(255,240,205,0.35)'; q.fillRect(Math.random() * 128, Math.random() * 250, 5, 6); }
+      const P = NEON_PAIRS[styleIdx % NEON_PAIRS.length];
+      const A = P[0], B = P[1];
+      const A2 = '#' + neonShade(A, 0.24).toString(16).padStart(6, '0');
+      const A3 = '#' + neonShade(A, 0.11).toString(16).padStart(6, '0');
+      const g1 = q.createLinearGradient(0, 0, 0, 256);
+      g1.addColorStop(0, A2); g1.addColorStop(0.5, A3); g1.addColorStop(1, A2);
+      q.fillStyle = g1; q.fillRect(0, 0, 128, 256);
+      // 撞色层间带（每层楼一条细线）
+      for (let y = 0; y < 256; y += 16) {
+        q.fillStyle = B; q.globalAlpha = 0.30 + Math.random() * 0.15;
+        q.fillRect(0, y + 12, 128, 2);
       }
+      q.globalAlpha = 1;
+      // 主色竖挺
+      for (let x = 0; x < 128; x += 8) {
+        q.fillStyle = A; q.globalAlpha = (x % 16 === 0) ? 0.85 : 0.40;
+        q.fillRect(x, 0, 2, 256);
+      }
+      q.globalAlpha = 1;
+      // 反光斜条
+      for (let i = 0; i < 6; i++) {
+        q.fillStyle = 'rgba(255,255,255,0.10)';
+        q.fillRect(Math.random() * 120, 0, 3 + Math.random() * 10, 256);
+      }
+      // 零星亮窗（撞色）
+      for (let y = 0; y < 256; y += 16) for (let x = 0; x < 128; x += 16) {
+        if (Math.random() < 0.16) {
+          q.fillStyle = B; q.globalAlpha = 0.35 + Math.random() * 0.45;
+          q.fillRect(x + 2, y + 2, 12, 10);
+        }
+      }
+      q.globalAlpha = 1;
       const t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       return t;
     }
     const cbdMats = [];
-    for (let k = 0; k < 8; k++) cbdMats.push(new THREE.MeshLambertMaterial({ map: facadeTex(k) }));
+    for (let k = 0; k < NEON_PAIRS.length; k++) cbdMats.push(new THREE.MeshLambertMaterial({ map: facadeTex(k) }));
+    // 少量白色石材楼（留一点对比，不然整城太花）
+    function stoneTex(k) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+      const q = c.getContext('2d');
+      const base = ['#F4F3EF', '#F7F7F7', '#E8E2D6'][k % 3];
+      q.fillStyle = base; q.fillRect(0, 0, 128, 256);
+      for (let i = 0; i < 220; i++) {
+        q.fillStyle = 'rgba(0,0,0,' + (0.012 + Math.random() * 0.03).toFixed(3) + ')';
+        q.fillRect(Math.random() * 128, Math.random() * 256, 3 + Math.random() * 12, 1 + Math.random() * 2);
+      }
+      for (let y = 8; y < 248; y += 18) for (let x = 6; x < 128; x += 18) {
+        q.fillStyle = '#33363A'; q.fillRect(x, y, 11, 12);
+        q.fillStyle = 'rgba(255,255,255,' + (0.30 + Math.random() * 0.35).toFixed(2) + ')'; q.fillRect(x + 1, y + 1, 9, 3);
+      }
+      for (let y = 0; y < 256; y += 18) { q.fillStyle = 'rgba(0,0,0,0.08)'; q.fillRect(0, y + 15, 128, 1); }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return t;
+    }
+    const stoneMats = [];
+    for (let k = 0; k < 3; k++) stoneMats.push(new THREE.MeshLambertMaterial({ map: stoneTex(k) }));
+
     function tileUV(geo, ru, rv) {
       const uv = geo.attributes.uv;
       if (uv) for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
@@ -25254,19 +25281,20 @@ function buildLinhaiCity(g) {
     function cbdPodium(x, z, w, d, idx, styleIdx) {
       const podW = w + 12, podD = d + 12, podH = 8.6;
       const podR = podW / 1.8478;
-      const P = CBD_PAL[styleIdx % 8];
-      const accent = cbdHex(P[2]);
-      const wall = cbdHex(P[1]);
-      const pod = new THREE.Mesh(new THREE.CylinderGeometry(podR, podR * 1.02, podH, 8), new THREE.MeshLambertMaterial({ color: accent }));
+      const PAIR = NEON_PAIRS[styleIdx % NEON_PAIRS.length];
+      const accent = neonShade(PAIR[0], 0.55);
+      const wall = neonShade(PAIR[0], 0.34);
+      const podMat = (idx % 5 === 0) ? stoneMats[idx % stoneMats.length] : cbdMats[styleIdx % NEON_PAIRS.length];
+      const pod = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(podR, podR * 1.02, podH, 8), 34, 2), podMat);
       pod.rotation.y = Math.PI / 8; pod.scale.z = podD / podW;
       pod.position.set(x, podH / 2, z); add(pod);
-      det(new THREE.CylinderGeometry(podR + 0.7, podR + 0.7, 0.5, 8), accent, x, podH + 0.25, z, 0, Math.PI / 8, 0);
+      det(new THREE.CylinderGeometry(podR + 0.7, podR + 0.7, 0.5, 8), 0x4a4f56, x, podH + 0.25, z, 0, Math.PI / 8, 0);
       det(new THREE.CylinderGeometry(podR + 1.0, podR + 1.2, 1.1, 8), wall, x, 0.55, z, 0, Math.PI / 8, 0);
       for (const sz of [-1, 1]) {
         const n = Math.max(4, Math.round(podW / 5.5));
         for (let k = 0; k < n; k++) {
           const px = x - podW / 2 + (k + 0.5) * podW / n;
-          det(BX(podW / n - 1.8, 3.4, 0.3), 0xffc078, px, 2.5, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
+          det(BX(podW / n - 1.8, 3.4, 0.3), 0xd6e6f2, px, 2.5, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
           det(BX(1.1, 6.4, 0.5), wall, px + podW / n / 2, 3.2, z + sz * (podD / 2 + 0.15));
           det(BX(podW / n - 2.2, 1.5, 0.25), 0x8fb6d4, px, 6.5, z + sz * (podD / 2 + 0.2), 0, 0, 0, true);
         }
@@ -25276,7 +25304,7 @@ function buildLinhaiCity(g) {
         const n = Math.max(4, Math.round(podD / 5.5));
         for (let k = 0; k < n; k++) {
           const pz2 = z - podD / 2 + (k + 0.5) * podD / n;
-          det(BX(0.3, 3.4, podD / n - 1.8), 0xffc078, x + sx * (podW / 2 + 0.2), 2.5, pz2, 0, 0, 0, true);
+          det(BX(0.3, 3.4, podD / n - 1.8), 0xd6e6f2, x + sx * (podW / 2 + 0.2), 2.5, pz2, 0, 0, 0, true);
         }
       }
       return podH;
@@ -25284,11 +25312,11 @@ function buildLinhaiCity(g) {
     // 一栋楼：7 种体形
     function heroTower(x, z, w, d, h, idx) {
       const shape = idx % 7;
-      const styleIdx = (idx * 3 + (idx % 2)) % 8;
-      const mat = cbdMats[styleIdx];
-      const P = CBD_PAL[styleIdx % 8];
-      const accent = cbdHex(P[2]), lightC = cbdHex(P[0]), darkC = cbdHex(P[1]);
-      const neon = neonC[idx % neonC.length];
+      const styleIdx = idx % NEON_PAIRS.length;
+      const mat = (idx % 5 === 0) ? stoneMats[idx % stoneMats.length] : cbdMats[styleIdx];
+      const PAIR = NEON_PAIRS[styleIdx];
+      const accent = neonShade(PAIR[0], 1.0), lightC = 0xdde3ea, darkC = neonShade(PAIR[0], 0.45);
+      const neon = neonShade(PAIR[1], 1.0);
       const podH = cbdPodium(x, z, w, d, idx, styleIdx);
       const y0 = podH;
       let yTop = y0 + h;
@@ -25357,14 +25385,14 @@ function buildLinhaiCity(g) {
         const bodyH = h * 0.82;
         const g = tileUV(new THREE.BoxGeometry(w, bodyH, d), Math.max(1, Math.round(w / 26)), Math.max(1, Math.round(bodyH / 56)));
         const m = new THREE.Mesh(g, mat); m.position.set(x, y0 + bodyH / 2, z); add(m);
-        const wg = new THREE.Mesh(wedgeGeo(w, h * 0.3, d), new THREE.MeshLambertMaterial({ color: darkC }));
+        const wg = new THREE.Mesh(wedgeGeo(w, h * 0.15, d), new THREE.MeshLambertMaterial({ color: 0x2f3439 }));
         wg.position.set(x, y0 + bodyH, z); add(wg);
         det(BX(w + 1.4, 0.6, d + 1.4), lightC, x, y0 + bodyH, z);
-        det(BX(0.5, h * 0.3, 0.5), neon, x, y0 + bodyH + h * 0.15, z - d / 2 - 0.2, 0, 0, 0, true);
+        det(BX(0.5, h * 0.15, 0.5), neon, x, y0 + bodyH + h * 0.075, z - d / 2 - 0.2, 0, 0, 0, true);
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
           det(BX(1.3, bodyH, 1.3), accent, x + sx * (w / 2 - 0.2), y0 + bodyH / 2, z + sz * (d / 2 - 0.2));
         }
-        yTop = y0 + bodyH + h * 0.3;
+        yTop = y0 + bodyH + h * 0.15;
         det(new THREE.SphereGeometry(0.45, 8, 6), 0xff2b2b, x, yTop + 2.4, z, 0, 0, 0, true);
       } else if (shape === 5) {
         // ---- 双塔 + 空中连桥 ----
