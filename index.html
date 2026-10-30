@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix133-board-guard';
+const BUILD = '20261030-fix134-landing-safety';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18830,6 +18830,10 @@ function attack() {
     return;   // 普通车不能射击
   }
   if (state !== 'walk' || atkCd > 0) return;
+  // 【fix134】下飞机瞬间手指还按着屏幕（或登机那一下被记着），会误触一次攻击 ——
+  // 手里是火箭筒就直接把自己炸死（用户："下飞机之后自动单击一下，单击到地上就把自己炸死了"）。
+  // 落地后 1 秒内不响应开火/挥拳。
+  if (performance.now() < _noFireUntil) return;
   const w = WEAPONS[currentWeapon];
   // 【2026-10-21·fix36 用户反馈修正】子弹/拳头方向 = **准星方向**（打准星指的地方），
   // 同时让人物在开火后 0.3 秒内**平滑转**向准星 —— 不是瞬间拧过去，所以不会有"僵直"感。
@@ -27130,6 +27134,9 @@ function flightCamera(t, ks, dt) {
 }
 // ---- 结束/复位 ----
 function endFlightShow() {
+  // 【fix134】落地保险期：结束演出的瞬间清掉按键/触摸残留，1 秒内不允许开火
+  _noFireUntil = performance.now() + 1000;
+  try { keys[' '] = false; keys['e'] = false; mouseDown = false; atkCd = Math.max(atkCd, 0.6); } catch (e) {}
   flightAudioStop();   // 【fix54】飞行结束：淡出并关闭音频上下文
   camera.near = 0.5; camera.far = 560; camera.updateProjectionMatrix();   // 【fix71】恢复常规近/远平面
   if (window.__cfSkyFar) { window.__cfSkyFar = 0; }
@@ -27303,6 +27310,7 @@ try {
 var flightPanelOpen = false;
 var flightPillarMiss = 0;                 // 关掉面板后的冷却，避免站在边缘反复弹
 var _retTicketCd = 0;                    // 【fix131】返程售票提示的冷却（没钱时别每帧刷屏）
+var _noFireUntil = 0;                    // 【fix134】这个时间戳之前禁止开火（下飞机防误触）
 const FLIGHT_PRICE_PERM = 10000;          // 永久往返机票
 const FLIGHT_PRICE_ONCE = 500;            // 单次前往机票
 function flightHasPass() { return !!(PROGRESS && PROGRESS.flightPass); }
