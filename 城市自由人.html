@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix130-gate-open';
+const BUILD = '20261030-fix131-view-arrow-ticket';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14436,7 +14436,7 @@ function grappleTarget() {
       }
     }
   }
-  const tx = px + fx * 30, tz = pz + fz * 30;
+  const tx = px + fx * 45, tz = pz + fz * 45;   // 【fix131】空钩前飞距离 30m → 45m
   return { type: 'zip', x: tx, y: Math.max(terrainHeight(tx, tz), person.position.y) + 1.5, z: tz };
 }
 function fireGrapple() {
@@ -21442,10 +21442,24 @@ function drawMinimap() {
   mctx.arc(S / 2, S / 2, 28, Math.atan2(fz, fx) - 0.5, Math.atan2(fz, fx) + 0.5);
   mctx.closePath();
   mctx.fill(); mctx.stroke();
-  // 玩家白点（带光晕）
-  mctx.shadowColor = '#ffffff'; mctx.shadowBlur = 6;
-  dot(px, pz, '#ffffff', 4.5);
+  // 【fix131】玩家标记：改成醒目的**绿色箭头**（原来只有个 4.5px 白点，混在路网里根本找不到自己）。
+  // 方向 = 人物朝向；带黑色描边 + 绿色光晕，灰底 / 夜战 / 雾天都看得清。
+  mctx.save();
+  mctx.translate(S / 2, S / 2);
+  mctx.rotate(Math.atan2(fz, fx));
+  mctx.beginPath();
+  mctx.moveTo(11, 0);
+  mctx.lineTo(-7, -7.2);
+  mctx.lineTo(-3.2, 0);
+  mctx.lineTo(-7, 7.2);
+  mctx.closePath();
+  mctx.shadowColor = '#39ff7a'; mctx.shadowBlur = 10;
+  mctx.fillStyle = '#2bff6a';
+  mctx.fill();
   mctx.shadowBlur = 0;
+  mctx.lineWidth = 1.8; mctx.strokeStyle = 'rgba(0,0,0,0.9)';
+  mctx.stroke();
+  mctx.restore();
   // === 敌人标记（有仇恨的人）：实心红点 + 红光晕 + 呼吸扩散环 ===
   // 画在最上层，保证不被建筑/警车盖住；r.alive 为假（被打死）时红点直接消失。
   const pulse = (performance.now() % 900) / 900;
@@ -23006,8 +23020,8 @@ function update(dt) {
     const cp = Math.cos(camPitchNow), sp = Math.sin(camPitchNow);
     const tfx = Math.sin(camYawNow) * cp, tfz = Math.cos(camYawNow) * cp;
     // 直升机/坦克视角更大更远
-    const dist0 = isHeli ? 18 : isTank ? 14 : (state === 'walk' ? 6 : 9);
-    const height0 = isHeli ? 12 : isTank ? 8 : (state === 'walk' ? 3.8 : 5.5);
+    const dist0 = isHeli ? 18 : isTank ? 14 : (state === 'walk' ? 8 : 9);   // 【fix131】用户要求：第三人称视角再远一点
+    const height0 = isHeli ? 12 : isTank ? 8 : (state === 'walk' ? 4.4 : 5.5);
     // 下坠时相机保持不动。之前这里会后拉 + 抬高 + 拉宽 FOV 想造速度感，
     // 但第三人称视角下抬高相机会让画面往上一窜，读起来像"人物跳了一下"，
     // 而不是"脚下的楼没了"，所以坠落感只由角色自身的下坠和姿态来表达。
@@ -25772,7 +25786,7 @@ function buildLinhaiCity(g) {
     // ===== 【fix113】古建重做：正经的中式屋顶 / 木格窗 / 斗拱 / 楼阁 =====
     // 用户：「新城区的古建筑做得不是很好，重做一下」。原来屋顶是个四棱锥（太矮、没出檐、没翘角），
     // 现在统一走 cnRoof()：出檐薄板 + 椽底 + 四坡屋面 + 正脊 + 四角起翘。
-    const roofMat = new THREE.MeshLambertMaterial({ color: TILE });
+    const roofMat = new THREE.MeshLambertMaterial({ color: TILE, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });   // 【fix131】共面闪烁
     function cnRoof(cx, cz, w, d, y0, rh) {
       det(BX(w + 3.6, 0.42, d + 3.6), 0x3a3f45, cx, y0 + 0.21, cz);                 // 檐口
       const under = new THREE.Mesh(BX(w + 3.0, 0.26, d + 3.0), new THREE.MeshLambertMaterial({ color: 0x6a5140 }));
@@ -25780,7 +25794,7 @@ function buildLinhaiCity(g) {
       const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.72, 1, 4, 1), roofMat);
       roof.rotation.y = Math.PI / 4;
       roof.scale.set((w + 1.6) / 1.018, rh, (d + 1.6) / 1.018);
-      roof.position.set(cx, y0 + 0.42 + rh / 2, cz);
+      roof.position.set(cx, y0 + 0.46 + rh / 2, cz);   // 【fix131】+0.04：原来和檐口顶面严格共面，远处一直闪烁
       add(roof);
       const along = w >= d;
       det(BX(along ? w * 0.5 : 0.5, 0.5, along ? 0.5 : d * 0.5), 0x2b3036, cx, y0 + 0.44 + rh + 0.12, cz);   // 正脊
@@ -27123,7 +27137,7 @@ function endFlightShow() {
   {
     const _cp = Math.cos(camPitch), _sp = Math.sin(camPitch);
     const _fx = Math.sin(camYaw) * _cp, _fz = Math.cos(camYaw) * _cp;
-    camPos.set(person.position.x - _fx * 6, person.position.y + 3.8 + 6 * _sp, person.position.z - _fz * 6);
+    camPos.set(person.position.x - _fx * 8, person.position.y + 4.4 + 8 * _sp, person.position.z - _fz * 8);   // 【fix131】与新的跟随视角距离保持一致
     camera.position.copy(camPos);
     camera.lookAt(person.position.x, person.position.y + 1.5, person.position.z);
   }
@@ -27254,6 +27268,7 @@ try { ncBuildGrid(); } catch (e) { console.error('[nc grid]', e); }
 // 改成"走到光柱自动弹对话面板"后：面板就是普通 HTML，手机上直接点按钮，两端行为一致。
 var flightPanelOpen = false;
 var flightPillarMiss = 0;                 // 关掉面板后的冷却，避免站在边缘反复弹
+var _retTicketCd = 0;                    // 【fix131】返程售票提示的冷却（没钱时别每帧刷屏）
 const FLIGHT_PRICE_PERM = 10000;          // 永久往返机票
 const FLIGHT_PRICE_ONCE = 500;            // 单次前往机票
 function flightHasPass() { return !!(PROGRESS && PROGRESS.flightPass); }
@@ -27595,8 +27610,22 @@ const frameLoop = () => {
   // （主城的机场光柱只能往荷芷市飞，飞过去之后没有回来的途径。）
   try {
     if (!FLIGHT && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
-      person.position.set(-100, 2, -251); vy = 0; onGround = false;
-      setHint('已返回主城机场');
+      // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
+      const _nowMs = performance.now();
+      if (flightHasPass()) {
+        person.position.set(-100, 2, -251); vy = 0; onGround = false;
+        setHint('永久往返机票 · 免费返程，已回到主城机场');
+        _retTicketCd = 0;
+      } else if (gold >= FLIGHT_PRICE_ONCE) {
+        addGold(-FLIGHT_PRICE_ONCE); saveGame();
+        person.position.set(-100, 2, -251); vy = 0; onGround = false;
+        floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 返程机票', '#ffd700');
+        setHint('已付 ' + FLIGHT_PRICE_ONCE + ' 金币返程机票，已回到主城机场');
+        _retTicketCd = 0;
+      } else if (_nowMs > _retTicketCd) {
+        _retTicketCd = _nowMs + 2000;
+        setHint('返程机票 ' + FLIGHT_PRICE_ONCE + ' 金币 · 金币不足（买永久往返机票可一直免费）');
+      }
     }
   } catch (e) {}
   // 【fix73】路牌配色按钮只在**走近路牌**时出现（用户要求：不要一直常驻屏幕）
