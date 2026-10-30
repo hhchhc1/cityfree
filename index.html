@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix149-snd-aim-guards';
+const BUILD = '20261030-fix150-return-flight';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22696,6 +22696,7 @@ function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
   // 常规世界逻辑整段跳过 —— 这样完全不必去碰那 179 处 state 判断，风险最低。
   if (FLIGHT) { flightTick(dt); return; }
+  if (RET) { retTick(dt); return; }   // 【fix150】返程演出：登机 → 滑跑 → 落地，不再直接传送
   // 没在过场：先跑光柱（走近自动弹机票对话），再更新舱门提示
   updateFlightPillar(dt);
   updateBoardPrompt();
@@ -27551,6 +27552,94 @@ function flightPathPoint(u) {
   return _fpA.copy(p[p.length - 1]);
 }
 // ---- 每帧推进（由 update() 开头接管调用）----
+// ==================== 【fix150】返程：固定翼飞机动画（不再瞬间传送）====================
+// 用户："把那个返程的固定翼飞机的动画也做一下，不要直接就回来。"
+// 做法：黑场 → 把人送到主城机场 → 客机从跑道滑回来停稳 → 黑场淡出交还操作。
+// 全程 10 秒，可点「跳过」直接结束（跳过后同样落在机场、镜头归位）。
+var RET = null;
+var _retOverlay = null;
+function retOverlayEl() {
+  if (!_retOverlay) {
+    _retOverlay = document.createElement('div');
+    _retOverlay.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:#000;opacity:0;pointer-events:none;z-index:80';
+    document.body.appendChild(_retOverlay);
+  }
+  return _retOverlay;
+}
+function startReturnFlight() {
+  if (window.__retTest) {}
+  if (FLIGHT || RET) return;
+  RET = { t: 0, swapped: false, home: null };
+  retOverlayEl().style.opacity = '0';
+  setHint('返程航班：准备登机…');
+  try { flightAudioStart(); } catch (e) {}
+  clearInput();
+}
+function retFinish() {
+  const el = retOverlayEl(); el.style.opacity = '0';
+  try { flightAudioStop(); } catch (e) {}
+  try { stopRainSnd(); } catch (e) {}
+  const R = RET; RET = null;
+  if (!R || !R.home) return;
+  // 镜头一帧到位：站在飞机旁边，面朝飞机和航站楼
+  const px = person.position.x, pz = person.position.z;
+  camYaw = Math.atan2(R.home.x - px, R.home.z - pz);
+  camPitch = 0.10;
+  const _cp = Math.cos(camPitch), _sp = Math.sin(camPitch);
+  camPos.set(px - Math.sin(camYaw) * _cp * 8, person.position.y + 4.4 + 8 * _sp, pz - Math.cos(camYaw) * _cp * 8);
+  camera.position.copy(camPos);
+  camera.lookAt(px, person.position.y + 1.5, pz);
+  setHint('已回到主城机场 · 欢迎回来');
+}
+window.startReturnFlight = startReturnFlight;   // 调试/兜底出口
+window.__retInfo = function () { return RET ? { t: Math.round(RET.t * 10) / 10, swapped: !!RET.swapped, camY: Math.round(camera.position.y) } : null; };
+function retTick(dt) {
+  const R = RET; if (!R) return;
+  R.t += dt;
+  const el = retOverlayEl();
+  const t = R.t;
+  // 阶段 1：0~1.2s 黑场淡入，并在全黑时把人和飞机就位
+  if (t < 1.2) {
+    el.style.opacity = String(Math.min(1, t / 1.2));
+  } else if (!R.swapped) {
+    el.style.opacity = '1';
+    R.swapped = true;
+    // 主城机场：客机正常停放位由 userData.fx 给出（起飞点 = 跑道西端）
+    const _fx = (AIRLINER && AIRLINER.userData.fx) ? AIRLINER.userData.fx : null;
+    const hp = new THREE.Vector3(_fx ? _fx.takeoffX : -100, _fx ? _fx.gearY : 5.6, _fx ? _fx.runwayZ : -251);
+    R.home = hp.clone();
+    R.fromX = hp.x - 150;
+    if (AIRLINER) { AIRLINER.position.set(R.fromX, hp.y, hp.z); AIRLINER.rotation.set(0, Math.PI / 2, 0); }
+    person.visible = true;
+    person.position.set(hp.x - 10, 2, hp.z + 20);
+    vy = 0; onGround = false;
+    // 镜头先架在跑道侧面看飞机滑回来
+    camPos.set(hp.x + 46, hp.y + 11, hp.z + 52);
+    camera.position.copy(camPos);
+    camera.lookAt(R.fromX, hp.y + 3, hp.z);
+  } else {
+    // 阶段 2：1.2s 之后淡出黑场，飞机从跑道滑回来停稳
+    const fade = Math.max(0, 1 - (t - 1.2) / 0.9);
+    el.style.opacity = String(fade);
+    const k = Math.min(1, Math.max(0, (t - 1.6) / 6.5));
+    const ease = k * k * (3 - 2 * k);
+    if (AIRLINER && R.home) {
+      AIRLINER.position.x = R.fromX + (R.home.x - R.fromX) * ease;
+      // 滑行时轻微摆头，看起来像在转弯对正
+      AIRLINER.rotation.y = Math.PI / 2 + Math.sin(ease * Math.PI) * 0.06;
+    }
+    // 镜头跟着飞机走，尾随在侧后方
+    if (AIRLINER && R.home) {
+      const ax = AIRLINER.position.x;
+      camera.position.set(ax - 52, R.home.y + 20, R.home.z + 66);
+      camera.lookAt(ax, R.home.y + 4, R.home.z);
+      camPos.copy(camera.position);
+      if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 正在滑回航站楼…');
+    }
+    if (t >= 8.6) retFinish();
+  }
+}
+
 function flightTick(dt) {
   // 【fix54】发动机声随阶段变化（轻微底噪，不吵）
   { const _tt = FLIGHT.t; let _vv = 0.30;
@@ -27710,7 +27799,8 @@ function endFlightShow() {
   // 东边依次是 CBD 天际线 → 河 → 对岸中式古建，一眼就是"到了另一座城"。
   person.visible = true;
   person.position.set(1262, 0.04, DEST.z + 34);
-  personAngle.v = Math.PI / 2;   // 【fix81】只设人物朝向，**不再强行重置 camYaw/camPitch** ——
+  // 【fix150】落地朝向改成"正对新城市中心"，不管落在跑道哪一段都对着城市天际线
+  personAngle.v = Math.atan2(DEST.x - person.position.x, DEST.z - person.position.z);
   // 原来这里把镜头硬切回固定角度，而相机上一帧还跟着飞机，于是出现
   // 『先移动一下视角、然后再归位』的卡顿（用户实测）。保持镜头连续即可。
   // 【fix127】下飞机时相机必须**直接就位**：原来只把飞机镜头交给常规相机，
@@ -27718,11 +27808,11 @@ function endFlightShow() {
   // → 玩家看到"视角先在很远的地方，然后猛地卡回飞机旁边"。
   // 这里直接把 camYaw/camPitch/camPos 算成"站在人物背后"的最终位置，一帧到位。
   camYaw = personAngle.v;
-  camPitch = 0.06;
+  camPitch = 0.14;   // 【fix150】稍微抬高一点，能看到城市天际线
   {
     const _cp = Math.cos(camPitch), _sp = Math.sin(camPitch);
     const _fx = Math.sin(camYaw) * _cp, _fz = Math.cos(camYaw) * _cp;
-    camPos.set(person.position.x - _fx * 8, person.position.y + 4.4 + 8 * _sp, person.position.z - _fz * 8);   // 【fix131】与新的跟随视角距离保持一致
+    camPos.set(person.position.x - _fx * 8, person.position.y + 5.6 + 8 * _sp, person.position.z - _fz * 8);
     camera.position.copy(camPos);
     camera.lookAt(person.position.x, person.position.y + 1.5, person.position.z);
   }
@@ -28224,12 +28314,12 @@ const frameLoop = () => {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
       const _nowMs = performance.now();
       if (flightHasPass()) {
-        person.position.set(-100, 2, -251); vy = 0; onGround = false;
+        startReturnFlight();   // 【fix150】改成播放返程动画，不再瞬间传送
         setHint('永久往返机票 · 免费返程，已回到主城机场');
         _retTicketCd = 0;
       } else if (gold >= FLIGHT_PRICE_ONCE) {
         addGold(-FLIGHT_PRICE_ONCE); saveGame();
-        person.position.set(-100, 2, -251); vy = 0; onGround = false;
+        startReturnFlight();   // 【fix150】付费返程同样播放动画
         floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 返程机票', '#ffd700');
         setHint('已付 ' + FLIGHT_PRICE_ONCE + ' 金币返程机票，已回到主城机场');
         _retTicketCd = 0;
