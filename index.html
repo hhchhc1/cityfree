@@ -239,8 +239,9 @@
      不再只在光柱旁边才出现 —— 原来开了开发者模式走远就找不到退出的地方）。
      z-index 31：在游戏内 HUD（10~25）之上、在黑幕弹窗（商店 90 / 面板 95+）之下，开着商店时自动被盖住。 */
   #devExitBtn {
-    position: fixed; left: 12px; top: 130px; display: none;
-    padding: 9px 14px; border-radius: 18px; z-index: 31;
+    /* 【fix130】用户要求：挪到经验条（#xpwrap，left:170 top:10）的下方，别再压在地图/疾跑旁边 */
+    position: fixed; left: 170px; top: 44px; display: none;
+    padding: 7px 12px; border-radius: 16px; z-index: 31;
     background: linear-gradient(180deg,#ff6b6b,#b52b2b); color: #fff; font: bold 13px sans-serif;
     box-shadow: 0 0 12px rgba(255,80,80,0.6); cursor: pointer; user-select: none;
   }
@@ -898,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261028-fix129-roof-climb';
+const BUILD = '20261030-fix130-gate-open';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24264,6 +24265,8 @@ function buildLinhaiCity(g) {
     }
     return m;
   }
+  // 【fix130】置 true 时 det() 只画不登记碰撞 —— 牌楼这种"门洞必须能走人"的结构用
+  let _detNoCol = false;
   function det(geo, hex, x, y, z, rx, ry, rz, glow, to) {
     const m = new THREE.Mesh(geo, detMat(hex, glow));
     m.position.set(x, y, z);
@@ -24287,7 +24290,7 @@ function buildLinhaiCity(g) {
       // 于是贴在建筑周围形成一圈看不见的空气墙 —— 用户实测：
       // 「那个空气墙是每一个都存在，每一个城墙围墙都存在，每一个古建筑上好像都有」。
       const _rot = (rx || ry || rz);
-      if (!_rot && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8)) {
+      if (!_rot && !_detNoCol && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8)) {
         LH_BLD.push({ minX: x - _w / 2, maxX: x + _w / 2, minZ: z - _d / 2, maxZ: z + _d / 2, minY: 0, top: y + _h / 2 });
       }
     } catch (e) {}
@@ -25940,6 +25943,10 @@ function buildLinhaiCity(g) {
     // 牌楼（月洞门前的入口标志：四柱三间 + 三重檐 + 匾额）
     (function paifang() {
       const px = 1870, pz = -4, RH = 7.6;
+      // 【fix130】整座牌楼"只画不挡"：横梁(5.6m)、檐口(7.6m)、斗拱这些小构件
+      // 以前被 det() 自动登记成 minY=0 的碰撞盒，等于在门洞里砌了一堵透明墙。
+      // 这里临时关掉自动登记，最后只手工给四根柱子登记碰撞。
+      _detNoCol = true;
       for (const sx of [-1, 1]) for (const k of [2.6, 6.6]) {
         det(new THREE.CylinderGeometry(0.42, 0.46, RH, 10), 0x9a3b2c, px + sx * k, RH / 2, pz);
         det(BX(1.3, 0.4, 1.3), 0x9aa0a4, px + sx * k, 0.2, pz);
@@ -25950,7 +25957,11 @@ function buildLinhaiCity(g) {
       cnRoof(px - 6.6, pz, 4.4, 3.4, 5.7, 1.9);
       cnRoof(px + 6.6, pz, 4.4, 3.4, 5.7, 1.9);
       plaque(px, 6.4, pz - 0.62, 4.2, 1.2);
-      LH_BLD.push({ minX: px - 7.8, maxX: px + 7.8, minZ: pz - 1.3, maxZ: pz + 1.3, minY: 0, top: RH });
+      _detNoCol = false;
+      // 只登记四根柱子（每根 1.1m 宽），中间三开间全部走通
+      for (const sx of [-1, 1]) for (const k of [2.6, 6.6]) {
+        LH_BLD.push({ minX: px + sx * k - 0.55, maxX: px + sx * k + 0.55, minZ: pz - 0.55, maxZ: pz + 0.55, minY: 0, top: RH });
+      }
     })();    // 石灯（夜里给园子一点光：灯罩用发光材质，不额外加点光源，省性能）
     for (const [lx, lz] of [[1870, 40], [1870, 92], [1832, 120], [1908, 120], [1812, 196], [1946, 214], [1794, 258], [1930, 96]]) {
       det(new THREE.CylinderGeometry(0.5, 0.62, 0.45, 6), 0x9a958c, lx, 0.22, lz);
