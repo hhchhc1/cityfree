@@ -16,7 +16,10 @@
      而 line2 的「黄色指引 … 161m」里 Math.round(d) 每帧都在变、line1 的「坦克/步行中」长度也不同，
      于是容器宽度一变、整行就左右同时伸缩，看起来就是"一直变大变长变短"（用户实测）。
      宽度用 vw 固定后，内容再变也不会影响布局。 */
-  #hud .line1 { font-size: 16px; font-weight: bold; width: 64vw; margin-left: auto; margin-right: auto; }
+  /* 【fix140】line1 里的数字（坦克耐久 351/360、直升机高度 60m）每帧都在变，
+     比例字体下 "1" 和 "0" 宽度不同，居中文本就会一直左右伸缩 —— 用户："上边还是会闪，一直变长变短"。
+     tabular-nums 让所有数字等宽，数字变化不再影响整行宽度。 */
+  #hud .line1 { font-size: 16px; font-weight: bold; width: 64vw; margin-left: auto; margin-right: auto; font-variant-numeric: tabular-nums; }
   #hud .line2 { font-size: 12px; opacity: 0.85; margin-top: 2px; width: 64vw; margin-left: auto; margin-right: auto; }
   /* 血量/耐力条移到右上角独立面板：原来它们在 #hud 里靠 margin:auto 居中，
      和顶部的任务追踪条(#questTracker)上下重叠，接任务时任务文字直接盖住血条，
@@ -439,6 +442,7 @@
   #xpwrap .xpline { font-weight: bold; }
   #xpbar { width: 130px; height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; margin-top: 3px; overflow: hidden; }
   #xpfill { height: 100%; width: 0; background: #9b59b6; }
+  #xpLine, #cardurtxt { font-variant-numeric: tabular-nums; }
   #ammoHud { display: none; position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 25; color: #fff; font-family: sans-serif; font-size: 14px; pointer-events: none; text-shadow: 0 1px 2px #000; background: rgba(0,0,0,0.55); padding: 4px 14px; border-radius: 12px; }
   #build { position: fixed; top: 2px; right: 6px; z-index: 30; color: #7f8ea3; font-family: monospace; font-size: 11px; pointer-events: none; user-select: none; }
   #mapPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; z-index: 95; color: #fff; font-family: sans-serif; flex-direction: column; }
@@ -899,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix139-tank-heli-aim';
+const BUILD = '20261030-fix140-tank-shell-hud';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19328,12 +19332,19 @@ if ((v.shootCd || 0) > 0) return;
     const hz = hit ? hit.o.z : gz;
     const _hDist = Math.hypot(hx - px, hz - pz);
     const hY = hit ? shellYAt(_hDist) : (gHit ? terrainHeight(hx, hz) + 1.0 : shellYAt(shellRange));
-    spawnTracer(barrelX, barrelY, barrelZ, hx, hY, hz, 'rocket');
+    // 【fix140】炮弹要有飞行时间：以前点击瞬间就在落点爆炸，炮弹还在半路、人已经被自己的爆炸波及，
+    // 表现就是"轨迹还没到，人已经死了"。现在按距离算飞行时间，到点了才炸。
+    const _shellDist = Math.max(_hDist, 1);
+    const _tFly = Math.min(2.2, Math.max(0.18, _shellDist / 130));
+    spawnTracer(barrelX, barrelY, barrelZ, hx, hY, hz, 'rocket', _tFly);
     // 爆炸范围伤害（半径20，中心100伤害，范围内车辆全部炸毁）
-    const R = 24, RY = TANK_BLAST_VH;   // 平面半径 24，垂直半径 16（上下都能炸到）
+    // 【fix140】爆炸半径 24 → 14（用户：炸的范围太大），垂直 16 → 10
+    const R = 14, RY = 10;
     // 【fix138】爆点越高伤害越弱：对着天空开炮不会把地面一片人全炸飞
     const _vFade = Math.max(0, 1 - Math.max(0, hY - (terrainHeight(hx, hz) + 2)) / 30);
     const at = d => Math.max(0, Math.round(100 * (1 - d / R) * _vFade));
+    // 【fix140】把整段爆炸收进一个函数，按炮弹飞行时间到点再执行
+    const tankBoom = () => {
     spawnBurst(hx, hz, 0xff2200, 38, hY); spawnBurst(hx, hz, 0xffcc33, 26, hY); spawnBurst(hx, hz, 0x222222, 20, hY);
     // 爆炸黑烟
     emitSmoke(hx, hY, hz, true);
@@ -19345,7 +19356,9 @@ if ((v.shootCd || 0) > 0) return;
     const inBlastV = o => Math.abs(terrainHeight(o.x, o.z) + 0.9 - tankBlastY) <= RY;
     for (const t of cars) if (!t.exploded && t !== v) { const d = Math.hypot(t.x - hx, t.z - hz); if (d < R && inBlastV(t)) { explodeCar(t); } }
     for (const tt of traffic) if (!tt.exploded) { const d = Math.hypot(tt.x - hx, tt.z - hz); if (d < R && inBlastV(tt)) explodeCar(tt); }
-    for (const pp of policeCars) if (!pp.exploded && pp !== v) { const d = Math.hypot(pp.x - hx, pp.z - hz); if (d < R && inBlastV(pp)) explodeCar(pp); }
+    for (const pp of policeCars) if (!pp.exploded && pp !== v) { const d = Math.hypot(pp.x - hx, pp.z - hz); if (d < R && inBlastV(pp)) explodeCar(pp); }    };
+    if (_tFly > 0.05) queueBullet(hx, hY, hz, _tFly, tankBoom);
+    else tankBoom();
   }
 }
 
@@ -22605,7 +22618,7 @@ function update(dt) {
       if (atkHeld) vehicleShoot();
 
        // 更新 HUD
-       hudText(hudLine1, 'line1', '直升机　·　高度 ' + Math.round(heli.flyHeight) + 'm　·　金币 ' + gold);
+       hudText(hudLine1, 'line1', '直升机　·　高度 ' + (Math.round(heli.flyHeight / 5) * 5) + 'm　·　金币 ' + gold);
        hudText(hintTextEl, 'hint', isMobile
          ? '左侧摇杆移动　·　右下「升 / 降」改变高度　·　长按攻击键射击　·　「上车」键下机'
          : 'WASD 移动　·　Space 上升　·　Shift 下降　·　鼠标瞄准+长按射击　·　E 下机');
@@ -23261,7 +23274,7 @@ function update(dt) {
     // 它们对子弹防弹，伤害全落在耐久上 —— 不把耐久摆出来，玩家被磨到爆炸都不知道自己在挨打。
     let line1;
     if (isHeli) {
-      line1 = '直升机　·　高度 ' + Math.round(currentCar.flyHeight || 0) + 'm　·　' + armorDurText(currentCar) + '　·　金币 ' + gold;
+      line1 = '直升机　·　高度 ' + (Math.round((currentCar.flyHeight || 0) / 5) * 5) + 'm　·　' + armorDurText(currentCar) + '　·　金币 ' + gold;
     } else if (isTank) {
       line1 = '坦克　·　' + armorDurText(currentCar) + '　·　金币 ' + gold;
     } else {
