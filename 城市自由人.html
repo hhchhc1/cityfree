@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix135-grapple-flight';
+const BUILD = '20261030-fix136-drumgate-plaques';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14485,7 +14485,7 @@ function fireGrapple() {
 }
 function releaseGrapple() {
   grapple = null; gvx = gvy = gvz = 0; vy = 0; climbPhase = 0;
-  const gy = platformTopAt(person.position.x, person.position.z);
+  const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
   onGround = (person.position.y <= gy + 0.05);
 }
 function updateGrapple(dt) {
@@ -15918,23 +15918,28 @@ function ncBuildGrid() {
     }
   }
 }
-function ncTopAt(x, z) {
+function ncTopAt(x, z, y) {
+  const yy = (typeof y === 'number') ? y : 1e9;
   const gx = Math.floor((x - NC_X0) / NC_CELL), gz = Math.floor((z - NC_Z0) / NC_CELL);
   if (gx < 0 || gz < 0 || gx >= NC_W || gz >= NC_H) return -Infinity;
   let t = -Infinity;
   for (const b of _ncGrid[gx + gz * NC_W]) {
-    if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && b.top > t) t = b.top;
+    if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && b.top > t && b.top <= yy + 1.3) t = b.top;
   }
   return t;
 }
 // 快速 platformTopAt：只检查附近建筑
-function platformTopAt(x, z) {
+// 【fix136】加第三个参数 y：只把"脚下或刚好能踩上去"的面当作可站立面。
+// 不加这个的话，鼓楼这种**能走进去的拱门洞**里，头顶的门楣（top=19）也会被当成地面，
+// 人一进洞就被瞬移到屋顶上 —— 所以以前城台只能撞墙、走不进去。
+function platformTopAt(x, z, y) {
+  const yy = (typeof y === 'number' && isFinite(y)) ? y : 1e9;
   let t = terrainHeight(x, z);
-  for (const pl of platforms) if (x > pl.minX && x < pl.maxX && z > pl.minZ && z < pl.maxZ) t = Math.max(t, pl.top);
+  for (const pl of platforms) if (x > pl.minX && x < pl.maxX && z > pl.minZ && z < pl.maxZ && pl.top <= yy + 1.3) t = Math.max(t, pl.top);
   // 【fix129】新城（x>900）走自己的网格：主城网格在那里是空的，不补就会踩空、爬上去也站不住
-  if (x > 900) { const _nt = ncTopAt(x, z); return _nt > t ? _nt : t; }
+  if (x > 900) { const _nt = ncTopAt(x, z, yy); return _nt > t ? _nt : t; }
   _gridAround(x, z, GRID_CELL, _gridCellsPlatform);
-  for (const ci of _gridCellsPlatform) for (const b of _gridBld[ci]) if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ) t = Math.max(t, b.top);
+  for (const ci of _gridCellsPlatform) for (const b of _gridBld[ci]) if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && b.top <= yy + 1.3) t = Math.max(t, b.top);
   return t;
 }
 // NPC（居民/警察）碰撞：建筑 + 台阶平台 + 停放车辆 + 来往车流（含摩托），让它们也是实体
@@ -22348,7 +22353,8 @@ function update(dt) {
       // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
       // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
       // 这里单独再查一份荷芷市碰撞盒。
-      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3) circleVsAABB(p, 0.4, _lb);
+      // 【fix136】同时检查 minY：门楣/屋檐这类'高处才挡'的盒子不能挡住地面上的人
+      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3 && person.position.y > (_lb.minY || 0) - 0.6) circleVsAABB(p, 0.4, _lb);
       collideCarsFast(p, 0.4);
       for (const w of wrecks) circleVsCircle(p, 0.4, { x: w.x, z: w.z }, w.radius);
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
@@ -22409,7 +22415,8 @@ function update(dt) {
       // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
       // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
       // 这里单独再查一份荷芷市碰撞盒。
-      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3) circleVsAABB(p, 0.4, _lb);
+      // 【fix136】同时检查 minY：门楣/屋檐这类'高处才挡'的盒子不能挡住地面上的人
+      if (p.x > 900) for (const _lb of LH_BLD) if (person.position.y < _lb.top - 0.3 && person.position.y > (_lb.minY || 0) - 0.6) circleVsAABB(p, 0.4, _lb);
       for (const pl of platforms) if (person.position.y < pl.top - 0.05) circleVsAABB(p, 0.4, pl);
       collideCarsFast(p, 0.4);
       for (const w of wrecks) circleVsCircle(p, 0.4, { x: w.x, z: w.z }, w.radius);
@@ -22441,7 +22448,7 @@ function update(dt) {
         if (person.position.y < gy0) person.position.y = gy0;
       }
       if (onGround) {
-        const gy = platformTopAt(person.position.x, person.position.z);
+        const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
         if (person.position.y <= gy + 0.1) person.position.y = gy;          // 稳稳站在地面/屋顶/台阶
         else if (person.position.y - gy > FALL_STEP_MAX) {                   // 落差较大 → 转入自由落体
           onGround = false; falling = true; vy = 0;
@@ -22466,7 +22473,7 @@ function update(dt) {
           fallWind -= dt;
           if (fallWind <= 0) { fallWind = 0.16; sfx('fall'); }
         }
-        const gy = platformTopAt(person.position.x, person.position.z);
+        const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
         if (person.position.y <= gy) {
           const impact = -vy;
           person.position.y = gy; vy = 0; onGround = true; falling = false;
@@ -24751,41 +24758,88 @@ function buildLinhaiCity(g) {
 // 中央拱门洞 / 雉堞 / 三层楼阁 / 斗拱 / 蓝底金字匾额 / 翘角脊兽 / 宝顶）。
 // 全部用绝对世界坐标 + det() 细节件（共享材质），所以细节再多也不涨 draw call。
   function buildDrumTower(px, pz) {
-  // 【fix81】鼓楼也登记：底座宽、塔身高，分两个盒子更贴近外形
-  LH_BLD.push({ minX: px - 11, maxX: px + 11, minZ: pz - 11, maxZ: pz + 11, minY: 0, top: 8 });
-  LH_BLD.push({ minX: px - 7, maxX: px + 7, minZ: pz - 7, maxZ: pz + 7, minY: 0, top: 24 });
-    const RED = 0xa8342a, RED_D = 0x872a22, TILE = 0x2f7a4a, TILE_D = 0x235f39;
-    const GOLD = 0xe8c45a, BLUE = 0x17356b, WOOD = 0x8a4a2c, WOOD_D = 0x5e3220;
-    const baseW = 48, baseH = 19;
-    // ---- 朱红城台（含上下线脚做收分感）----
-    det(BX(baseW, baseH, baseW), RED, px, baseH / 2, pz);
-    det(BX(baseW + 2.0, 1.4, baseW + 2.0), RED_D, px, 0.7, pz);
-    det(BX(baseW + 1.4, 1.1, baseW + 1.4), RED_D, px, baseH - 0.55, pz);
-    // ---- 中央拱门洞：暗色贯穿 + 一圈砖砌拱券 ----
-    det(BX(10, 13, baseW + 2.4), 0x140f0c, px, 6.5, pz);                   // 洞口（南北贯穿）
-    for (const s of [-1, 1]) {                                             // 拱券（两侧各一圈）
-      for (let i = 0; i < 9; i++) {
-        const a = Math.PI * (i + 0.5) / 9;
-        det(BX(1.7, 1.7, 1.2), RED, px + Math.cos(a) * 5.0, 13 + Math.sin(a) * 3.6, pz + s * (baseW / 2 + 0.5));
-      }
-      det(BX(1.6, 12.4, 1.2), RED, px + 5.6, 6.2, pz + s * (baseW / 2 + 0.5));   // 门洞两侧券脚
-      det(BX(1.6, 12.4, 1.2), RED, px - 5.6, 6.2, pz + s * (baseW / 2 + 0.5));
+  const RED = 0xa8342a, RED_D = 0x872a22, TILE = 0x2f7a4a, TILE_D = 0x235f39;
+  const GOLD = 0xe8c45a, BLUE = 0x17356b, WOOD = 0x8a4a2c, WOOD_D = 0x5e3220;
+  const baseW = 48, baseH = 19;
+  // 【fix136】用户要求：鼓楼**四面**都开拱形门洞（原来南北只有一个"贴片假门"，还进不去）。
+  // 做法：把实心城台拆成「四个角墩 + 十字贯通的券洞 + 门楣」。
+  // 门楣的碰撞盒带 minY=OPEN_H → 只有人在门楣高度以上才会被挡，走洞里不挡。
+  const OPEN_W = 11, OPEN_H = 13;
+  const pierW = (baseW - OPEN_W) / 2, pierOff = OPEN_W / 2 + pierW / 2;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    LH_BLD.push({ minX: px + sx * pierOff - pierW / 2, maxX: px + sx * pierOff + pierW / 2,
+                  minZ: pz + sz * pierOff - pierW / 2, maxZ: pz + sz * pierOff + pierW / 2, minY: 0, top: baseH });
+  }
+  LH_BLD.push({ minX: px - OPEN_W / 2, maxX: px + OPEN_W / 2, minZ: pz - baseW / 2, maxZ: pz + baseW / 2, minY: OPEN_H, top: baseH });
+  LH_BLD.push({ minX: px - baseW / 2, maxX: px + baseW / 2, minZ: pz - OPEN_W / 2, maxZ: pz + OPEN_W / 2, minY: OPEN_H, top: baseH });
+  // 城台以上那三层楼阁 + 屋顶：只在 y>baseH 时才挡（人站在门楣顶上才碰得到）
+  LH_BLD.push({ minX: px - 19, maxX: px + 19, minZ: pz - 19, maxZ: pz + 19, minY: baseH, top: 45 });
+  // 【fix136】城台 + 楼阁 + 屋顶全部"只画不挡"，碰撞由上面几个盒子手工登记。
+  // 否则线脚(1.4m)、回廊台面、匾额、宝顶这些 det 盒子会被自动登记成 minY=0 的实心障碍，
+  // 把刚打通的十字门洞重新堵死（用户说的"空气墙"就是这么来的）。
+  _detNoCol = true;
+  // ---- 四个角墩（朱红城台）----
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    det(BX(pierW, baseH, pierW), RED, px + sx * pierOff, baseH / 2, pz + sz * pierOff);
+  }
+  // ---- 门楣（拱顶以上到城台顶）：南北向、东西向各一条，中间叠成十字券顶 ----
+  det(BX(OPEN_W, baseH - OPEN_H, baseW), RED, px, OPEN_H + (baseH - OPEN_H) / 2, pz);
+  det(BX(baseW, baseH - OPEN_H, OPEN_W), RED, px, OPEN_H + (baseH - OPEN_H) / 2, pz);
+  // ---- 上下线脚（收分感）----
+  det(BX(baseW + 2.0, 1.4, baseW + 2.0), RED_D, px, 0.7, pz);
+  det(BX(baseW + 1.4, 1.1, baseW + 1.4), RED_D, px, baseH - 0.55, pz);
+  // ---- 四面砖砌拱券（四个方向各一圈，券脚落到地面）----
+  const spring = OPEN_H - 3.9, rad = 5.4;
+  for (let q = 0; q < 4; q++) {
+    const rot = q * Math.PI / 2, nx = Math.sin(rot), nz = Math.cos(rot);
+    const fx = px + nx * (baseW / 2 + 0.35), fz = pz + nz * (baseW / 2 + 0.35);
+    const tx = Math.cos(rot), tz = -Math.sin(rot);
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI * (i + 0.5) / 9;
+      det(BX(1.75, 1.75, 1.2), RED_D, fx + tx * (Math.cos(a) * rad), spring + Math.sin(a) * 3.9, fz + tz * (Math.cos(a) * rad));
     }
-    // ---- 城台顶雉堞（垛口）----
+    for (const s of [-1, 1]) {
+      det(BX(1.6, spring, 1.2), RED_D, fx + tx * s * 6.2, spring / 2, fz + tz * s * 6.2);
+    }
+  }
+  // ---- 门洞地面：青石铺地，走进去脚下是石头的 ----
+  det(BX(OPEN_W, 0.1, baseW + 1.0), 0x8d8a80, px, 0.06, pz);
+  det(BX(baseW + 1.0, 0.1, OPEN_W), 0x8d8a80, px, 0.055, pz);    // ---- 城台顶雉堞（垛口）----
     for (let k = -(baseW / 2 - 1.4); k <= baseW / 2 - 1.4; k += 3.4) {
       for (const s of [-1, 1]) {
         det(BX(2.0, 2.0, 1.3), RED, px + k, baseH + 1.0, pz + s * (baseW / 2 - 0.7));
         det(BX(1.3, 2.0, 2.0), RED, px + s * (baseW / 2 - 0.7), baseH + 1.0, pz + k);
       }
     }
-    // ---- 城台四面匾额（蓝底金字）----
+    // ---- 城台四面匾额（蓝底 + 金黄楷体匾文）----
+    // 【fix136】用户指定：东「护国安民」/ 南「辅元开化」/ 西「览秀西河」/ 北「保障冀北」
+    // q=0 → +Z 面（南）；1 → +X（东）；2 → -Z（北）；3 → -X（西）
+    const BIAN = ['辅元开化', '护国安民', '保障冀北', '览秀西河'];
     for (let q = 0; q < 4; q++) {
       const rot = q * Math.PI / 2, ox = Math.sin(rot) * (baseW / 2 + 0.5), oz = Math.cos(rot) * (baseW / 2 + 0.5);
-      det(BX(9, 3.0, 0.4), BLUE, px + ox, 15.5, pz + oz, 0, rot, 0);
-      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 17.1, pz + oz, 0, rot, 0, true);
-      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 13.9, pz + oz, 0, rot, 0, true);
-    }
-    // ---- 三层楼阁（逐层收分）----
+      det(BX(9.6, 3.4, 0.4), GOLD, px + ox, 15.6, pz + oz, 0, rot, 0);
+      det(BX(9.0, 2.9, 0.42), BLUE, px + ox, 15.6, pz + oz, 0, rot, 0);
+      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 17.2, pz + oz, 0, rot, 0, true);
+      det(BX(9.6, 0.3, 0.5), GOLD, px + ox, 14.0, pz + oz, 0, rot, 0, true);
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = 168;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = '#17356b'; c2.fillRect(0, 0, 512, 168);
+      c2.strokeStyle = 'rgba(232,196,90,0.5)'; c2.lineWidth = 7; c2.strokeRect(9, 9, 494, 150);
+      c2.fillStyle = '#f0cf6b';
+      c2.font = 'bold 104px "KaiTi","STKaiti","SimSun",serif';
+      c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.shadowColor = 'rgba(255,215,110,0.85)'; c2.shadowBlur = 16;
+      c2.fillText(BIAN[q], 256, 92);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.anisotropy = 4;
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(8.6, 2.6), new THREE.MeshBasicMaterial({ map: tex }));
+      // 必须贴在蓝底**前面**：蓝底中心在 baseW/2+0.5、厚 0.42（半厚 0.21），
+      // 原来只放到 +0.74，等于藏在蓝底肚子里，所以匾上一直是空白的。
+      board.position.set(px + Math.sin(rot) * (baseW / 2 + 0.5 + 0.21 + 0.06), 15.6, pz + Math.cos(rot) * (baseW / 2 + 0.5 + 0.21 + 0.06));
+      board.rotation.y = rot;
+      add(board);
+    }    // ---- 三层楼阁（逐层收分）----
     let y = baseH + 1.2;
     for (let L = 0; L < 3; L++) {
       const bw = baseW * (1 - L * 0.19), wallH = 7.6 - L * 0.9;
@@ -24843,6 +24897,7 @@ function buildLinhaiCity(g) {
         det(BX(0.8, 1.1, 0.8), GOLD, px + sx * (tw * 0.9 / 2 + k * 1.3), y + 5.2 - k * 1.15, pz + sz * (tw * 0.9 / 2 + k * 1.3), 0, 0, 0, true);
       }
     }
+    _detNoCol = false;   // 栏杆/石狮恢复自动登记（它们是真实障碍）
     // ---- 台基石栏 + 门前石狮 ----
     for (let k = -(baseW / 2 + 9); k <= baseW / 2 + 9; k += 3.0) {
       for (const s of [-1, 1]) {
