@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix142-heli-fx-grapple-miny';
+const BUILD = '20261030-fix143-base-tank-tracer';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6664,6 +6664,167 @@ var AIRLINER = null;
 })();
 
 // ========== 军事基地（西北偏北，直升机+坦克+机枪塔） ==========
+// ========== 【fix143】军事基地：围墙 + 岗楼 + 标识（原来只有两根门柱，完全不像基地） ==========
+(function militaryBaseBuild() {
+  const bx = -280, bz = 120, gy = 2.5, baseW = 80, baseD = 70;
+  const wallH = 3.2, wallT = 1.2;
+  const x0 = bx - baseW / 2, x1 = bx + baseW / 2, z0 = bz - baseD / 2, z1 = bz + baseD / 2;
+  const gateHalf = 7;   // 南面大门开口半宽（门洞 14 米，坦克能开出去）
+  const conc = new THREE.MeshLambertMaterial({ color: 0x8c8c86 });
+  const concD = new THREE.MeshLambertMaterial({ color: 0x6e6e69 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+  const steel = new THREE.MeshLambertMaterial({ color: 0x555a52 });
+  const red = new THREE.MeshLambertMaterial({ color: 0xa8241c });
+  const yellow = new THREE.MeshLambertMaterial({ color: 0xd8b32a });
+  const addWall = (wx, wz, ww, wd) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(ww, wallH, wd), conc);
+    m.position.set(wx, gy + wallH / 2, wz); scene.add(m);
+    // 压顶
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.3, 0.28, wd + 0.3), concD);
+    cap.position.set(wx, gy + wallH + 0.14, wz); scene.add(cap);
+    buildings.push({ minX: wx - ww / 2, maxX: wx + ww / 2, minZ: wz - wd / 2, maxZ: wz + wd / 2, bottom: gy, top: gy + wallH + 0.28 });
+  };
+  // 四面围墙（南面留大门）
+  addWall(bx, z0, baseW + wallT, wallT);                                   // 北
+  addWall(x0, bz, wallT, baseD + wallT);                                   // 西
+  addWall(x1, bz, wallT, baseD + wallT);                                   // 东
+  addWall((x0 + (bx - gateHalf)) / 2, z1, (bx - gateHalf) - x0, wallT);    // 南（门西）
+  addWall(((bx + gateHalf) + x1) / 2, z1, x1 - (bx + gateHalf), wallT);    // 南（门东）
+  // 墙顶铁丝网支架
+  for (let x = x0 + 2; x < x1; x += 4) {
+    for (const zz of [z0, z1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), dark);
+      post.position.set(x, gy + wallH + 0.6, zz); scene.add(post);
+    }
+  }
+  for (let z = z0 + 2; z < z1; z += 4) {
+    for (const xx of [x0, x1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), dark);
+      post.position.set(xx, gy + wallH + 0.6, z); scene.add(post);
+    }
+  }
+  // 墙身红白警示带
+  for (const zz of [z0, z1]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.5, wallT + 0.08), red);
+    band.position.set(bx, gy + 2.1, zz); scene.add(band);
+  }
+  for (const xx of [x0, x1]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(wallT + 0.08, 0.5, baseD), red);
+    band.position.set(xx, gy + 2.1, bz); scene.add(band);
+  }
+  // 院内硬化地面（原来是一片草地，完全不像军事基地）
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(baseW + 1.0, 0.1, baseD + 1.0), new THREE.MeshLambertMaterial({ color: 0x71716b }));   // 铺到墙根，别留一条草
+  apron.position.set(bx, gy + 0.05, bz); scene.add(apron);
+  // 停车位划线（坦克区）
+  for (let i = 0; i < 3; i++) {
+    const line = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 9), new THREE.MeshBasicMaterial({ color: 0xe8e4d0 }));
+    line.position.set(bx + 18 + i * 7, gy + 0.11, bz + 20); scene.add(line);
+  }
+  // 弹药箱 + 油桶堆
+  for (let i = 0; i < 4; i++) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.9), new THREE.MeshLambertMaterial({ color: 0x4e5a3a }));
+    crate.position.set(bx + 34, gy + 0.42 + (i % 2) * 0.72, bz + 8 + Math.floor(i / 2) * 1.1); scene.add(crate);
+  }
+  for (let i = 0; i < 6; i++) {
+    const barrelM = new THREE.MeshLambertMaterial({ color: i % 2 ? 0x8a2f22 : 0x3f4a35 });
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.0, 10), barrelM);
+    drum.position.set(bx + 33 + (i % 3) * 1.0, gy + 0.55, bz + 2 - Math.floor(i / 3) * 1.0); scene.add(drum);
+  }
+  treeObstacles.push({ x: bx + 34, z: bz + 8.5, r: 1.4 });
+  // 场内高杆灯
+  for (const [lx, lz] of [[bx - 30, bz + 26], [bx + 30, bz + 26], [bx - 30, bz - 26], [bx + 30, bz - 26]]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 9, 8), new THREE.MeshLambertMaterial({ color: 0x555a52 }));
+    post.position.set(lx, gy + 4.5, lz); scene.add(post);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.24, 0.7), new THREE.MeshBasicMaterial({ color: 0xfff0c0 }));
+    head.position.set(lx, gy + 9.05, lz); scene.add(head);
+    treeObstacles.push({ x: lx, z: lz, r: 0.6 });
+  }  // 四角墙顶岗亭（带探照灯）——注意：院内已经有四座机枪塔，这里改成"骑在墙顶"的小岗亭，
+  // 不再另立腿架，避免和机枪塔位置重叠。
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const tx = bx + sx * (baseW / 2 - 1.0), tz = bz + sz * (baseD / 2 - 1.0);
+    const hutY = gy + wallH + 0.28;
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 3.6), new THREE.MeshLambertMaterial({ color: 0x5c6650 }));
+    hut.position.set(tx, hutY + 1.2, tz); scene.add(hut);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.1, 1.1, 4), concD);
+    roof.rotation.y = Math.PI / 4; roof.position.set(tx, hutY + 2.95, tz); scene.add(roof);
+    // 射击孔
+    for (const f of [-1, 1]) {
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.32, 0.08), dark);
+      slit.position.set(tx + (sx > 0 ? -f * 1.81 : f * 1.81), hutY + 1.4, tz + (sz > 0 ? -f * 1.81 : f * 1.81)); scene.add(slit);
+    }
+    // 探照灯（朝院内）
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, 0.5, 10), dark);
+    lamp.rotation.x = Math.PI / 2;
+    lamp.position.set(tx - sx * 2.2, hutY + 1.6, tz - sz * 2.2); scene.add(lamp);
+    const beam = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff3c0 }));
+    beam.position.set(tx - sx * 2.4, hutY + 1.6, tz - sz * 2.4); scene.add(beam);
+  }  // 大门内外的路面标线（黄线 + 停止线）
+  for (const zz of [z1 - 6, z1 + 6]) {
+    const line = new THREE.Mesh(new THREE.BoxGeometry(baseW * 0.9, 0.06, 0.5), yellow);
+    line.position.set(bx, gy + 0.06, zz); scene.add(line);
+  }
+  for (const s of [-1, 1]) {
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 26), yellow);
+    edge.position.set(bx + s * gateHalf, gy + 0.06, z1 + 8); scene.add(edge);
+  }
+  // 起落杆（红白相间，抬起状态）
+  const poleBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.1, 1.0), concD);
+  poleBase.position.set(bx + gateHalf + 1.2, gy + 0.55, z1 + 3); scene.add(poleBase);
+  for (let i = 0; i < 6; i++) {
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.22, 0.22), i % 2 ? red : new THREE.MeshLambertMaterial({ color: 0xf0f0f0 }));
+    seg.position.set(bx + gateHalf + 1.2 - 0.7 - i * 1.4, gy + 1.9, z1 + 3); scene.add(seg);
+  }
+  // 沙袋掩体（门口两侧）
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 5; k++) {
+      for (let h = 0; h < 2; h++) {
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.35, 0.62), new THREE.MeshLambertMaterial({ color: 0x9c8a5e }));
+        bag.position.set(bx + s * (gateHalf + 2.6 + k * 1.15) + (h % 2) * 0.25, gy + 0.2 + h * 0.35, z1 + 5.4); scene.add(bag);
+      }
+    }
+  }
+  // 旗杆 + 红旗
+  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 12, 8), new THREE.MeshLambertMaterial({ color: 0xdcdcdc }));
+  flagPole.position.set(bx + 14, gy + 6, z1 - 10); scene.add(flagPole);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.4), new THREE.MeshLambertMaterial({ color: 0xc21f16, side: THREE.DoubleSide }));
+  flag.position.set(bx + 15.9, gy + 10.6, z1 - 10); scene.add(flag);
+  // 标识牌（canvas 贴图）
+  const mkSign = (title, sub, w, h, bg, fg, border) => {
+    const cv = document.createElement('canvas');
+    cv.width = 640; cv.height = Math.round(640 * h / w);
+    const c2 = cv.getContext('2d');
+    c2.fillStyle = bg; c2.fillRect(0, 0, cv.width, cv.height);
+    if (border) { c2.strokeStyle = border; c2.lineWidth = 16; c2.strokeRect(8, 8, cv.width - 16, cv.height - 16); }
+    c2.fillStyle = fg; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+    c2.font = 'bold ' + Math.round(cv.height * (sub ? 0.40 : 0.5)) + 'px "Microsoft YaHei","SimHei",sans-serif';
+    c2.fillText(title, cv.width / 2, sub ? cv.height * 0.38 : cv.height * 0.52);
+    if (sub) { c2.font = 'bold ' + Math.round(cv.height * 0.18) + 'px Arial,sans-serif'; c2.fillText(sub, cv.width / 2, cv.height * 0.76); }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = 4;
+    return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  };
+  // 大门横梁上的大牌
+  const gateSign = mkSign('军事基地', 'MILITARY BASE', 14, 2.6, '#1d2a1d', '#f2e6b8', '#c8a24a');
+  gateSign.position.set(bx, gy + 7.4, z1 + 0.05); scene.add(gateSign);
+  // 门口两侧立柱上的编号牌
+  for (const s of [-1, 1]) {
+    const num = mkSign(s < 0 ? '警' : '卫', 'GUARD', 1.8, 1.8, '#7a1512', '#ffffff', '#f0d47a');
+    num.position.set(bx + s * (gateHalf + 4.4), gy + 4.4, z1 + 0.85); scene.add(num);
+  }
+  // 围墙外朝外的警示牌
+  const warn = mkSign('军事禁区', 'NO ENTRY', 6.5, 1.7, '#b0201a', '#ffffff', '#ffffff');
+  warn.position.set(bx + 26, gy + 1.9, z1 + 0.7); scene.add(warn);
+  const warn2 = warn.clone(); warn2.position.set(bx - 26, gy + 1.9, z1 + 0.7); scene.add(warn2);
+  // 北墙内侧的标语
+  const slogan = mkSign('听党指挥 能打胜仗 作风优良', 'MILITARY BASE No.7', 22, 2.2, '#1d2a1d', '#f2e6b8', '#c8a24a');
+  slogan.position.set(bx, gy + 5.6, z0 + 0.7); scene.add(slogan);   // 默认朝向 +Z（朝院内），写反了会变成镜像字
+  // 停机坪旁的风向袋
+  const sockPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), steel);
+  sockPole.position.set(bx - 18, gy + 2.5, bz + 20); scene.add(sockPole);
+  const sock = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.0, 8, 1, true), new THREE.MeshLambertMaterial({ color: 0xe06a2a, side: THREE.DoubleSide }));
+  sock.rotation.z = Math.PI / 2; sock.position.set(bx - 17, gy + 5, bz + 20); scene.add(sock);
+  treeObstacles.push({ x: bx - 18, z: bz + 20, r: 0.8 });
+})();
 let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 (function addMilitaryBase() {
   const bx = -280, bz = 120;
@@ -6816,72 +6977,153 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 
   // ========== 坦克模型（大型主战坦克，~8m长） ==========
   function buildTankModel() {
-  const tankGroup = new THREE.Group();
-  const tankBodyMat = new THREE.MeshLambertMaterial({ color: 0x4a5a3a });
-  const tankDarkMat = new THREE.MeshLambertMaterial({ color: 0x3a4a2a });
-  const tankTrackMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-  // 底盘（宽大厚重）
-  const tankChassis = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 8.0), tankDarkMat);
-  tankChassis.position.set(0, 0.6, 0); tankGroup.add(tankChassis);
-  // 前装甲（倾斜）
-  const frontArmor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.6, 1.5), tankBodyMat);
-  frontArmor.rotation.x = -0.3; frontArmor.position.set(0, 1.0, 4.2); tankGroup.add(frontArmor);
-  // 后装甲
-  const rearArmor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.0, 0.5), tankDarkMat);
-  rearArmor.position.set(0, 0.7, -4.2); tankGroup.add(rearArmor);
-  // 履带（两侧，宽大）
-  for (const side of [-1, 1]) {
-    const track = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 8.2), tankTrackMat);
-    track.position.set(side * 2.4, 0.5, 0); tankGroup.add(track);
-    // 履带轮（6个）
-    for (let wz = -3.2; wz <= 3.2; wz += 1.28) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.65, 10), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-      wheel.rotation.z = Math.PI / 2; wheel.position.set(side * 2.4, 0.25, wz); tankGroup.add(wheel);
-    }
-    // 驱动轮（前后各一个）
-    for (const wz of [-3.8, 3.8]) {
-      const driveWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.65, 10), new THREE.MeshLambertMaterial({ color: 0x444444 }));
-      driveWheel.rotation.z = Math.PI / 2; driveWheel.position.set(side * 2.4, 0.6, wz); tankGroup.add(driveWheel);
-    }
+  // 【fix143】坦克重建：主战坦克（MBT）造型 —— 楔形炮塔、反应装甲、侧裙、负重轮、
+  // 炮塔尾篮、车长塔、探照灯、星光标识。整体尺寸与碰撞、相机、炮塔旋转接口保持不变。
+  const g = new THREE.Group();
+  const bodyM = new THREE.MeshLambertMaterial({ color: 0x4a5a3a });   // 军绿
+  const darkM = new THREE.MeshLambertMaterial({ color: 0x3a4a2a });   // 深绿
+  const camoM = new THREE.MeshLambertMaterial({ color: 0x5c6b45 });   // 迷彩浅
+  const trackM = new THREE.MeshLambertMaterial({ color: 0x1e1e1e });
+  const steelM = new THREE.MeshLambertMaterial({ color: 0x6b6f66 });
+  const rubberM = new THREE.MeshLambertMaterial({ color: 0x2b2b2b });
+  const lampM = new THREE.MeshBasicMaterial({ color: 0xfff6c8 });
+  const tailM = new THREE.MeshBasicMaterial({ color: 0xd8321e });
+  const mk = (geo, mat, x, y, z, rx, ry, rz, group) => {
+    const o = new THREE.Mesh(geo, mat);
+    o.position.set(x, y, z);
+    if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz;
+    (group || g).add(o); return o;
+  };
+  // ---- 车体底盘 ----
+  mk(new THREE.BoxGeometry(3.2, 1.0, 7.2), darkM, 0, 0.95, 0);              // 车体底甲
+  mk(new THREE.BoxGeometry(4.4, 0.9, 6.4), bodyM, 0, 1.55, -0.2);           // 车体主装甲
+  // 首上倾斜甲（楔形）
+  mk(new THREE.BoxGeometry(4.2, 0.72, 2.2), bodyM, 0, 1.62, 3.15, -0.52, 0, 0);
+  mk(new THREE.BoxGeometry(4.2, 0.5, 1.0), darkM, 0, 2.02, 2.55);           // 首上平台
+  // 反应装甲块（首上）
+  for (let i = -2; i <= 2; i++) {
+    mk(new THREE.BoxGeometry(0.62, 0.36, 0.72), darkM, i * 0.78, 2.12, 2.15, 0, 0, 0.18);
   }
-  // 车体上部
-  const tankUpper = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.8, 5.5), tankBodyMat);
-  tankUpper.position.set(0, 1.6, 0); tankGroup.add(tankUpper);
-  // 炮塔（可旋转，大型六边形）
-  const turretGroup = new THREE.Group();
-  turretGroup.position.set(0, 2.4, -0.5);
-  const turretBase = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 3.2), tankBodyMat);
-  turretBase.position.set(0, 0.5, 0); turretGroup.add(turretBase);
-  // 炮塔前部楔形
-  const turretFront = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.8, 1.0), tankDarkMat);
-  turretFront.position.set(0, 0.6, 1.8); turretGroup.add(turretFront);
-  // 炮塔顶部舱盖
-  const hatch = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.12, 10), tankDarkMat);
-  hatch.position.set(0, 1.05, 0); turretGroup.add(hatch);
-  // 主炮管（长管）
-  const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 5.5, 10), tankDarkMat);
-  gunBarrel.rotation.x = Math.PI / 2; gunBarrel.position.set(0, 0.65, 4.0); turretGroup.add(gunBarrel);
-  // 炮口制退器
-  const muzzleBrake = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.5, 10), tankDarkMat);
-  muzzleBrake.rotation.x = Math.PI / 2; muzzleBrake.position.set(0, 0.65, 6.8); turretGroup.add(muzzleBrake);
-  // 烟幕弹发射器
-  for (const side of [-1, 1]) {
+  // 尾板 + 排气 + 外挂油箱
+  mk(new THREE.BoxGeometry(4.2, 1.1, 0.5), darkM, 0, 1.35, -3.5);
+  mk(new THREE.BoxGeometry(0.9, 0.55, 0.6), trackM, 1.5, 1.1, -3.75);       // 排气口
+  for (const s of [-1, 1]) {
+    mk(new THREE.CylinderGeometry(0.42, 0.42, 1.7, 12), steelM, s * 1.75, 1.95, -3.05, 0, 0, 0);
+    const drum = mk(new THREE.CylinderGeometry(0.42, 0.42, 1.7, 12), steelM, s * 1.75, 1.95, -3.05);
+    drum.rotation.z = Math.PI / 2;
+  }
+  // 拖车钢缆（车体侧面）
+  for (const s of [-1, 1]) {
+    mk(new THREE.CylinderGeometry(0.055, 0.055, 5.4, 6), steelM, s * 2.15, 2.05, -0.4, Math.PI / 2, 0, 0);
+  }
+  // 首灯 / 尾灯
+  for (const s of [-1, 1]) {
+    const hl = mk(new THREE.BoxGeometry(0.55, 0.32, 0.22), darkM, s * 1.35, 1.82, 3.95);
+    mk(new THREE.BoxGeometry(0.44, 0.22, 0.08), lampM, s * 1.35, 1.82, 4.06);
+    mk(new THREE.BoxGeometry(0.34, 0.2, 0.12), tailM, s * 1.5, 1.55, -3.76);
+  }
+  // 牵引钩
+  for (const s of [-1, 1]) mk(new THREE.TorusGeometry(0.16, 0.06, 6, 10), steelM, s * 1.1, 0.9, -3.72);
+  // ---- 履带 + 负重轮 ----
+  for (const s of [-1, 1]) {
+    const tx = s * 2.05;
+    // 履带外带（上下两段 + 前后圆弧近似）
+    mk(new THREE.BoxGeometry(0.78, 0.34, 8.6), trackM, tx, 0.18, 0);
+    mk(new THREE.BoxGeometry(0.78, 0.30, 8.6), trackM, tx, 1.02, 0);
+    mk(new THREE.BoxGeometry(0.78, 0.86, 0.42), trackM, tx, 0.6, 4.28);
+    mk(new THREE.BoxGeometry(0.78, 0.86, 0.42), trackM, tx, 0.6, -4.28);
+    // 履带齿（少量，够看出纹理）
+    for (let i = -3; i <= 3; i++) {
+      mk(new THREE.BoxGeometry(0.82, 0.1, 0.3), rubberM, tx, 0.36, i * 1.2);
+      mk(new THREE.BoxGeometry(0.82, 0.1, 0.3), rubberM, tx, 0.86, i * 1.2 + 0.6);
+    }
+    // 负重轮 6 个 + 主动轮/诱导轮
+    for (let i = 0; i < 6; i++) {
+      const wz = -3.0 + i * 1.2;
+      const w = mk(new THREE.CylinderGeometry(0.44, 0.44, 0.72, 14), darkM, tx, 0.46, wz, 0, 0, Math.PI / 2);
+      mk(new THREE.CylinderGeometry(0.2, 0.2, 0.76, 10), steelM, tx, 0.46, wz, 0, 0, Math.PI / 2);
+    }
+    mk(new THREE.CylinderGeometry(0.5, 0.5, 0.7, 12), steelM, tx, 0.62, 3.9, 0, 0, Math.PI / 2);   // 主动轮
+    mk(new THREE.CylinderGeometry(0.46, 0.46, 0.7, 12), steelM, tx, 0.55, -3.9, 0, 0, Math.PI / 2); // 诱导轮
+    for (const rz of [-2.0, 0, 2.0]) mk(new THREE.CylinderGeometry(0.16, 0.16, 0.6, 8), darkM, tx, 0.98, rz, 0, 0, Math.PI / 2);
+    // 侧裙（带迷彩）
+    mk(new THREE.BoxGeometry(0.12, 0.72, 6.6), camoM, s * 2.46, 1.35, 0);
+    mk(new THREE.BoxGeometry(0.16, 0.5, 1.2), darkM, s * 2.46, 1.2, 3.5, 0, 0, 0);   // 前挡泥板
+  }
+  // ---- 炮塔 ----
+  const T = new THREE.Group();
+  T.position.set(0, 2.4, -0.4);
+  mk(new THREE.BoxGeometry(2.9, 0.94, 3.0), bodyM, 0, 0.48, 0, 0, 0, 0, T);        // 炮塔主体
+  mk(new THREE.BoxGeometry(2.5, 0.8, 1.1), darkM, 0, 0.5, 1.85, -0.12, 0, 0, T);   // 楔形前甲
+  mk(new THREE.BoxGeometry(2.2, 0.34, 0.9), camoM, 0, 0.95, 1.55, 0, 0, 0, T);     // 顶部附加甲
+  // 反应装甲（炮塔正面 + 两侧）
+  for (let i = -1; i <= 1; i++) {
+    mk(new THREE.BoxGeometry(0.72, 0.42, 0.5), darkM, i * 0.78, 0.55, 2.36, 0.1, 0, 0, T);
+  }
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 3; i++) mk(new THREE.BoxGeometry(0.34, 0.4, 0.62), darkM, s * 1.5, 0.5, 0.9 - i * 0.85, 0, 0, 0, T);
+    // 储物箱
+    mk(new THREE.BoxGeometry(0.3, 0.44, 1.1), camoM, s * 1.52, 0.95, -0.55, 0, 0, 0, T);
+  }
+  // 炮塔尾篮（栅栏）
+  mk(new THREE.BoxGeometry(2.4, 0.1, 1.0), steelM, 0, 0.38, -1.95, 0, 0, 0, T);
+  mk(new THREE.BoxGeometry(2.4, 0.1, 1.0), steelM, 0, 0.86, -1.95, 0, 0, 0, T);
+  for (const s of [-1, 1]) {
+    mk(new THREE.BoxGeometry(0.08, 0.5, 1.0), steelM, s * 1.16, 0.62, -1.95, 0, 0, 0, T);
+    mk(new THREE.BoxGeometry(2.4, 0.5, 0.08), steelM, 0, 0.62, -2.42, 0, 0, 0, T);
+  }
+  mk(new THREE.BoxGeometry(1.0, 0.5, 0.8), camoM, -0.5, 0.68, -1.95, 0, 0, 0, T);   // 尾篮里的行李
+  // 车长塔 + 舱盖
+  mk(new THREE.CylinderGeometry(0.62, 0.62, 0.34, 14), bodyM, 0.62, 1.12, -0.35, 0, 0, 0, T);
+  mk(new THREE.CylinderGeometry(0.56, 0.56, 0.1, 14), darkM, 0.62, 1.32, -0.35, 0, 0, 0, T);
+  // 车长观瞄镜
+  mk(new THREE.BoxGeometry(0.34, 0.26, 0.2), steelM, 0.62, 1.32, 0.35, 0, 0, 0, T);
+  // 炮手舱盖
+  mk(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 12), darkM, -0.62, 1.0, -0.2, 0, 0, 0, T);
+  // 主炮（带抽烟装置和制退器）
+  mk(new THREE.CylinderGeometry(0.15, 0.17, 5.6, 12), darkM, 0, 0.62, 4.05, Math.PI / 2, 0, 0, T);
+  mk(new THREE.CylinderGeometry(0.21, 0.21, 0.7, 12), steelM, 0, 0.62, 2.6, Math.PI / 2, 0, 0, T);   // 抽烟装置
+  mk(new THREE.CylinderGeometry(0.24, 0.18, 0.62, 12), darkM, 0, 0.62, 6.9, Math.PI / 2, 0, 0, T);   // 制退器
+  // 并列机枪
+  mk(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 8), steelM, 0.5, 0.55, 2.9, Math.PI / 2, 0, 0, T);
+  // 烟幕弹发射器（两排）
+  for (const s of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
-      const smoke = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 6), new THREE.MeshLambertMaterial({ color: 0x555555 }));
-      smoke.rotation.x = 0.4; smoke.position.set(side * 1.6, 0.8, 1.2 + i * 0.35); turretGroup.add(smoke);
+      mk(new THREE.CylinderGeometry(0.07, 0.07, 0.34, 6), steelM, s * 1.35, 0.72, 1.05 + i * 0.3, 0.5, 0, 0, T);
     }
   }
   // 车顶机枪
-  const tankMg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1.2), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-  tankMg.position.set(0.8, 1.2, 0.3); turretGroup.add(tankMg);
-  // 天线
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2.5, 4), new THREE.MeshLambertMaterial({ color: 0x666666 }));
-  antenna.position.set(-1.2, 2.0, -0.8); turretGroup.add(antenna);
-  tankGroup.add(turretGroup);
-  tankGroup.userData.turret = turretGroup;
-    return tankGroup;
+  mk(new THREE.BoxGeometry(0.08, 0.08, 1.15), trackM, 0.9, 1.42, 0.32, 0, 0, 0, T);
+  mk(new THREE.BoxGeometry(0.22, 0.18, 0.4), darkM, 0.9, 1.34, -0.15, 0, 0, 0, T);
+  // 天线（两根）
+  mk(new THREE.CylinderGeometry(0.022, 0.022, 2.6, 4), steelM, -1.15, 2.1, -1.3, 0.06, 0, 0, T);
+  mk(new THREE.CylinderGeometry(0.018, 0.018, 1.9, 4), steelM, 1.15, 1.85, -1.5, -0.05, 0, 0, T);
+  // 炮塔侧后方的探照灯
+  mk(new THREE.CylinderGeometry(0.2, 0.24, 0.32, 10), darkM, -1.3, 0.95, 0.55, 0.3, 0, 0, T);
+  mk(new THREE.SphereGeometry(0.17, 8, 6), lampM, -1.34, 0.95, 0.72, 0, 0, 0, T);
+  // 星光标识（左右各一，canvas 贴图）
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
+  const c2 = cv.getContext('2d');
+  c2.clearRect(0, 0, 128, 128);
+  c2.fillStyle = '#f2f2ea';
+  c2.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const r = (i % 2 === 0) ? 58 : 24;
+    const px2 = 64 + Math.cos(a) * r, py2 = 64 + Math.sin(a) * r;
+    if (i === 0) c2.moveTo(px2, py2); else c2.lineTo(px2, py2);
   }
-  function spawnMilitaryTank() {
+  c2.closePath(); c2.fill();
+  const starTex = new THREE.CanvasTexture(cv);
+  for (const s of [-1, 1]) {
+    const star = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), new THREE.MeshBasicMaterial({ map: starTex, transparent: true }));
+    star.position.set(s * 1.47, 0.52, 0.35); star.rotation.y = s * Math.PI / 2;
+    T.add(star);
+  }
+  g.add(T);
+  g.userData.turret = T;
+  return g;
+}  function spawnMilitaryTank() {
     const tankGroup = buildTankModel();
     const tankX = bx + 25, tankZ = bz + 20;   // 坦克放在基地东南角（远离直升机停机坪）
     tankGroup.position.set(tankX, baseGy + 0.8, tankZ);
@@ -16558,12 +16800,16 @@ const TRACER_CAP = isMobile ? 50 : 90;            // 同屏子弹轨迹上限
 const _tracerPools = { single: [], stream: [], rocket: [], __beads: [] };
 var _tracerGeos = null, _tracerMats = null;
 function tracerKind(w) {
+  // 【fix143】载具机枪单独一种弹道：比步枪粗得多，从高空扫射时也看得清
+  if (w === 'cannon') return 'cannon';
   if (w === 'rocket' || w === 'rpg' || w === 'rpg4') return 'rocket';
   if (w === 'shotgun') return 'spread';
   if (w === 'pistol' || w === 'revolver' || w === 'fist') return 'single';
   return 'stream';                       // smg / rifle / ak47 / sniper
 }
 function tracerPalette(kind) {
+  // 【fix143】直升机机枪：粗 + 亮（原来是步枪那种细丝，天上打下来几乎看不见）
+  if (kind === 'cannon') return { head: 0xfff2a8, halo: 0xffe066, beam: 0xffd24a, headSize: 0.30, haloSize: 0.58, beamR: 0.16, op: 1.0, dur: 0.22 };
   if (kind === 'rocket') return { head: 0xff4400, halo: 0xff6600, beam: 0xff8800, headSize: 0.13, haloSize: 0.24, beamR: 0.065, op: 1.0, dur: 0.35 };
   if (kind === 'stream') return { head: 0xfff27a, halo: 0xfff6b0, beam: 0xfff088, headSize: 0.062, haloSize: 0.125, beamR: 0.028, op: 0.85, dur: 0.16 };
   return                                    { head: 0xffaa33, halo: 0xffcc44, beam: 0xffaa33, headSize: 0.05, haloSize: 0.10, beamR: 0.02, op: 0.8, dur: 0.09 };
@@ -19267,7 +19513,7 @@ if ((v.shootCd || 0) > 0) return;
     // 【fix142】枪口火光必须画在**枪口高度**：spawnBurst 不传 y 时默认贴地面，
     // 于是天空中的直升机开火，火光出现在机身正下方的地面上（用户截图里那串火星）。
     spawnBurst(px + fdx * 3, pz + fdz * 3, 0xffd76a, 4, py);
-    spawnTracer(px + fdx * 3, py, pz + fdz * 3, hx, hitY, hz, 'rifle');
+    spawnTracer(px + fdx * 3, py, pz + fdz * 3, hx, hitY, hz, 'cannon');   // 【fix143】加粗弹道
     if (bestHit) {
       if (bestHit.k === 'r') damageResident(bestHit.o, 15, 'heli');
       else if (bestHit.k === 'c') hitCop(bestHit.o, 15, 'heli');
