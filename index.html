@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix143-base-tank-tracer';
+const BUILD = '20261030-fix144-base-polish';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6677,8 +6677,9 @@ var AIRLINER = null;
   const red = new THREE.MeshLambertMaterial({ color: 0xa8241c });
   const yellow = new THREE.MeshLambertMaterial({ color: 0xd8b32a });
   const addWall = (wx, wz, ww, wd) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(ww, wallH, wd), conc);
-    m.position.set(wx, gy + wallH / 2, wz); scene.add(m);
+    // 墙体向下多埋 1.2 米：地形在基地边缘有起伏，墙根露出一条缝会看着像悬空
+    const m = new THREE.Mesh(new THREE.BoxGeometry(ww, wallH + 1.2, wd), conc);
+    m.position.set(wx, gy + (wallH + 1.2) / 2 - 1.2, wz); scene.add(m);
     // 压顶
     const cap = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.3, 0.28, wd + 0.3), concD);
     cap.position.set(wx, gy + wallH + 0.14, wz); scene.add(cap);
@@ -6767,7 +6768,13 @@ var AIRLINER = null;
     const edge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 26), yellow);
     edge.position.set(bx + s * gateHalf, gy + 0.06, z1 + 8); scene.add(edge);
   }
-  // 起落杆（红白相间，抬起状态）
+  // 门外进场道路（原来大门直接开在草地上）
+  const approach = new THREE.Mesh(new THREE.BoxGeometry(18, 0.12, 34), new THREE.MeshLambertMaterial({ color: 0x5f5f5a }));
+  approach.position.set(bx, gy + 0.02, z1 + 16.5); scene.add(approach);
+  for (let i = 0; i < 5; i++) {
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 3.0), new THREE.MeshBasicMaterial({ color: 0xe8e4d0 }));
+    dash.position.set(bx, gy + 0.1, z1 + 3 + i * 6.2); scene.add(dash);
+  }  // 起落杆（红白相间，抬起状态）
   const poleBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.1, 1.0), concD);
   poleBase.position.set(bx + gateHalf + 1.2, gy + 0.55, z1 + 3); scene.add(poleBase);
   for (let i = 0; i < 6; i++) {
