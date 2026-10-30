@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix144-base-polish';
+const BUILD = '20261030-fix145-cam-snap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23391,7 +23391,7 @@ function update(dt) {
         }
       }
     }
-    camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));
+    if (camPos.distanceToSquared(_camTmp) > 324) camPos.copy(_camTmp); else camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));   // 【fix145】切换视角(落地/上车)时不插值，否则相机会穿过墙
     camera.position.copy(camPos);
     // 落地/重击镜头抖动：直接作用在最终相机位置上，每帧指数衰减
     if (camShake > 0.002) {
