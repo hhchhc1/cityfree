@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix145-cam-snap';
+const BUILD = '20261030-fix146-crash-heli-guards';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6822,9 +6822,6 @@ var AIRLINER = null;
   const warn = mkSign('军事禁区', 'NO ENTRY', 6.5, 1.7, '#b0201a', '#ffffff', '#ffffff');
   warn.position.set(bx + 26, gy + 1.9, z1 + 0.7); scene.add(warn);
   const warn2 = warn.clone(); warn2.position.set(bx - 26, gy + 1.9, z1 + 0.7); scene.add(warn2);
-  // 北墙内侧的标语
-  const slogan = mkSign('听党指挥 能打胜仗 作风优良', 'MILITARY BASE No.7', 22, 2.2, '#1d2a1d', '#f2e6b8', '#c8a24a');
-  slogan.position.set(bx, gy + 5.6, z0 + 0.7); scene.add(slogan);   // 默认朝向 +Z（朝院内），写反了会变成镜像字
   // 停机坪旁的风向袋
   const sockPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), steel);
   sockPole.position.set(bx - 18, gy + 2.5, bz + 20); scene.add(sockPole);
@@ -6894,74 +6891,139 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 
   // ========== 直升机模型（大型军用，~14m长） ==========
   function buildHeliModel() {
-  const heliGroup = new THREE.Group();
-  const heliBodyMat = new THREE.MeshLambertMaterial({ color: 0x3a5a3a });
-  const heliDarkMat = new THREE.MeshLambertMaterial({ color: 0x2a3a2a });
-  const heliGlassMat = new THREE.MeshLambertMaterial({ color: 0x88bbdd, transparent: true, opacity: 0.5 });
-  // 机身主体（大型椭圆体）
-  const heliBody = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.2, 9.0, 10), heliBodyMat);
-  heliBody.rotation.x = Math.PI / 2; heliBody.position.set(0, 0, 0); heliGroup.add(heliBody);
-  // 驾驶舱（大透明罩）
-  const heliCockpit = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), heliGlassMat);
-  heliCockpit.position.set(0, 0.3, 4.0); heliGroup.add(heliCockpit);
-  // 机身底部滑橇（更宽更长）
-  for (const sx of [-1.2, 1.2]) {
-    const skid = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 7.0), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-    skid.position.set(sx, -1.4, 0.5); heliGroup.add(skid);
-    for (const sz of [-2.0, 0, 2.0]) {
-      const skidBar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-      skidBar.position.set(sx, -0.9, sz + 0.5); heliGroup.add(skidBar);
+  // 【fix146】武装直升机重建：分段机身、五片式主旋翼（带下垂角和桨毂）、
+  // 四片座舱罩+框架、发动机舱与排气管、短翼挂架（火箭巢+导弹）、机鼻光电球、
+  // 收窄尾梁+垂尾+水平安定面+尾桨保护环、滑橇细节、航行灯。整体尺寸与接口保持不变。
+  const g = new THREE.Group();
+  const bodyM = new THREE.MeshLambertMaterial({ color: 0x3f5238 });   // 军绿
+  const darkM = new THREE.MeshLambertMaterial({ color: 0x2b3826 });   // 深绿
+  const camoM = new THREE.MeshLambertMaterial({ color: 0x556b45 });   // 迷彩浅
+  const blackM = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const steelM = new THREE.MeshLambertMaterial({ color: 0x717565 });
+  const glassM = new THREE.MeshLambertMaterial({ color: 0x9ec8e8, transparent: true, opacity: 0.42, side: THREE.DoubleSide });
+  const lampM = new THREE.MeshBasicMaterial({ color: 0xfff8d0 });
+  const redM = new THREE.MeshBasicMaterial({ color: 0xff3322 });
+  const grnM = new THREE.MeshBasicMaterial({ color: 0x38ff70 });
+  const mk = (geo, mat, x, y, z, rx, ry, rz) => {
+    const o = new THREE.Mesh(geo, mat);
+    o.position.set(x, y, z);
+    if (rx) o.rotation.x = rx; if (ry) o.rotation.y = ry; if (rz) o.rotation.z = rz;
+    g.add(o); return o;
+  };
+  // ---- 机身 ----
+  mk(new THREE.BoxGeometry(2.5, 1.9, 5.6), bodyM, 0, 0.05, 0.7);
+  mk(new THREE.BoxGeometry(2.1, 0.85, 5.0), darkM, 0, -0.95, 0.6);          // 下腹
+  mk(new THREE.BoxGeometry(2.2, 0.5, 1.5), camoM, 0, 1.02, 1.5);            // 背部机脊
+  mk(new THREE.BoxGeometry(2.3, 1.25, 2.2), bodyM, 0, 0.28, 3.4);           // 座舱底段
+  mk(new THREE.CylinderGeometry(0.72, 1.06, 1.5, 10), bodyM, 0, -0.1, 4.85, Math.PI / 2, 0, 0);  // 机鼻锥
+  mk(new THREE.SphereGeometry(0.36, 10, 8), blackM, 0, -0.72, 4.55);        // 光电球
+  mk(new THREE.CylinderGeometry(0.028, 0.028, 1.0, 4), steelM, 0.52, 0.32, 5.55, Math.PI / 2, 0, 0);  // 空速管
+  // 侧装甲板 / 迷彩块
+  for (const s of [-1, 1]) {
+    mk(new THREE.BoxGeometry(0.06, 1.1, 3.4), camoM, s * 1.26, 0.15, 0.9);
+    mk(new THREE.BoxGeometry(0.1, 0.9, 1.6), darkM, s * 1.28, -0.35, 2.6);   // 舱门
+    mk(new THREE.BoxGeometry(0.06, 0.32, 1.2), blackM, s * 1.31, 0.35, 2.6); // 舱门滑轨
+  }
+  // ---- 座舱罩 ----
+  mk(new THREE.BoxGeometry(1.95, 0.06, 2.1), glassM, 0, 1.0, 3.55, -0.3, 0, 0);
+  mk(new THREE.BoxGeometry(1.95, 1.0, 0.06), glassM, 0, 0.55, 4.7, 0.16, 0, 0);
+  for (const s of [-1, 1]) mk(new THREE.BoxGeometry(0.05, 0.92, 2.0), glassM, s * 1.0, 0.62, 3.5);
+  // 座舱框架
+  for (const s of [-1, 1]) {
+    mk(new THREE.BoxGeometry(0.09, 0.1, 2.1), darkM, s * 1.0, 1.0, 3.55);
+    mk(new THREE.BoxGeometry(0.09, 1.05, 0.09), darkM, s * 1.0, 0.55, 4.72);
+    mk(new THREE.BoxGeometry(0.09, 0.09, 1.0), darkM, s * 0.6, 1.02, 4.2);
+  }
+  mk(new THREE.BoxGeometry(2.05, 0.1, 0.1), darkM, 0, 1.02, 2.5);   // 罩后横梁
+  // ---- 发动机舱 + 排气 ----
+  mk(new THREE.BoxGeometry(1.6, 0.75, 1.9), darkM, 0, 1.32, 0.1);
+  mk(new THREE.BoxGeometry(1.1, 0.2, 1.4), blackM, 0, 1.72, 0.1);          // 进气格栅
+  for (const s of [-1, 1]) {
+    mk(new THREE.CylinderGeometry(0.2, 0.26, 0.8, 8), blackM, s * 0.62, 1.42, -0.85, 1.15, 0, 0);  // 排气管
+    mk(new THREE.BoxGeometry(0.3, 0.3, 1.4), camoM, s * 0.95, 1.15, 0.4);   // 侧进气箱
+  }
+  // ---- 主旋翼（5 叶，带下垂角 + 桨毂）----
+  const mainRotorGroup = new THREE.Group();
+  mainRotorGroup.position.set(0, 1.85, 0);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.42, 0.3, 10), steelM);
+  mainRotorGroup.add(hub);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 6.6), blackM);
+    // 一片桨叶 = 根部短块 + 主体 + 桨尖
+    blade.position.set(Math.sin(a) * 3.6, 0, Math.cos(a) * 3.6);
+    blade.rotation.y = a;
+    mainRotorGroup.add(blade);
+    const root = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 1.1), steelM);
+    root.position.set(Math.sin(a) * 0.7, 0.02, Math.cos(a) * 0.7);
+    root.rotation.y = a;
+    mainRotorGroup.add(root);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.9), new THREE.MeshLambertMaterial({ color: 0xe8dfc0 }));
+    tip.position.set(Math.sin(a) * 7.15, 0, Math.cos(a) * 7.15);
+    tip.rotation.y = a;
+    mainRotorGroup.add(tip);
+  }
+  g.add(mainRotorGroup);
+  g.userData.mainRotor = mainRotorGroup;
+  mk(new THREE.CylinderGeometry(0.14, 0.14, 0.9, 8), steelM, 0, 1.55, 0);   // 旋翼轴
+  // ---- 尾梁（收窄）+ 尾翼 + 尾桨 ----
+  mk(new THREE.CylinderGeometry(0.22, 0.5, 5.2, 8), bodyM, 0, 0.45, -3.6, Math.PI / 2, 0, 0);
+  mk(new THREE.CylinderGeometry(0.14, 0.22, 2.4, 8), bodyM, 0, 0.62, -7.3, Math.PI / 2, 0, 0);
+  mk(new THREE.BoxGeometry(0.12, 1.9, 1.5), darkM, 0, 1.35, -8.3);          // 垂尾
+  mk(new THREE.BoxGeometry(2.9, 0.1, 0.85), darkM, 0, 1.05, -8.0);          // 水平安定面
+  mk(new THREE.BoxGeometry(2.9, 0.5, 0.1), darkM, 0, 1.05, -8.4);           // 安定面端板
+  const tailRotor = new THREE.Group();
+  tailRotor.position.set(0.22, 1.45, -8.9);
+  for (let i = 0; i < 4; i++) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.5, 0.2), blackM);
+    b.rotation.x = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    tailRotor.add(b);
+  }
+  g.add(tailRotor);
+  g.userData.tailRotor = tailRotor;
+  // 尾桨保护环
+  mk(new THREE.TorusGeometry(0.95, 0.06, 6, 16), steelM, 0.22, 1.45, -9.0, 0, Math.PI / 2, 0);
+  // ---- 短翼挂架 + 火箭巢 + 导弹 ----
+  for (const s of [-1, 1]) {
+    mk(new THREE.BoxGeometry(1.5, 0.16, 0.7), bodyM, s * 1.7, 0.15, 1.5);       // 短翼
+    const pod = mk(new THREE.CylinderGeometry(0.3, 0.3, 1.5, 10), darkM, s * 2.4, -0.05, 1.5, Math.PI / 2, 0, 0);
+    // 火箭巢里的 7 个发射管口
+    for (let k = 0; k < 7; k++) {
+      const ang = (k / 7) * Math.PI * 2;
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.06, 6), blackM);
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(s * 2.4 + Math.cos(ang) * 0.16, -0.05 + Math.sin(ang) * 0.16, 2.28);
+      g.add(tube);
+    }
+    // 导弹（两根）
+    for (const dy of [0.18, -0.28]) {
+      mk(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 8), steelM, s * 1.5, dy, 1.6, Math.PI / 2, 0, 0);
+      mk(new THREE.ConeGeometry(0.07, 0.28, 8), darkM, s * 1.5, dy, 2.3, Math.PI / 2, 0, 0);
     }
   }
-  // 尾梁（粗壮）
-  const tailBoom = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 7.0), heliBodyMat);
-  tailBoom.position.set(0, 0.4, -5.5); heliGroup.add(tailBoom);
-  // 尾翼（垂直+水平）
-  const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, 2.0), heliDarkMat);
-  tailFin.position.set(0, 2.0, -8.5); heliGroup.add(tailFin);
-  const tailFinH = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 1.2), heliDarkMat);
-  tailFinH.position.set(0, 1.5, -8.8); heliGroup.add(tailFinH);
-  // 尾桨
-  const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.08, 0.2), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-  tailRotor.position.set(0.6, 2.0, -9.2); heliGroup.add(tailRotor);
-  heliGroup.userData.tailRotor = tailRotor;
-  // 主旋翼（4叶，巨大）
-  const mainRotorGroup = new THREE.Group();
-  mainRotorGroup.position.set(0, 1.3, 0);
-  for (let i = 0; i < 4; i++) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 12.0), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-    blade.rotation.y = (i / 4) * Math.PI * 2;
-    blade.position.set(Math.sin((i / 4) * Math.PI * 2) * 6.0, 0, Math.cos((i / 4) * Math.PI * 2) * 6.0);
-    mainRotorGroup.add(blade);
+  // ---- 机腹链炮 ----
+  mk(new THREE.BoxGeometry(0.55, 0.4, 0.7), darkM, 0, -1.15, 2.6);
+  mk(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 6), blackM, 0, -1.2, 3.5, Math.PI / 2, 0, 0);
+  // ---- 滑橇起落架 ----
+  for (const s of [-1, 1]) {
+    mk(new THREE.CylinderGeometry(0.07, 0.07, 6.2, 8), blackM, s * 1.35, -1.55, 0.2, Math.PI / 2, 0, 0);
+    for (const zz of [-1.7, 0.6, 2.2]) {
+      mk(new THREE.CylinderGeometry(0.06, 0.06, 0.85, 6), blackM, s * 1.35, -1.15, zz);
+    }
+    mk(new THREE.BoxGeometry(0.16, 0.1, 1.4), steelM, s * 1.35, -1.62, 2.4);   // 滑橇前端
   }
-  heliGroup.add(mainRotorGroup);
-  heliGroup.userData.mainRotor = mainRotorGroup;
-  // 旋翼轴
-  const rotorShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.8, 6), new THREE.MeshLambertMaterial({ color: 0x444444 }));
-  rotorShaft.position.set(0, 1.0, 0); heliGroup.add(rotorShaft);
-  // 机枪挂架（两侧）
-  for (const side of [-1, 1]) {
-    const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 2.0), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-    gunBody.position.set(side * 2.2, -0.8, 2.5); heliGroup.add(gunBody);
-    const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 6), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-    gunBarrel.rotation.x = Math.PI / 2; gunBarrel.position.set(side * 2.2, -0.8, 3.8); heliGroup.add(gunBarrel);
-  }
-  // 火箭巢（两侧短翼）
-  for (const side of [-1, 1]) {
-    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 8), new THREE.MeshLambertMaterial({ color: 0x4a4a4a }));
-    pod.rotation.x = Math.PI / 2; pod.position.set(side * 2.6, -0.5, 1.5); heliGroup.add(pod);
-  }
-  // 前灯
-  const heliLight = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffcc }));
-  heliLight.position.set(0, -0.3, 4.6); heliGroup.add(heliLight);
-  // 机腹细节（散热口）
-  for (let i = -2; i <= 2; i++) {
-    const vent = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.3), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
-    vent.position.set(0, -0.6, i * 1.2); heliGroup.add(vent);
-  }
-    return heliGroup;
-  }
-  function spawnMilitaryHeli() {
+  // 横撑
+  mk(new THREE.CylinderGeometry(0.05, 0.05, 2.7, 6), steelM, 0, -1.35, -1.7, 0, 0, Math.PI / 2);
+  mk(new THREE.CylinderGeometry(0.05, 0.05, 2.7, 6), steelM, 0, -1.35, 2.2, 0, 0, Math.PI / 2);
+  // ---- 灯 ----
+  mk(new THREE.SphereGeometry(0.16, 8, 6), lampM, 0, -0.55, 4.95);            // 机鼻探照灯
+  mk(new THREE.SphereGeometry(0.1, 6, 5), redM, -1.3, 0.4, 0.6);              // 左红
+  mk(new THREE.SphereGeometry(0.1, 6, 5), grnM, 1.3, 0.4, 0.6);               // 右绿
+  mk(new THREE.SphereGeometry(0.08, 6, 5), lampM, 0, 2.35, -8.3);             // 尾灯
+  // 天线
+  mk(new THREE.CylinderGeometry(0.02, 0.02, 1.6, 4), steelM, 0, -1.1, -2.4, 0.25, 0, 0);
+  return g;
+}  function spawnMilitaryHeli() {
     const heliGroup = buildHeliModel();
     heliGroup.position.set(padX, baseGy + 2.5, padZ);
     scene.add(heliGroup);
@@ -12277,6 +12339,41 @@ spawnFixedLimo(1);
     GANG_HQ_GUARDS.push(r);
   });
 
+  // ===== 【fix146】军事基地警卫（站岗士兵）=====
+  // 用户："还有警卫呢" —— 基地原来空无一人。这里在门口和院内加哨兵：
+  // 用居民系统 + post 站岗状态机（被撞开会自动走回岗位，站着时缓慢扫视）。
+  (function addBaseGuards() {
+    const bx = -280, bz = 120;
+    const UNI = 0x4a5a3a;   // 军绿制服
+    const posts = [
+      { dx: -9.5, dz: 33,  angle: Math.PI,      ranged: 'rifle', name: 'baseGateL' },
+      { dx:  9.5, dz: 33,  angle: Math.PI,      ranged: 'rifle', name: 'baseGateR' },
+      { dx: -20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardL' },
+      { dx:  20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardR' },
+      { dx: -31,  dz: -2,  angle: Math.PI / 2,  ranged: 'rifle', name: 'baseCmd' },
+      { dx:  26,  dz: -12, angle: -Math.PI / 2, ranged: 'smg',   name: 'baseHangar' },
+      { dx:  -6,  dz: -26, angle: 0,            ranged: 'rifle', name: 'baseNorth' }
+    ];
+    posts.forEach((post, i) => {
+      const nx = bx + post.dx, nz = bz + post.dz;
+      const g = makeHuman(UNI, false, { uniformColor: UNI });
+      addWeaponMesh(g, post.ranged);
+      const ny = terrainHeight(nx, nz);
+      g.position.set(nx, ny, nz);
+      g.rotation.y = post.angle;
+      scene.add(g);
+      residents.push({
+        group: g, x: nx, z: nz, angle: post.angle,
+        alive: true, walking: false, timer: 0, walkTime: 0, respawn: 0,
+        hp: 140, maxHp: 140, melee: 'fist', ranged: post.ranged,
+        faction: 0, flee: false, hate: null, down: false, downT: 0,
+        attackCd: 0, phase: i * 0.7, punchAnim: 0, punchHand: 0,
+        armed: true, ammo: 60, maxAmmo: 60, chaseMode: 'run',
+        post: true, postX: nx, postZ: nz, postAngle: post.angle, postName: post.name,
+        hqFlatY: ny, isBaseGuard: true, noRespawn: false
+      });
+    });
+  })();
   // ===== 大本营外围的游荡黑衣人 =====
   // 反馈"人太少不够杀"：光 15 个站岗是固定靶子，清完就没了。
   // 这里再在大本营周围 30~75m 环带上刷一圈游荡的黑帮。
@@ -16854,6 +16951,9 @@ function acquireTracer(kind, p) {
   }
   const mats = tracerMaterials(kind, p);
   const geos = tracerGeometries(kind, p);
+  // 【fix146】新加的 'cannon' 弹道第一次使用时对应的池子还没有创建，
+  // _tracerPools[kind] 是 undefined → .pop() 直接抛 TypeError（开直升机机枪就报错）。
+  if (!_tracerPools[kind]) _tracerPools[kind] = [];
   let item = _tracerPools[kind].pop();
   if (!item) {
     const head = new THREE.Mesh(geos.head, mats.head);
