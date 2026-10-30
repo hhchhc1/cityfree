@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix132-cross-arrow-beacon';
+const BUILD = '20261030-fix133-board-guard';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26926,6 +26926,14 @@ function flightAudioStop() {
     setTimeout(function () { try { A.src.stop(); A.lfo.stop(); A.ctx.close(); } catch (e) {} }, 1500);
   } catch (e) {}
 }function startFlightShow() {
+  // 【fix133】开车冲到登机口也会弹出机票面板 → 人在车里就起飞了：车载音乐一路跟着响，
+  // 落地后相机还绑在那辆停在登机口的车上（用户："卡回登机口"）。
+  // 登机必须下车：还在驾驶状态就直接拦下来。
+  if (typeof state !== 'undefined' && state !== 'walk' && !FLIGHT) {
+    setHint('请先下车再登机');
+    return;
+  }
+  try { stopCarMusic(); } catch (e) {}   // 【fix133】起飞前一定关掉车载音乐
   flightAudioStart();
   // 【fix63】相机远平面必须一起拉远！它固定是 560（new THREE.PerspectiveCamera(...,0.5,560)），
   // 上一版我把过场雾设到 3200+high*7000，但 560 以外全被相机裁掉 ——
@@ -27383,7 +27391,8 @@ function updateFlightPillar(dt) {
     if (d > 7.0) closeFlightPanel();              // 走出范围自动收起，免得被"粘"在对话里
     return;
   }
-  if (d < 3.8 && flightPillarMiss <= 0) openFlightPanel();
+  // 【fix133】只有**步行**靠近才自动弹面板；开车经过不算（否则在车里就被带飞了）
+  if (d < 3.8 && flightPillarMiss <= 0 && state === 'walk') openFlightPanel();
 }
 
 // ==================== 【fix51·二期】动态天气：晴 / 多云 / 阴 / 小雨 ====================
