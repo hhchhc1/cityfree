@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix140-tank-shell-hud';
+const BUILD = '20261030-fix141-hud-single-writer';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22618,7 +22618,9 @@ function update(dt) {
       if (atkHeld) vehicleShoot();
 
        // 更新 HUD
-       hudText(hudLine1, 'line1', '直升机　·　高度 ' + (Math.round(heli.flyHeight / 5) * 5) + 'm　·　金币 ' + gold);
+       // 【fix141】这里原来还会写一次 line1（不带耐久），与下面统一定时器里那条（带耐久）**每帧互相覆盖**，
+// 于是顶部这行在两种文字之间来回跳 —— 用户看到的"还在不停变化闪"就是这个。
+// 顶部文字统一交给后面的 line1 构建器，这里不再写。
        hudText(hintTextEl, 'hint', isMobile
          ? '左侧摇杆移动　·　右下「升 / 降」改变高度　·　长按攻击键射击　·　「上车」键下机'
          : 'WASD 移动　·　Space 上升　·　Shift 下降　·　鼠标瞄准+长按射击　·　E 下机');
@@ -22719,7 +22721,7 @@ function update(dt) {
       // 长按持续射击：按住左键时每帧尝试开火（冷却自动限速）
       if (atkHeld) vehicleShoot();
 
-       hudText(hudLine1, 'line1', '坦克　·　金币 ' + gold);
+       // 【fix141】同上：坦克的 line1 由统一构建器负责（重复写会闪）
        hudText(hintTextEl, 'hint', 'WASD 移动　·　鼠标瞄准炮塔方向　·　左键开炮　·　E 下车');
     } else {
     // ========== 普通车驾驶 ==========
