@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix131-view-arrow-ticket';
+const BUILD = '20261030-fix132-cross-arrow-beacon';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21575,12 +21575,18 @@ function drawFullMap() {
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
   const ang = (state === 'drive' && currentCar) ? currentCar.angle : personAngle.v;
   const fx = Math.sin(ang), fz = Math.cos(ang);
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(X(px), Y(pz), 5, 0, 7); ctx.fill();
-  ctx.fillStyle = 'rgba(120,200,255,0.3)';
-  ctx.beginPath(); ctx.moveTo(X(px), Y(pz));
-  ctx.arc(X(px), Y(pz), 22, Math.atan2(fz, fx) - 0.5, Math.atan2(fz, fx) + 0.5);
-  ctx.closePath(); ctx.fill();
+  // 【fix132】大地图上换成醒目的绿色箭头（原来那个 5px 白点，放大到 5 倍也找不到自己）
+  ctx.save();
+  ctx.translate(X(px), Y(pz));
+  ctx.rotate(Math.atan2(fz, fx));
+  ctx.beginPath();
+  ctx.moveTo(14, 0); ctx.lineTo(-9, -9); ctx.lineTo(-4, 0); ctx.lineTo(-9, 9);
+  ctx.closePath();
+  ctx.shadowColor = '#39ff7a'; ctx.shadowBlur = 12;
+  ctx.fillStyle = '#2bff6a'; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.stroke();
+  ctx.restore();
   // 任务点：未接受=绿色，进行中=金色。
   // 之前全屏地图上一个任务点都没画，只能靠小地图上那个 150px 的框找人。
   if (typeof QUESTS !== 'undefined') {
@@ -25200,6 +25206,10 @@ function buildLinhaiCity(g) {
     for (const rz of STZ) pbox(DX1 - DX0, 0.1, STW + 6, 'concrete', (DX0 + DX1) / 2, 0.05, rz, 6);
     for (const rx of AVX) pbox(AVW, 0.08, DZ1 - DZ0, 'asphalt', rx, 0.1, (DZ0 + DZ1) / 2, 8);
     for (const rz of STZ) pbox(DX1 - DX0, 0.08, STW, 'asphalt', (DX0 + DX1) / 2, 0.1, rz, 8);
+    // 【fix132】路口再压一块略高的沥青：横纵两块路面的顶面在交叉处严格共面（都在 y=0.14），
+    // 深度值一样 → 显卡每帧随机选一个画，就是用户看到的"十字路口一直在闪"。
+    // 给路口单独补一块 top=0.175 的沥青，比两块路面都高、又低于标线（0.21），闪烁消失。
+    for (const rx of AVX) for (const rz of STZ) pbox(AVW + 0.8, 0.1, STW + 0.8, 'asphalt', rx, 0.125, rz, 8);
     // 白色路缘石：参考图里人行道边上那一圈白边，街景立刻就"立"起来了
     for (const rx of AVX) for (const s of [-1, 1]) det(BX(0.36, 0.34, DZ1 - DZ0), 0xd9d7cf, rx + s * (AVW / 2 + 0.18), 0.17, (DZ0 + DZ1) / 2);
     for (const rz of STZ) for (const s of [-1, 1]) det(BX(DX1 - DX0, 0.34, 0.36), 0xd9d7cf, (DX0 + DX1) / 2, 0.17, rz + s * (STW / 2 + 0.18));
@@ -27220,6 +27230,22 @@ try { batchStaticScene(); } catch (error) { console.error('[Static batch 2 error
 })();
 // 【fix129】新城建筑已全部登记进 buildings，这里把它们的可站立面网格建起来
 try { ncBuildGrid(); } catch (e) { console.error('[nc grid]', e); }
+// 【fix132】返程点光柱：用户"回程机票的位置在哪里" —— 原来返程是个**看不见的触发圈**，
+// 站在跑道东端才会突然被送回主城。这里给它一根绿色光柱 + 地面光环，走过去一眼就能看见。
+try {
+  (function returnBeacon() {
+    const bg = new THREE.Group();
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 16, 14, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x35ff9a, transparent: true, opacity: 0.30, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 8; bg.add(beam);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.16, 8, 26), new THREE.MeshBasicMaterial({ color: 0x35ff9a }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.18; bg.add(ring);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), new THREE.MeshBasicMaterial({ color: 0x35ff9a, transparent: true, opacity: 0.35, depthWrite: false }));
+    disc.rotation.x = -Math.PI / 2; disc.position.y = 0.12; bg.add(disc);
+    bg.position.set(1290, 0, DEST.z + 40);
+    scene.add(bg);
+  })();
+} catch (e) { console.error('[return beacon]', e); }
 
 // ==================== 【fix46】自动版本守卫 ====================
 // 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
@@ -27604,6 +27630,14 @@ const frameLoop = () => {
     if (!isFinite(person.position.x) || !isFinite(person.position.y) || !isFinite(person.position.z)) {
       person.position.set(0, 2, 0); vy = 0; onGround = false;
       console.warn('[anti-stuck] 位置异常，已拉回主城');
+    }
+  } catch (e) {}
+  // 【fix132】返程光柱的靠近提示（原来完全看不见在哪）
+  try {
+    const _retD = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));
+    if (!FLIGHT && _retD > 4.5 && _retD < 16 && performance.now() > _retTicketCd) {
+      _retTicketCd = performance.now() + 3000;
+      setHint('绿色光柱＝返程机票：走进去就回主城（有永久往返机票免费，否则 500 金币）');
     }
   } catch (e) {}
   // 【fix70】荷芷市回程：跑道东端有一个回程点，走过去就送回主城机场。
