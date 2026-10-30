@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix138-vehicle-aim3d';
+const BUILD = '20261030-fix139-tank-heli-aim';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19222,8 +19222,12 @@ if ((v.shootCd || 0) > 0) return;
       tgtY = rr.origin.y + rr.direction.y * range;
     }
     const ddx = tgtX - px, ddz = tgtZ - pz;
-    const dLen = Math.hypot(ddx, ddz) || 1;
-    const fdx = ddx / dLen, fdz = ddz / dLen;   // 归一化的水平射击方向
+    let dLen = Math.hypot(ddx, ddz);
+    // 【fix138】准星几乎垂直指天/指地时，水平长度会被归一化成 0 → 方向变 NaN。
+    // 这时退回"机头正前方"，保证还能开火。
+    let fdx, fdz;
+    if (dLen > 0.6) { fdx = ddx / dLen; fdz = ddz / dLen; }
+    else { fdx = Math.sin(v.angle); fdz = Math.cos(v.angle); dLen = Math.max(dLen, 1); }
 
     // 命中判定：沿"鼠标方向"这一条线上找最近目标，而不是在落点周围画半径5的圆
     const hitR = 5;
@@ -19272,6 +19276,14 @@ if ((v.shootCd || 0) > 0) return;
     // 炮口位置：坦克中心 + 炮管方向偏移
     const barrelX = px + ttx * 6.5, barrelZ = pz + ttz * 6.5;
     const barrelY = terrainHeight(v.x, v.z) + 3.5;
+    // 【fix138】坦克炮改 3D 瞄准：俯仰角取**准星射线**的斜率。
+    // 以前炮弹只有水平方向，垂直方向被写死成"落在地面高度+1"，
+    // 所以对着天空开炮，炮弹也必然落在 200 米外的地面上。
+    raycaster.setFromCamera(mouseActive ? mouseNDC : aimNDC, camera);
+    const _cr = raycaster.ray;
+    const _crh = Math.hypot(_cr.direction.x, _cr.direction.z) || 1e-4;
+    const _cslope = _cr.direction.y / _crh;
+    const shellYAt = d => barrelY + d * _cslope;
     spawnBurst(barrelX, barrelZ, 0xffff88, 8);
     // 坦克炮是高爆弹，「上下」也算打击范围：命中判定加一段垂直容差，
     // 炮弹爆点上下 TANK_BLAST_VH 米内都算命中（以前完全没有垂直维度，只有一个贴地圆）。
@@ -19284,7 +19296,7 @@ if ((v.shootCd || 0) > 0) return;
         const t = ox * dx + oz * dz;
         if (t < 0 || t > shellRange) return;
         const perp = Math.abs(ox * dz - oz * dx);
-        if (Math.abs(terrainHeight(o.x, o.z) + 1.0 - shotY) > TANK_V_HIT) return;   // 垂直范围外打不到
+        if (Math.abs(terrainHeight(o.x, o.z) + 1.0 - shellYAt(t)) > TANK_V_HIT) return;   // 垂直范围外打不到
         if (perp < 1.5 && t < bd) { bd = t; best = { k, o }; hs = perp < 0.6; }
       };
       for (const r of residents) if (r.alive) test(r, 'r');
@@ -19294,7 +19306,7 @@ if ((v.shootCd || 0) > 0) return;
         const t = ox * dx + oz * dz;
         if (t < 0 || t > shellRange) return;
         const perp = Math.abs(ox * dz - oz * dx);
-        if (Math.abs(terrainHeight(o.x, o.z) + 1.0 - shotY) > TANK_V_HIT) return;   // 垂直范围外打不到
+        if (Math.abs(terrainHeight(o.x, o.z) + 1.0 - shellYAt(t)) > TANK_V_HIT) return;   // 垂直范围外打不到
         if (perp < ((o.radius || 1.6) + 0.4) && t < bd) { bd = t; best = { k: 'car', o }; hs = false; }
       };
       for (const c of cars) if (!c.exploded && c !== v) testV(c);
