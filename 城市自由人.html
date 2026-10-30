@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix134-landing-safety';
+const BUILD = '20261030-fix135-grapple-flight';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14489,6 +14489,10 @@ function releaseGrapple() {
   onGround = (person.position.y <= gy + 0.05);
 }
 function updateGrapple(dt) {
+  // 【fix135】登机演出期间必须彻底停掉钩爪：否则"用钩爪飞到登机口再登机"时，
+  // 墙面攀爬状态会一直被保留，落地后每帧把人物又拉回**老城那面墙/飞机**上
+  //（用户："登上飞机后先是到新城市，然后卡回到飞机"）。
+  if (typeof FLIGHT !== 'undefined' && FLIGHT) { grapple = null; return; }
   const g = grapple; if (!g) return;
   if (g.mode === 'wall') {
     // 墙面攀爬：W/S 上下，A/D 沿墙左右，F 松开
@@ -26938,6 +26942,8 @@ function flightAudioStop() {
     return;
   }
   try { stopCarMusic(); } catch (e) {}   // 【fix133】起飞前一定关掉车载音乐
+  // 【fix135】钩爪状态必须在这里清掉（见 updateGrapple 的注释）
+  try { if (grapple) releaseGrapple(); grapple = null; gvx = gvy = gvz = 0; onGround = false; } catch (e) {}
   flightAudioStart();
   // 【fix63】相机远平面必须一起拉远！它固定是 560（new THREE.PerspectiveCamera(...,0.5,560)），
   // 上一版我把过场雾设到 3200+high*7000，但 560 以外全被相机裁掉 ——
