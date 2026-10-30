@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix141-hud-single-writer';
+const BUILD = '20261030-fix142-heli-fx-grapple-miny';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14360,7 +14360,9 @@ function jump() { if (state === 'walk' && onGround && !grapple) { vy = 9; onGrou
 
 // ========== 钩爪（F 键：勾回实体 / 把自己送到建筑） ==========
 function rayBoxHit(o, d, b) {
-  const bottom = b.bottom !== undefined ? b.bottom : 0;
+  // 【fix142】support minY：门楣/屋檐这类盒子只有 minY 以上才是实体。
+  // 不认 minY 的话，射线会把它当成"从地面一直实到顶"，于是钩爪能勾在鼓楼**空的门洞里**。
+  const bottom = b.bottom !== undefined ? b.bottom : (b.minY !== undefined ? b.minY : 0);
   let tmin = -1e9, tmax = 1e9, faceAxis = '', neg = false;
   const slab = (min, max, axis) => {
     if (Math.abs(d[axis]) < 1e-9) { if (o[axis] < min || o[axis] > max) return false; return true; }
@@ -14506,7 +14508,9 @@ function updateGrapple(dt) {
     if (keys['a'] || keys['arrowleft'] || (joyActive && joyX < -0.3)) side = -1;
     if (keys['d'] || keys['arrowright'] || (joyActive && joyX > 0.3)) side = 1;
     const b = g.b;
-    const bottom = b.bottom !== undefined ? b.bottom : 0;
+    // 【fix142】support minY：门楣/屋檐这类盒子只有 minY 以上才是实体。
+  // 不认 minY 的话，射线会把它当成"从地面一直实到顶"，于是钩爪能勾在鼓楼**空的门洞里**。
+  const bottom = b.bottom !== undefined ? b.bottom : (b.minY !== undefined ? b.minY : 0);
     const wallOff = 0.55;
     let px = person.position.x, py = person.position.y, pz = person.position.z;
     const tang = side * 4.5 * dt;
@@ -19260,7 +19264,9 @@ if ((v.shootCd || 0) > 0) return;
     const hz = bestHit ? bestHit.o.z : tgtZ;
     const hitY = bestHit ? (terrainHeight(hx, hz) + (bestHit.k === 'car' ? 0.9 : 1.0)) : tgtY;
     // 枪口从机头前方起射，方向严格沿着鼠标射线在地面的投影
-    spawnBurst(px + fdx * 3, pz + fdz * 3, 0xffd76a, 6);   // 机头枪口火光
+    // 【fix142】枪口火光必须画在**枪口高度**：spawnBurst 不传 y 时默认贴地面，
+    // 于是天空中的直升机开火，火光出现在机身正下方的地面上（用户截图里那串火星）。
+    spawnBurst(px + fdx * 3, pz + fdz * 3, 0xffd76a, 4, py);
     spawnTracer(px + fdx * 3, py, pz + fdz * 3, hx, hitY, hz, 'rifle');
     if (bestHit) {
       if (bestHit.k === 'r') damageResident(bestHit.o, 15, 'heli');
@@ -24844,7 +24850,15 @@ function buildLinhaiCity(g) {
   det(BX(OPEN_W, baseH - OPEN_H, baseW), RED, px, OPEN_H + (baseH - OPEN_H) / 2, pz);
   det(BX(baseW, baseH - OPEN_H, OPEN_W), RED, px, OPEN_H + (baseH - OPEN_H) / 2, pz);
   // ---- 上下线脚（收分感）----
-  det(BX(baseW + 2.0, 1.4, baseW + 2.0), RED_D, px, 0.7, pz);
+  // 【fix142】下沿线脚原来是一整块 50×50 的红台，直接把十字门洞的地面垫高了 1.4 米，
+  // 人一走进去半截身子就陷在里面（用户："鼓楼下面人身体都没过了"）。
+  // 改成四个角块，让门洞地面保持和外面一样平。
+  {
+    const cw = (baseW + 2.0 - OPEN_W) / 2, co = OPEN_W / 2 + cw / 2;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      det(BX(cw, 1.4, cw), RED_D, px + sx * co, 0.7, pz + sz * co);
+    }
+  }
   det(BX(baseW + 1.4, 1.1, baseW + 1.4), RED_D, px, baseH - 0.55, pz);
   // ---- 四面砖砌拱券（四个方向各一圈，券脚落到地面）----
   const spring = OPEN_H - 3.9, rad = 5.4;
@@ -24861,8 +24875,8 @@ function buildLinhaiCity(g) {
     }
   }
   // ---- 门洞地面：青石铺地，走进去脚下是石头的 ----
-  det(BX(OPEN_W, 0.1, baseW + 1.0), 0x8d8a80, px, 0.06, pz);
-  det(BX(baseW + 1.0, 0.1, OPEN_W), 0x8d8a80, px, 0.055, pz);    // ---- 城台顶雉堞（垛口）----
+  det(BX(OPEN_W, 0.1, baseW + 1.0), 0x8d8a80, px, -0.01, pz);
+  det(BX(baseW + 1.0, 0.1, OPEN_W), 0x8d8a80, px, -0.015, pz);    // ---- 城台顶雉堞（垛口）----
     for (let k = -(baseW / 2 - 1.4); k <= baseW / 2 - 1.4; k += 3.4) {
       for (const s of [-1, 1]) {
         det(BX(2.0, 2.0, 1.3), RED, px + k, baseH + 1.0, pz + s * (baseW / 2 - 0.7));
