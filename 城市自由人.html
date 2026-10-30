@@ -899,7 +899,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix136-drumgate-plaques';
+const BUILD = '20261030-fix137-range-sky3d';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -12851,22 +12851,22 @@ const WEAPONS = {
   chainsaw:{ name: '链锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
-  pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 40,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
-  smg:    { name: '冲锋枪', type: 'gun',   dmg: 11, range: 32,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 22,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
-  rifle:  { name: '步枪',   type: 'gun',   dmg: 16, range: 55,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
-  ak47:   { name: 'AK47',   type: 'gun',   dmg: 18, range: 48,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
+  pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 65,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
+  smg:    { name: '冲锋枪', type: 'gun',   dmg: 11, range: 60,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 38,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
+  rifle:  { name: '步枪',   type: 'gun',   dmg: 16, range: 90,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
+  ak47:   { name: 'AK47',   type: 'gun',   dmg: 18, range: 85,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
   // desc 单独挂在武器对象上，商店简介会把它拼在通用说明后面（这样探针也能直接读来验证）
-  sniper: { name: '狙击枪', type: 'gun',   dmg: 90, range: 80,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
+  sniper: { name: '狙击枪', type: 'gun',   dmg: 90, range: 170,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
     desc: '🎯 点击「瞄准」进入狙击镜：时间放慢到 0.5 倍，打中任何部位都是一枪毙命，一发子弹能穿透一排目标。再点一次「瞄准」退出。\n👻 瞄准状态下击杀不会升星、不会惊动同伙、也不会增加通缉 —— 杀人于无形。\n🔇 用它开枪本身也不会涨星（零颗星时随便打也不会被通缉）。' },
-  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 90, range: 70,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
+  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 90, range: 130,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
   // 【2026-10-13】四联火箭筒：装备后可「连发」（点一下发 1 发）或「齐发」（一次 4 发齐射）。
   // salvo 标记表示这把武器支持齐发模式，由 salvoMode 切换；连发时每次消耗 1 发火箭弹，齐发时一次消耗 4 发。
-  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 90, range: 70,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
+  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 90, range: 130,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
     desc: '🚀 四联装填，双击「齐发」按钮切换：连发模式点一下打出去 1 发，齐发模式一次 4 发齐射、覆盖一片。每一发都是范围爆炸，适合清场。' },
   // 【2026-10-13】加特林：高射速转管机枪，弹链 100 发（7.62mm），靠持续泼洒火力压制。
-  minigun:{ name: '加特林',   type: 'gun',   dmg: 12, range: 50,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
+  minigun:{ name: '加特林',   type: 'gun',   dmg: 12, range: 85,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
 };
 // 命中部位倍率：头 2.5 / 身 1.0 / 腿 0.6（狙击枪 oneShot 时忽略倍率，见 shoot()）
 const ZONE_MULT = { head: 2.5, body: 1.0, leg: 0.6 };
@@ -18885,7 +18885,7 @@ function attack() {
     atkCd = w.fireCd || 0.3;
     punchAnim = 1;   // 触发射击后坐力姿态（仅射击瞬间）
     sfx('shoot');
-    spawnBurst(px + fx * 1.2, pz + fz * 1.2, 0xffff88, 6, (person.position.y || 0) + 1.35);   // 枪口闪光（枪口真实高度）
+    spawnBurst(px + fx * 1.2, pz + fz * 1.2, 0xffff88, 3, (person.position.y || 0) + 1.35);   // 枪口闪光（枪口真实高度）
     // 【2026-10-13 用户要求】四联火箭筒齐发：一次最多打出去 4 发（弹匣有几发打几发）。
     // 连发模式（salvoMode=false）每次只打 1 发；齐发模式（salvoMode=true）一次 4 发齐射。
     const salvoWant = (w.salvo && salvoMode) ? Math.max(1, Math.min(4, magOf(currentWeapon))) : 1;
@@ -18921,7 +18921,13 @@ function shoot(w, count) {
   // 每水平 1 米的升降直接取**准星射线**的俯仰斜率（不再叠加 walkAimPitch，
   // 因为垂直方向已经完全由准星光标 aimCurY 决定了）。
   const slope = _rd.y / _rh;
-  const shotY = (x, z, s) => Math.max(terrainHeight(x, z) + 0.05, muzzleY + s * slope);
+  // 【fix137】用户："往远处天空打子弹，落点也是地面" —— 原来这里用 Math.max(地形高度, 弹道)，
+  // 打天空时弹道是往上走的，却被地形高度兜住，于是弹着点被按在地上。
+  // 现在分两种：打到地形 → 用地面/命中点；什么都没打到（打天空）→ 严格沿准星射线一直飞到射程尽头。
+  let _skyShot = false;
+  const shotY = (x, z, s) => _skyShot
+    ? (muzzleY + s * slope)
+    : Math.max(terrainHeight(x, z) + 0.05, muzzleY + s * slope);
   // 【2026-10-21·fix37】子弹打地面：无目标时沿弹道步进检测是否提前命中地形，
   // 避免 Math.max 把弹道硬拉到地面以上导致"子弹永远打不进地里"的违和感。
   const groundHit = (dx, dz, maxDist) => {
@@ -19039,7 +19045,8 @@ function shoot(w, count) {
       let hx = r.best ? r.best.o.x : px + dx * w.range;
       let hz = r.best ? r.best.o.z : pz + dz * w.range;
       let pd = Math.hypot(hx - px, hz - pz);
-      if (!r.best) { const gh = groundHit(dx, dz, pd); if (gh) { hx = gh.x; hz = gh.z; pd = gh.dist; } }
+      _skyShot = !r.best;
+      if (!r.best) { const gh = groundHit(dx, dz, pd); if (gh) { _skyShot = false; hx = gh.x; hz = gh.z; pd = gh.dist; } }
       const hy = shotY(hx, hz, pd);
       const ptt = bulletTravelTime(w, pd);
       spawnTracer(px + dx * 0.5, muzzleY, pz + dz * 0.5, hx, hy, hz, currentWeapon, ptt || undefined);
@@ -19073,11 +19080,13 @@ function shoot(w, count) {
       let hx = shot.best ? shot.best.o.x : px + ax * w.range;
       let hz = shot.best ? shot.best.o.z : pz + az * w.range;
       let rpgDist = Math.hypot(hx - px, hz - pz);
-      if (!shot.best) { const gh = groundHit(ax, az, rpgDist); if (gh) { hx = gh.x; hz = gh.z; rpgDist = gh.dist; } }
+      _skyShot = !shot.best;
+      if (!shot.best) { const gh = groundHit(ax, az, rpgDist); if (gh) { _skyShot = false; hx = gh.x; hz = gh.z; rpgDist = gh.dist; } }
       const rpgTt = bulletTravelTime(w, rpgDist);
-      spawnTracer(px + ax * 0.5, muzzleY, pz + az * 0.5, hx, shotY(hx, hz, rpgDist), hz, currentWeapon, rpgTt || undefined);
-      if (rpgTt > 0) queueBullet(hx, 1.0, hz, rpgTt, () => rocketImpact(w, shot.best, hx, hz));
-      else rocketImpact(w, shot.best, hx, hz);
+      const rpgY = shotY(hx, hz, rpgDist);
+      spawnTracer(px + ax * 0.5, muzzleY, pz + az * 0.5, hx, rpgY, hz, currentWeapon, rpgTt || undefined);
+      if (rpgTt > 0) queueBullet(hx, rpgY, hz, rpgTt, () => rocketImpact(w, shot.best, hx, hz, rpgY));
+      else rocketImpact(w, shot.best, hx, hz, rpgY);
     }
     return;
   }
@@ -19089,7 +19098,8 @@ function shoot(w, count) {
     let farX = lastO ? lastO.x : px + fx * w.range;
     let farZ = lastO ? lastO.z : pz + fz * w.range;
     let pdFar = Math.hypot(farX - px, farZ - pz);
-    if (!lastO) { const gh = groundHit(fx, fz, pdFar); if (gh) { farX = gh.x; farZ = gh.z; pdFar = gh.dist; } }
+    _skyShot = !lastO;
+    if (!lastO) { const gh = groundHit(fx, fz, pdFar); if (gh) { _skyShot = false; farX = gh.x; farZ = gh.z; pdFar = gh.dist; } }
     const ttl = bulletTravelTime(w, pdFar);
     spawnTracer(px + fx * 0.5, muzzleY, pz + fz * 0.5, farX, shotY(farX, farZ, pdFar), farZ, currentWeapon, ttl || undefined);
     for (const hit of hits) {
@@ -19112,7 +19122,8 @@ function shoot(w, count) {
   let hx = r.best ? r.best.o.x : px + fx * w.range;
   let hz = r.best ? r.best.o.z : pz + fz * w.range;
   let sdist = Math.hypot(hx - px, hz - pz);
-  if (!r.best) { const gh = groundHit(fx, fz, sdist); if (gh) { hx = gh.x; hz = gh.z; sdist = gh.dist; } }
+  _skyShot = !r.best;
+  if (!r.best) { const gh = groundHit(fx, fz, sdist); if (gh) { _skyShot = false; hx = gh.x; hz = gh.z; sdist = gh.dist; } }
   const hy = shotY(hx, hz, sdist);
   const stt = bulletTravelTime(w, sdist);
   spawnTracer(px + fx * 0.5, muzzleY, pz + fz * 0.5, hx, hy, hz, currentWeapon, stt || undefined);
@@ -19126,23 +19137,29 @@ function shoot(w, count) {
     else spawnBurst(hx, hz, 0xaaaaaa, 4, hy);
   }
 }
-function rocketImpact(w, shotBest, hx, hz) {
+function rocketImpact(w, shotBest, hx, hz, hy) {
   {
     const px = person.position.x, pz = person.position.z;
     if (shotBest && shotBest.k === 'gas') { explodeGasBarrel(shotBest.o); return; }
     const R = 7;
-    const at = d => Math.max(0, Math.round(w.dmg * (1 - d / R)));
+    // 【fix137】爆炸改成立体：打天空时在空中炸，不再"炸在地上"。
+    // 离地越高伤害衰减越快（vFade），对着天空打也不会再把自己炸死。
+    const _gY = terrainHeight(hx, hz) + 0.9;
+    const ey = (typeof hy === 'number' && isFinite(hy)) ? hy : _gY;
+    const vFade = Math.max(0, 1 - Math.max(0, ey - _gY) / 12);
+    const at = d => Math.max(0, Math.round(w.dmg * (1 - d / R) * vFade));
     // 【2026-10-13 用户要求】火箭弹爆炸"火光更亮一点"：两发叠加（中心亮黄 + 外圈橙红），粒子更多更亮。
-    spawnBurst(hx, hz, 0xffdd55, 30);
-    spawnBurst(hx, hz, 0xff6a00, 22);
+    spawnBurst(hx, hz, 0xffdd55, 22, ey);
+    spawnBurst(hx, hz, 0xff6a00, 16, ey);
     sfx('boom');
     // 【2026-10-13 用户要求】火箭弹落地"烟雾再浓一点"：中心叠 3 团浓烟（叠加透明度更厚），
     // 再补 6 缕四周余烟，整体比原来的"一团 + 3 缕"厚实得多。
-    emitSmoke(hx, 0.9, hz, true);
-    emitSmoke(hx, 1.1, hz, true);
-    emitSmoke(hx + 0.2, 0.7, hz + 0.1, true);
-    for (let i = 0; i < 6; i++) emitSmoke(hx + (Math.random() - 0.5) * 3.6, 0.6, hz + (Math.random() - 0.5) * 3.6, false);
-    const pd = Math.hypot(px - hx, pz - hz);
+    emitSmoke(hx, ey, hz, true);
+    emitSmoke(hx, ey + 0.2, hz, true);
+    emitSmoke(hx + 0.2, ey - 0.2, hz + 0.1, true);
+    for (let i = 0; i < 6; i++) emitSmoke(hx + (Math.random() - 0.5) * 3.6, ey - 0.3, hz + (Math.random() - 0.5) * 3.6, false);
+    // 自身伤害用**立体**距离：往天上打不会再炸到自己脚下
+    const pd = Math.hypot(px - hx, pz - hz, (person.position.y + 1.0) - ey);
     if (pd < R) hurtPlayer(at(pd));
     blastPeople(hx, hz, R, at, 3.2, 0, 0, 'gun');       // 火箭筒：玩家武器，正当击杀计入
     const damageVehicle = v => {
