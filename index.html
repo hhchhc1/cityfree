@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix147-rain-audio';
+const BUILD = '20261030-fix148-gate-fix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6705,9 +6705,16 @@ var AIRLINER = null;
     }
   }
   // 墙身红白警示带
-  for (const zz of [z0, z1]) {
-    const band = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.5, wallT + 0.08), red);
-    band.position.set(bx, gy + 2.1, zz); scene.add(band);
+  // 【fix148】南面的警示带原来是一整条横穿大门（还从门柱中间穿过）→ 和门柱/横梁相交，
+  // 交叠处一直闪。现在北面整条，南面门两侧各一段。
+  {
+    const bandN = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.5, wallT + 0.08), red);
+    bandN.position.set(bx, gy + 2.1, z0); scene.add(bandN);
+    for (const seg of [[x0, bx - gateHalf], [bx + gateHalf, x1]]) {
+      const w = seg[1] - seg[0];
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, wallT + 0.08), red);
+      b.position.set((seg[0] + seg[1]) / 2, gy + 2.1, z1); scene.add(b);
+    }
   }
   for (const xx of [x0, x1]) {
     const band = new THREE.Mesh(new THREE.BoxGeometry(wallT + 0.08, 0.5, baseD), red);
@@ -6716,6 +6723,11 @@ var AIRLINER = null;
   // 院内硬化地面（原来是一片草地，完全不像军事基地）
   const apron = new THREE.Mesh(new THREE.BoxGeometry(baseW + 1.0, 0.1, baseD + 1.0), new THREE.MeshLambertMaterial({ color: 0x71716b }));   // 铺到墙根，别留一条草
   apron.position.set(bx, gy + 0.05, bz); scene.add(apron);
+  // 【fix148】基地外围再垫一层"草地色"大板（比地面低 3cm，只在缝隙里露出来）。
+  // 原来基地边界处地面会有细小的缝隙/破面，透出下面的黑色，看起来像"黑色不明物体"。
+  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(150, 140), new THREE.MeshLambertMaterial({ color: 0x5d8f3c, side: THREE.DoubleSide }));
+  skirt.rotation.x = -Math.PI / 2;
+  skirt.position.set(bx, gy - 0.03, bz); scene.add(skirt);
   // 停车位划线（坦克区）
   for (let i = 0; i < 3; i++) {
     const line = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 9), new THREE.MeshBasicMaterial({ color: 0xe8e4d0 }));
@@ -6846,7 +6858,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     gateCollision.push(gc);   // 保存引用，任务完成后可移除
   }
   const gateTop = new THREE.Mesh(new THREE.BoxGeometry(gateW + 6, 0.5, 2), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-  gateTop.position.set(bx, baseGy + 6.25, bz + baseD / 2); scene.add(gateTop);
+  gateTop.position.set(bx, baseGy + 6.34, bz + baseD / 2); scene.add(gateTop);   // 【fix148】抬高 9cm：原来和门柱顶面共面 → z-fighting 一直闪
 
   // 指挥楼（2层，灰色混凝土）
   const cmdW = 16, cmdD = 10, cmdH = 7;
@@ -12346,8 +12358,8 @@ spawnFixedLimo(1);
     const bx = -280, bz = 120;
     const UNI = 0x4a5a3a;   // 军绿制服
     const posts = [
-      { dx: -9.5, dz: 33,  angle: Math.PI,      ranged: 'rifle', name: 'baseGateL' },
-      { dx:  9.5, dz: 33,  angle: Math.PI,      ranged: 'rifle', name: 'baseGateR' },
+      { dx: -11.5, dz: 37.5, angle: 0,          ranged: 'rifle', name: 'baseGateL' },
+      { dx:  11.5, dz: 37.5, angle: 0,          ranged: 'rifle', name: 'baseGateR' },
       { dx: -20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardL' },
       { dx:  20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardR' },
       { dx: -31,  dz: -2,  angle: Math.PI / 2,  ranged: 'rifle', name: 'baseCmd' },
@@ -20305,6 +20317,8 @@ function updateResident(r, dt) {
       return;
     }
   }
+  // 【fix148】基地警卫是友好单位：清掉对玩家的仇恨，否则开车/开坦克经过被撞一下就会追着打。
+  if (r.isBaseGuard && r.hate === 'player') r.hate = null;
   // 仇恨：攻击玩家或警察
   if (r.hate === 'cop') {
     const c = nearestCop(r.x, r.z);
