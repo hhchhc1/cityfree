@@ -220,7 +220,7 @@
     position: fixed; inset: 0; display: none; z-index: 18; pointer-events: none;
     background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0 24vh, rgba(0,0,0,0.5) 24.6vh, rgba(0,0,0,0.9) 26vh 100%);
   }
-  #scopeOverlay::before, #scopeOverlay::after { content: ''; position: absolute; left: 50%; top: 50%; background: rgba(255,70,70,0.85); }
+  #scopeOverlay::before, #scopeOverlay::after { content: ''; position: absolute; left: calc(50% + var(--sx, 0px)); top: calc(50% + var(--sy, 0px)); background: rgba(255,70,70,0.85); }
   #scopeOverlay::before { width: 2px; height: 24vh; transform: translate(-50%,-50%); }
   #scopeOverlay::after  { width: 24vh; height: 2px; transform: translate(-50%,-50%); }
   /* 夜视仪（2026-10-13 用户要求）：夜里戴上夜视仪，附近的人和车会用绿色方框标在屏幕上 */
@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix151-boom-range';
+const BUILD = '20261102-fix152-scope-cross';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14223,7 +14223,7 @@ let gasHeld = false, reverseHeld = false, steerValue = 0;
 // 直升机升降键（手机）：等效于键盘的 Space / Shift，见驾驶分支里的 helicopter 段
 const heliUpEl = document.getElementById('heliUpBtn'), heliDownEl = document.getElementById('heliDownBtn');
 let heliUpHeld = false, heliDownHeld = false;
-const hudLine1 = document.querySelector('#hud .line1'), crosshairEl = document.getElementById('crosshair'), hintTextEl = document.getElementById('hintText');
+const hudLine1 = document.querySelector('#hud .line1'), crosshairEl = document.getElementById('crosshair'), scopeOverlayEl = document.getElementById('scopeOverlay'), hintTextEl = document.getElementById('hintText');
 const hpFillEl = document.getElementById('hpfill'), stFillEl = document.getElementById('stfill');
 // 车辆耐久条（上车后显示）
 const carDurEl = document.getElementById('cardur'), carDurFillEl = document.getElementById('cardurfill'),
@@ -21681,6 +21681,12 @@ function updateCrosshair(dt) {
   if (inVeh && !mouseActive) {
     aimNDC.x = _chX / (innerWidth * 0.5);
     aimNDC.y = -_chY / (innerHeight * 0.5);
+  }
+  // 【fix152】开镜时红色十字必须画在**真实弹道落点**（绿准星所在处），
+  // 原来它焊死在屏幕正中，弹道却跟着绿准星走 —— 用户说的"红十字是假的"就是这个。
+  if (scopeOverlayEl && typeof scoping !== 'undefined' && scoping) {
+    scopeOverlayEl.style.setProperty('--sx', _chX.toFixed(1) + 'px');
+    scopeOverlayEl.style.setProperty('--sy', _chY.toFixed(1) + 'px');
   }
   // 位移不到 0.3px 就不碰 DOM，省掉每帧一次样式写入
   if (Math.abs(_chX - _chLastX) < 0.3 && Math.abs(_chY - _chLastY) < 0.3) return;
