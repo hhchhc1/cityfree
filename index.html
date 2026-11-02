@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix165-clear-water';
+const BUILD = '20261102-fix166-wall-garden';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25215,14 +25215,18 @@ function buildLinhaiCity(g) {
   const jadeM = new THREE.MeshLambertMaterial({ color: 0x6b7d5a });
   // 城墙：沿河一侧的长墙 + 箭垛 + 石砌台基
   const wallX = LH.ancX0 + 6;
-  const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, ZLEN - 60), wallM);
-  cw.position.set(wallX, 4.25, ZC); add(cw);
+  // 【fix166】用户："城墙到这里就戛然而止了，要绕到苏州园林那边"。
+  // 原来主墙只有 ZLEN-60 长、到 z≈-115 就断掉，断口悬在半空。现在往南延伸到 z=150，
+  // 把苏州园林那一整片也围进来。
+  const _WZ0 = ZC - ZLEN / 2 + 30, _WZ1 = 150;
+  const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, _WZ1 - _WZ0), wallM);
+  cw.position.set(wallX, 4.25, (_WZ0 + _WZ1) / 2); add(cw);
   // 【fix94】城墙碰撞盒必须**在城门处留门洞**！原来是一整条连续碰撞（minZ→maxZ），
   // 把 3 座城门也一起堵死了 —— 用户：『那边的古建筑怎么还是勾不过去啊？那个城墙
   // 给我挡住了，我也进不去，钩爪上过去就直接吸附到底下的城墙那儿了』。
   // 城门在 Z0+120 / ZC / Z1-120 三处（见下面 buildGateTower 的调用），每处留 30m 门洞。
   {
-    const _zA = ZC - (ZLEN - 60) / 2, _zB = ZC + (ZLEN - 60) / 2;
+    const _zA = _WZ0, _zB = _WZ1;
     const _gates = [Z0 + 120, ZC, Z1 - 120].sort((a, b) => a - b);
     let _cur = _zA;
     for (const _gz of _gates) {
@@ -25248,11 +25252,25 @@ function buildLinhaiCity(g) {
     pv.position.set((LH.ancX0 + LH.ancX1) / 2 + 9, 0.055, ZC);
     pv.userData.lodShared = true;
     add(pv);
-  }  const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, ZLEN - 56), stoneM);
-  plinth.position.set(wallX, 0.7, ZC); add(plinth);
-  for (let z = Z0 + 32; z < Z1 - 32; z += 3.6) {                        // 箭垛
+  }
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, (_WZ1 - _WZ0) - 4), stoneM);
+  plinth.position.set(wallX, 0.7, (_WZ0 + _WZ1) / 2); add(plinth);
+  for (let z = _WZ0 + 8; z < _WZ1 - 8; z += 3.6) {                        // 箭垛
     const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), merlonM);
     m.position.set(wallX - 3.2, 9.2, z); add(m);
+  }
+  // 【fix166】南墙：沿园林南缘再砌一道，和主墙接上，围成一圈
+  {
+    const _sX0 = wallX - 3.5, _sX1 = 2050, _sZ = _WZ1;
+    const _sw = new THREE.Mesh(new THREE.BoxGeometry(_sX1 - _sX0, 8.5, 7), wallM);
+    _sw.position.set((_sX0 + _sX1) / 2, 4.25, _sZ); add(_sw);
+    const _spl = new THREE.Mesh(new THREE.BoxGeometry(_sX1 - _sX0 + 1, 1.4, 9.5), stoneM);
+    _spl.position.set((_sX0 + _sX1) / 2, 0.7, _sZ); add(_spl);
+    LH_BLD.push({ minX: _sX0, maxX: _sX1, minZ: _sZ - 3.5, maxZ: _sZ + 3.5, minY: 0, top: 8.5 });
+    for (let _x = _sX0 + 6; _x < _sX1 - 6; _x += 3.6) {
+      const _m = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 1.5), merlonM);
+      _m.position.set(_x, 9.2, _sZ + 3.2); add(_m);
+    }
   }
   // 城楼 / 门楼（3 座，沿城墙分布）
   function buildGateTower(cz, h) {
