@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix153-airwall-camera';
+const BUILD = '20261102-fix154-no-flicker';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -2567,7 +2567,8 @@ function addGableRoof(x, gy, z, w, d, h) {
 // 大楼主体早就用 buildingBodyMaterial(style) 按风格复用了，但屋顶/女儿墙/空调/阳台
 // 这些配件一直是每栋楼各 new 一份 —— 静态合批按材质分组，每多一个唯一材质就多一次
 // 绘制调用：几百栋楼 × 每个配件一份 = 白白多出几百次调用。共享之后配件全部并批。
-const BLD_M_TRIM  = new THREE.MeshLambertMaterial({ color: 0x8e949b });   // 女儿墙 / 压顶
+// 【fix154】压顶/腰线这类"贴在墙面上的薄板"加一点深度前置：它和墙体共面时不再互抢像素（白色长条闪烁）。
+const BLD_M_TRIM  = new THREE.MeshLambertMaterial({ color: 0x8e949b, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -1.5 });   // 女儿墙 / 压顶
 const BLD_M_DARK  = new THREE.MeshLambertMaterial({ color: 0x727980 });   // 设备层 / 檐口
 const BLD_M_MECH  = new THREE.MeshLambertMaterial({ color: 0x7d848b });   // 屋顶机房
 const BLD_M_STEEL = new THREE.MeshLambertMaterial({ color: 0x9aa2aa });   // 空调机组 / 柱廊
@@ -2575,7 +2576,7 @@ const BLD_M_ANT   = new THREE.MeshLambertMaterial({ color: 0xcccccc });   // 天
 const BLD_M_BRIDGE= new THREE.MeshLambertMaterial({ color: 0x9ec6de });   // 双塔连廊
 const BLD_M_RAIL  = new THREE.MeshLambertMaterial({ color: 0x30353a });   // 阳台栏杆
 const BLD_M_FLOOR = new THREE.MeshLambertMaterial({ color: 0x8b8f94 });   // 阳台楼板
-const BLD_M_CROWN = new THREE.MeshLambertMaterial({ color: 0x666666 });   // 摩天楼尖顶/女儿墙
+const BLD_M_CROWN = new THREE.MeshLambertMaterial({ color: 0x666666, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -1.5 });   // 摩天楼尖顶/女儿墙
 const BLD_M_PYR   = new THREE.MeshLambertMaterial({ color: 0x8a3b2f });   // 居民楼金字塔顶
 const BLD_M_TANK  = new THREE.MeshLambertMaterial({ color: 0x7a7a7a });   // 屋顶水箱
 const BLD_M_ROOF  = new THREE.MeshLambertMaterial({ color: 0x9a4a3a });   // 人字屋顶瓦
@@ -26734,7 +26735,11 @@ function buildLinhaiCity(g) {
           for (let k = 0; k < 4; k++) {
             const hh = rh * (1 - k / 4), ww = (w + 0.2) * (1 - k / 4);
             if (ww < 0.8) break;
-            bx(0.5, hh / 4 + 0.05, ww, gableHex || WHITE, gx, y0 + rh - hh / 2 - hh / 8, cz);
+            // 【fix154】山墙原来是 4 层**几乎共面**的薄板（厚度相同、x 也相同），
+            // 上下层重叠的那一小条上两个面深度一样，互相抢像素 →
+            // 远看就是"白色的长条一直在闪"（用户三张截图都是这个）。
+            // 每往上一层往里缩 2.5cm，重叠处的深度就分开了，闪烁消失，外形看不出变化。
+            bx(0.5, hh / 4 + 0.04, ww, gableHex || WHITE, gx - s * (k * 0.025), y0 + rh - hh / 2 - hh / 8, cz);
           }
         }
         return y0 + rh;
