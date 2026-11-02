@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix162-tankshell-retbtn';
+const BUILD = '20261102-fix163-bridge-sea';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27307,12 +27307,38 @@ function initFlightScenery() {
   //    从 x=500 起还有一个好处：正好接上本城边缘那圈已经沉到 WATER_Y 的 ground mesh。
   // 【fix125】远海平面：地图边缘的地面正好沉到 WATER_Y，两者共面 → 起飞过场里
   // 那片浅蓝一直在闪（z-fighting）。压低 0.3m + polygonOffset 往后推，彻底不打架。
-  const seaMat = new THREE.MeshLambertMaterial({ color: 0x1d4e6b });
+// 【fix163】用户要求：两城之间那片海要"深蓝、像护城河的水"。原来 0x1d4e6b 在夜里几乎全黑，
+// 现在提亮成 0x1f6fa0 并给一点自发光（emissive），夜景下也能看出是海面而不是黑色地毯。
+const seaMat = new THREE.MeshLambertMaterial({ color: 0x1f6fa0, emissive: 0x08243a });
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
   sea.rotation.x = -Math.PI / 2;
   sea.position.set(500 + 2500, WATER_Y - 0.3, DEST.z);
   scene.add(sea);
+// 【fix163】跨海木栈桥：木板桥面 + 纵梁 + 木栏木桩（参考用户给的木桥照片）
+{
+  const _bridge = new THREE.Group();
+  const _wA = new THREE.MeshLambertMaterial({ color: 0xa5713f });   // 亮木色
+  const _wB = new THREE.MeshLambertMaterial({ color: 0x7a4a24 });   // 深木色
+  const BX0 = 542, BX1 = 648, BZ = -285, BW = 4.6, BY = WATER_Y + 0.55;
+  for (let x = BX0; x < BX1; x += 1.7) {
+    const _pl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.22, BW), (Math.round((x - BX0) / 1.7) % 3 === 0) ? _wB : _wA);
+    _pl.position.set(x + 0.75, BY, BZ); _bridge.add(_pl);
+  }
+  for (const _s of [-1, 1]) {
+    const _bm = new THREE.Mesh(new THREE.BoxGeometry(BX1 - BX0 - 2, 0.36, 0.32), _wB);
+    _bm.position.set((BX0 + BX1) / 2, BY - 0.22, BZ + _s * (BW / 2 - 0.16)); _bridge.add(_bm);
+    const _rl = new THREE.Mesh(new THREE.BoxGeometry(BX1 - BX0 - 2, 0.14, 0.16), _wA);
+    _rl.position.set((BX0 + BX1) / 2, BY + 1.05, BZ + _s * (BW / 2 - 0.16)); _bridge.add(_rl);
+    for (let x = BX0 + 2; x <= BX1 - 2; x += 6) {
+      const _po = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.35, 0.28), _wB);
+      _po.position.set(x, BY + 0.45, BZ + _s * (BW / 2 - 0.16)); _bridge.add(_po);
+      const _lg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 3.4, 0.36), _wB);
+      _lg.position.set(x, BY - 1.45, BZ + _s * (BW / 2 - 0.16)); _bridge.add(_lg);
+    }
+  }
+  scene.add(_bridge);
+}
   // (2) 【占位新城】地面 + 沙滩过渡 + 跑道 + 楼群天际线 + 城市名标牌
   const g = new THREE.Group();
   // 三层地基：沙滩（最大）→ 草地 → 城区铺装。只铺一块纯绿会像一块塑料板，
