@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix154-no-flicker';
+const BUILD = '20261102-fix155-grapple-camera';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21559,6 +21559,7 @@ function updateVehicleSuspension(dt) {
 }
 
 // ========== 相机 ==========
+var camDistSmooth = 0, _camCand = [];   // 【fix155】镜头距离平滑 + 候选遮挡盒
 const camPos = new THREE.Vector3(0, 6, -10), camLook = new THREE.Vector3(0, 1, 0);
 const _camTmp = new THREE.Vector3(), _camLookA = new THREE.Vector3();
 const _camForward = new THREE.Vector3(), _camRight = new THREE.Vector3();
@@ -23591,28 +23592,50 @@ function update(dt) {
     // 在鼓楼这种四面封闭的券洞里会被推得左右乱跳（用户："鼓楼内部视角混乱"）。
     // 现在：从人物沿"镜头后退方向"由远到近采样，取最远一个不在墙里的距离。
     // 镜头要么正常在身后，要么顺着同一条线贴近人物 —— 方向不变，所以永远不会甩。
-    const _camBlk = (x, y, z) => {
-      for (let _bi = 0; _bi < buildings.length; _bi++) {
-        const _b = buildings[_bi];
-        const _bBot = (_b.bottom !== undefined) ? _b.bottom : (_b.minY || 0);
-        if (y <= _bBot || y >= _b.top) continue;
-        if (camTarget.position.y >= _b.top - 0.5) continue;
-        if (x > _b.minX - 0.45 && x < _b.maxX + 0.45 && z > _b.minZ - 0.45 && z < _b.maxZ + 0.45) return true;
-      }
-      return false;
-    };
+    // 【fix155】性能 + 手感：
+    // ① 原来每个采样点都要把 buildings 全扫一遍（新城区几千个盒子 × 15 次 = 每帧十几万次判断），
+    //    在楼多的新城区就是掉帧/一顿一顿的来源。现在先用一次粗筛把"可能挡住相机"的盒子挑出来，
+    //    再用这一小撮做采样，开销直接降一个数量级。
+    // ② 镜头距离加平滑：往里收要快（不能穿墙），往外放要慢（避免嗖地弹开）——
+    //    飞钩穿过楼群时视角就不会"卡一下"。
+    const _fxT = camTarget.position.x - tfx * dist;
+    const _fzT = camTarget.position.z - tfz * dist;
+    const _yT = camTarget.position.y + height + dist * sp;
+    const _minX = Math.min(camTarget.position.x, _fxT) - 0.7, _maxX = Math.max(camTarget.position.x, _fxT) + 0.7;
+    const _minZ = Math.min(camTarget.position.z, _fzT) - 0.7, _maxZ = Math.max(camTarget.position.z, _fzT) + 0.7;
+    const _minYm = Math.min(camTarget.position.y + height, _yT) - 0.7, _maxYm = Math.max(camTarget.position.y + height, _yT) + 0.7;
+    _camCand.length = 0;
+    for (let _bi = 0; _bi < buildings.length; _bi++) {
+      const _b = buildings[_bi];
+      if (_b.maxX < _minX || _b.minX > _maxX || _b.maxZ < _minZ || _b.minZ > _maxZ) continue;
+      const _bBot = (_b.bottom !== undefined) ? _b.bottom : (_b.minY || 0);
+      if (_b.top < _minYm || _bBot > _maxYm) continue;
+      if (camTarget.position.y >= _b.top - 0.5) continue;
+      _camCand.push(_b, _bBot);
+    }
     let _camDist = dist;
-    for (let _cs = 1; _cs <= 15; _cs++) {
+    for (let _cs = 1; _cs <= 15 && _camCand.length; _cs++) {
       const _t = _cs * 0.6;
       if (_t > dist) break;
       const _sx = camTarget.position.x - tfx * _t;
       const _sy = camTarget.position.y + height + _t * sp;
       const _sz = camTarget.position.z - tfz * _t;
-      if (_camBlk(_sx, _sy, _sz)) { _camDist = Math.max(1.7, _t - 0.6); break; }
+      let _hit = false;
+      for (let _k = 0; _k < _camCand.length; _k += 2) {
+        const _b = _camCand[_k], _bBot = _camCand[_k + 1];
+        if (_sy <= _bBot || _sy >= _b.top) continue;
+        if (_sx > _b.minX - 0.45 && _sx < _b.maxX + 0.45 && _sz > _b.minZ - 0.45 && _sz < _b.maxZ + 0.45) { _hit = true; break; }
+      }
+      if (_hit) { _camDist = Math.max(1.7, _t - 0.6); break; }
     }
-    _camTmp.set(camTarget.position.x - tfx * _camDist,
-                camTarget.position.y + height + _camDist * sp,
-                camTarget.position.z - tfz * _camDist);
+    if (!camDistSmooth) camDistSmooth = _camDist;
+    if (_camDist < camDistSmooth) camDistSmooth += (_camDist - camDistSmooth) * Math.min(1, 20 * dt);
+    else camDistSmooth += (_camDist - camDistSmooth) * Math.min(1, 4.5 * dt);
+    if (camDistSmooth > _camDist + 0.35) camDistSmooth = _camDist + 0.35;   // 不许因为平滑而穿墙
+    const _dNow = camDistSmooth;
+    _camTmp.set(camTarget.position.x - tfx * _dNow,
+                camTarget.position.y + height + _dNow * sp,
+                camTarget.position.z - tfz * _dNow);
     if (camPos.distanceToSquared(_camTmp) > 324) camPos.copy(_camTmp); else camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));   // 【fix145】切换视角(落地/上车)时不插值，否则相机会穿过墙
     camera.position.copy(camPos);
     // 落地/重击镜头抖动：直接作用在最终相机位置上，每帧指数衰减
