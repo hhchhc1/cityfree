@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix161-heli-cross';
+const BUILD = '20261102-fix162-tankshell-retbtn';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19831,6 +19831,14 @@ if ((v.shootCd || 0) > 0) return;
     emitSmoke(hx, hY, hz, true);
     emitSmoke(hx + 0.6, hY + 0.3, hz - 0.4, true);
     emitSmoke(hx - 0.5, hY + 0.1, hz + 0.5, false);
+    // 【fix162】坦克炮弹落点爆炸做大同款：两层火球 + 贴地冲击波 + 加倍碎片
+    spawnFireball(hx, (hY || terrainHeight(hx, hz)) + 1.6, hz, 1.7, 8.5, 0.5, 0xffe066);
+    spawnFireball(hx, (hY || terrainHeight(hx, hz)) + 1.0, hz, 1.0, 5.8, 0.72, 0xff8c1a);
+    spawnShockRing(hx, terrainHeight(hx, hz), hz, 1.5, 17, 0.62, 0xffc45a);
+    spawnBurst(hx, hz, 0xffcc33, 60, hY);
+    spawnBurst(hx, hz, 0xff6600, 40, hY);
+    spawnBurst(hx, hz, 0x2a1600, 20, hY);
+    for (let i = 0; i < 8; i++) emitSmoke(hx + (Math.random() - 0.5) * 4.0, (hY || terrainHeight(hx, hz)) + 0.4, hz + (Math.random() - 0.5) * 4.0, i < 3);
     blastPeople(hx, hz, R, at, 3.4, RY, hY, 'tank');   // 坦克炮弹：玩家坦克，正当击杀计入
     // 被炮弹掀到的车：同样按垂直范围判定（以前只看平面距离）
     const tankBlastY = hY;
@@ -28448,16 +28456,31 @@ const frameLoop = () => {
   // 【fix70】荷芷市回程：跑道东端有一个回程点，走过去就送回主城机场。
   // （主城的机场光柱只能往荷芷市飞，飞过去之后没有回来的途径。）
   try {
-    if (!FLIGHT && !RET && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
+  // 【fix162】用户："新城市坐飞机没有确定的按钮" —— 返程改成**先出按钮，点了才登机**，
+  // 不再一走进光柱就直接起飞（也不需要每帧判断扣钱）。
+  try {
+    if (!window.__retBtn) {
+      const _rb = document.createElement('div');
+      _rb.textContent = '登机返程';
+      _rb.style.cssText = 'position:fixed;right:118px;bottom:250px;padding:13px 20px;border-radius:30px;background:linear-gradient(180deg,#a9f0c8,#4fd08a);color:#0a3b22;font:700 16px sans-serif;z-index:30;cursor:pointer;display:none;box-shadow:0 4px 12px rgba(0,0,0,.45)';
+      _rb.onclick = function () { window.__retOk = true; _rb.style.display = "none"; };
+      document.body.appendChild(_rb);
+      window.__retBtn = _rb;
+    }
+    const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5);
+    window.__retBtn.style.display = _nearRet ? 'block' : 'none';
+    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：点右下「登机返程」按钮才起飞'); }
+  } catch (e) {}
+    if (!FLIGHT && !RET && window.__retOk && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
       const _nowMs = performance.now();
       if (flightHasPass()) {
-        startReturnFlight();   // 【fix150】改成播放返程动画，不再瞬间传送
+        startReturnFlight();   // 【fix150】改成播放返程动画，不再瞬间传送 window.__retOk = false;
         setHint('永久往返机票 · 免费返程，已回到主城机场');
         _retTicketCd = 0;
       } else if (gold >= FLIGHT_PRICE_ONCE) {
         addGold(-FLIGHT_PRICE_ONCE); saveGame();
-        startReturnFlight();   // 【fix150】付费返程同样播放动画
+        startReturnFlight();   // 【fix150】付费返程同样播放动画 window.__retOk = false;
         floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 返程机票', '#ffd700');
         setHint('已付 ' + FLIGHT_PRICE_ONCE + ' 金币返程机票，已回到主城机场');
         _retTicketCd = 0;
