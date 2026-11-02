@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix156-basegrass-police';
+const BUILD = '20261102-fix157-no-greensheet';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6726,23 +6726,11 @@ var AIRLINER = null;
   apron.position.set(bx, gy + 0.05, bz); scene.add(apron);
   // 【fix148】基地外围再垫一层"草地色"大板（比地面低 3cm，只在缝隙里露出来）。
   // 原来基地边界处地面会有细小的缝隙/破面，透出下面的黑色，看起来像"黑色不明物体"。
-  // 【fix156】这片"草地大板"原来是一整块**平的** 150×140 平面，放在 gy-0.03 的高度：
-  // 基地外面地形有起伏，走到低处时镜头就跑到板子下面，整屏被一大片深绿盖住
-  // （用户："一片大绿色把人都盖住了"）。现在按地形逐点抬高，板子永远贴着地，
-  // 而且改成单面朝上 —— 从下面看是透的，不可能再把画面糊住。
-  const skirtGeo = new THREE.PlaneGeometry(150, 140, 30, 30);   // 【fix156】网格加密，贴合地形
-  skirtGeo.rotateX(-Math.PI / 2);
-  {
-    const _sp = skirtGeo.attributes.position;
-    for (let i = 0; i < _sp.count; i++) {
-      const _wx = bx + _sp.getX(i), _wz = bz + _sp.getZ(i);
-      _sp.setY(i, terrainHeight(_wx, _wz) - 0.7);   // 【fix156】再压低 0.7m：网格插值不会拱到路面上面
-    }
-    _sp.needsUpdate = true;
-    skirtGeo.computeVertexNormals();
-  }
-  const skirt = new THREE.Mesh(skirtGeo, new THREE.MeshLambertMaterial({ color: 0x5d8f3c }));
-  skirt.position.set(bx, 0, bz); scene.add(skirt);
+// 【fix157】整块"草地大板"直接删掉了。
+// 它是我之前为了遮地面缝隙加的补丁，但两次都出事：先是压平的一块板把镜头盖住，
+// 改成贴地形之后，基地这块地是**人工平整**出来的、比周边自然地形低，板子就浮在人身上，
+// 人只剩一个头露在外面（用户："绿色的铺了一层东西，把人都没了"）。
+// 遮缝隙的活交给地面网格本身，不再往场景里塞一整块大板。
   // 停车位划线（坦克区）
   for (let i = 0; i < 3; i++) {
     const line = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 9), new THREE.MeshBasicMaterial({ color: 0xe8e4d0 }));
