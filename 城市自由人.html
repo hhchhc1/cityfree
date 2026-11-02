@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix157-no-greensheet';
+const BUILD = '20261102-fix159-grapple-cam-alarm';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19338,9 +19338,16 @@ function attack() {
   }
 }
 // 【fix149】基地告警：一声枪响 / 有人动了直升机坦克 → 全部守卫一起追打那个人
+var _baseAlarmUntil = 0;   // 【fix158】上一轮警报的到期时间
 function inMilitaryBase(x, z) { return x > -330 && x < -230 && z > 75 && z < 175; }
 function alertBaseGuards(sec) {
-  const until = performance.now() + (sec || 45) * 1000;
+  // 【fix158】同一轮警报只提示一次：用户在基地里每开一枪都弹"基地警报"，太吵。
+  // 只要上一轮还没过期，就只在后台续时间，不再刷提示。
+  // 【fix158】同一轮警报只响一次
+  const _nowMs = performance.now();
+  const _baseAlarmFresh = _nowMs > _baseAlarmUntil;
+  const until = _nowMs + (sec || 45) * 1000;
+  if (until > _baseAlarmUntil) _baseAlarmUntil = until;
   let n = 0;
   for (const r of residents) {
     if (!r.isBaseGuard || !r.alive) continue;
@@ -19348,7 +19355,7 @@ function alertBaseGuards(sec) {
     r.baseAlertUntil = until;
     n++;
   }
-  if (n > 0) { setHint('⚡ 军事基地警报：警卫全员出动！'); floatText('基地警报！', '#ff6b6b'); }
+  if (n > 0 && _baseAlarmFresh) { setHint('⚡ 军事基地警报：警卫全员出动！'); floatText('基地警报！', '#ff6b6b'); }
   return n;
 }
 window.alertBaseGuards = alertBaseGuards;
@@ -20069,7 +20076,10 @@ function npcFriendlyFire(shooter, victim) {
 }
 function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
-  if (d > 22) return false;
+  // 【fix158】警报期间守卫的追击半径放宽到 90m：原来一律 22m，基地这么大，
+  // 远处的守卫一看"超过 22 米"就直接放弃仇恨，所以只有离玩家最近的那个会来打。
+  const _chaseCap = (r.baseAlertUntil && performance.now() < r.baseAlertUntil) ? 90 : 22;
+  if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
   // 以前这里完全不看高度：目标 y 一律写死成 1.3/1.05，于是弹道是一条贴地的水平线，
   // 玩家用绳索爬到楼顶后，楼下的人照样"平射"命中他。现在：
@@ -20432,7 +20442,7 @@ function updateResident(r, dt) {
     const tz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
     // Task #10：把"玩家的实际高度"也传进去（在车上就取车身高度，在楼顶就是楼顶高度）
     const ty = (state === 'drive' && currentCar) ? entityFootY(currentCar) : person.position.y;
-    if (chaseAndAttack(r, dt, tx, tz, dmg => npcShotPlayer(dmg, r.x, r.z, r.ranged), (state === 'drive' ? currentCar : null), ty)) return;
+    if (chaseAndAttack(r, dt, tx, tz, dmg => npcShotPlayer(r.isBaseGuard ? dmg * 0.55 : dmg, r.x, r.z, r.ranged) /* fix158: 警卫枪伤打55折 */, (state === 'drive' ? currentCar : null), ty)) return;
     r.hate = null;
   } else if (r.hate && typeof r.hate === 'object') {
     // 【2026-10-13 用户要求】被别的 NPC 误伤（hate 里存的就是那个人的对象）：追着他打，
@@ -23642,7 +23652,11 @@ function update(dt) {
     _camTmp.set(camTarget.position.x - tfx * _dNow,
                 camTarget.position.y + height + _dNow * sp,
                 camTarget.position.z - tfz * _dNow);
-    if (camPos.distanceToSquared(_camTmp) > 324) camPos.copy(_camTmp); else camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));   // 【fix145】切换视角(落地/上车)时不插值，否则相机会穿过墙
+    // 【fix159】飞钩时镜头"闪一下别的位置"就是这行造成的：相机和目标距离一超过 18m 就直接瞬移。
+    // 飞钩速度快，偶尔一帧就移动十几米，于是整屏跳一下。现在只在**真正的传送**（传送到别处、
+    // 上下车、复活，距离 60m 以上）时才瞬移，飞钩期间一律平滑跟随。
+    const _snapSq = (typeof grapple !== 'undefined' && grapple) ? 1e9 : 3600;
+    if (camPos.distanceToSquared(_camTmp) > _snapSq) camPos.copy(_camTmp); else camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));
     camera.position.copy(camPos);
     // 落地/重击镜头抖动：直接作用在最终相机位置上，每帧指数衰减
     if (camShake > 0.002) {
