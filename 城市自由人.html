@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix168-sea-foam-sparkle';
+const BUILD = '20261102-fix169-water-above-bed';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25001,8 +25001,11 @@ function buildLinhaiCity(g) {
   LH_GROUND.tex = gtex;
   // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
   const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
-  const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x3f7f72 }));
-  bed.position.set(rwC, -0.18, ZC); add(bed);
+const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x5f9a86 }));
+  // 【fix169】河床必须沉到水面以下！原来 bed 顶面在 y=+0.07、水面在 y=0.02，
+  // 水面整个被河床盖住 —— 这就是"改了材质一点变化都没有"的真正原因（用户看到的其实是河床）。
+  // 现在床顶降到 -0.33，水面与床之间留 0.35m 清水层。
+  bed.position.set(rwC, -0.58, ZC); add(bed);
   // 波纹贴图：用 canvas 画随机细波，作为半透明面叠在水上，靠每帧平移 UV 做流动
   const wcv = document.createElement('canvas'); wcv.width = wcv.height = 256;
   const wcx = wcv.getContext('2d');
@@ -25025,7 +25028,7 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.16 + Math.random() * 0.34).toFixed(3)
     specular: 0xbfeaf5, shininess: 110, reflectivity: 0.4,
     transparent: true, opacity: 0.8, emissive: 0x05201f, depthWrite: false
   }));
-  wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.02, ZC); add(wsurf);
+  wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.06, ZC); add(wsurf);
   registerDynamicObject(wsurf);
   // 【fix168】岸边浪花：水与石岸交界处一条浅色带，水才不像"切开的色块"
   {
@@ -25049,7 +25052,7 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.16 + Math.random() * 0.34).toFixed(3)
     _spTex.repeat.set(rwW / 26, ZLEN / 26);
     window.__sparkTex = _spTex;
     const _spark = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshBasicMaterial({ map: _spTex, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
-    _spark.rotation.x = -Math.PI / 2; _spark.position.set(rwC, 0.045, ZC);
+    _spark.rotation.x = -Math.PI / 2; _spark.position.set(rwC, 0.09, ZC);
     add(_spark); registerDynamicObject(_spark);
   }
   LH_WATER.mesh = wsurf; LH_WATER.tex = wtex;
