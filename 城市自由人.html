@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix152-scope-cross';
+const BUILD = '20261102-fix153-airwall-camera';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19348,6 +19348,16 @@ window.alertBaseGuards = alertBaseGuards;
 window.inMilitaryBase = inMilitaryBase;
 // 调试/自测钩子（只在浏览器控制台用，不影响玩法）
 window.__fxRock = function (x, z, y) { try { rocketImpact(WEAPONS.rpg4, null, x, z, typeof y === 'number' ? y : terrainHeight(x, z) + 0.9); return 'ok'; } catch (e) { return String(e); } };
+// 碰撞盒统计（调试用）：看有多少盒子是"从地面一直实到很高"的幽灵柱
+window.__colStats = function () {
+  let ground = 0, tallGround = 0, floating = 0, maxTop = 0;
+  for (const b of buildings) {
+    const bot = (b.minY !== undefined) ? b.minY : 0;
+    if (bot <= 0.01) { ground++; if (b.top > 25) tallGround++; } else floating++;
+    if (b.top > maxTop) maxTop = b.top;
+  }
+  return { total: buildings.length, ground: ground, tallGround: tallGround, floating: floating, maxTop: Math.round(maxTop) };
+};
 window.__fxCar = function () { try { const c = cars.find(v => !v.exploded); if (!c) return 'no car'; explodeCar(c); return 'ok @' + Math.round(c.x) + ',' + Math.round(c.z); } catch (e) { return String(e); } };
 
 function shoot(w, count) {
@@ -23576,30 +23586,32 @@ function update(dt) {
     const height = height0;
     const wantFov = 60;
     if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov = wantFov; camera.updateProjectionMatrix(); }
-    const behindX = camTarget.position.x - tfx * dist, behindZ = camTarget.position.z - tfz * dist;
-    const behindY = camTarget.position.y + height + dist * sp;
-    _camTmp.set(behindX, behindY, behindZ);
-    // 【2026-10-21·fix31 移植】相机被楼体遮挡：镜头钻到楼里时把**目标位置**推到墙外。
-    // （旧分支里这段是 fix22b/fix24，防抖写法是 fix32，三者必须一起搬：
-    //   只搬"外推"不搬"防抖"会把 fix32 修的剧烈抖动重新带回来。）
-    // 原写法是先 camPos.lerp 进墙、再把 camPos 硬推出墙 → camPos 每帧在墙内外反复横跳
-    // （lerp 往里拉、外推往外推），贴着墙转视角时整屏剧烈抖动。
-    // 现在只推**目标位置** _camTmp：目标每帧都是确定值，camPos 平滑收敛到墙外点，不再抖。
-    for (let _bi = 0; _bi < buildings.length; _bi++) {
-      const _b = buildings[_bi];
-      if (_camTmp.y <= _b.bottom || _camTmp.y >= _b.top) continue;   // 高于楼顶/低于楼底不挡
-      // 【fix24·楼顶防钻模】玩家站在这栋楼的楼顶（或更高）时不挡（相机该在楼顶上空自由环绕）。
-      if (camTarget.position.y >= _b.top - 0.5) continue;
-      if (_camTmp.x > _b.minX - 0.5 && _camTmp.x < _b.maxX + 0.5 && _camTmp.z > _b.minZ - 0.5 && _camTmp.z < _b.maxZ + 0.5) {
-        let _ux = _camTmp.x - camTarget.position.x, _uz = _camTmp.z - camTarget.position.z;
-        const _ul = Math.hypot(_ux, _uz);
-        if (_ul > 1e-4) { _ux /= _ul; _uz /= _ul; } else { _ux = tfx; _uz = tfz; }   // 正对正上方时退向镜头默认后方
-        let _guard = 0;
-        while (_camTmp.x > _b.minX - 0.5 && _camTmp.x < _b.maxX + 0.5 && _camTmp.z > _b.minZ - 0.5 && _camTmp.z < _b.maxZ + 0.5 && _guard < 60) {
-          _camTmp.x -= _ux * 0.25; _camTmp.z -= _uz * 0.25; _guard++;
-        }
+    // 【fix153】相机遮挡改用"沿视线回缩"：原来是把已进墙的相机点**横向推出** AABB，
+    // 在鼓楼这种四面封闭的券洞里会被推得左右乱跳（用户："鼓楼内部视角混乱"）。
+    // 现在：从人物沿"镜头后退方向"由远到近采样，取最远一个不在墙里的距离。
+    // 镜头要么正常在身后，要么顺着同一条线贴近人物 —— 方向不变，所以永远不会甩。
+    const _camBlk = (x, y, z) => {
+      for (let _bi = 0; _bi < buildings.length; _bi++) {
+        const _b = buildings[_bi];
+        const _bBot = (_b.bottom !== undefined) ? _b.bottom : (_b.minY || 0);
+        if (y <= _bBot || y >= _b.top) continue;
+        if (camTarget.position.y >= _b.top - 0.5) continue;
+        if (x > _b.minX - 0.45 && x < _b.maxX + 0.45 && z > _b.minZ - 0.45 && z < _b.maxZ + 0.45) return true;
       }
+      return false;
+    };
+    let _camDist = dist;
+    for (let _cs = 1; _cs <= 15; _cs++) {
+      const _t = _cs * 0.6;
+      if (_t > dist) break;
+      const _sx = camTarget.position.x - tfx * _t;
+      const _sy = camTarget.position.y + height + _t * sp;
+      const _sz = camTarget.position.z - tfz * _t;
+      if (_camBlk(_sx, _sy, _sz)) { _camDist = Math.max(1.7, _t - 0.6); break; }
     }
+    _camTmp.set(camTarget.position.x - tfx * _camDist,
+                camTarget.position.y + height + _camDist * sp,
+                camTarget.position.z - tfz * _camDist);
     if (camPos.distanceToSquared(_camTmp) > 324) camPos.copy(_camTmp); else camPos.lerp(_camTmp, 1 - Math.pow(0.001, dt));   // 【fix145】切换视角(落地/上车)时不插值，否则相机会穿过墙
     camera.position.copy(camPos);
     // 落地/重击镜头抖动：直接作用在最终相机位置上，每帧指数衰减
@@ -24821,7 +24833,13 @@ function buildLinhaiCity(g) {
     const k = (glow ? 'b' : 'l') + hex;
     let m = _detMats.get(k);
     if (!m) {
-      m = glow ? new THREE.MeshBasicMaterial({ color: hex }) : new THREE.MeshLambertMaterial({ color: hex });
+      // 【fix153】装饰件一律往前偏一点点深度（polygonOffset）：
+      // 屋檐线 / 腰线 / 屋脊 / 匾额这些"贴在墙面上"的薄片，和底下的墙体**共面**时会互相抢像素，
+      // 远看就是一圈不停闪的边（用户报过鼓楼下沿一圈、园林某座房子上面一圈）。
+      // 给它们一个极小的深度前置，谁在前就固定谁，闪烁立刻消失，位置看不出变化。
+      const _po = { polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -1.5 };
+      m = glow ? new THREE.MeshBasicMaterial(Object.assign({ color: hex }, _po))
+               : new THREE.MeshLambertMaterial(Object.assign({ color: hex }, _po));
       _detMats.set(k, m);
     }
     return m;
@@ -24852,7 +24870,11 @@ function buildLinhaiCity(g) {
       // 「那个空气墙是每一个都存在，每一个城墙围墙都存在，每一个古建筑上好像都有」。
       const _rot = (rx || ry || rz);
       if (!_rot && !_detNoCol && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8)) {
-        LH_BLD.push({ minX: x - _w / 2, maxX: x + _w / 2, minZ: z - _d / 2, maxZ: z + _d / 2, minY: 0, top: y + _h / 2 });
+        // 【fix153】minY 原来是写死的 0 —— 于是挂在楼顶/屋檐上的装饰件（灯笼、脊兽、旗杆、匾额）
+        // 会从地面拉出一根**看不见的实心柱子**，一直顶到装饰件的高处，玩家还能顺着爬（用户：
+        // "还有很多建筑上方还有看不见的空气墙能攀爬"）。改成按物体自身的下沿登记：
+        // 贴着地面的东西行为完全不变，挂在高处的就只剩它自己那一块。
+        LH_BLD.push({ minX: x - _w / 2, maxX: x + _w / 2, minZ: z - _d / 2, maxZ: z + _d / 2, minY: Math.max(0, y - _h / 2), top: y + _h / 2 });
       }
     } catch (e) {}
     return m;
@@ -25316,7 +25338,9 @@ function buildLinhaiCity(g) {
   // 人一走进去半截身子就陷在里面（用户："鼓楼下面人身体都没过了"）。
   // 改成四个角块，让门洞地面保持和外面一样平。
   {
-    const cw = (baseW + 2.0 - OPEN_W) / 2, co = OPEN_W / 2 + cw / 2;
+    // 【fix153】线脚整体往外挪 0.06m：原来它的内侧面和角墩内侧面**正好共面**，
+    // 站在券洞里看就是一条不停闪的"下边一圈"（z-fighting）。挪出去之后内侧面藏进角墩里。
+    const cw = (baseW + 2.0 - OPEN_W) / 2, co = OPEN_W / 2 + cw / 2 + 0.06;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       det(BX(cw, 1.4, cw), RED_D, px + sx * co, 0.7, pz + sz * co);
     }
@@ -26902,11 +26926,11 @@ function buildLinhaiCity(g) {
         bx(w + 0.6, 0.4, d + 0.6, 0x6b4a2c, cx, floorY + 0.2, cz);
         bx(w + 1.6, 0.2, d + 1.6, 0x4a2f1c, cx, floorY - 0.02, cz);
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx(0.26, 2.8, 0.26, DARKW, cx + sx * (w / 2 - 0.35), floorY + 1.75, cz + sz * (d / 2 - 0.35));
-        bx(w, 2.8, 0.22, 0x7c4a2c, cx, floorY + 1.75, cz - d / 2 + 0.2);
-        bx(0.22, 2.8, d, 0x7c4a2c, cx - w / 2 + 0.2, floorY + 1.75, cz);
-        bx(0.22, 2.8, d, 0x7c4a2c, cx + w / 2 - 0.2, floorY + 1.75, cz);
-        bx(w * 0.4, 2.8, 0.22, 0x7c4a2c, cx - w * 0.3, floorY + 1.75, cz + d / 2 - 0.2);
-        bx(w * 0.4, 2.8, 0.22, 0x7c4a2c, cx + w * 0.3, floorY + 1.75, cz + d / 2 - 0.2);
+        solid(w, 2.8, 0.22, 0x7c4a2c, cx, floorY + 1.75, cz - d / 2 + 0.2);   // 【fix153】墙体改实体，能穿过去的问题
+        solid(0.22, 2.8, d, 0x7c4a2c, cx - w / 2 + 0.2, floorY + 1.75, cz);   // 【fix153】墙体改实体，能穿过去的问题
+        solid(0.22, 2.8, d, 0x7c4a2c, cx + w / 2 - 0.2, floorY + 1.75, cz);   // 【fix153】墙体改实体，能穿过去的问题
+        solid(w * 0.4, 2.8, 0.22, 0x7c4a2c, cx - w * 0.3, floorY + 1.75, cz + d / 2 - 0.2);   // 【fix153】墙体改实体，能穿过去的问题
+        solid(w * 0.4, 2.8, 0.22, 0x7c4a2c, cx + w * 0.3, floorY + 1.75, cz + d / 2 - 0.2);   // 【fix153】墙体改实体，能穿过去的问题
         bx(w * 0.2, 2.3, 0.2, 0x3a2a1c, cx, floorY + 1.35, cz + d / 2 - 0.1);
         bx(w + 2.2, 0.2, 1.9, 0x6b4a2c, cx, floorY + 0.15, cz + d / 2 + 0.85);
         for (let k = -4; k <= 4; k++) bx(0.12, 1.0, 0.12, 0x53331e, cx + k * 1.45, floorY + 0.78, cz + d / 2 + 1.6);
