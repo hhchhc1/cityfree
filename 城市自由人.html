@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix166-wall-garden';
+const BUILD = '20261102-fix167-real-water';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25007,9 +25007,9 @@ function buildLinhaiCity(g) {
   const wcv = document.createElement('canvas'); wcv.width = wcv.height = 256;
   const wcx = wcv.getContext('2d');
   wcx.fillStyle = 'rgba(255,255,255,0)'; wcx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 260; i++) {
+for (let i = 0; i < 520; i++) {   // 【fix167】波纹数量翻倍
     const x = Math.random() * 256, y = Math.random() * 256, w = 10 + Math.random() * 34;
-    wcx.strokeStyle = 'rgba(190,232,255,' + (0.05 + Math.random() * 0.16).toFixed(3) + ')';
+wcx.strokeStyle = 'rgba(215,245,255,' + (0.16 + Math.random() * 0.34).toFixed(3) + ')';   // 【fix167】波纹加深，水面才有层次
     wcx.lineWidth = 1 + Math.random() * 1.6;
     wcx.beginPath(); wcx.moveTo(x, y);
     wcx.bezierCurveTo(x + w * 0.3, y - 2.5, x + w * 0.7, y + 2.5, x + w, y);
@@ -25018,10 +25018,12 @@ function buildLinhaiCity(g) {
   const wtex = new THREE.CanvasTexture(wcv);
   wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping;
   wtex.repeat.set(rwW / 22, ZLEN / 22);
-  const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshLambertMaterial({
-    // 【fix165】用户要的是参考照片里那种**清澈的浅青绿**水，不是深蓝。
-    // 做法：颜色改成青绿、透明度调低让水底透出来、自发光也换成偏青的暗色。
-    color: 0x63c6a8, map: wtex, transparent: true, opacity: 0.62, emissive: 0x0e3c34
+  // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
+  // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
+  const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
+    color: 0x2c7f7c, map: wtex, bumpMap: wtex, bumpScale: 0.42,
+    specular: 0xbfeaf5, shininess: 110, reflectivity: 0.4,
+    transparent: true, opacity: 0.8, emissive: 0x05201f, depthWrite: false
   }));
   wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.02, ZC); add(wsurf);
   registerDynamicObject(wsurf);
