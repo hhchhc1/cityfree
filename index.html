@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix159-grapple-cam-alarm';
+const BUILD = '20261102-fix161-heli-cross';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21666,7 +21666,10 @@ function updateCrosshair(dt) {
     ox = person.position.x; oy = person.position.y + 1.25; oz = person.position.z;
     dir = aimDirection();
   }
-  _chV3.set(ox + dir.x * CROSSHAIR_AIM_DIST, oy + (dir.y || 0) * CROSSHAIR_AIM_DIST, oz + dir.z * CROSSHAIR_AIM_DIST);
+  // 【fix161】载具（直升机/坦克）的准星原来按"正前方 26 米"投影，而炮弹是沿鼠标射线打到
+  // 几十上百米外 —— 两者视差很大，看起来就是"准星和弹道不匹配"。载具改用很远的瞄准点（200 米）投影。
+  const _aimDist = inVeh ? 200 : CROSSHAIR_AIM_DIST;
+  _chV3.set(ox + dir.x * _aimDist, oy + (dir.y || 0) * _aimDist, oz + dir.z * _aimDist);
   let tx = 0, ty = 0;
   // 必须是"小幅移动"：限制在短边 28% 范围内，别甩到角落、也别压住左边的按键。
   const maxOff = Math.min(innerWidth, innerHeight) * CROSSHAIR_MAX_OFF;
@@ -22782,7 +22785,10 @@ function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
   // 常规世界逻辑整段跳过 —— 这样完全不必去碰那 179 处 state 判断，风险最低。
   if (FLIGHT) { flightTick(dt); return; }
-  if (RET) { retTick(dt); return; }   // 【fix150】返程演出：登机 → 滑跑 → 落地，不再直接传送
+  if (RET) {   // 【fix160】返程演出：任何异常/超时都必须交还操作，绝不允许把游戏卡住
+    try { retTick(dt); } catch (errRet) { console.warn('[ret] 演出出错，强制结束', errRet); try { retFinish(); } catch (e2) { RET = null; } }
+    return;
+  }
   // 没在过场：先跑光柱（走近自动弹机票对话），再更新舱门提示
   updateFlightPillar(dt);
   updateBoardPrompt();
@@ -27725,6 +27731,7 @@ function retFinish() {
 window.startReturnFlight = startReturnFlight;   // 调试/兜底出口
 window.__retInfo = function () { return RET ? { t: Math.round(RET.t * 10) / 10, swapped: !!RET.swapped, camY: Math.round(camera.position.y) } : null; };
 function retTick(dt) {
+  if (RET && RET.t > 20) { retFinish(); return; }   // 【fix160】超过 20 秒一律结束，杜绝卡死
   const R = RET; if (!R) return;
   R.t += dt;
   const el = retOverlayEl();
@@ -28441,7 +28448,7 @@ const frameLoop = () => {
   // 【fix70】荷芷市回程：跑道东端有一个回程点，走过去就送回主城机场。
   // （主城的机场光柱只能往荷芷市飞，飞过去之后没有回来的途径。）
   try {
-    if (!FLIGHT && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
+    if (!FLIGHT && !RET && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
       const _nowMs = performance.now();
       if (flightHasPass()) {
