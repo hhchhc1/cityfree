@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix167-real-water';
+const BUILD = '20261102-fix168-sea-foam-sparkle';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25027,6 +25027,31 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.16 + Math.random() * 0.34).toFixed(3)
   }));
   wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.02, ZC); add(wsurf);
   registerDynamicObject(wsurf);
+  // 【fix168】岸边浪花：水与石岸交界处一条浅色带，水才不像"切开的色块"
+  {
+    const _foamMat = new THREE.MeshBasicMaterial({ color: 0xe6fbff, transparent: true, opacity: 0.5, depthWrite: false });
+    for (const _s of [-1, 1]) {
+      const _fm = new THREE.Mesh(new THREE.PlaneGeometry(3.4, ZLEN), _foamMat);
+      _fm.rotation.x = -Math.PI / 2;
+      _fm.position.set(_s < 0 ? rw0 + 1.7 : rw1 - 1.7, 0.035, ZC);
+      add(_fm); registerDynamicObject(_fm);
+    }
+    // 水面闪点（加法混合的细碎白点，随水流动）
+    const _spCv = document.createElement('canvas'); _spCv.width = _spCv.height = 256;
+    const _spCtx = _spCv.getContext('2d');
+    for (let i = 0; i < 90; i++) {
+      const _a = 0.25 + Math.random() * 0.6, _r = 0.8 + Math.random() * 1.9;
+      _spCtx.fillStyle = 'rgba(255,255,255,' + _a.toFixed(2) + ')';
+      _spCtx.beginPath(); _spCtx.arc(Math.random() * 256, Math.random() * 256, _r, 0, 6.2832); _spCtx.fill();
+    }
+    const _spTex = new THREE.CanvasTexture(_spCv);
+    _spTex.wrapS = _spTex.wrapT = THREE.RepeatWrapping;
+    _spTex.repeat.set(rwW / 26, ZLEN / 26);
+    window.__sparkTex = _spTex;
+    const _spark = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshBasicMaterial({ map: _spTex, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+    _spark.rotation.x = -Math.PI / 2; _spark.position.set(rwC, 0.045, ZC);
+    add(_spark); registerDynamicObject(_spark);
+  }
   LH_WATER.mesh = wsurf; LH_WATER.tex = wtex;
   // 驳岸：两岸石砌矮墙 + 亲水平台踏步
   const stoneM = new THREE.MeshLambertMaterial({ color: 0x7e8288 });
@@ -27337,7 +27362,22 @@ function initFlightScenery() {
 // 【fix163】用户要求：两城之间那片海要"深蓝、像护城河的水"。原来 0x1d4e6b 在夜里几乎全黑，
 // 现在提亮成 0x1f6fa0 并给一点自发光（emissive），夜景下也能看出是海面而不是黑色地毯。
 // 【fix165】用户要"清澈的水"：从深蓝改成偏青的海水色，自发光也调亮一点，白天/夜里都能看出是水。
-const seaMat = new THREE.MeshLambertMaterial({ color: 0x3fa8b8, emissive: 0x0b3540 });
+// 【fix168】用户："右边那个深蓝色的也做成这种" —— 两城之间的海也换成同款反光涟漪水面。
+const _seaCv = document.createElement('canvas'); _seaCv.width = _seaCv.height = 256;
+const _seaCtx = _seaCv.getContext('2d');
+for (let i = 0; i < 620; i++) {
+  const _x = Math.random() * 256, _y = Math.random() * 256, _w = 12 + Math.random() * 40;
+  _seaCtx.strokeStyle = 'rgba(220,248,255,' + (0.12 + Math.random() * 0.3).toFixed(3) + ')';
+  _seaCtx.lineWidth = 1 + Math.random() * 1.8;
+  _seaCtx.beginPath(); _seaCtx.moveTo(_x, _y);
+  _seaCtx.bezierCurveTo(_x + _w * 0.3, _y - 3, _x + _w * 0.7, _y + 3, _x + _w, _y);
+  _seaCtx.stroke();
+}
+const _seaTex = new THREE.CanvasTexture(_seaCv);
+_seaTex.wrapS = _seaTex.wrapT = THREE.RepeatWrapping;
+_seaTex.repeat.set(90, 99);
+window.__seaTex = _seaTex;
+const seaMat = new THREE.MeshPhongMaterial({ color: 0x1f6f8f, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.55, specular: 0xcdeef6, shininess: 100, emissive: 0x04161f });
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
 // 【fix164】护城河木栈桥（用户指定要架在新城市护城河上，参考照片：木板桥面+木栏）
@@ -28423,6 +28463,9 @@ const frameLoop = () => {
   // 【fix48】临海市河面流动：每帧平移波纹贴图的 UV（放在 frameLoop 而不是 update，
   // 这样对话/暂停时水也不会"冻住"）。开销只是一次 texture offset 赋值。
   if (LH_WATER.tex) { LH_WATER.tex.offset.x += dt * 0.010; LH_WATER.tex.offset.y += dt * 0.018; }
+    // 【fix168】海面 / 闪点也一起流动
+    if (window.__seaTex) { window.__seaTex.offset.x += dt * 0.0035; window.__seaTex.offset.y += dt * 0.0055; }
+    if (window.__sparkTex) { window.__sparkTex.offset.x -= dt * 0.006; window.__sparkTex.offset.y += dt * 0.010; }
   // 【2026-10-20·fix28】updateAutoQuality 必须排在 render **之前**：
   // 它会调 renderer.setPixelRatio() → three.js 内部重新 setSize → **整个 framebuffer 被重分配**。
   // 原来它排在 render 之后，于是这一帧刚画好的内容随旧缓冲区一起被丢掉，
