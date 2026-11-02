@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261030-fix150-return-flight';
+const BUILD = '20261102-fix151-boom-range';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13221,22 +13221,22 @@ const WEAPONS = {
   chainsaw:{ name: '链锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
-  pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 65,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
-  smg:    { name: '冲锋枪', type: 'gun',   dmg: 11, range: 60,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 38,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
-  rifle:  { name: '步枪',   type: 'gun',   dmg: 16, range: 90,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
-  ak47:   { name: 'AK47',   type: 'gun',   dmg: 18, range: 85,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
+  pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
+  smg:    { name: '冲锋枪', type: 'gun',   dmg: 11, range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
+  rifle:  { name: '步枪',   type: 'gun',   dmg: 16, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
+  ak47:   { name: 'AK47',   type: 'gun',   dmg: 18, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
   // desc 单独挂在武器对象上，商店简介会把它拼在通用说明后面（这样探针也能直接读来验证）
-  sniper: { name: '狙击枪', type: 'gun',   dmg: 90, range: 170,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
+  sniper: { name: '狙击枪', type: 'gun',   dmg: 90, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
     desc: '🎯 点击「瞄准」进入狙击镜：时间放慢到 0.5 倍，打中任何部位都是一枪毙命，一发子弹能穿透一排目标。再点一次「瞄准」退出。\n👻 瞄准状态下击杀不会升星、不会惊动同伙、也不会增加通缉 —— 杀人于无形。\n🔇 用它开枪本身也不会涨星（零颗星时随便打也不会被通缉）。' },
-  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 90, range: 130,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
+  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 90, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
   // 【2026-10-13】四联火箭筒：装备后可「连发」（点一下发 1 发）或「齐发」（一次 4 发齐射）。
   // salvo 标记表示这把武器支持齐发模式，由 salvoMode 切换；连发时每次消耗 1 发火箭弹，齐发时一次消耗 4 发。
-  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 90, range: 130,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
+  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 90, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
     desc: '🚀 四联装填，双击「齐发」按钮切换：连发模式点一下打出去 1 发，齐发模式一次 4 发齐射、覆盖一片。每一发都是范围爆炸，适合清场。' },
   // 【2026-10-13】加特林：高射速转管机枪，弹链 100 发（7.62mm），靠持续泼洒火力压制。
-  minigun:{ name: '加特林',   type: 'gun',   dmg: 12, range: 85,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
+  minigun:{ name: '加特林',   type: 'gun',   dmg: 12, range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
 };
 // 命中部位倍率：头 2.5 / 身 1.0 / 腿 0.6（狙击枪 oneShot 时忽略倍率，见 shoot()）
 const ZONE_MULT = { head: 2.5, body: 1.0, leg: 0.6 };
@@ -16376,6 +16376,44 @@ function spawnBurst(x, z, color, n, y) {
     effects.push({ m, vx: Math.cos(a) * sp, vy: 3 + Math.random() * 4, vz: Math.sin(a) * sp, life: 0.45 });
   }
 }
+// ==================== 【fix151】爆炸火球 + 冲击波 ====================
+// 用户："明显增大火箭筒末尾爆炸的效果、还有车辆被打爆的效果"。
+// 粒子（spawnBurst）只能做小碎片，这里补两样真正"大"的东西：
+//   ① 会膨胀变大的加色火球  ② 贴地扩散的冲击波圆环。
+const _fireballs = [];
+const _fbGeo = new THREE.SphereGeometry(1, 10, 8);
+const _ringGeo = new THREE.RingGeometry(0.72, 1, 24);
+function spawnFireball(x, y, z, r0, r1, dur, color) {
+  const cap = isMobile ? 5 : 9;
+  if (_fireballs.length >= cap) { const o = _fireballs.shift(); scene.remove(o.m); o.m.material.dispose(); }
+const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+  const m = new THREE.Mesh(_fbGeo, mat);
+  m.position.set(x, y, z); m.scale.setScalar(r0); m.frustumCulled = false;
+  scene.add(m);
+  _fireballs.push({ m: m, t: 0, dur: dur, r0: r0, r1: r1, ring: false });
+}
+function spawnShockRing(x, y, z, r0, r1, dur, color) {
+  const cap = isMobile ? 4 : 8;
+  if (_fireballs.length >= cap) { const o = _fireballs.shift(); scene.remove(o.m); o.m.material.dispose(); }
+const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const m = new THREE.Mesh(_ringGeo, mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, y + 0.12, z); m.scale.setScalar(r0); m.frustumCulled = false;
+  scene.add(m);
+  _fireballs.push({ m: m, t: 0, dur: dur, r0: r0, r1: r1, ring: true });
+}
+function updateFireballs(dt) {
+  for (let i = _fireballs.length - 1; i >= 0; i--) {
+    const f = _fireballs[i]; f.t += dt;
+    const k = Math.min(1, f.t / f.dur);
+    const grow = 1 - Math.pow(1 - k, 3);
+    const r = f.r0 + (f.r1 - f.r0) * grow;
+    f.m.scale.setScalar(r);
+f.m.material.opacity = (f.ring ? 0.62 : 0.82) * (1 - k * k);
+    if (k >= 1) { scene.remove(f.m); f.m.material.dispose(); _fireballs.splice(i, 1); }
+  }
+}
+
 function updateEffects(dt) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const e = effects[i];
@@ -16629,7 +16667,12 @@ function explodeCar(v) {
   if (state === 'drive' && currentCar === v) { state = 'walk'; currentCar = null; person.visible = true; person.position.set(v.x, personGroundY(v.x, v.z), v.z); stopCarMusic(); }
   blackenGroup(v.group);   // 整车变黑
   if (v.group && v.group.userData.detail) { v.group.userData.detail.visible = true; v.group.userData.lod.visible = false; }   // 残骸永远显示完整车模，别留个低模盒子
-  spawnBurst(v.x, v.z, 0xff3300, 70); spawnBurst(v.x, v.z, 0xffaa00, 45); spawnBurst(v.x, v.z, 0xffe066, 24); spawnBurst(v.x, v.z, 0x111111, 36);
+  // 【fix151】车辆爆炸也做大：两颗火球 + 冲击波 + 碎片翻倍
+  const _wy = terrainHeight(v.x, v.z);
+spawnFireball(v.x, _wy + 2.4, v.z, 1.2, 4.4, 0.4, 0xffe066);
+spawnFireball(v.x, _wy + 1.7, v.z, 0.8, 3.4, 0.55, 0xff8c1a);
+spawnShockRing(v.x, _wy, v.z, 1.2, 11, 0.55, 0xffc45a);
+  spawnBurst(v.x, v.z, 0xff3300, 110); spawnBurst(v.x, v.z, 0xffaa00, 70); spawnBurst(v.x, v.z, 0xffe066, 40); spawnBurst(v.x, v.z, 0x111111, 55);
   for (let _i = 0; _i < 9; _i++) emitSmoke(v.x + (Math.random() - 0.5) * 2.0, 1.1 + Math.random() * 1.6, v.z + (Math.random() - 0.5) * 2.0, true);
   sfx('boom');
   applyExplosionDamage(v);
@@ -19303,6 +19346,9 @@ function alertBaseGuards(sec) {
 }
 window.alertBaseGuards = alertBaseGuards;
 window.inMilitaryBase = inMilitaryBase;
+// 调试/自测钩子（只在浏览器控制台用，不影响玩法）
+window.__fxRock = function (x, z, y) { try { rocketImpact(WEAPONS.rpg4, null, x, z, typeof y === 'number' ? y : terrainHeight(x, z) + 0.9); return 'ok'; } catch (e) { return String(e); } };
+window.__fxCar = function () { try { const c = cars.find(v => !v.exploded); if (!c) return 'no car'; explodeCar(c); return 'ok @' + Math.round(c.x) + ',' + Math.round(c.z); } catch (e) { return String(e); } };
 
 function shoot(w, count) {
   // 【fix149】在军事基地里开枪 → 全部警卫立刻追打
@@ -19543,7 +19589,7 @@ function rocketImpact(w, shotBest, hx, hz, hy) {
   {
     const px = person.position.x, pz = person.position.z;
     if (shotBest && shotBest.k === 'gas') { explodeGasBarrel(shotBest.o); return; }
-    const R = 7;
+    const R = 10;   // 【fix151】爆炸范围 7 → 10
     // 【fix137】爆炸改成立体：打天空时在空中炸，不再"炸在地上"。
     // 离地越高伤害衰减越快（vFade），对着天空打也不会再把自己炸死。
     const _gY = terrainHeight(hx, hz) + 0.9;
@@ -19551,15 +19597,21 @@ function rocketImpact(w, shotBest, hx, hz, hy) {
     const vFade = Math.max(0, 1 - Math.max(0, ey - _gY) / 12);
     const at = d => Math.max(0, Math.round(w.dmg * (1 - d / R) * vFade));
     // 【2026-10-13 用户要求】火箭弹爆炸"火光更亮一点"：两发叠加（中心亮黄 + 外圈橙红），粒子更多更亮。
-    spawnBurst(hx, hz, 0xffdd55, 22, ey);
-    spawnBurst(hx, hz, 0xff6a00, 16, ey);
+    // 【fix151】火箭筒末尾爆炸做大：三层膨胀火球 + 贴地冲击波 + 三倍碎片
+spawnFireball(hx, ey + 1.5, hz, 1.2, 4.6, 0.38, 0xffe066);
+spawnFireball(hx, ey + 1.0, hz, 0.8, 3.6, 0.5, 0xff8c1a);
+spawnFireball(hx, ey + 0.6, hz, 0.5, 2.8, 0.7, 0xff3300);
+spawnShockRing(hx, ey, hz, 1.2, 12, 0.5, 0xffc45a);
+    spawnBurst(hx, hz, 0xffdd55, 48, ey);
+    spawnBurst(hx, hz, 0xff6a00, 34, ey);
+    spawnBurst(hx, hz, 0x2a1600, 18, ey);
     sfx('boom');
     // 【2026-10-13 用户要求】火箭弹落地"烟雾再浓一点"：中心叠 3 团浓烟（叠加透明度更厚），
     // 再补 6 缕四周余烟，整体比原来的"一团 + 3 缕"厚实得多。
     emitSmoke(hx, ey, hz, true);
     emitSmoke(hx, ey + 0.2, hz, true);
     emitSmoke(hx + 0.2, ey - 0.2, hz + 0.1, true);
-    for (let i = 0; i < 6; i++) emitSmoke(hx + (Math.random() - 0.5) * 3.6, ey - 0.3, hz + (Math.random() - 0.5) * 3.6, false);
+    for (let i = 0; i < 12; i++) emitSmoke(hx + (Math.random() - 0.5) * 5.2, ey - 0.3, hz + (Math.random() - 0.5) * 5.2, i < 5);
     // 自身伤害用**立体**距离：往天上打不会再炸到自己脚下
     const pd = Math.hypot(px - hx, pz - hz, (person.position.y + 1.0) - ey);
     if (pd < R) hurtPlayer(at(pd));
@@ -23336,6 +23388,7 @@ function update(dt) {
   } catch(e) { console.error('[NPC update error]', e); }
   try {
     updateEffects(dt);
+  updateFireballs(dt);   // 【fix151】爆炸火球/冲击波
     updateLevelFx(dt);      // 升级金色光圈（升起 → 放大 → 淡出）
     updateTracers(dt);
     updateShots(dt);
