@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix164-moat-bridge';
+const BUILD = '20261102-fix165-clear-water';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25001,7 +25001,7 @@ function buildLinhaiCity(g) {
   LH_GROUND.tex = gtex;
   // ---------- 2) 河流：深水底 + 波纹面 + 石砌驳岸 ----------
   const rw0 = LH.rivX0, rw1 = LH.rivX1, rwC = (rw0 + rw1) / 2, rwW = rw1 - rw0;
-  const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x14405e }));
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.MeshLambertMaterial({ color: 0x3f7f72 }));
   bed.position.set(rwC, -0.18, ZC); add(bed);
   // 波纹贴图：用 canvas 画随机细波，作为半透明面叠在水上，靠每帧平移 UV 做流动
   const wcv = document.createElement('canvas'); wcv.width = wcv.height = 256;
@@ -25019,7 +25019,9 @@ function buildLinhaiCity(g) {
   wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping;
   wtex.repeat.set(rwW / 22, ZLEN / 22);
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshLambertMaterial({
-    color: 0x3d86b8, map: wtex, transparent: true, opacity: 0.86, emissive: 0x0a2233
+    // 【fix165】用户要的是参考照片里那种**清澈的浅青绿**水，不是深蓝。
+    // 做法：颜色改成青绿、透明度调低让水底透出来、自发光也换成偏青的暗色。
+    color: 0x63c6a8, map: wtex, transparent: true, opacity: 0.62, emissive: 0x0e3c34
   }));
   wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.02, ZC); add(wsurf);
   registerDynamicObject(wsurf);
@@ -27314,19 +27316,20 @@ function initFlightScenery() {
   // 那片浅蓝一直在闪（z-fighting）。压低 0.3m + polygonOffset 往后推，彻底不打架。
 // 【fix163】用户要求：两城之间那片海要"深蓝、像护城河的水"。原来 0x1d4e6b 在夜里几乎全黑，
 // 现在提亮成 0x1f6fa0 并给一点自发光（emissive），夜景下也能看出是海面而不是黑色地毯。
-const seaMat = new THREE.MeshLambertMaterial({ color: 0x1f6fa0, emissive: 0x08243a });
+// 【fix165】用户要"清澈的水"：从深蓝改成偏青的海水色，自发光也调亮一点，白天/夜里都能看出是水。
+const seaMat = new THREE.MeshLambertMaterial({ color: 0x3fa8b8, emissive: 0x0b3540 });
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
 // 【fix164】护城河木栈桥（用户指定要架在新城市护城河上，参考照片：木板桥面+木栏）
 // 位置：跨新城市那条南北向河道（x 从 1495 到 1645），z = -120 附近。
 // window.__woodBridge 同时被 linhaiHeight 读取 —— 桥面必须比河床判断**优先**，
 // 否则玩家一上桥就被按回 -2.6 的河床里（fix93 踩过这个坑）。
-window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.6 };
+window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.9 };   // 【fix165】桥面抬高到 2.9
 {
   const _wb = window.__woodBridge;
   const _br = new THREE.Group();
-  const _wA = new THREE.MeshLambertMaterial({ color: 0xb07a45 });
-  const _wB = new THREE.MeshLambertMaterial({ color: 0x7d4a22 });
+  const _wA = new THREE.MeshLambertMaterial({ color: 0xa76b34 });   // 【fix165】更接近参考图的棕色木板
+  const _wB = new THREE.MeshLambertMaterial({ color: 0x6d3f1c });   // 深棕：栏杆/立柱
   const _span = _wb.x1 - _wb.x0;
   // 桥面板（横板一块块铺）
   for (let x = _wb.x0; x < _wb.x1; x += 1.6) {
