@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix174-lighter-river';
+const BUILD = '20261102-fix175-natural-ripples';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25007,21 +25007,28 @@ const bed = new THREE.Mesh(new THREE.BoxGeometry(rwW, 0.5, ZLEN), new THREE.Mesh
   // 现在床顶降到 -0.33，水面与床之间留 0.35m 清水层。
   bed.position.set(rwC, -1.2, ZC); add(bed);   // 【fix173】河床再压低
   // 波纹贴图：用 canvas 画随机细波，作为半透明面叠在水上，靠每帧平移 UV 做流动
-  const wcv = document.createElement('canvas'); wcv.width = wcv.height = 256;
-  const wcx = wcv.getContext('2d');
-  wcx.fillStyle = 'rgba(255,255,255,0)'; wcx.fillRect(0, 0, 256, 256);
-for (let i = 0; i < 300; i++) {   // 【fix170】波纹数量回落
-    const x = Math.random() * 256, y = Math.random() * 256, w = 10 + Math.random() * 34;
-wcx.strokeStyle = 'rgba(215,245,255,' + (0.03 + Math.random() * 0.06).toFixed(3) + ')';   // 【fix174】波纹更淡
-    wcx.lineWidth = 1 + Math.random() * 1.6;
-    wcx.beginPath(); wcx.moveTo(x, y);
-    wcx.bezierCurveTo(x + w * 0.3, y - 2.5, x + w * 0.7, y + 2.5, x + w, y);
-    wcx.stroke();
-  }
+// 【fix175】用户："波纹没必要是这么长的直线"。原来是用长贝塞尔横线铺满贴图，
+// 放大后就成了满屏长直线。现在改成几百条**短小、带弧度、方向随机**的水纹，
+// 看起来才像水面自然的细波。
+const wcv = document.createElement('canvas'); wcv.width = wcv.height = 512;
+const wcx = wcv.getContext('2d');
+wcx.fillStyle = 'rgba(255,255,255,0)'; wcx.fillRect(0, 0, 512, 512);
+for (let i = 0; i < 900; i++) {
+  const _x = Math.random() * 512, _y = Math.random() * 512;
+  const _ang = Math.random() * Math.PI * 2;
+  const _len = 4 + Math.random() * 12;
+  const _curve = (Math.random() - 0.5) * 6;
+  wcx.strokeStyle = 'rgba(220,246,255,' + (0.05 + Math.random() * 0.09).toFixed(3) + ')';
+  wcx.lineWidth = 0.8 + Math.random() * 1.2;
+  wcx.beginPath();
+  wcx.moveTo(_x, _y);
+  wcx.quadraticCurveTo(_x + Math.cos(_ang + 0.6) * _len * 0.5 + _curve, _y + Math.sin(_ang + 0.6) * _len * 0.5, _x + Math.cos(_ang) * _len, _y + Math.sin(_ang) * _len);
+  wcx.stroke();
+}
   const wtex = new THREE.CanvasTexture(wcv);
   wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping;
-wtex.repeat.set(2, 6);   // 【fix174】条纹密度再降
-wtex.center.set(0.5, 0.5); wtex.rotation = Math.PI / 2;   // 【fix174】波纹旋转 90 度（用户要求）
+wtex.repeat.set(6, 14);   // 【fix175】短纹密铺
+wtex.center.set(0.5, 0.5); wtex.rotation = -Math.PI / 2;   // 【fix175】流向再转 90 度（用户要求）
   // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
   // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
@@ -27406,7 +27413,7 @@ const _seaTex = new THREE.CanvasTexture(_seaCv);
 _seaTex.wrapS = _seaTex.wrapT = THREE.RepeatWrapping;
 _seaTex.repeat.set(90, 99);
 window.__seaTex = _seaTex;
-const seaMat = new THREE.MeshPhongMaterial({ color: 0x1f6f8f, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.55, specular: 0xcdeef6, shininess: 100, emissive: 0x04161f });
+const seaMat = new THREE.MeshPhongMaterial({ color: 0x2f8fa8, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.3, specular: 0x9fe0ef, shininess: 70, emissive: 0x0a2c36 });   // 【fix175】海面也调成河水蓝
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
 // 【fix164】护城河木栈桥（用户指定要架在新城市护城河上，参考照片：木板桥面+木栏）
