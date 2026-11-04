@@ -814,6 +814,15 @@
        手机界面的那些按钮的位置还有大小，可以根据个人的喜好调整" -->
   <div id="setPanel" style="display:none">
     <div class="st-head"><span>⚙️ 设置</span><span class="st-close" id="setClose">×</span></div>
+  <!-- 【fix180】用户："我的意思是在设置这个页面出现开发者按钮" -->
+  <div class="set-sec">
+    <h4>🛠 开发者模式</h4>
+    <p class="set-desc">内测用。开启后：<b>金币无限</b>、<b>耐力常满</b>；<b>生命和普通模式一样</b>，不会变强。</p>
+    <p class="set-desc">退出时会把进入前的金币原样还给你。</p>
+    <div class="set-row">
+      <div class="map-btn" id="setDevBtn" style="background:#5b3f8f">🛠 开发者模式</div>
+    </div>
+  </div>
     <div class="set-sec">
       <h4>🎮 手机按钮布局</h4>
       <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
@@ -903,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix179-cop-lot-devbtn';
+const BUILD = '20261102-fix180-dev-in-settings';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -29039,6 +29048,9 @@ function syncLayoutModeTabs() {
   document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
 }
 document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); });
+// 【fix180】设置面板里的开发者入口
+const _setDevBtn = document.getElementById('setDevBtn');
+if (_setDevBtn) _setDevBtn.addEventListener('click', () => { try { openDevPanel(); } catch (e) {} });
 document.getElementById('setClose').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'none'; });
 // 模式切换 tab：选中模式即更新高亮；正在编辑时切换 = 重进编辑（保留各自已存布局）
 document.querySelectorAll('#layoutModeRow .mode-tab').forEach(t => {
