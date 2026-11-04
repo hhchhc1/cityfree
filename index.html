@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix176-dev-shop-night';
+const BUILD = '20261102-fix177-darker-river';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22767,7 +22767,7 @@ function updateDayNight(dt) {
   sun.intensity = 0.05 + dayF * 1.05;
   _sunTmp.copy(_sunLo).lerp(_sunHi, THREE.MathUtils.clamp(sunH, 0, 1));
   sun.color.copy(_sunTmp);
-  hemi.intensity = 0.14 + dayF * 0.46;      // 【fix176】夜间底光压低（用户："晚上不用这么亮"），白天不变
+  hemi.intensity = 0.30 + dayF * 0.40;      // 夜里保留一点底光，别黑到看不见路（【fix177】还原，用户说的暗是河不是夜）
   const d = THREE.MathUtils.clamp((sunH + 0.12) / 0.5, 0, 1);
   _skyTmp.copy(_skyNight).lerp(_skyDay, d);
   const dusk = Math.max(0, 1 - Math.abs(sunH) / 0.32);
@@ -25050,7 +25050,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = -Math.PI / 2;   // 【fix175】流向
   // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
   // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
-    color: 0x3f9bb0, map: wtex, bumpMap: wtex, bumpScale: 0.06,   // 【fix174】凹凸再收，别像条形码
+    color: 0x2e8497, map: wtex, bumpMap: wtex, bumpScale: 0.06,   // 【fix177】河流水色调暗一档
     specular: 0x7fd2e2, shininess: 65, reflectivity: 0.3,   // 【fix170】高光收敛，避免整片反光发灰
     transparent: false, opacity: 1, emissive: 0x14505c, depthWrite: true, side: THREE.DoubleSide   // 【fix173】透明+不写深度会让水面被河床盖掉，这里改成不透明实体面
   }));
@@ -27431,7 +27431,7 @@ const _seaTex = new THREE.CanvasTexture(_seaCv);
 _seaTex.wrapS = _seaTex.wrapT = THREE.RepeatWrapping;
 _seaTex.repeat.set(90, 99);
 window.__seaTex = _seaTex;
-const seaMat = new THREE.MeshPhongMaterial({ color: 0x2f8fa8, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.3, specular: 0x9fe0ef, shininess: 70, emissive: 0x0a2c36 });   // 【fix175】海面也调成河水蓝
+const seaMat = new THREE.MeshPhongMaterial({ color: 0x2e8497, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.3, specular: 0x9fe0ef, shininess: 70, emissive: 0x123f4a });   // 【fix177】和海/河统一成同一个水色
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
 // 【fix164】护城河木栈桥（用户指定要架在新城市护城河上，参考照片：木板桥面+木栏）
