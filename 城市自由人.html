@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix181-dev-stamina';
+const BUILD = '20261102-fix182-dev-stamina2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5262,6 +5262,9 @@ buildPlayerHome();
 var DEV_PASSWORD = 'hhc81192';
 var DEV_PILLAR = { x: -90, z: -78, r: 3.4 };
 var devMode = false, devPillar = null, devBtnEl = null, devExitEl = null, devPanelOpen = false;
+// 【fix182】统一的"是否开发者模式"判定：变量没置上（读档后常见）也算，
+// 只要玩家在设置里开过、存档里 devMode=true，就享受满耐力。
+function isDevOn() { return !!devMode || !!(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.devMode); }
 // 【fix15】开发者模式的"进入前快照"：退出时把金币原样还回去（原来不退，等于白送）。
 // 【fix40 清理】原来这里还有一个 devModeSpBackup（技能点快照）。fix31 改成"开发者模式
 // 只给无限金币、不再灌技能点"之后，它再也没有被赋过值 —— 退出分支里的
@@ -23030,7 +23033,7 @@ function update(dt) {
         walkPhase = 0;
       }
       // 耐力：疾跑缓慢消耗
-if (devMode) player.stamina = player.maxStamina;   // 【fix181】开发者模式：每帧把耐力拉满，跑步/钩爪/踢飞都不掉
+if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模式耐力不掉（判定放宽到存档标记）
       else if (canSprint && moving) player.stamina = Math.max(0, player.stamina - SPRINT_COST * dt);
       if (moving) {
         _stepDustCd = (_stepDustCd || 0) - dt;
@@ -23835,7 +23838,7 @@ if (devMode) player.stamina = player.maxStamina;   // 【fix181】开发者模�
     hudText(weaponBtnEl, 'weaponText', WEAPONS[currentWeapon].name);
     hudStyle(hpFillEl, 'hpWidth', 'width', (player.hp / player.maxHp * 100).toFixed(1) + '%');
     hudStyle(hpFillEl, 'hpColor', 'background', player.hp > 50 ? '#2ecc71' : player.hp > 25 ? '#f39c12' : '#e74c3c');
-    hudStyle(stFillEl, 'stWidth', 'width', (player.stamina / player.maxStamina * 100).toFixed(1) + '%');
+hudStyle(stFillEl, 'stWidth', 'width', (isDevOn() ? 100 : (player.stamina / player.maxStamina * 100)).toFixed(1) + '%');   // 【fix182】开发者模式恒满
     // 车辆耐久条（2026-10-13 用户要求）：上车后显示整车剩余耐久，正常绿 / 中等黄 / 危险红。
     // 自行车没有耐久概念（isBicycle），不显示这条。
     // 三档阈值 = 车体已有的外观阶段："开始冒大烟"（CAR_SMOKE_HEAVY_AT）和"开始冒火花"（CAR_WRECK_AT），
