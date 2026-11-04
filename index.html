@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix170-bluer-water';
+const BUILD = '20261102-fix171-closed-wall';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25291,7 +25291,7 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.05 + Math.random() * 0.11).toFixed(3)
   }
   // 【fix166】南墙：沿园林南缘再砌一道，和主墙接上，围成一圈
   {
-    const _sX0 = wallX - 3.5, _sX1 = 2050, _sZ = _WZ1;
+    const _sX0 = wallX - 3.5, _sX1 = 2162, _sZ = _WZ1;   // 【fix171】南墙延到东端，和东墙接上
     const _sw = new THREE.Mesh(new THREE.BoxGeometry(_sX1 - _sX0, 8.5, 7), wallM);
     _sw.position.set((_sX0 + _sX1) / 2, 4.25, _sZ); add(_sw);
     const _spl = new THREE.Mesh(new THREE.BoxGeometry(_sX1 - _sX0 + 1, 1.4, 9.5), stoneM);
@@ -25300,6 +25300,31 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.05 + Math.random() * 0.11).toFixed(3)
     for (let _x = _sX0 + 6; _x < _sX1 - 6; _x += 3.6) {
       const _m = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 1.5), merlonM);
       _m.position.set(_x, 9.2, _sZ + 3.2); add(_m);
+    }
+  }
+  // 【fix171】用户："城墙还是没有完全围住"。补上东、北两面，把古建城 + 园林围成一个完整的方圈。
+  {
+    const _eX = 2162, _eZ0 = _WZ0, _eZ1 = _WZ1;
+    // 东墙（南北走向）
+    const _ew = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, _eZ1 - _eZ0), wallM);
+    _ew.position.set(_eX, 4.25, (_eZ0 + _eZ1) / 2); add(_ew);
+    LH_BLD.push({ minX: _eX - 3.5, maxX: _eX + 3.5, minZ: _eZ0, maxZ: _eZ1, minY: 0, top: 8.5 });
+    const _epl = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, _eZ1 - _eZ0), stoneM);
+    _epl.position.set(_eX, 0.7, (_eZ0 + _eZ1) / 2); add(_epl);
+    for (let _z = _eZ0 + 6; _z < _eZ1 - 6; _z += 3.6) {
+      const _m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), merlonM);
+      _m.position.set(_eX - 3.2, 9.2, _z); add(_m);
+    }
+    // 北墙（东西走向）
+    const _nX0 = wallX - 3.5, _nX1 = _eX + 3.5, _nZ = _eZ0;
+    const _nw = new THREE.Mesh(new THREE.BoxGeometry(_nX1 - _nX0, 8.5, 7), wallM);
+    _nw.position.set((_nX0 + _nX1) / 2, 4.25, _nZ); add(_nw);
+    LH_BLD.push({ minX: _nX0, maxX: _nX1, minZ: _nZ - 3.5, maxZ: _nZ + 3.5, minY: 0, top: 8.5 });
+    const _npl = new THREE.Mesh(new THREE.BoxGeometry(_nX1 - _nX0, 1.4, 9.5), stoneM);
+    _npl.position.set((_nX0 + _nX1) / 2, 0.7, _nZ); add(_npl);
+    for (let _x = _nX0 + 6; _x < _nX1 - 6; _x += 3.6) {
+      const _m = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 1.5), merlonM);
+      _m.position.set(_x, 9.2, _nZ + 3.2); add(_m);
     }
   }
   // 城楼 / 门楼（3 座，沿城墙分布）
