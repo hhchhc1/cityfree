@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix182-dev-stamina2';
+const BUILD = '20261102-fix183-heli-aim';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21704,7 +21704,7 @@ function aimDirection() {
 // 准星就会跟着视角小幅移动，并且永远指向子弹真正飞去的位置。
 // ===========================================================
 var CROSSHAIR_AIM_DIST = 26;                       // 准星代表前方多远的瞄准点（米）
-var CROSSHAIR_MAX_OFF = 0.28;                      // 准星离屏幕中心的最大偏移（占短边比例）
+var CROSSHAIR_MAX_OFF = 0.42;   // 【fix183】准星活动范围 0.28 → 0.42（用户："直升机的准星范围太小"）
 var _chV3 = new THREE.Vector3(), _chCam = new THREE.Vector3();
 var _chX = 0, _chY = 0, _chReady = false, _chLastX = 1e9, _chLastY = 1e9;
 // 注：原来的 getBulletDir()（"把相机中心射线当弹道方向再投影"）已删除 ——
@@ -21734,11 +21734,26 @@ function updateCrosshair(dt) {
   }
   // 【fix161】载具（直升机/坦克）的准星原来按"正前方 26 米"投影，而炮弹是沿鼠标射线打到
   // 几十上百米外 —— 两者视差很大，看起来就是"准星和弹道不匹配"。载具改用很远的瞄准点（200 米）投影。
-  const _aimDist = inVeh ? 200 : CROSSHAIR_AIM_DIST;
-  _chV3.set(ox + dir.x * _aimDist, oy + (dir.y || 0) * _aimDist, oz + dir.z * _aimDist);
+const _aimDist = inVeh ? 200 : CROSSHAIR_AIM_DIST;
+      // 【fix183】载具：准星点直接取"沿鼠标射线与地形求交"的落点（和 vehicleShoot 用同一套步进），
+      // 这样准星画在哪、子弹就落在哪，不再出现"准星在上、子弹打下边"的错位。
+      let _vehLock = null;
+      if (inVeh && mouseActive) {
+        raycaster.setFromCamera(mouseNDC, camera);
+        const _r = raycaster.ray;
+        for (let _s = 3; _s <= 300; _s += 3) {
+          const _sx = _r.origin.x + _r.direction.x * _s;
+          const _sy = _r.origin.y + _r.direction.y * _s;
+          const _sz = _r.origin.z + _r.direction.z * _s;
+          if (_sy <= terrainHeight(_sx, _sz)) { _vehLock = { x: _sx, y: terrainHeight(_sx, _sz), z: _sz }; break; }
+        }
+        if (!_vehLock) _vehLock = { x: _r.origin.x + _r.direction.x * 300, y: _r.origin.y + _r.direction.y * 300, z: _r.origin.z + _r.direction.z * 300 };
+      }
+if (typeof _vehLock !== 'undefined' && _vehLock) _chV3.set(_vehLock.x, _vehLock.y, _vehLock.z);   // 【fix183】载具直接用锁定落点
+      else _chV3.set(ox + dir.x * _aimDist, oy + (dir.y || 0) * _aimDist, oz + dir.z * _aimDist);
   let tx = 0, ty = 0;
   // 必须是"小幅移动"：限制在短边 28% 范围内，别甩到角落、也别压住左边的按键。
-  const maxOff = Math.min(innerWidth, innerHeight) * CROSSHAIR_MAX_OFF;
+const maxOff = Math.min(innerWidth, innerHeight) * (inVeh ? 0.62 : CROSSHAIR_MAX_OFF);   // 【fix183】载具准星范围更大（0.62）
   // ============================================================
   // 【步行 · 2026-10-13 光标版】准星 = 屏幕上的**自由光标位置**（aimCurX/Y），不再做 3D 投影。
   // 前两版失败的原因（这次彻底想明白了）：
