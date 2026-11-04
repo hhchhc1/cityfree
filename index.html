@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix196-water-back';
+const BUILD = '20261102-fix197-water-opaque';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25132,7 +25132,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
     color: 0x4fc3d6, map: wtex, bumpMap: wtex, bumpScale: 0.12,   // 【fix177】河流水色调暗一档
     specular: 0x7fd2e2, shininess: 65, reflectivity: 0.3,   // 【fix170】高光收敛，避免整片反光发灰
-    transparent: true, opacity: 0.45, emissive: 0x2a7c8a, depthWrite: true, side: THREE.DoubleSide   // 【fix173】透明+不写深度会让水面被河床盖掉，这里改成不透明实体面
+    transparent: false, opacity: 1, emissive: 0x3d94a8, depthWrite: true, side: THREE.DoubleSide   // 【fix197】改回不透明实体面：半透明会被河床盖掉，水面直接看不见
   }));
   wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.35, ZC); add(wsurf);   // 【fix173】抬到河床明显之上
   registerDynamicObject(wsurf);
