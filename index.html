@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix192-lot-cap4';
+const BUILD = '20261102-fix193-police-restored';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13123,7 +13123,7 @@ function spawnPoliceCar(crew) {
   // 【fix156】警车总数封顶：用户反馈"没有警察局前为什么会刷出这么多的车"。
   // 4~5 星一次补足 6~8 辆，全刷在你附近的同一条车道上，排成一队长龙（还被前车堵住不动）。
   // 封到 4 辆，既够追捕，也不会再排长队。
-  if (policeCars.length >= 4) return;
+  if (policeCars.length >= 8) return;   // 【fix193】还原：通缉追捕警车上限回到原来的 8 辆（5星满编）
   const g = makeCar('cop', COP_CAR_PAINT, true);
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
