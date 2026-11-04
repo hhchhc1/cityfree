@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix188-water-bright';
+const BUILD = '20261102-fix189-fast-flight';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27420,7 +27420,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
 
 var FLIGHT = null;                       // 过场状态对象（null = 未激活）
 // 各阶段结束时刻（秒）。总时长约 53s。【fix54】已按用户要求移除跳过功能。
-const FLIGHT_T = { taxi: 12.0, rotate: 14.2, lift: 17.5, climb: 24.0, cruise: 35.0, descend: 45.0, land: 50.0, done: 53.0 };
+const FLIGHT_T = { taxi: 6.0, rotate: 7.1, lift: 8.8, climb: 12.0, cruise: 17.5, descend: 22.5, land: 25.0, done: 26.5 };   // 【fix189】全程 53s → 26.5s（用户：加快去新城市、缩短等待）
 const FLIGHT_BOARD_END = 4.0;            // 登机段结束（之后飞机开始滑跑）
 // 【占位新城】—— 用户说"另一个城市一会给你说后续的开发"，所以这里先放一座**占位城市**：
 // 一条跑道 + 一片楼群天际线 + 城市名标牌，够飞机降落、够看出"到了另一座城"。
