@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix171-closed-wall';
+const BUILD = '20261102-fix172-river-flow';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25020,10 +25020,10 @@ wcx.strokeStyle = 'rgba(215,245,255,' + (0.05 + Math.random() * 0.11).toFixed(3)
   }
   const wtex = new THREE.CanvasTexture(wcv);
   wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping;
-  wtex.repeat.set(rwW / 22, ZLEN / 22);
+wtex.repeat.set(rwW / 78, ZLEN / 9);   // 【fix172】纹理拉成长条：波纹顺着河岸，不再横着切
   // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
   // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
-  const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
+  const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW + 12, ZLEN + 6), new THREE.MeshPhongMaterial({   // 【fix172】略宽，盖住河道边缘露出的底色
     color: 0x1b6d86, map: wtex, bumpMap: wtex, bumpScale: 0.2,   // 【fix170】更蓝更实，凹凸别再那么灰
     specular: 0x7fd2e2, shininess: 65, reflectivity: 0.3,   // 【fix170】高光收敛，避免整片反光发灰
     transparent: true, opacity: 0.9, emissive: 0x07262f, depthWrite: false
@@ -28490,7 +28490,8 @@ const frameLoop = () => {
   if (flightPanelOpen) { try { refreshFlightBtns(); } catch (e) {} }
   // 【fix48】临海市河面流动：每帧平移波纹贴图的 UV（放在 frameLoop 而不是 update，
   // 这样对话/暂停时水也不会"冻住"）。开销只是一次 texture offset 赋值。
-  if (LH_WATER.tex) { LH_WATER.tex.offset.x += dt * 0.010; LH_WATER.tex.offset.y += dt * 0.018; }
+    // 【fix172】只沿河道方向流动（去掉横向漂移，波纹才不会"垂直于河岸流"）
+    LH_WATER.tex.offset.y += dt * 0.020;
     // 【fix168】海面 / 闪点也一起流动
     if (window.__seaTex) { window.__seaTex.offset.x += dt * 0.0035; window.__seaTex.offset.y += dt * 0.0055; }
     if (window.__sparkTex) { window.__sparkTex.offset.x -= dt * 0.006; window.__sparkTex.offset.y += dt * 0.010; }
