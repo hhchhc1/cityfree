@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix198-sea-river';
+const BUILD = '20261102-fix199-ocean-match';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7372,7 +7372,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 
 // ========== 四面环海半透明海面 ==========
 (function addOcean() {
-  const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1a7aaa, transparent: true, opacity: 0.55 });
+  const oceanMat = new THREE.MeshLambertMaterial({ color: 0x4fc3d6, transparent: false, opacity: 1 });   // 【fix199】半透明深蓝大海面会盖在河道上形成一道深蓝色带，改成与河水同色不透明
   const ocean = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2.5, HALF * 2.5), oceanMat);
   ocean.rotation.x = -Math.PI / 2; ocean.position.y = -0.6; scene.add(ocean);
   // 海面波纹（4条白色细线模拟浪花）
