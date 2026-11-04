@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix180-dev-in-settings';
+const BUILD = '20261102-fix181-dev-stamina';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -23030,7 +23030,8 @@ function update(dt) {
         walkPhase = 0;
       }
       // 耐力：疾跑缓慢消耗
-      if (canSprint && moving) player.stamina = Math.max(0, player.stamina - SPRINT_COST * dt);
+if (devMode) player.stamina = player.maxStamina;   // 【fix181】开发者模式：每帧把耐力拉满，跑步/钩爪/踢飞都不掉
+      else if (canSprint && moving) player.stamina = Math.max(0, player.stamina - SPRINT_COST * dt);
       if (moving) {
         _stepDustCd = (_stepDustCd || 0) - dt;
         if (_stepDustCd <= 0) { _stepDustCd = canSprint ? 0.20 : 0.34; emitDust(person.position.x, person.position.z); }
