@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix178-minimap-coords';
+const BUILD = '20261102-fix179-cop-lot-devbtn';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5348,10 +5348,11 @@ function setDevMode(on) {
     const b = document.createElement('div');
     b.id = 'shopDevBtn';
     b.textContent = '⚙ 开发者模式';
-    b.style.cssText = 'margin:16px auto 4px;padding:11px 16px;border-radius:12px;background:#2b2436;color:#c9a8ff;font:600 14px sans-serif;text-align:center;cursor:pointer;border:1px solid #6b4f9e;width:190px';
+    b.style.cssText = 'position:fixed;right:16px;bottom:120px;z-index:9999;display:none;padding:12px 18px;border-radius:14px;background:#2b2436;color:#c9a8ff;font:600 15px sans-serif;text-align:center;cursor:pointer;border:2px solid #7c5cc4;box-shadow:0 6px 18px rgba(0,0,0,0.5)';   // 【fix179】改成固定在屏幕右下，商店什么布局都能看见
     b.onclick = function () { try { openDevPanel(); } catch (e) {} };
     window.__addDevEntry = addDevEntry;   // 【fix178】商店每次打开都调用一次，保证按钮一定在
-    shop.appendChild(b);
+    document.body.appendChild(b);   // 【fix179】挂到 body，避免被商店面板的布局/滚动裁掉
+    window.__showShopDev = (on) => { b.style.display = on ? 'block' : 'none'; };
   };
 // 【fix178】小地图点击 → 实时坐标
 (function () {
@@ -12944,9 +12945,19 @@ function ensureParkedCops() {
   if (!spots.length) return;
   const want = spots.length;
   const have = cars.filter(c => c.isParkedCop && !c.exploded).length;
+  // 【fix179】用户："有警车就不用再刷，被主角开走后再过一段时间自动刷新"
+  // 原来 have<want 就立刻补，玩家刚开走一辆，下一秒原地又冒出一辆。
+  // 现在加一个冷却：空缺后先等 25 秒，再补一辆。
+  if (have < want) {
+    const _now = performance.now();
+    if (!window.__parkedCopRefillAt) { window.__parkedCopRefillAt = _now + 25000; return; }
+    if (_now < window.__parkedCopRefillAt) return;
+    window.__parkedCopRefillAt = _now + 25000;
+  } else { window.__parkedCopRefillAt = 0; return; }
   if (have >= want) return;
   const copSh = CAR_SHAPES.cop || CAR_SHAPES.sedan;
-  for (let i = have; i < want; i++) {
+  const _fill = Math.min(want, have + 1);   // 【fix179】每次只补一辆
+  for (let i = have; i < _fill; i++) {
     const s = spots[i];
     const g = makeCar('cop', COP_CAR_PAINT, false);
     g.position.set(s.x, terrainHeight(s.x, s.z), s.z);
@@ -15308,7 +15319,7 @@ function toggleShop() {
   if (!s) return;
   const open = s.style.display === 'block';
   s.style.display = open ? 'none' : 'block';
-  if (!open) { try { window.__addDevEntry && window.__addDevEntry(); } catch (e) {} renderShop(); } else shopViewStop();
+  if (!open) { renderShop(); try { window.__showShopDev && window.__showShopDev(true); } catch (e) {} } else { shopViewStop(); try { window.__showShopDev && window.__showShopDev(false); } catch (e) {} }
 }
 function buyWeapon(key) {
   const w = WEAPONS[key];
