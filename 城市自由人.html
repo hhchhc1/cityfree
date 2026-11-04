@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix184-clear-flowing';
+const BUILD = '20261102-fix185-clear-water';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25121,7 +25121,7 @@ for (let i = 0; i < 900; i++) {
   const _ang = Math.random() * Math.PI * 2;
   const _len = 4 + Math.random() * 12;
   const _curve = (Math.random() - 0.5) * 6;
-  wcx.strokeStyle = 'rgba(220,246,255,' + (0.05 + Math.random() * 0.09).toFixed(3) + ')';
+  wcx.strokeStyle = 'rgba(235,252,255,' + (0.10 + Math.random() * 0.16).toFixed(3) + ')';
   wcx.lineWidth = 0.8 + Math.random() * 1.2;
   wcx.beginPath();
   wcx.moveTo(_x, _y);
@@ -25135,9 +25135,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = -Math.PI / 2;   // 【fix175】流向
   // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
   // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
-    color: 0x2e8497, map: wtex, bumpMap: wtex, bumpScale: 0.06,   // 【fix177】河流水色调暗一档
+    color: 0x5bc4d6, map: wtex, bumpMap: wtex, bumpScale: 0.16,   // 【fix177】河流水色调暗一档
     specular: 0x7fd2e2, shininess: 65, reflectivity: 0.3,   // 【fix170】高光收敛，避免整片反光发灰
-    transparent: false, opacity: 1, emissive: 0x14505c, depthWrite: true, side: THREE.DoubleSide   // 【fix173】透明+不写深度会让水面被河床盖掉，这里改成不透明实体面
+    transparent: true, opacity: 0.62, emissive: 0x2a7c8a, depthWrite: true, side: THREE.DoubleSide   // 【fix173】透明+不写深度会让水面被河床盖掉，这里改成不透明实体面
   }));
   wsurf.rotation.x = -Math.PI / 2; wsurf.position.set(rwC, 0.35, ZC); add(wsurf);   // 【fix173】抬到河床明显之上
   registerDynamicObject(wsurf);
@@ -25160,9 +25160,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = -Math.PI / 2;   // 【fix175】流向
     }
     const _spTex = new THREE.CanvasTexture(_spCv);
     _spTex.wrapS = _spTex.wrapT = THREE.RepeatWrapping;
-    _spTex.repeat.set(rwW / 26, ZLEN / 26);
+    _spTex.repeat.set(rwW / 20, ZLEN / 20);
     window.__sparkTex = _spTex;
-    const _spark = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshBasicMaterial({ map: _spTex, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));   // 【fix170】闪点收敛
+    const _spark = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshBasicMaterial({ map: _spTex, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false }));   // 【fix170】闪点收敛
     _spark.rotation.x = -Math.PI / 2; _spark.position.set(rwC, 0.09, ZC);
     add(_spark); registerDynamicObject(_spark);
   }
@@ -28602,7 +28602,7 @@ const frameLoop = () => {
   // 【fix48】临海市河面流动：每帧平移波纹贴图的 UV（放在 frameLoop 而不是 update，
   // 这样对话/暂停时水也不会"冻住"）。开销只是一次 texture offset 赋值。
   if (LH_WATER.tex) {   // 【fix173】空值保护补回来：原来这行被误删，tex 未就绪时会每帧抛异常
-    LH_WATER.tex.offset.y += dt * 0.020;
+    LH_WATER.tex.offset.y += dt * 0.075;
     // 【fix168】海面 / 闪点也一起流动
     if (window.__seaTex) { window.__seaTex.offset.x += dt * 0.0035; window.__seaTex.offset.y += dt * 0.0055; }
     if (window.__sparkTex) { window.__sparkTex.offset.x -= dt * 0.006; window.__sparkTex.offset.y += dt * 0.010; }
