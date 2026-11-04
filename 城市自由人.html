@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix197-water-opaque';
+const BUILD = '20261102-fix198-sea-river';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27511,7 +27511,7 @@ const _seaTex = new THREE.CanvasTexture(_seaCv);
 _seaTex.wrapS = _seaTex.wrapT = THREE.RepeatWrapping;
 _seaTex.repeat.set(90, 99);
 window.__seaTex = _seaTex;
-const seaMat = new THREE.MeshPhongMaterial({ color: 0x1a5578, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.3, specular: 0x9fe0ef, shininess: 70, emissive: 0x123f4a });   // 【fix177】和海/河统一成同一个水色
+const seaMat = new THREE.MeshPhongMaterial({ color: 0x4fc3d6, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.12, specular: 0x8fe0ee, shininess: 65, emissive: 0x2a7c8a });   // 【fix198】远处海面改成和河道同款水色/波纹，不再是深蓝平板  // 【fix177】和海/河统一成同一个水色
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5500), seaMat);
 // 【fix164】护城河木栈桥（用户指定要架在新城市护城河上，参考照片：木板桥面+木栏）
