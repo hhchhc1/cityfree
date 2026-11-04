@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix187-river-horizontal';
+const BUILD = '20261102-fix188-water-bright';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -4183,7 +4183,7 @@ const CAR_MAT = {
   glass:  new THREE.MeshLambertMaterial({ color: 0x1c2a38, transparent: true, opacity: 0.5 }),
   // 挡风玻璃专用：比侧窗更亮、更反光，带一点自发光，
   // 否则深色玻璃压在实心车漆上完全看不出是玻璃（这是原来"没有挡风玻璃"的根因）
-  windshield: new THREE.MeshLambertMaterial({ color: 0x6f9fb8, transparent: true, opacity: 0.42, emissive: 0x16232e, side: THREE.DoubleSide, depthWrite: false }),
+  windshield: new THREE.MeshLambertMaterial({ color: 0x6f9fb8, transparent: true, opacity: 0.72, emissive: 0x3d94a8, side: THREE.DoubleSide, depthWrite: false }),
   chrome: new THREE.MeshLambertMaterial({ color: 0xc6cad0 }),
   dark:   new THREE.MeshLambertMaterial({ color: 0x15171b }),
   trim:   new THREE.MeshLambertMaterial({ color: 0x1f2227 }),
@@ -25135,7 +25135,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   // 【fix167】用户："水色太假了"。原来是一块纯色 Lambert 平板，没有反光也没有起伏。
   // 现在换成 Phong：凹凸贴图做出涟漪的高低、高光模拟天光反射、自发光压暗让水看起来有深度。
   const wsurf = new THREE.Mesh(new THREE.PlaneGeometry(rwW, ZLEN), new THREE.MeshPhongMaterial({
-    color: 0x5bc4d6, map: wtex, bumpMap: wtex, bumpScale: 0.16,   // 【fix177】河流水色调暗一档
+    color: 0x6fd0de, map: wtex, bumpMap: wtex, bumpScale: 0.16,   // 【fix177】河流水色调暗一档
     specular: 0x7fd2e2, shininess: 65, reflectivity: 0.3,   // 【fix170】高光收敛，避免整片反光发灰
     transparent: true, opacity: 0.45, emissive: 0x2a7c8a, depthWrite: true, side: THREE.DoubleSide   // 【fix173】透明+不写深度会让水面被河床盖掉，这里改成不透明实体面
   }));
