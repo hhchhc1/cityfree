@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix193-police-restored';
+const BUILD = '20261102-fix194-star-cap3';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13764,7 +13764,9 @@ function addHeat(n) {
   // 违背"两星以上只要不打死人就不再加星"。
   if (lightCrimeLocked()) return;
   heat += n;
-  while (heat >= 100 && wanted < LIGHT_CRIME_CAP - 1e-6) { heat -= 100; wanted++; wantedDecay = 0; syncForces(); }
+  const _heated = (state === 'drive' && currentCar && (currentCar.isTank || currentCar.isHelicopter));
+  const _hcap = Math.min(LIGHT_CRIME_CAP, _heated ? 5 : 3);   // 【fix194】轻罪也按枪械封顶 3 星
+  while (heat >= 100 && wanted < _hcap - 1e-6) { heat -= 100; wanted++; wantedDecay = 0; syncForces(); }
 }
 // 加星时顺手把衰减倒计时清零 —— "星还在的时候又犯事，就重新计时 20 秒"（用户要求）
 function addWanted(n) {
@@ -13774,7 +13776,10 @@ function addWanted(n) {
   // 升五星从"杀穿一条街"变成"真的要把整座城掀一遍"。（写 n*0.5 的话杀警察 +2 会变成 +1，
   // 一枪一个警察就直接满星，等于没加难度。）
   const step = (wanted >= 4) ? 0.5 : n;
-  wanted = Math.min(5, wanted + step);
+  // 【fix194】用户要求：只用枪械最多升到 3 星；只有开坦克/直升机（重武器）才推得到 5 星。
+  const _heavy = (state === 'drive' && currentCar && (currentCar.isTank || currentCar.isHelicopter));
+  const _cap = _heavy ? 5 : 3;
+  wanted = Math.min(_cap, wanted + step);   // 【fix194】枪械封顶 3 星
   wantedDecay = 0;
   syncForces();
 }
