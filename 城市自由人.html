@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix175-natural-ripples';
+const BUILD = '20261102-fix176-dev-shop-night';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5324,10 +5324,12 @@ function setDevMode(on) {
     // 【2026-10-21·fix31 移植】不再灌"无限技能点"、也不再放开技能上限：
     // 开发者模式**只给无限金币**，人物属性保持和普通模式完全一样
     // （用户要求："就算进开发者模式，人物属性也和普通模式一样，不要 99，就 10 个就行了"）。
+  if (devMode) player.stamina = player.maxStamina;   // 【fix176】开发者模式耐力常满
     gold = 999999;
+    player.stamina = player.maxStamina;   // 【fix176】开发者模式：耐力常满（血量仍和普通模式一样）
     recomputeStats();
     floatText('开发者模式已开启', '#c9a8ff');
-    showOverlay('开发者模式\n\n无限金币已生效（人物属性保持普通模式不变）。\n\n退出后会把进入前的金币原样还给你。', 5);
+    showOverlay('开发者模式\n\n· 金币：无限（999999）\n· 耐力：常满\n· 生命：和普通模式一样（不会变强）\n\n退出后会把进入前的金币原样还给你。', 6);   // 【fix176】说明写清楚
   } else {
     // 【fix15】退出还原：金币回到进入前的数量（技能等级保留，方便继续看高等级数值）
     // 【fix40 清理】删掉了恒为假的 devModeSpBackup 还原分支（见 4447 行说明）。
@@ -5337,6 +5339,22 @@ function setDevMode(on) {
   refreshDevBtnText();
   try { renderStats(); } catch (e) {}
 }
+// 【fix176】用户："把开发者选项弄到设置里边，不要在那个房子后边弄了"。
+// 在「商店」面板底部加一个入口，点了弹原来的密码面板（光柱入口保留，不影响老玩家）。
+(function () {
+  const addDevEntry = () => {
+    const shop = document.getElementById('shop');
+    if (!shop || document.getElementById('shopDevBtn')) return;
+    const b = document.createElement('div');
+    b.id = 'shopDevBtn';
+    b.textContent = '⚙ 开发者模式';
+    b.style.cssText = 'margin:16px auto 4px;padding:11px 16px;border-radius:12px;background:#2b2436;color:#c9a8ff;font:600 14px sans-serif;text-align:center;cursor:pointer;border:1px solid #6b4f9e;width:190px';
+    b.onclick = function () { try { openDevPanel(); } catch (e) {} };
+    shop.appendChild(b);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addDevEntry);
+  else addDevEntry();
+})();
 function openDevPanel(focus) {
   const p = document.getElementById('devPanel');
   if (!p) return;
@@ -22749,7 +22767,7 @@ function updateDayNight(dt) {
   sun.intensity = 0.05 + dayF * 1.05;
   _sunTmp.copy(_sunLo).lerp(_sunHi, THREE.MathUtils.clamp(sunH, 0, 1));
   sun.color.copy(_sunTmp);
-  hemi.intensity = 0.30 + dayF * 0.40;      // 夜里保留一点底光，别黑到看不见路
+  hemi.intensity = 0.14 + dayF * 0.46;      // 【fix176】夜间底光压低（用户："晚上不用这么亮"），白天不变
   const d = THREE.MathUtils.clamp((sunH + 0.12) / 0.5, 0, 1);
   _skyTmp.copy(_skyNight).lerp(_skyDay, d);
   const dusk = Math.max(0, 1 - Math.abs(sunH) / 0.32);
