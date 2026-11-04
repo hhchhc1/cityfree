@@ -903,7 +903,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix177-darker-river';
+const BUILD = '20261102-fix178-minimap-coords';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5350,8 +5350,25 @@ function setDevMode(on) {
     b.textContent = '⚙ 开发者模式';
     b.style.cssText = 'margin:16px auto 4px;padding:11px 16px;border-radius:12px;background:#2b2436;color:#c9a8ff;font:600 14px sans-serif;text-align:center;cursor:pointer;border:1px solid #6b4f9e;width:190px';
     b.onclick = function () { try { openDevPanel(); } catch (e) {} };
+    window.__addDevEntry = addDevEntry;   // 【fix178】商店每次打开都调用一次，保证按钮一定在
     shop.appendChild(b);
   };
+// 【fix178】小地图点击 → 实时坐标
+(function () {
+  const setup = () => {
+    const mm = document.getElementById('minimap');
+    if (!mm || document.getElementById('mmCoords')) return;
+    const el = document.createElement('div');
+    el.id = 'mmCoords';
+    el.style.cssText = 'position:fixed;left:12px;top:128px;z-index:26;display:none;padding:4px 8px;border-radius:8px;background:rgba(8,12,20,0.82);color:#cfe6ff;font:600 12px/1.2 monospace;border:1px solid rgba(120,180,255,0.35);pointer-events:none';
+    document.body.appendChild(el);
+    window.__mmCoordEl = el;
+    mm.style.cursor = 'pointer';
+    mm.addEventListener('click', () => { window.__mmShowCoords = !window.__mmShowCoords; });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+  else setup();
+})();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addDevEntry);
   else addDevEntry();
 })();
@@ -15291,7 +15308,7 @@ function toggleShop() {
   if (!s) return;
   const open = s.style.display === 'block';
   s.style.display = open ? 'none' : 'block';
-  if (!open) renderShop(); else shopViewStop();
+  if (!open) { try { window.__addDevEntry && window.__addDevEntry(); } catch (e) {} renderShop(); } else shopViewStop();
 }
 function buyWeapon(key) {
   const w = WEAPONS[key];
@@ -21955,6 +21972,26 @@ function drawMinimap() {
     }
   }
   // 道路
+  // 【fix178】新城区（临海市）：小地图上画出城墙、护城河、木桥、园林、跑道。
+  // 原来小地图只用主城的 roads 数组绘制，走到新城区就是一片空黑。
+  if (typeof LH !== 'undefined' && px > 700) {
+    const mmRect = (x0, z0, x1, z1, fill, stroke) => {
+      const a = w2m(x0), b = w2n(z0), c2 = w2m(x1), d2 = w2n(z1);
+      if (fill) { mctx.fillStyle = fill; mctx.fillRect(a, b, c2 - a, d2 - b); }
+      if (stroke) { mctx.strokeStyle = stroke; mctx.lineWidth = 1.4; mctx.strokeRect(a, b, c2 - a, d2 - b); }
+    };
+    mmRect(1510, LH.z0, 1630, LH.z1, 'rgba(46,132,151,0.55)', null);            // 护城河
+    mmRect(1492, -124, 1648, -116, 'rgba(167,107,52,0.95)', null);               // 木桥
+    mmRect(LH.ancX0, LH.z0, LH.ancX1, 150, null, 'rgba(190,190,190,0.75)');      // 城墙
+    mctx.fillStyle = 'rgba(70,150,80,0.35)';
+    mctx.beginPath(); mctx.arc(w2m(1965), w2n(55), 110 * s, 0, 7); mctx.fill();   // 苏州园林
+    mmRect(1050, -765, 1190, -85, 'rgba(120,120,130,0.35)', null);               // 跑道
+    if (typeof w2m === 'function') {
+      const cx2 = w2m(1790), cy2 = w2n(-425);
+      mctx.fillStyle = 'rgba(230,200,120,0.9)';
+      mctx.beginPath(); mctx.arc(cx2, cy2, 3.2, 0, 7); mctx.fill();               // 鼓楼
+    }
+  }
   mctx.strokeStyle = 'rgba(130,140,160,0.5)'; mctx.lineWidth = 1.2;
   for (const r of roads) {
     if (Math.abs(r - px) <= R + 5) { mctx.beginPath(); mctx.moveTo(w2m(r), w2n(pz - R)); mctx.lineTo(w2m(r), w2n(pz + R)); mctx.stroke(); }
@@ -23828,6 +23865,15 @@ function update(dt) {
       hudText(ammoHudEl, 'ammoText', curW.name + '　' + (AMMO[curW.ammo] ? AMMO[curW.ammo].name : curW.ammo) + ' × ' + mtxt + rtxt);
     } else hudDisplay(ammoHudEl, 'ammoDisplay', 'none');
     drawMinimap();
+  // 【fix178】点左上角小地图 → 显示当前实时坐标（再点一次收起）
+  if (window.__mmCoordEl) {
+    if (window.__mmShowCoords) {
+      const _px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
+      const _pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+      window.__mmCoordEl.style.display = 'block';
+      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   Z ' + _pz.toFixed(0);
+    } else window.__mmCoordEl.style.display = 'none';
+  }
     // 装甲载具（直升机/坦克）顶部顺带显示剩余耐久：
     // 它们对子弹防弹，伤害全落在耐久上 —— 不把耐久摆出来，玩家被磨到爆炸都不知道自己在挨打。
     let line1;
