@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix227-soccer-kit';
+const BUILD = '20261106-fix228-kit-bag';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -8787,9 +8787,31 @@ function setPlayerJersey(team) {
   const skin = [0xf2c9a0, 0xe8b48c, 0xd9a06b, 0xc68642, 0x8d5524, 0x6d4c41, 0x5d4037].map(h => new THREE.Color(h));
   const isSkin = (r, g, b) => skin.some(c => Math.abs(c.r - r) < 0.06 && Math.abs(c.g - g) < 0.06 && Math.abs(c.b - b) < 0.06);
   try {
+    for (const o of (window.__socKitMats || [])) {
+      if (!o || !o.material || !o.material.color || o.userData.__socMatSaved === undefined || o.userData.__socMatSaved === null) continue;
+      o.material.color.setHex(o.userData.__socMatSaved);
+      o.userData.__socMatSaved = null;
+    }
+    window.__socKitMats = [];
     if (!window.__socKitBackup) window.__socKitBackup = [];
     person.traverse(o => {
-      if (!o.isMesh || !o.geometry || !o.geometry.attributes || !o.geometry.attributes.color) return;
+      if (!o.isMesh || !o.geometry) return;
+      // 【fix228】没有顶点色的部件（书包/背心这类独立小模型）走材质换色，否则只有身体变红、书包还是原来的颜色
+      const _attr0 = o.geometry.attributes && o.geometry.attributes.color;
+      if (!_attr0) {
+        const _m = o.material;
+        if (!_m || !_m.color || _m.map) return;
+        const _c = _m.color;
+        if (isSkin(_c.r, _c.g, _c.b)) return;
+        if ((_c.r + _c.g + _c.b) / 3 < 0.10) return;
+        if (!o.userData.__socMatSaved) {
+          o.userData.__socMatSaved = _m.color.getHex();
+          window.__socKitMats = window.__socKitMats || [];
+          window.__socKitMats.push(o);
+        }
+        _m.color.copy(target);
+        return;
+      }
       const attr = o.geometry.attributes.color;
       if (!o.userData.__socKitSaved) {
         o.userData.__socKitSaved = Array.prototype.slice.call(attr.array);
