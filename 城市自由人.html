@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix226-grapple-drop';
+const BUILD = '20261106-fix227-soccer-kit';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -8554,11 +8554,11 @@ function attachJerseyNumber(g, num, isGk) {
   const tex = makeSoccerNumberTexture(num, isGk ? '#1a1a1a' : '#ffffff');
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
   const grp = new THREE.Group();
-  const pw = 0.14, ph = 0.16;
+  const pw = 0.26, ph = 0.32;   // 【fix227】号码原来 0.14x0.16 太小，远处根本看不见
   const front = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
-  front.position.set(0, 0.27, 0.126); front.renderOrder = 6; grp.add(front);
+  front.position.set(0, 0.30, 0.135); front.renderOrder = 6; grp.add(front);
   const back = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
-  back.position.set(0, 0.27, -0.126); back.rotation.y = Math.PI; back.renderOrder = 6; grp.add(back);
+  back.position.set(0, 0.30, -0.135); back.rotation.y = Math.PI; back.renderOrder = 6; grp.add(back);
   u.hip.add(grp);
   u.__jerseyNum = grp;
 }
@@ -8780,21 +8780,47 @@ function teamAttackGoalX(t) { const P = SOC.P; return t === 1 ? (P.x + P.hw) : (
 // 否则"你是红方"但身上还是蓝夹克，看着很矛盾。
 // makePlayer() 只造了 person 这一个模型（材质是它独有的），所以直接改颜色不会影响别人。
 function setPlayerJersey(team) {
-  const target = (team === 1) ? 0x2f6fe0 : 0xe0433a;   // 蓝方蓝 / 红方红
-  const dark = (team === 1) ? 0x1a3a5c : 0x7a1c18;
+  // 【fix227】用户：组队后衣服必须换成阵营色，不能因为穿了买的防弹背心/外套就不换。
+  // 人物模型的所有颜色都被烘焙进了顶点色（makeHuman 里 mergeVehicleByVertexColor），
+  // 所以这里直接改顶点色：皮肤和很暗的部件(头发/鞋底/眼睛)跳过，其余全部刷成阵营色。
+  const target = (team === 1) ? new THREE.Color(0x2f6fe0) : new THREE.Color(0xe0433a);
+  const skin = [0xf2c9a0, 0xe8b48c, 0xd9a06b, 0xc68642, 0x8d5524, 0x6d4c41, 0x5d4037].map(h => new THREE.Color(h));
+  const isSkin = (r, g, b) => skin.some(c => Math.abs(c.r - r) < 0.06 && Math.abs(c.g - g) < 0.06 && Math.abs(c.b - b) < 0.06);
   try {
+    if (!window.__socKitBackup) window.__socKitBackup = [];
     person.traverse(o => {
-      if (!o.isMesh || !o.material || !o.material.color) return;
-      const hex = o.material.color.getHex();
-      // 【2026-10-16·fix19】原来只认"原始蓝 0x2980b9" —— 一旦上一场把外套刷成红色，
-      // 这一场想刷回蓝色时，遍历里**根本找不到 0x2980b9**（早就是红的了），外套就永远卡在红色。
-      // 后果：系统提示"你是蓝方"、身上却穿红衣服 → 玩家以为自己被分到红方，
-      // 于是按传球时看到球飞向蓝方队友，就以为是"传球传给蓝方"（其实代码是对的，是衣服骗了人）。
-      // 现在把**所有队服候选色**（原始蓝 + 两队的亮色）都归一到目标色，随便怎么来回切都能刷对。
-      if (hex === 0x2980b9 || hex === 0x2f6fe0 || hex === 0xe0433a) o.material.color.setHex(target);
-      else if (hex === 0x1a3a5c || hex === 0x7a1c18) o.material.color.setHex(dark);
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes || !o.geometry.attributes.color) return;
+      const attr = o.geometry.attributes.color;
+      if (!o.userData.__socKitSaved) {
+        o.userData.__socKitSaved = Array.prototype.slice.call(attr.array);
+        window.__socKitBackup.push(o);
+      }
+      const a = attr.array;
+      for (let i = 0; i < a.length; i += 3) {
+        const r = a[i], g = a[i + 1], b = a[i + 2];
+        if (isSkin(r, g, b)) continue;
+        const lum = (r + g + b) / 3;
+        if (lum < 0.10) continue;                 // 头发/鞋/眼睛这种近黑的保留
+        a[i] = target.r; a[i + 1] = target.g; a[i + 2] = target.b;
+      }
+      attr.needsUpdate = true;
     });
-  } catch (e) {}
+  } catch (err) {}
+}
+function restoreSocKit() {
+  // 比赛结束：把备份的顶点色原样写回，衣服恢复成玩家自己买的那套
+  try {
+    const list = window.__socKitBackup || [];
+    for (const o of list) {
+      if (!o || !o.geometry || !o.geometry.attributes || !o.geometry.attributes.color) continue;
+      if (!o.userData.__socKitSaved) continue;
+      const attr = o.geometry.attributes.color;
+      attr.array.set(o.userData.__socKitSaved);
+      attr.needsUpdate = true;
+      o.userData.__socKitSaved = null;
+    }
+    window.__socKitBackup = [];
+  } catch (err) {}
 }
 
 // 【2026-10-16】进攻方向箭头：一大块贴地的箭头，摆在玩家半场，指向玩家进攻的球门。
@@ -8887,6 +8913,7 @@ function soccerEnd(playerWon) {
     SOC.pickCd = 0; SOC.lastKicker = null;
     if (SOC.dirArrow) SOC.dirArrow.visible = false;              // 收掉进攻方向箭头
     setPlayerJersey(1);                                          // 外套换回原本的蓝色
+  restoreSocKit();   // 【fix227】把玩家原本的衣服颜色还原
     detachJerseyNumber(person);                                  // 【fix26】比赛结束把玩家球衣上的号码片卸掉（回到普通路人）
     soccerClearPowerups(); SOC.tackleFastT = 0;                  // 【fix26】清掉场上残留技能包
     soccerResetBall();
