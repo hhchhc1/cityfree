@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix238-folk-wiki';
+const BUILD = '20261106-fix239-ret-cancel';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28949,7 +28949,7 @@ function refreshRetBtns() {
   }
 }
 function retBuy(kind) {
-  if (kind === 'cancel') { closeRetPanel(); setHint('已取消：想回去的时候再走到绿色光柱这边'); return; }
+  if (kind === 'cancel') { closeRetPanel(); window.__retPanelCd = performance.now() + 5000; setHint('已取消：想回去时再点绿色光柱旁边（5 秒内不会自动弹）'); return; }
   const permed = flightHasPass();
   if (kind === 'perm' && !permed) {
     if (gold < FLIGHT_PRICE_PERM) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_PERM - gold) + ' 金币'); return; }
@@ -29290,7 +29290,7 @@ const frameLoop = () => {
     const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
     // 【fix232】靠近绿色光柱自动弹「返航」机票面板（和主城登机一样），走远自动收起
     if (!FLIGHT && !RET && person.position.x > 900) {
-      if (_retD2 < 6.5 && state === 'walk') openRetPanel();
+      if (_retD2 < 6.5 && state === 'walk' && performance.now() > (window.__retPanelCd || 0)) openRetPanel();
       else if (_retD2 > 9.5) closeRetPanel();
     }
     const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 6.0);   // 【fix231】提示范围放宽到 6 米
