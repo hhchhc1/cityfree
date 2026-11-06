@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix202-ret-loop';
+const BUILD = '20261106-fix203-wall-torch';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25425,6 +25425,32 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, (_WZ1 - _WZ0) - 4), stoneM);
   plinth.position.set(wallX, 0.7, (_WZ0 + _WZ1) / 2); add(plinth);
+  // ===== 【fix203】城墙火把：沿四面城墙顶部等距排布，夜里提供暖光（逻辑同主城路灯）=====
+  (function addWallTorches() {
+    const _torchPole = new THREE.MeshLambertMaterial({ color: 0x3a2a1c });
+    const _torchFlame = new THREE.MeshBasicMaterial({ color: 0xffb347 });
+    const _torchCore = new THREE.MeshBasicMaterial({ color: 0xfff0b0 });
+    const _TORCH_Y = 10.1;
+    const _spots = [];
+    for (let z = _WZ0 + 12; z < _WZ1 - 8; z += 26) _spots.push([wallX, z]);          // 西墙
+    for (let x = wallX + 12; x < 2162 - 8; x += 26) _spots.push([x, _WZ1]);          // 南墙
+    for (let z = _WZ0 + 12; z < _WZ1 - 8; z += 26) _spots.push([2162, z]);           // 东墙
+    for (let x = wallX + 12; x < 2162 - 8; x += 26) _spots.push([x, _WZ0]);          // 北墙
+    let _lit = 0;
+    for (let k = 0; k < _spots.length; k++) {
+      const sx = _spots[k][0], sz = _spots[k][1];
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 1.5, 6), _torchPole);
+      pole.position.set(sx, _TORCH_Y - 0.4, sz); add(pole);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.95, 7), _torchFlame);
+      flame.position.set(sx, _TORCH_Y + 0.55, sz); add(flame);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6), _torchCore);
+      core.position.set(sx, _TORCH_Y + 0.35, sz); add(core);
+      if (k % 6 === 0 && _lit < 14) {   // 只给一部分火把挂真实光源，控制性能
+        const li = new THREE.PointLight(0xffa54a, 1.15, 26, 2);
+        li.position.set(sx, _TORCH_Y + 1.0, sz); add(li); _lit++;
+      }
+    }
+  })();
   for (let z = _WZ0 + 8; z < _WZ1 - 8; z += 3.6) {                        // 箭垛
     const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), merlonM);
     m.position.set(wallX - 3.2, 9.2, z); add(m);
