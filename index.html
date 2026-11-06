@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix201-taxi-btn';
+const BUILD = '20261106-fix202-ret-loop';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28748,12 +28748,12 @@ const frameLoop = () => {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
       const _nowMs = performance.now();
       if (flightHasPass()) {
-        startReturnFlight();   // 【fix150】改成播放返程动画，不再瞬间传送 window.__retOk = false;
+        startReturnFlight(); window.__retOk = false;   // 【fix202】原来 __retOk=false 被写进了注释里 → 按钮状态永不重置，返程会一直循环
         setHint('永久往返机票 · 免费返程，已回到主城机场');
         _retTicketCd = 0;
       } else if (gold >= FLIGHT_PRICE_ONCE) {
         addGold(-FLIGHT_PRICE_ONCE); saveGame();
-        startReturnFlight();   // 【fix150】付费返程同样播放动画 window.__retOk = false;
+        startReturnFlight(); window.__retOk = false;   // 【fix202】同上：重置按钮状态，不再循环
         floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 返程机票', '#ffd700');
         setHint('已付 ' + FLIGHT_PRICE_ONCE + ' 金币返程机票，已回到主城机场');
         _retTicketCd = 0;
