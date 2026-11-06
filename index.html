@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix236-kit-leave';
+const BUILD = '20261106-fix238-folk-wiki';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14704,7 +14704,7 @@ addEventListener('touchstart', e => {
   //   ① 被当成游戏触摸 → 落入摇杆分支 → 摇杆被拉到手指位置（用户报的"轮盘移到左手点的地方"）
   //   ② 随后 e.preventDefault() → 浏览器不合成 click → 三个按钮**全都点不动**
   // 两个症状同一个根因。（我当初只用 CDP 鼠标点击验证过，而手机走的是 touch 事件，漏了。）
-    if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen) return;     // 【fix234】返程面板也要让位，否则手机点不动
+    if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen || (window.__wikiPanelOpen && window.__wikiPanelOpen())) return;   // 【fix237】民居百科面板也让位     // 【fix234】返程面板也要让位，否则手机点不动
   // 【2026-10-15】足球开赛面板开着时同样让位：否则点「开赛」「取消」会穿透到游戏里、把摇杆拉起来
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
   let handled = false;                             // 本次事件是否真的启动了摇杆/视角（启动了才 preventDefault）
@@ -26990,7 +26990,58 @@ function buildWoodPagoda(cx, cz, B) {
   })();
 
   // ---- ③ 苏州园林：白墙黛瓦 + 月洞门 + 水池荷花 + 假山 + 水榭 + 六角亭 ----
-  (function buildSuzhouGarden() {
+  // 【fix237】民居百科：走近显示「查看」按钮 + 百科面板（房屋本体在 buildSuzhouGarden 里建）
+(function folkWikiUI() {
+  let btn = null, panel = null, cur = null, open = false;
+  function ensure() {
+    if (btn) return true;
+    btn = document.createElement("div");
+    btn.style.cssText = "display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:185px;z-index:86;padding:14px 26px;border-radius:30px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:17px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)";
+    document.body.appendChild(btn);
+    btn.onclick = function () { if (cur) show(cur); };
+    return true;
+  }
+  function show(d) {
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "wikiPanel";
+      panel.style.cssText = "display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:90;align-items:center;justify-content:center;background:rgba(4,10,18,0.6)";
+      panel.innerHTML = '<div style="width:min(92vw,470px);box-sizing:border-box;max-height:80vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:20px 18px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218">' +
+        '<div id="wikiTitle" style="font-size:21px;font-weight:700;color:#5a3a1a;margin-bottom:4px"></div>' +
+        '<div id="wikiTag" style="font-size:13px;color:#8a6b42;margin-bottom:12px"></div>' +
+        '<div id="wikiText" style="font-size:14.5px;line-height:1.85"></div>' +
+        '<div id="wikiClose" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div></div>';
+      document.body.appendChild(panel);
+      panel.querySelector("#wikiClose").onclick = function () { panel.style.display = "none"; open = false; };
+    }
+    panel.querySelector("#wikiTitle").textContent = d.name;
+    panel.querySelector("#wikiTag").textContent = d.tag;
+    panel.querySelector("#wikiText").textContent = d.text;
+    panel.style.display = "flex";
+    open = true;
+    if (btn) btn.style.display = "none";
+  }
+  window.__wikiPanelOpen = function () { return open; };
+  function tick() {
+    try {
+      const DATA = window.__folkData || [];
+      if (!DATA.length || typeof person === "undefined" || !person) return;
+      ensure();
+      if (open) { btn.style.display = "none"; return; }
+      let best = null, bd = 1e9;
+      for (const d of DATA) {
+        const dd = Math.hypot(person.position.x - d.x, person.position.z - d.z);
+        if (dd < bd) { bd = dd; best = d; }
+      }
+      cur = bd < 10 ? best : null;
+      if (cur) { btn.textContent = "📖 查看 · " + cur.name; btn.style.display = "block"; }
+      else if (btn) btn.style.display = "none";
+    } catch (err) {}
+  }
+  setInterval(tick, 250);
+})();
+
+(function buildSuzhouGarden() {
     const GX0 = 1700, GX1 = 2040, GZ0 = 10, GZ1 = 292;
     const WHITE = 0xefeade, TILE = 0x474b51, WOOD = 0x7c4a2c, STONE = 0x9aa0a4, PAVE = 0xc3bdaf;
     const WALL_H = 3.4;
@@ -27283,6 +27334,60 @@ function buildWoodPagoda(cx, cz, B) {
       det(BX(1.8, 0.5, 6.2), WOOD, 2020, 0.55, z + 3);
     }
     det(BX(11, 0.42, 190), TILE, 2020, 3.55, 153, 0, 0, 0.06);
+// 【fix237】传统民居 4 座：徽派 / 北京四合院 / 江南水乡 / 福建土楼（门前立名牌，走近可查看百科）
+window.__folkData = [];
+try {
+  const FOLK = [
+    { name: "徽派民居", tag: "粉墙黛瓦 · 马头墙", x: 1772, z: 58, kind: "hui",
+      text: "流行于安徽南部古徽州与江西婺源一带。外墙雪白（粉墙）、屋面深灰（黛瓦）；山墙高出屋面、做成阶梯状的马头墙（封火墙），既能防火又可装饰。院内以天井为中心，雨水归入堂前，称『四水归堂』；砖、木、石『三雕』精美。2000 年西递、宏村被列入世界文化遗产。" },
+    { name: "北京四合院", tag: "坐北朝南 · 长幼有序", x: 1985, z: 58, kind: "siheyuan",
+      text: "华北地区典型的院落式住宅。坐北朝南，正房居中给长辈，东西厢房住晚辈，倒座房在南侧作客房杂用。大门多开在东南角（巽位），进门迎面设影壁挡风遮视线。院子宽绰、四面围合，讲究『坎宅巽门』，体现传统家族的伦理秩序。" },
+    { name: "江南水乡民居", tag: "临河而建 · 前店后宅", x: 1772, z: 244, kind: "jiangnan",
+      text: "长江下游苏浙一带的临河聚落。粉墙黛瓦、坡屋顶、木格窗，房屋沿河一字排开；前门临街经商、后门临河取水，屋后设河埠头（水码头）洗衣淘米。天井小而深，便于通风避晒，是『小桥流水人家』的原型。" },
+    { name: "福建土楼", tag: "夯土环楼 · 聚族而居", x: 1985, z: 244, kind: "tulou",
+      text: "闽西、闽南客家人与闽南人的夯土高楼，有圆楼、方楼等形制。以生土夯筑，外墙厚可达一两米，底层不开窗、顶层设枪眼，防御性极强。楼内一圈圈房间围合中央祖堂与天井，可容数百人聚族而居。2008 年列入世界文化遗产。" }
+  ];
+  for (const f of FOLK) {
+    const x = f.x, z = f.z;
+    det(BX(12, 0.5, 9), 0x9aa0a4, x, 0.25, z);
+    if (f.kind === "tulou") {
+      const cy = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.8, 6.6, 18, 1, true),
+        new THREE.MeshLambertMaterial({ color: 0xc9b184, side: THREE.DoubleSide }));
+      cy.position.set(x, 3.3, z); scene.add(cy);
+      det(new THREE.CylinderGeometry(6.1, 6.1, 0.55, 18), 0x3b3f45, x, 6.95, z);
+      det(new THREE.CylinderGeometry(3.2, 3.2, 0.3, 14), 0x7c4a2c, x, 0.55, z);
+      if (window.LH_BLD) LH_BLD.push({ minX: x - 6, maxX: x + 6, minZ: z - 6, maxZ: z + 6, minY: 0, top: 7.4 });
+    } else {
+      det(BX(9.6, 3.4, 6.8), 0xefeade, x, 2.2, z);
+      det(new THREE.ConeGeometry(7.6, 2.4, 4), 0x3b3f45, x, 5.1, z, 0, Math.PI / 4);
+      det(BX(1.0, 2.2, 0.24), 0x7c4a2c, x, 1.6, z - 3.45);
+      for (const sx of [-1, 1]) det(BX(2.0, 1.4, 0.2), 0x2b3138, x + sx * 2.9, 2.7, z - 3.44);
+      if (f.kind === "hui") {
+        for (const sx of [-1, 1]) {
+          det(BX(0.55, 4.3, 7.3), 0xefeade, x + sx * 4.95, 2.65, z);
+          det(BX(0.8, 0.4, 7.5), 0x3b3f45, x + sx * 4.95, 4.9, z);
+          det(BX(0.55, 5.4, 3.0), 0xefeade, x + sx * 4.95, 3.2, z);
+          det(BX(0.8, 0.4, 3.2), 0x3b3f45, x + sx * 4.95, 6.0, z);
+        }
+      }
+      if (window.LH_BLD) LH_BLD.push({ minX: x - 5.5, maxX: x + 5.5, minZ: z - 4, maxZ: z + 4, minY: 0, top: 6.6 });
+    }
+    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 128;
+    const c2 = cv.getContext("2d");
+    c2.fillStyle = "#f6f1e2"; c2.fillRect(0, 0, 512, 128);
+    c2.strokeStyle = "#7c4a2c"; c2.lineWidth = 10; c2.strokeRect(8, 8, 496, 112);
+    c2.fillStyle = "#2b2218"; c2.font = "bold 64px Microsoft YaHei, SimHei, sans-serif";
+    c2.textAlign = "center"; c2.textBaseline = "middle";
+    c2.fillText(f.name, 256, 68);
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.35),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, side: THREE.DoubleSide }));
+    plate.position.set(x, 2.9, z - (f.kind === "tulou" ? 6.2 : 4.2));
+    plate.rotation.y = Math.PI;
+    scene.add(plate);
+    window.__folkData.push({ name: f.name, tag: f.tag, text: f.text, x: x, z: z });
+  }
+} catch (e) { window.__folkErr = String(e); }
+
     // 花坛（石砌矮边 + 修剪成球的灌木）—— 江南园林里"一步一景"靠的就是这些
     for (const [fx, fz] of [[1745, 96], [1745, 150], [1745, 204], [1925, 96], [1925, 204], [1890, 262]]) {
       det(new THREE.CylinderGeometry(2.6, 2.8, 0.7, 8), 0xb0aa9a, fx, 0.35, fz);
