@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix216-blast-air';
+const BUILD = '20261106-fix217-ancient-rich';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26081,7 +26081,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
 
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
-  buildWoodPagoda(2055, ZC - 150, 11);
+  buildWoodPagoda(2055, ZC - 150, 16);   // 【fix217】塔身放大 11->16
   buildCourt(1990, ZC + 45, 30, 26);
   buildCourt(2125, ZC + 125, 26, 24);
   buildWell(1955, ZC - 35, 3.4);
@@ -26144,7 +26144,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   // ---------- 中式（古建区）：石灯笼 / 石桌凳 / 香炉 / 水缸 / 拴马桩 / 石碑 / 盆景 / 旗杆 ----------
   for (let z = Z0 + 22; z < Z1 - 20; z += 20) {
     for (let x = LH.ancX0 + 18; x < LH.ancX1 - 12; x += 26) {
-      if (Math.random() < 0.30) continue;
+      if (Math.random() < 0.18) continue;   // 【fix217】装饰更密
       const px = x + (Math.random() - 0.5) * 8, pz = z + (Math.random() - 0.5) * 8;
       const r = Math.random();
       if (r < 0.20) {                                       // 石灯笼（座+柱+灯室+顶+宝珠）
@@ -26180,9 +26180,13 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
       } else if (r < 0.88) {                                // 盆景（盆 + 松）
         det(new THREE.CylinderGeometry(0.7, 0.55, 0.5, 10), 0x7a4a2c, px, 0.25, pz);
         det(new THREE.ConeGeometry(0.85, 2.0, 7), 0x2f6b45, px, 1.4, pz);
-      } else {                                              // 旗杆 + 旗
+        } else if (((Math.round(px) * 7 + Math.round(pz) * 13) % 13) === 0) {   // 【fix217】旗杆只在少数点出现
         det(new THREE.CylinderGeometry(0.12, 0.16, 6, 6), 0x8a4a2c, px, 3, pz);
         det(BX(1.6, 1.1, 0.08), 0xc0392b, px + 0.85, 5.2, pz);
+        } else {                                              // 【fix217】其余位置补松树，填补空地
+          det(new THREE.CylinderGeometry(0.22, 0.3, 1.7, 6), 0x5a3a24, px, 0.85, pz);
+          det(new THREE.ConeGeometry(1.6, 3.6, 7), 0x2f6b45, px, 3.1, pz);
+          det(new THREE.ConeGeometry(1.2, 2.4, 7), 0x377a4e, px, 4.4, pz);
       }
     }
   }
