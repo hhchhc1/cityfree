@@ -824,6 +824,13 @@
     </div>
   </div>
 <div class="set-sec">
+  <h4>🔍 水面排查</h4>
+  <p class="set-desc">点一下把所有<b>水平的水面</b>临时藏起来。如果那片水跟着消失，说明是水面平面；如果水还在，说明是地面画上去的。</p>
+  <div class="set-row">
+    <div class="map-btn" id="setWaterDbg" style="background:#7a3f22">🔍 临时隐藏水面</div>
+  </div>
+</div>
+<div class="set-sec">
   <h4>📍 屏幕坐标</h4>
   <p class="set-desc">打开后在屏幕左上角显示当前 <b>X / Z</b> 坐标，方便报位置。再点一次关掉。</p>
   <div class="set-row">
@@ -919,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix220-pagoda-hd';
+const BUILD = '20261106-fix221-water-dbg';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5388,6 +5395,29 @@ function setDevMode(on) {
     el.style.cssText = 'position:fixed;left:12px;top:128px;z-index:26;display:none;padding:4px 8px;border-radius:8px;background:rgba(8,12,20,0.82);color:#cfe6ff;font:600 12px/1.2 monospace;border:1px solid rgba(120,180,255,0.35);pointer-events:none';
     document.body.appendChild(el);
     window.__mmCoordEl = el;
+    // 【fix221】水面排查：把所有接近水平、高度在 -6~1 米之间的平面藏起来
+    const _wb = document.getElementById('setWaterDbg');
+    if (_wb) {
+      window.__waterHidden = [];
+      _wb.onclick = () => {
+        if (window.__waterHidden.length) {
+          for (const m of window.__waterHidden) m.visible = true;
+          window.__waterHidden.length = 0;
+          _wb.textContent = '🔍 临时隐藏水面';
+          return;
+        }
+        scene.traverse(o => {
+          if (!o.isMesh || !o.geometry) return;
+          if (o.geometry.type !== 'PlaneGeometry') return;
+          const wy = o.getWorldPosition(new THREE.Vector3()).y;
+          if (wy > 1 || wy < -6) return;
+          if (Math.abs(o.rotation.x) < 0.5) return;
+          o.visible = false;
+          window.__waterHidden.push(o);
+        });
+        _wb.textContent = '🔍 显示水面（已隐藏 ' + window.__waterHidden.length + ' 块）';
+      };
+    }
     // 【fix207】设置里的显示坐标开关
     const _cb = document.getElementById("setCoordBtn");
     if (_cb) {
