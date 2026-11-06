@@ -823,6 +823,13 @@
       <div class="map-btn" id="setDevBtn" style="background:#5b3f8f">🛠 开发者模式</div>
     </div>
   </div>
+<div class="set-sec">
+  <h4>📍 屏幕坐标</h4>
+  <p class="set-desc">打开后在屏幕左上角显示当前 <b>X / Z</b> 坐标，方便报位置。再点一次关掉。</p>
+  <div class="set-row">
+    <div class="map-btn" id="setCoordBtn" style="background:#1f5f7a">📍 显示坐标：关</div>
+  </div>
+</div>
     <div class="set-sec">
       <h4>🎮 手机按钮布局</h4>
       <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
@@ -912,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix206-torch-red';
+const BUILD = '20261106-fix207-dev-same';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5381,6 +5388,13 @@ function setDevMode(on) {
     el.style.cssText = 'position:fixed;left:12px;top:128px;z-index:26;display:none;padding:4px 8px;border-radius:8px;background:rgba(8,12,20,0.82);color:#cfe6ff;font:600 12px/1.2 monospace;border:1px solid rgba(120,180,255,0.35);pointer-events:none';
     document.body.appendChild(el);
     window.__mmCoordEl = el;
+    // 【fix207】设置里的显示坐标开关
+    const _cb = document.getElementById("setCoordBtn");
+    if (_cb) {
+      const _sync = () => { _cb.textContent = window.__mmShowCoords ? "📍 显示坐标：开" : "📍 显示坐标：关"; };
+      _cb.onclick = () => { window.__mmShowCoords = !window.__mmShowCoords; _sync(); };
+      _sync();
+    }
     mm.style.cursor = 'pointer';
     mm.addEventListener('click', () => { window.__mmShowCoords = !window.__mmShowCoords; });
   };
@@ -22390,7 +22404,7 @@ function renderStats() {
   for (const sk of SKILLS) {
     const cur = player[sk.key] || 0;
     // Task #11：开发者模式放开 10 点上限，方便核对"加到很高时加成还合不合理"
-    const cap = devMode ? 99 : sk.max;
+    const cap = sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
     const maxed = cur >= cap, afford = player.skillPoints > 0 && !maxed;
     const now = skillGain(sk, cur);
     const next = maxed ? 0 : skillGain(sk, cur + 1) - now;
@@ -22433,7 +22447,7 @@ function renderStats() {
 function buySkill(key) {
   const sk = SKILLS.find(s => s.key === key); if (!sk) return;
   // Task #11：开发者模式突破 10 点上限（上限 99），好核对高加点时的加成曲线
-  const cap = devMode ? 99 : sk.max;
+  const cap = sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
   if (player[sk.key] >= cap) return;
   if (player.skillPoints <= 0) { setHint('技能点不足，去击杀敌人升级'); return; }
   // 【2026-10-13】加点前先记下"这一行到底会改哪个数值、加完变成多少"。
