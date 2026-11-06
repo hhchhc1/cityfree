@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix230-guard-dmg';
+const BUILD = '20261106-fix231-return-board';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -29110,14 +29110,16 @@ const frameLoop = () => {
     if (!window.__retBtn) {
       const _rb = document.createElement('div');
       _rb.textContent = '登机返程';
-      _rb.style.cssText = 'position:fixed;right:118px;bottom:250px;padding:13px 20px;border-radius:30px;background:linear-gradient(180deg,#a9f0c8,#4fd08a);color:#0a3b22;font:700 16px sans-serif;z-index:30;cursor:pointer;display:none;box-shadow:0 4px 12px rgba(0,0,0,.45)';
+      _rb.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:185px;z-index:85;padding:16px 30px;border-radius:30px;background:linear-gradient(180deg,#a9f0c8,#4fd08a);color:#0a3b22;font-size:18px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:auto;';   // 【fix231】手机端：原来 right:118px 会被右下攻击键盖住，点不到
       _rb.onclick = function () { window.__retOk = true; _rb.style.display = "none"; };
       document.body.appendChild(_rb);
       window.__retBtn = _rb;
     }
-    const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5);
-    window.__retBtn.style.display = _nearRet ? 'block' : 'none';
-    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：点右下「登机返程」按钮才起飞'); }
+    const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
+    if (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 2.6 && performance.now() > (window.__retAutoCd || 0)) { window.__retAutoCd = performance.now() + 3000; window.__retOk = true; }
+    const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 6.0);   // 【fix231】提示范围放宽到 6 米
+    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：走进绿色光柱就会自动登机返程（也可点下方「登机返程」）'); }
+    if (window.__retBtn) window.__retBtn.style.display = _nearRet ? 'block' : 'none';
   } catch (e) {}
     if (!FLIGHT && !RET && window.__retOk && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
