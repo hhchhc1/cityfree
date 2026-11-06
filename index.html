@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix235-water-clean';
+const BUILD = '20261106-fix236-kit-leave';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18824,7 +18824,12 @@ function updateJobs(dt) {
   if (!window.__copTrimT || performance.now() - window.__copTrimT > 3000) { window.__copTrimT = performance.now(); try { trimCopCrowd(); } catch (e) {} }
   // 【fix229】兜底：只要不在比赛中、而身上还挂着队服颜色，就还原玩家原本的衣服
   try {
-    if (typeof SOC !== 'undefined' && SOC && !SOC.active && ((window.__socKitBackup && window.__socKitBackup.length) || (window.__socKitMats && window.__socKitMats.length))) restoreSocKit();
+    // 【fix236】只要已经离开球场（离球场中心超过 55 米），或者比赛已结束，就还原原装衣服。
+    if (window.__socKitPainted) {
+      const _inMatch2 = (typeof SOC !== 'undefined' && SOC && SOC.active);
+      const _far2 = Math.hypot(person.position.x + 17.25, person.position.z - 454.75) > 55;
+      if (!_inMatch2 || _far2) restoreSocKit();
+    }
   } catch (e) {}
   try { updateSite(dt); } catch (e) { console.error('[site]', e); }
   try { if (currentCar && currentCar.isCrane) updateCrane(currentCar, dt); } catch (e) { console.error('[crane]', e); }
