@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix224-no-cop-nostar';
+const BUILD = '20261106-fix225-cop-lot-fix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -13043,7 +13043,7 @@ function ensureParkedCops() {
   const spots = window.POLICE_LOT_SPOTS || [];
   if (!spots.length) return;
   const want = Math.min(spots.length, 4);   // 【fix192】警局门口最多 4 辆，不再凭空停一长排
-  let have = cars.filter(c => c.isParkedCop && !c.exploded).length;
+  let have = cars.filter(c => c.isParkedCop && !c.exploded && spots.some(s2 => Math.hypot(c.x - s2.x, c.z - s2.z) < 14)).length;   // 【fix225】只数楼前车位里的车，旧位置的车不再占名额
   // 【fix215】多余的警车必须清掉：老存档里存着上限修正前刷出来的一大排，光靠"不再补车"是清不掉的
   for (let _i = cars.length - 1; _i >= 0 && have > want; _i--) {
     const _c = cars[_i];
@@ -18742,6 +18742,17 @@ function updateJobs(dt) {
         if (c === currentCar) continue;
         if (Math.hypot(c.x - _cx, c.z - _cz) > _R) continue;
         _near.push({ arr: cars, o: c });
+      }
+      // 【fix225】老存档里带回来的警车（saveKind=cop）停在旧位置，不在楼前车位里 —— 零通缉时一律删掉
+      if (typeof wanted === 'number' && wanted <= 0.01) {
+        for (let i3 = cars.length - 1; i3 >= 0; i3--) {
+          const c3 = cars[i3];
+          if (!c3 || c3 === currentCar) continue;
+          if (c3.isParkedCop && spots.some(s3 => Math.hypot(c3.x - s3.x, c3.z - s3.z) < 14)) continue;   // 【fix225】车位里的保留，其它位置的清掉
+          if (c3.saveKind !== 'cop') continue;
+          try { if (c3.group) scene.remove(c3.group); } catch (e) {}
+          cars.splice(i3, 1);
+        }
       }
       let over = _near.length - _MAX;
       for (const it of _near) {
