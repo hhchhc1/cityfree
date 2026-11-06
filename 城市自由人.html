@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix229-kit-restore';
+const BUILD = '20261106-fix230-guard-dmg';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19646,7 +19646,7 @@ function alertBaseGuards(sec) {
   let n = 0;
   for (const r of residents) {
     if (!r.isBaseGuard || !r.alive) continue;
-    r.hate = 'player'; r.armed = true; r.flee = false; r.attackCd = 0;
+    r.hate = 'player'; r.armed = true; r.flee = false; r.attackCd = Math.random() * 1.4;   // 【fix230】不同时齐射，错开开火（原来全员 0 冷却 → 一瞬间吃满 6 个人的子弹）
     r.baseAlertUntil = until;
     n++;
   }
@@ -20745,7 +20745,7 @@ function updateResident(r, dt) {
     const tz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
     // Task #10：把"玩家的实际高度"也传进去（在车上就取车身高度，在楼顶就是楼顶高度）
     const ty = (state === 'drive' && currentCar) ? entityFootY(currentCar) : person.position.y;
-    if (chaseAndAttack(r, dt, tx, tz, dmg => npcShotPlayer(r.isBaseGuard ? dmg * 0.55 : dmg, r.x, r.z, r.ranged) /* fix158: 警卫枪伤打55折 */, (state === 'drive' ? currentCar : null), ty)) return;
+    if (chaseAndAttack(r, dt, tx, tz, dmg => npcShotPlayer(r.isBaseGuard ? dmg * 0.35 : dmg, r.x, r.z, r.ranged) /* fix230: 警卫枪伤降到 35%（用户：一开枪伤害就高得离谱） */, (state === 'drive' ? currentCar : null), ty)) return;
     r.hate = null;
   } else if (r.hate && typeof r.hate === 'object') {
     // 【2026-10-13 用户要求】被别的 NPC 误伤（hate 里存的就是那个人的对象）：追着他打，
