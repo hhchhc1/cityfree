@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix217-ancient-rich';
+const BUILD = '20261106-fix218-blast-tower';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19767,7 +19767,7 @@ function rocketImpact(w, shotBest, hx, hz, hy) {
     const _gY = terrainHeight(hx, hz) + 0.9;
     const ey = (typeof hy === 'number' && isFinite(hy)) ? hy : _gY;
     const vFade = Math.max(0, 1 - Math.max(0, ey - _gY) / 12);
-    const at = d => Math.max(0, Math.round(w.dmg * (1 - d / R) * vFade));
+      const at = d => Math.max(0, Math.round(w.dmg * 2.4 * (1 - d / R) * vFade));   // 【fix218】伤害×2.4：原来打中只掉血不死，NPC 倒地 1 秒又爬起来
     // 【2026-10-13 用户要求】火箭弹爆炸"火光更亮一点"：两发叠加（中心亮黄 + 外圈橙红），粒子更多更亮。
     // 【fix151】火箭筒末尾爆炸做大：三层膨胀火球 + 贴地冲击波 + 三倍碎片
 spawnFireball(hx, ey + 1.5, hz, 1.2, 4.6, 0.38, 0xffe066);
@@ -19787,7 +19787,7 @@ spawnShockRing(hx, ey, hz, 1.2, 12, 0.5, 0xffc45a);
     // 自身伤害用**立体**距离：往天上打不会再炸到自己脚下
     const pd = Math.hypot(px - hx, pz - hz, (person.position.y + 1.0) - ey);
     if (pd < R) hurtPlayer(at(pd));
-    blastPeople(hx, hz, R, at, 3.2, 0, 0, 'gun');       // 火箭筒：玩家武器，正当击杀计入
+      blastPeople(hx, hz, R, at, 5.2, 0, 0, 'gun');       // 【fix218】致死半径 3.2→5.2，火箭筒：玩家武器，正当击杀计入
     const damageVehicle = v => {
       if (!v || v.exploded) return;
       const d = Math.hypot(v.x - hx, v.z - hz);
@@ -19971,7 +19971,7 @@ if ((v.shootCd || 0) > 0) return;
     const R = 14, RY = 10;
     // 【fix138】爆点越高伤害越弱：对着天空开炮不会把地面一片人全炸飞
     const _vFade = Math.max(0, 1 - Math.max(0, hY - (terrainHeight(hx, hz) + 2)) / 30);
-    const at = d => Math.max(0, Math.round(100 * (1 - d / R) * _vFade));
+      const at = d => Math.max(0, Math.round(260 * (1 - d / R) * _vFade));   // 【fix218】100→260
     // 【fix140】把整段爆炸收进一个函数，按炮弹飞行时间到点再执行
     const tankBoom = () => {
     spawnBurst(hx, hz, 0xff2200, 38, hY); spawnBurst(hx, hz, 0xffcc33, 26, hY); spawnBurst(hx, hz, 0x222222, 20, hY);
@@ -19987,7 +19987,7 @@ if ((v.shootCd || 0) > 0) return;
     spawnBurst(hx, hz, 0xff6600, 40, hY);
     spawnBurst(hx, hz, 0x2a1600, 20, hY);
     for (let i = 0; i < 8; i++) emitSmoke(hx + (Math.random() - 0.5) * 4.0, (hY || terrainHeight(hx, hz)) + 0.4, hz + (Math.random() - 0.5) * 4.0, i < 3);
-    blastPeople(hx, hz, R, at, 3.4, RY, hY, 'tank');   // 坦克炮弹：玩家坦克，正当击杀计入
+      blastPeople(hx, hz, R, at, 6.0, RY, hY, 'tank');   // 【fix218】致死半径 3.4→6.0，坦克炮弹
     // 被炮弹掀到的车：同样按垂直范围判定（以前只看平面距离）
     const tankBlastY = hY;
     const inBlastV = o => Math.abs(terrainHeight(o.x, o.z) + 0.9 - tankBlastY) <= RY;
@@ -25670,7 +25670,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   function buildPagoda(px, pz, levels, baseW) {
   // 【fix81】古建也要登记进 buildings（LH_BLD 就是它）—— 之前只有 CBD 楼和城墙进去过，
   // 所以古建区完全不能攀爬（用户：『古代楼房还是没有算到楼房里边，也不能攀爬』）。
-  LH_BLD.push({ minX: px - baseW * 0.45, maxX: px + baseW * 0.45, minZ: pz - baseW * 0.45, maxZ: pz + baseW * 0.45, minY: 0, top: baseW * 0.95 * levels + 5 });   // 【fix97】0.62→0.45：原来盒子偏大，塔外一圈就是空气墙
+  LH_BLD.push({ minX: px - baseW * 0.45, maxX: px + baseW * 0.45, minZ: pz - baseW * 0.45, maxZ: pz + baseW * 0.45, minY: 0, top: 1.6 + levels * 6.4 + 4 });   // 【fix218】原来 top 是 baseW*0.95*levels+5（22宽3层≈68米），整座塔上方 50 米都是看不见的墙
     const pg = new THREE.Group();
     const podium = new THREE.Mesh(new THREE.BoxGeometry(baseW + 6, 1.6, baseW + 6), stoneM);
     podium.position.y = 0.8; pg.add(podium);
@@ -26081,7 +26081,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
 
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
-  buildWoodPagoda(2055, ZC - 150, 16);   // 【fix217】塔身放大 11->16
+  buildWoodPagoda(2055, ZC - 150, 20);   // 【fix218】16→20   // 【fix217】塔身放大 11->16
   buildCourt(1990, ZC + 45, 30, 26);
   buildCourt(2125, ZC + 125, 26, 24);
   buildWell(1955, ZC - 35, 3.4);
