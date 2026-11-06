@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix210-wall-garden';
+const BUILD = '20261106-fix211-probe';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5401,6 +5401,43 @@ function setDevMode(on) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
   else setup();
 })();
+// 【fix211】临时调试开关：按 P 键，显示准星正对着的那个物体的信息（用来定位那块"平板水"）
+(function addProbe() {
+  const el = document.createElement('div');
+  el.id = 'probeInfo';
+  el.style.cssText = 'position:fixed;left:12px;bottom:130px;z-index:9999;display:none;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,0.88);color:#7dffb0;font:600 14px/1.6 monospace;max-width:76vw;white-space:pre-wrap;pointer-events:none';
+  document.body.appendChild(el);
+  const _ndc = new THREE.Vector2(0, 0);
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'p' && ev.key !== 'P') return;
+    try {
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(_ndc, camera);
+      const hits = rc.intersectObjects(scene.children, true).filter(h => h.object.visible && h.object.type !== 'Sprite');
+      if (!hits.length) { el.style.display = 'block'; el.textContent = '没打到东西'; return; }
+      const o = hits[0].object;
+      const m = o.material || {};
+      const g = o.geometry || {};
+      const wp = o.getWorldPosition(new THREE.Vector3());
+      const params = g.parameters || {};
+      const size = params.width ? (Math.round(params.width) + 'x' + Math.round(params.height)) : (params.radius ? ('r' + Math.round(params.radius)) : '-');
+      const lines = [
+        '类型: ' + o.type,
+        '几何: ' + (g.type || '?') + '  ' + size,
+        '材质: ' + (Array.isArray(m) ? 'array' : (m.type || '?')),
+        '颜色: ' + (m.color ? '#' + m.color.getHexString() : '-'),
+        '贴图: ' + (m.map ? '有' : '无'),
+        '透明度: ' + (m.opacity !== undefined ? m.opacity.toFixed(2) : '-') + (m.transparent ? ' (transparent)' : '-'),
+        '位置: ' + wp.x.toFixed(0) + ', ' + wp.y.toFixed(2) + ', ' + wp.z.toFixed(0),
+        '距离: ' + hits[0].distance.toFixed(0) + ' m'
+      ];
+      el.textContent = lines.join(String.fromCharCode(10));
+      el.style.display = 'block';
+      window.__probeLast = { type: o.type, geo: g.type, size: size, color: m.color ? m.color.getHexString() : null, pos: [wp.x, wp.y, wp.z], dist: hits[0].distance };
+    } catch (e) { el.style.display = 'block'; el.textContent = 'err: ' + e.message; }
+  });
+})();
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addDevEntry);
   else addDevEntry();
 })();
