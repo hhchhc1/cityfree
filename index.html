@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix223-coord-lock';
+const BUILD = '20261106-fix224-no-cop-nostar';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18715,7 +18715,19 @@ function updateJobs(dt) {
   // 【fix219】警局门口警车硬性限流：附近超过 6 辆就清掉多余的
   function trimCopCrowd() {
     try {
-      const _cx = 140, _cz = 60, _R = 90, _MAX = 6;
+      const _cx = 140, _cz = 60, _R = 90;
+      // 【fix224】零通缉时警局周围不允许有追捕警车（用户：没星的时候警局门口两侧也冒车）
+      const _pursuitNo = (typeof wanted === 'number' && wanted > 0.01) ? 0 : 99;
+      let _removed = 0;
+      for (let i2 = policeCars.length - 1; i2 >= 0 && _removed < _pursuitNo; i2--) {
+        const c2 = policeCars[i2];
+        if (!c2) continue;
+        if (Math.hypot(c2.x - _cx, c2.z - _cz) > _R) continue;
+        try { if (c2.group) scene.remove(c2.group); } catch (e) {}
+        policeCars.splice(i2, 1);
+        _removed++;
+      }
+      const _MAX = (typeof wanted === 'number' && wanted > 0.01) ? 6 : 4;
       const _near = [];
       for (let i = policeCars.length - 1; i >= 0; i--) {
         const c = policeCars[i];
