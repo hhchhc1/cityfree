@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix204-torch-hd';
+const BUILD = '20261106-fix205-torch-outer';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25426,63 +25426,70 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.4, (_WZ1 - _WZ0) - 4), stoneM);
   plinth.position.set(wallX, 0.7, (_WZ0 + _WZ1) / 2); add(plinth);
-  // ===== 【fix204】城墙火把重做：木杆+铁箍+会跳动的三层火焰+地面光斑+光晕+真实点光源 =====
+  // ===== 【fix205】城墙火把：挂到城墙外侧、向外倾斜，照亮城外 =====
   (function addWallTorches() {
-    const _cv = document.createElement("canvas"); _cv.width = _cv.height = 128;
-    const _c2 = _cv.getContext("2d");
+    const _cv = document.createElement('canvas'); _cv.width = _cv.height = 128;
+    const _c2 = _cv.getContext('2d');
     const _grd = _c2.createRadialGradient(64, 64, 0, 64, 64, 64);
-    _grd.addColorStop(0, "rgba(255,214,150,0.85)");
-    _grd.addColorStop(0.28, "rgba(255,186,110,0.45)");
-    _grd.addColorStop(0.6, "rgba(255,160,80,0.18)");
-    _grd.addColorStop(1, "rgba(255,150,70,0)");
+    _grd.addColorStop(0, 'rgba(255,214,150,0.9)');
+    _grd.addColorStop(0.28, 'rgba(255,186,110,0.5)');
+    _grd.addColorStop(0.6, 'rgba(255,160,80,0.2)');
+    _grd.addColorStop(1, 'rgba(255,150,70,0)');
     _c2.fillStyle = _grd; _c2.fillRect(0, 0, 128, 128);
     const _poolTex = new THREE.CanvasTexture(_cv);
-    const _poolGeo = new THREE.CircleGeometry(9, 20);
-    const _hv = document.createElement("canvas"); _hv.width = _hv.height = 64;
-    const _hc = _hv.getContext("2d");
+    const _poolGeo = new THREE.CircleGeometry(11, 22);
+    const _hv = document.createElement('canvas'); _hv.width = _hv.height = 64;
+    const _hc = _hv.getContext('2d');
     const _hg = _hc.createRadialGradient(32, 32, 0, 32, 32, 32);
-    _hg.addColorStop(0, "rgba(255,250,220,1)");
-    _hg.addColorStop(0.25, "rgba(255,214,130,0.75)");
-    _hg.addColorStop(0.6, "rgba(255,150,60,0.28)");
-    _hg.addColorStop(1, "rgba(255,120,40,0)");
+    _hg.addColorStop(0, 'rgba(255,250,220,1)');
+    _hg.addColorStop(0.25, 'rgba(255,214,130,0.78)');
+    _hg.addColorStop(0.6, 'rgba(255,150,60,0.3)');
+    _hg.addColorStop(1, 'rgba(255,120,40,0)');
     _hc.fillStyle = _hg; _hc.fillRect(0, 0, 64, 64);
     const _haloTex = new THREE.CanvasTexture(_hv);
     const _woodM = new THREE.MeshLambertMaterial({ color: 0x4a3221 });
     const _ironM = new THREE.MeshLambertMaterial({ color: 0x2b2b2b });
-    const _TORCH_TOP = 10.2;
-    const _spots = [];
-    for (let z = _WZ0 + 14; z < _WZ1 - 8; z += 30) _spots.push([wallX, z]);
-    for (let x = wallX + 14; x < 2162 - 8; x += 30) _spots.push([x, _WZ1]);
-    for (let z = _WZ0 + 14; z < _WZ1 - 8; z += 30) _spots.push([2162, z]);
-    for (let x = wallX + 14; x < 2162 - 8; x += 30) _spots.push([x, _WZ0]);
+    const _spots = [];   // [基准x, 基准z, 朝外法线x, 朝外法线z]
+    for (let z = _WZ0 + 16; z < _WZ1 - 8; z += 30) _spots.push([wallX - 3.6, z, -1, 0]);
+    for (let x = wallX + 16; x < 2162 - 8; x += 30) _spots.push([x, _WZ1 + 3.4, 0, 1]);
+    for (let z = _WZ0 + 16; z < _WZ1 - 8; z += 30) _spots.push([2162 + 3.6, z, 1, 0]);
+    for (let x = wallX + 16; x < 2162 - 8; x += 30) _spots.push([x, _WZ0 - 3.4, 0, -1]);
     const _list = [];
+    const TILT = 0.55;   // 向外倾斜约 31 度
     for (let k = 0; k < _spots.length; k++) {
-      const sx = _spots[k][0], sz = _spots[k][1];
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 2.1, 8), _woodM);
-      pole.position.set(sx, _TORCH_TOP - 1.05, sz); add(pole);
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.16, 8), _ironM);
-      ring.position.set(sx, _TORCH_TOP - 0.2, sz); add(ring);
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.2, 0.34, 8), _ironM);
-      cup.position.set(sx, _TORCH_TOP + 0.05, sz); add(cup);
+      const bx = _spots[k][0], bz = _spots[k][1], nx = _spots[k][2], nz = _spots[k][3];
+      const g = new THREE.Group();
+      g.position.set(bx, 8.15, bz);
+      if (nx !== 0) g.rotation.z = -nx * TILT;   // 沿 x 方向倾斜
+      else g.rotation.x = nz * TILT;             // 沿 z 方向倾斜
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 2.3, 8), _woodM);
+      pole.position.y = 1.15; g.add(pole);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.15, 8), _ironM);
+      ring.position.y = 2.0; g.add(ring);
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.19, 0.32, 8), _ironM);
+      cup.position.y = 2.38; g.add(cup);
       const fl = [];
       const mkF = (r, h, hex, op, y) => {
         const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-        m.position.set(sx, _TORCH_TOP + y, sz); add(m); fl.push(m); return m;
+        m.position.y = y; g.add(m); fl.push(m); return m;
       };
-      mkF(0.42, 1.15, 0xff7a1a, 0.75, 0.62);
-      mkF(0.28, 0.86, 0xffb347, 0.85, 0.52);
-      mkF(0.16, 0.52, 0xfff3c4, 0.95, 0.42);
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: _haloTex, color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-      halo.position.set(sx, _TORCH_TOP + 0.55, sz); halo.scale.set(4.2, 4.2, 1); add(halo);
-      const pool = new THREE.Mesh(_poolGeo, new THREE.MeshBasicMaterial({ map: _poolTex, color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-      pool.rotation.x = -Math.PI / 2;
-      pool.position.set(sx, terrainHeight(sx, sz) + 0.12, sz);
-      add(pool);
+      mkF(0.44, 1.2, 0xff7a1a, 0.75, 2.95);
+      mkF(0.29, 0.9, 0xffb347, 0.85, 2.85);
+      mkF(0.17, 0.55, 0xfff3c4, 0.95, 2.75);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: _haloTex, color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      halo.position.y = 2.9; halo.scale.set(4.6, 4.6, 1); g.add(halo);
       let li = null;
-      if (k % 4 === 0) {
-        li = new THREE.PointLight(0xffa64a, 2.4, 26, 2);
-        li.position.set(sx, _TORCH_TOP + 0.8, sz); add(li);
+      if (k % 3 === 0) {
+        li = new THREE.PointLight(0xffa64a, 3.2, 34, 2);
+        li.position.y = 3.0; g.add(li);
       }
+      add(g);
+      // 城外地面的光斑：落在城墙外 4 米处，照亮城外地面
+      const px = bx + nx * 4.5, pz = bz + nz * 4.5;
+      const pool = new THREE.Mesh(_poolGeo, new THREE.MeshBasicMaterial({ map: _poolTex, color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(px, terrainHeight(px, pz) + 0.12, pz);
+      add(pool);
       _list.push({ fl: fl, halo: halo, pool: pool, light: li, seed: Math.random() * 10 });
     }
     window.__wallTorches = _list;
