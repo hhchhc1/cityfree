@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix207-dev-same';
+const BUILD = '20261106-fix209-dev-free';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7388,6 +7388,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 (function addOcean() {
   const oceanMat = new THREE.MeshLambertMaterial({ color: 0x4fc3d6, transparent: false, opacity: 1 });   // 【fix199】半透明深蓝大海面会盖在河道上形成一道深蓝色带，改成与河水同色不透明
   const ocean = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2.5, HALF * 2.5), oceanMat);
+  window.__oceanMat = oceanMat; window.__oceanMesh = ocean;   // 【fix208】暴露给后面的海面波纹贴图
   ocean.rotation.x = -Math.PI / 2; ocean.position.y = -0.6; scene.add(ocean);
   // 海面波纹（4条白色细线模拟浪花）
   for (let i = 0; i < 4; i++) {
@@ -22404,7 +22405,7 @@ function renderStats() {
   for (const sk of SKILLS) {
     const cur = player[sk.key] || 0;
     // Task #11：开发者模式放开 10 点上限，方便核对"加到很高时加成还合不合理"
-    const cap = sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
+    const cap = devMode ? 99 : sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
     const maxed = cur >= cap, afford = player.skillPoints > 0 && !maxed;
     const now = skillGain(sk, cur);
     const next = maxed ? 0 : skillGain(sk, cur + 1) - now;
@@ -22447,7 +22448,7 @@ function renderStats() {
 function buySkill(key) {
   const sk = SKILLS.find(s => s.key === key); if (!sk) return;
   // Task #11：开发者模式突破 10 点上限（上限 99），好核对高加点时的加成曲线
-  const cap = sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
+  const cap = devMode ? 99 : sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
   if (player[sk.key] >= cap) return;
   if (player.skillPoints <= 0) { setHint('技能点不足，去击杀敌人升级'); return; }
   // 【2026-10-13】加点前先记下"这一行到底会改哪个数值、加完变成多少"。
@@ -27652,6 +27653,18 @@ const _seaTex = new THREE.CanvasTexture(_seaCv);
 _seaTex.wrapS = _seaTex.wrapT = THREE.RepeatWrapping;
 _seaTex.repeat.set(432, 432);   // 【fix200】按 24000/5000 等比放大
 window.__seaTex = _seaTex;
+    // 【fix208】大海面（addOcean 那块）原来是一整片死板的纯色，和河道并排看就是两块不同的水
+    if (window.__oceanMat) {
+      const _ot = _seaTex.clone();
+      _ot.needsUpdate = true;
+      _ot.wrapS = _ot.wrapT = THREE.RepeatWrapping;
+      _ot.repeat.set(22, 22);   // 1250m / 56 ≈ 22，颗粒和河道一致
+      window.__oceanTex = _ot;
+      window.__oceanMat.map = _ot;
+      window.__oceanMat.color.setHex(0x4fc3d6);
+      window.__oceanMat.emissive && window.__oceanMat.emissive.setHex(0x2a7c8a);
+      window.__oceanMat.needsUpdate = true;
+    }
 const seaMat = new THREE.MeshPhongMaterial({ color: 0x4fc3d6, map: _seaTex, bumpMap: _seaTex, bumpScale: 0.12, specular: 0x8fe0ee, shininess: 65, emissive: 0x2a7c8a });   // 【fix198】远处海面改成和河道同款水色/波纹，不再是深蓝平板  // 【fix177】和海/河统一成同一个水色
   seaMat.polygonOffset = true; seaMat.polygonOffsetFactor = 2; seaMat.polygonOffsetUnits = 8;
 const sea = new THREE.Mesh(new THREE.PlaneGeometry(24000, 24000), seaMat);   // 【fix200】5000→24000：原来海面边界露在视野里，看上去是一条深蓝色带
@@ -28739,6 +28752,7 @@ const frameLoop = () => {
   // 这样对话/暂停时水也不会"冻住"）。开销只是一次 texture offset 赋值。
   if (LH_WATER.tex) {   // 【fix173】空值保护补回来：原来这行被误删，tex 未就绪时会每帧抛异常
     LH_WATER.tex.offset.y += dt * 0.30;
+      if (window.__oceanTex) window.__oceanTex.offset.y += dt * 0.30;   // 【fix208】大海面同步流动
     // 【fix168】海面 / 闪点也一起流动
     if (window.__seaTex) { window.__seaTex.offset.x += dt * 0.0035; window.__seaTex.offset.y += dt * 0.0055; }
     if (window.__sparkTex) { window.__sparkTex.offset.y += dt * 0.09; window.__sparkTex.offset.x += dt * 0.004; }
