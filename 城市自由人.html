@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix222-terrain-edge';
+const BUILD = '20261106-fix223-coord-lock';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -5425,8 +5425,8 @@ function setDevMode(on) {
       _cb.onclick = () => { window.__mmShowCoords = !window.__mmShowCoords; _sync(); };
       _sync();
     }
-    mm.style.cursor = 'pointer';
-    mm.addEventListener('click', () => { window.__mmShowCoords = !window.__mmShowCoords; const _b2 = document.getElementById('setCoordBtn'); if (_b2) _b2.textContent = window.__mmShowCoords ? '📍 显示坐标：开' : '📍 显示坐标：关'; });   // 【fix210】同步设置里的开关文字
+    mm.style.cursor = 'default';
+    // 【fix223】用户：点小地图不该关掉坐标。坐标开关只由「设置 → 屏幕坐标」控制
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
   else setup();
