@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix239-ret-cancel';
+const BUILD = '20261106-fix240-tap-real';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26998,7 +26998,7 @@ function buildWoodPagoda(cx, cz, B) {
     btn = document.createElement("div");
     btn.style.cssText = "display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:185px;z-index:86;padding:14px 26px;border-radius:30px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:17px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)";
     document.body.appendChild(btn);
-    btn.onclick = function () { if (cur) show(cur); };
+    window.__bindTap(btn, function () { if (cur) show(cur); });
     return true;
   }
   function show(d) {
@@ -27012,7 +27012,7 @@ function buildWoodPagoda(cx, cz, B) {
         '<div id="wikiText" style="font-size:14.5px;line-height:1.85"></div>' +
         '<div id="wikiClose" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div></div>';
       document.body.appendChild(panel);
-      panel.querySelector("#wikiClose").onclick = function () { panel.style.display = "none"; open = false; };
+      window.__bindTap(panel.querySelector("#wikiClose"), function () { panel.style.display = "none"; open = false; });
     }
     panel.querySelector("#wikiTitle").textContent = d.name;
     panel.querySelector("#wikiTag").textContent = d.tag;
@@ -27033,7 +27033,7 @@ function buildWoodPagoda(cx, cz, B) {
         const dd = Math.hypot(person.position.x - d.x, person.position.z - d.z);
         if (dd < bd) { bd = dd; best = d; }
       }
-      cur = bd < 10 ? best : null;
+      cur = bd < 14 ? best : null;
       if (cur) { btn.textContent = "📖 查看 · " + cur.name; btn.style.display = "block"; }
       else if (btn) btn.style.display = "none";
     } catch (err) {}
@@ -28934,6 +28934,26 @@ function refreshRetBtns() {
   const permed = flightHasPass();
   const d = document.getElementById('retDesc');
   const n = document.getElementById('retNote');
+// 【fix240】手机端点不动的通用解决：不依赖 click（游戏全局 touchstart 会 preventDefault 把 click 吃掉），
+// 直接监听 touchstart / mousedown，自己 stopPropagation + preventDefault 后执行回调。
+function __bindTap(el, fn) {
+  if (!el) return;
+  let last = 0;
+  const h = function (e) {
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - last < 320) return;
+    last = now;
+    try { e.stopPropagation(); } catch (x1) {}
+    try { e.preventDefault(); } catch (x2) {}
+    try { fn(); } catch (x3) {}
+  };
+  el.style.touchAction = "manipulation";
+  el.addEventListener("touchstart", h, { passive: false });
+  el.addEventListener("pointerdown", h);
+  el.addEventListener("mousedown", h);
+  el.addEventListener("click", h);
+}
+window.__bindTap = __bindTap;
   const bP = document.getElementById('retPerm');
   const bO = document.getElementById('retOnce');
   if (d) d.textContent = '少年，还是忘不掉那座熟悉的小城吗？';
@@ -28980,9 +29000,9 @@ function openRetPanel() {
       "<button id='retCancel' style='display:block;width:100%;padding:12px;border:1px solid #3a6076;border-radius:10px;font-size:14px;color:#b7d6e6;background:#12283a;cursor:pointer'>暂时不了</button>" +
       "</div>";
     document.body.appendChild(p);
-    document.getElementById('retPerm').onclick = () => retBuy('perm');
-    document.getElementById('retOnce').onclick = () => retBuy('once');
-    document.getElementById('retCancel').onclick = () => retBuy('cancel');
+    window.__bindTap(document.getElementById('retPerm'), () => retBuy('perm'));
+    window.__bindTap(document.getElementById('retOnce'), () => retBuy('once'));
+    window.__bindTap(document.getElementById('retCancel'), () => retBuy('cancel'));
   }
   refreshRetBtns();
   p.style.display = 'flex';
