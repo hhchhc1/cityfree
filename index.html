@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix218-blast-tower';
+const BUILD = '20261106-fix219-cops-bob';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18682,7 +18682,37 @@ function updateSite(dt) {
 // ---------- 统一每帧更新 + 提示 ----------
 function updateJobs(dt) {
   try { updateTaxi(dt); } catch (e) { console.error('[taxi]', e); }
+  // 【fix219】警局门口警车硬性限流：附近超过 6 辆就清掉多余的
+  function trimCopCrowd() {
+    try {
+      const _cx = 140, _cz = 60, _R = 90, _MAX = 6;
+      const _near = [];
+      for (let i = policeCars.length - 1; i >= 0; i--) {
+        const c = policeCars[i];
+        if (!c) continue;
+        if (Math.hypot(c.x - _cx, c.z - _cz) > _R) continue;
+        _near.push({ arr: policeCars, o: c });
+      }
+      for (let i = cars.length - 1; i >= 0; i--) {
+        const c = cars[i];
+        if (!c) continue;
+        if (!(c.isParkedCop || c.saveKind === 'cop')) continue;
+        if (c === currentCar) continue;
+        if (Math.hypot(c.x - _cx, c.z - _cz) > _R) continue;
+        _near.push({ arr: cars, o: c });
+      }
+      let over = _near.length - _MAX;
+      for (const it of _near) {
+        if (over <= 0) break;
+        try { if (it.o.group) scene.remove(it.o.group); } catch (e) {}
+        const k = it.arr.indexOf(it.o);
+        if (k >= 0) it.arr.splice(k, 1);
+        over--;
+      }
+    } catch (e) {}
+  }
   try { updateWallTorches(performance.now() / 1000); } catch (e) {}   // 【fix204】火把火焰跳动
+  if (!window.__copTrimT || performance.now() - window.__copTrimT > 3000) { window.__copTrimT = performance.now(); try { trimCopCrowd(); } catch (e) {} }
   try { updateSite(dt); } catch (e) { console.error('[site]', e); }
   try { if (currentCar && currentCar.isCrane) updateCrane(currentCar, dt); } catch (e) { console.error('[crane]', e); }
   // HUD 提示
@@ -23198,10 +23228,10 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       }
       if (onGround) {
         const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
-        if (person.position.y <= gy + 0.1) person.position.y = gy;          // 稳稳站在地面/屋顶/台阶
+        if (person.position.y <= gy + 0.1) person.position.y = (Math.abs(person.position.y - gy) < 0.6 ? person.position.y + (gy - person.position.y) * Math.min(1, dt * 20) : gy);          // 稳稳站在地面/屋顶/台阶   // 【fix219】平滑跟随，消除原地上下跳
         else if (person.position.y - gy > FALL_STEP_MAX) {                   // 落差较大 → 转入自由落体
           onGround = false; falling = true; vy = 0;
-        } else person.position.y = gy;                                       // 小落差（台阶/缓坡）直接跟下去，避免一格一格弹
+        } else person.position.y = (Math.abs(person.position.y - gy) < 0.6 ? person.position.y + (gy - person.position.y) * Math.min(1, dt * 20) : gy);                                       // 小落差（台阶/缓坡）直接跟下去，避免一格一格弹
       } else {
         // 自由落体：从高处走下来。重力比跳跃稍大 + 终端速度，
         // 让下落有明显的加速感和"被拽下去"的重量感，而不是匀速平移。
