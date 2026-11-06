@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix211-probe';
+const BUILD = '20261106-fix213-sea-level';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27736,7 +27736,7 @@ window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.9 };   // 【
   scene.add(_br);
 }
   sea.rotation.x = -Math.PI / 2;
-  sea.position.set(500 + 2500, WATER_Y - 0.3, DEST.z);
+  sea.position.set(500 + 2500, -3.6, DEST.z);   // 【fix213】海面原来在 -0.9，比地面低洼处还高 → 机场/草地凹地会冒出"河流"；降到 -3.6，只有真正挖到 -9 的水域才露出海面
   scene.add(sea);
   // (2) 【占位新城】地面 + 沙滩过渡 + 跑道 + 楼群天际线 + 城市名标牌
   const g = new THREE.Group();
@@ -27786,7 +27786,7 @@ window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.9 };   // 【
     dgPos.setY(i, hy);
     // 斑驳噪声波长必须远大于格距（940/94 = 10m），否则采样混叠成条纹
     const jit = (Math.sin(wx * 0.055 + wz * 0.043) * 0.5 + 0.5) * 0.07 - 0.035;
-    if (hy < -1.6) _dc.setHex(0x16303f);                        // 河床深水
+    if (hy < -1.6) _dc.setHex(0x3a93a8);   // 【fix212】河床深水颜色原来是一整片深蓝 0x16303f，水面平面没盖到的地方就露出这块"旧深蓝"；改成和河水同色系
     else if (hy < -0.35) _dc.setHex(0xa8946c);                  // 河岸沙地
     else if (hy < 0.6) _dc.setHex(wx > LH.ancX0 - 26 ? 0x8d8677 : 0x817d75);   // 城区台地（暖石材灰，古建区偏黄石）
     else _dc.setHex(0x3f6630).lerp(_dc2.setHex(0x24401f), Math.min(1, (hy - 0.6) / 5));   // 丘陵草坡
