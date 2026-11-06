@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix233-kit-restore2';
+const BUILD = '20261106-fix234-ret-panel-tap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14704,7 +14704,7 @@ addEventListener('touchstart', e => {
   //   ① 被当成游戏触摸 → 落入摇杆分支 → 摇杆被拉到手指位置（用户报的"轮盘移到左手点的地方"）
   //   ② 随后 e.preventDefault() → 浏览器不合成 click → 三个按钮**全都点不动**
   // 两个症状同一个根因。（我当初只用 CDP 鼠标点击验证过，而手机走的是 touch 事件，漏了。）
-  if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen) return;     // 面板开着：摇杆/视角/攻击全部让位给 UI
+    if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen) return;     // 【fix234】返程面板也要让位，否则手机点不动
   // 【2026-10-15】足球开赛面板开着时同样让位：否则点「开赛」「取消」会穿透到游戏里、把摇杆拉起来
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
   let handled = false;                             // 本次事件是否真的启动了摇杆/视角（启动了才 preventDefault）
@@ -25040,7 +25040,7 @@ function gamePaused() {
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
       || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel')
       || vis('setPanel')
-      || vis('flightPanel')   // 【fix47】机票对话打开时也要暂停世界（否则对话时人物还能乱跑）
+      || vis('flightPanel') || vis('retPanel')   // 【fix47】机票对话打开时也要暂停世界（否则对话时人物还能乱跑）
       // 【2026-10-21·fix38】布局编辑模式也要暂停：玩家在摆按钮时世界必须冻住，
       // 否则背后的车流/NPC 照跑，一退出编辑就"世界自己动了半天"。
       || (typeof layoutEditing !== 'undefined' && layoutEditing);
