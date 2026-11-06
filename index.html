@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix221-water-dbg';
+const BUILD = '20261106-fix222-terrain-edge';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1286,7 +1286,7 @@ function terrainHeight(x, z) {
   // 【fix48】临海市：这张地图只覆盖 ±500，地图外原本会被"四面环海"逻辑压到海平面
   // （WATER_Y ≈ -0.6）。而临海市的地基在 y≈0，于是玩家一走过去就会**陷进地面 0.66m**
   // （实测相机沉到水下、整屏都是水色）。所以给新城单独一块水平地面。
-  if (x > 880 && x < 2020 && z > -840 && z < 280) return linhaiHeight(x, z);   // 【fix50】改用地形高度（原先是恒 0 的平地）
+  if (x > 880 && x < 2415 && z > -1245 && z < 675) return linhaiHeight(x, z);   // 【fix222】原来只到 x<2020 / z>-840，古建城东扩(到 x2180 / z-905)以后那一圈掉进主城丘陵公式 → 地面断掉、脚下露出海水、人站上去上下抖   // 【fix50】改用地形高度（原先是恒 0 的平地）
   const m = Math.max(Math.abs(x), Math.abs(z));   // 用方形判断，保证城市网格（含四角）全平
   const ring = THREE.MathUtils.clamp((m - 205) / 90, 0, 1);   // 城市外才开始丘陵（城市内全平）
   const south = THREE.MathUtils.clamp((z - 190) / 60, 0, 1);  // 南侧压平丘陵，让位给沙滩
