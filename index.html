@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix231-return-board';
+const BUILD = '20261106-fix232-ret-panel';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28822,6 +28822,72 @@ function flightBuy(kind) {
   closeFlightPanel();
   startFlightShow();                              // 付完款直接进入登机→起飞→降落演出
 }
+// 【fix232】返程也做成机票面板（和主城「新的旅途」一样），手机点按钮就能回
+var retPanelOpen = false;
+function refreshRetBtns() {
+  const permed = flightHasPass();
+  const d = document.getElementById('retDesc');
+  const n = document.getElementById('retNote');
+  const bP = document.getElementById('retPerm');
+  const bO = document.getElementById('retOnce');
+  if (d) d.textContent = '少年，还是忘不掉那座熟悉的小城吗？';
+  if (n) n.textContent = '当前金币 ' + gold + (permed ? '　·　永久往返已解锁，返程免费' : '　·　永久往返买一次，以后往返都免费');
+  if (bP) {
+    bP.style.display = permed ? 'none' : 'block';
+    bP.style.opacity = gold >= FLIGHT_PRICE_PERM ? '1' : '0.5';
+    bP.textContent = '永久往返机票　' + FLIGHT_PRICE_PERM + ' 金币';
+  }
+  if (bO) {
+    bO.textContent = permed ? '立即返航（永久机票 · 免费）' : '单次返程机票　' + FLIGHT_PRICE_ONCE + ' 金币';
+    bO.style.opacity = (permed || gold >= FLIGHT_PRICE_ONCE) ? '1' : '0.5';
+  }
+}
+function retBuy(kind) {
+  if (kind === 'cancel') { closeRetPanel(); setHint('已取消：想回去的时候再走到绿色光柱这边'); return; }
+  const permed = flightHasPass();
+  if (kind === 'perm' && !permed) {
+    if (gold < FLIGHT_PRICE_PERM) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_PERM - gold) + ' 金币'); return; }
+    addGold(-FLIGHT_PRICE_PERM); PROGRESS.flightPass = true; saveGame();
+    floatText('- ' + FLIGHT_PRICE_PERM + ' 金币 · 永久往返机票', '#ffd700');
+    setHint('已购买「永久往返机票」：以后往返都免费（已存档）');
+  } else if (kind === 'once' && !permed) {
+    if (gold < FLIGHT_PRICE_ONCE) { setHint('金币不够，还差 ' + (FLIGHT_PRICE_ONCE - gold) + ' 金币'); return; }
+    addGold(-FLIGHT_PRICE_ONCE); saveGame();
+    floatText('- ' + FLIGHT_PRICE_ONCE + ' 金币 · 返程机票', '#ffd700');
+  }
+  closeRetPanel();
+  try { startReturnFlight(); } catch (e) { setHint('返程启动失败：' + e); }
+}
+function openRetPanel() {
+  if (retPanelOpen) { refreshRetBtns(); return; }
+  let p = document.getElementById('retPanel');
+  if (!p) {
+    p = document.createElement('div');
+    p.id = 'retPanel';
+    p.style.cssText = "display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:88;align-items:center;justify-content:center;background:rgba(4,10,18,0.55)";
+    p.innerHTML = "<div style='width:min(92vw,430px);box-sizing:border-box;background:linear-gradient(180deg,#0e2233,#0a1620);border:1px solid #2f6d8f;border-radius:14px;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.65);color:#dff2ff'>" +
+      "<div style='font-size:19px;font-weight:700;color:#8fe3ff;margin-bottom:9px'>✈ 返航</div>" +
+      "<div id='retDesc' style='font-size:15px;line-height:1.7;margin-bottom:9px'></div>" +
+      "<div id='retNote' style='font-size:12px;color:#9fc4d8;margin-bottom:14px'></div>" +
+      "<button id='retPerm' style='display:block;width:100%;margin-bottom:9px;padding:13px;border:0;border-radius:10px;font-size:15px;font-weight:700;color:#08202c;background:linear-gradient(180deg,#ffe9a3,#f5c542);cursor:pointer'></button>" +
+      "<button id='retOnce' style='display:block;width:100%;margin-bottom:9px;padding:13px;border:0;border-radius:10px;font-size:15px;font-weight:700;color:#062018;background:linear-gradient(180deg,#a9f0c8,#4fd08a);cursor:pointer'></button>" +
+      "<button id='retCancel' style='display:block;width:100%;padding:12px;border:1px solid #3a6076;border-radius:10px;font-size:14px;color:#b7d6e6;background:#12283a;cursor:pointer'>暂时不了</button>" +
+      "</div>";
+    document.body.appendChild(p);
+    document.getElementById('retPerm').onclick = () => retBuy('perm');
+    document.getElementById('retOnce').onclick = () => retBuy('once');
+    document.getElementById('retCancel').onclick = () => retBuy('cancel');
+  }
+  refreshRetBtns();
+  p.style.display = 'flex';
+  retPanelOpen = true;
+}
+function closeRetPanel() {
+  const p = document.getElementById('retPanel');
+  if (p) p.style.display = 'none';
+  retPanelOpen = false;
+}
+window.retBuy = retBuy;
 // 每帧检查（非过场时）：走到光柱旁就自动弹出对话，走远了自动收起
 function updateFlightPillar(dt) {
   if (!AIRLINER || FLIGHT) return;
@@ -29115,11 +29181,15 @@ const frameLoop = () => {
       document.body.appendChild(_rb);
       window.__retBtn = _rb;
     }
-    const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
-    if (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 2.6 && performance.now() > (window.__retAutoCd || 0)) { window.__retAutoCd = performance.now() + 3000; window.__retOk = true; }
+    const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
+    // 【fix232】靠近绿色光柱自动弹「返航」机票面板（和主城登机一样），走远自动收起
+    if (!FLIGHT && !RET && person.position.x > 900) {
+      if (_retD2 < 6.5 && state === 'walk') openRetPanel();
+      else if (_retD2 > 9.5) closeRetPanel();
+    }
     const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 6.0);   // 【fix231】提示范围放宽到 6 米
-    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：走进绿色光柱就会自动登机返程（也可点下方「登机返程」）'); }
-    if (window.__retBtn) window.__retBtn.style.display = _nearRet ? 'block' : 'none';
+    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：走进绿色光柱就会自动登机返程（也可点下方「登机返程」）'); }
+    if (window.__retBtn) window.__retBtn.style.display = 'none';   // 【fix232】浮动按钮废弃，改用机票面板
   } catch (e) {}
     if (!FLIGHT && !RET && window.__retOk && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
       // 【fix131】返程也要票：有「永久往返机票」免费；没有就当场付 500 金币；钱不够不放行
