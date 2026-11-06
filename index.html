@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix225-cop-lot-fix';
+const BUILD = '20261106-fix226-grapple-drop';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15006,6 +15006,17 @@ function fireGrapple() {
   }
 }
 function releaseGrapple() {
+  // 【fix226】半空中取消钩爪：被拽的物体必须放回地面，否则会悬在半空（用户实测：勾起来再按一次钩爪，车浮在天上）
+  if (grapple && grapple.mode === 'pull' && grapple.o) {
+    const _o = grapple.o;
+    _o.grappled = false;
+    _o.holdY = undefined; _o.holdX = undefined; _o.holdZ = undefined;
+    const _gy = terrainHeight(_o.x, _o.z);
+    if (_o.group) { _o.group.position.y = _gy; _o.group.rotation.x = 0; }
+    if (_o.y !== undefined) _o.y = _gy;
+    if (_o.vy !== undefined) _o.vy = 0;
+    spawnBurst(_o.x, _o.z, 0xcccccc, 6);
+  }
   grapple = null; gvx = gvy = gvz = 0; vy = 0; climbPhase = 0;
   const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
   onGround = (person.position.y <= gy + 0.05);
