@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix215-cop-clean';
+const BUILD = '20261106-fix216-blast-air';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -16766,7 +16766,7 @@ function blastPeople(x, z, R, dmgAt, killR, vh, oy, by) {
 }
 function applyExplosionDamage(v) {
   const R = 8;   // 伤害半径
-  const dmgAt = d => Math.max(0, Math.round(42 * (1 - d / R)));   // 中心 42，由近及远递减到 0
+  const dmgAt = d => Math.max(0, Math.round(160 * (1 - d / R)));   // 中心 42，由近及远递减到 0   // 【fix216】42→160：原来炸不死人（NPC 血量比 42 高），只会倒地僵直 1 秒
   // 玩家（即使不在车里也受伤）
   const px = (state === 'drive' && currentCar === v) ? v.x : person.position.x;
   const pz = (state === 'drive' && currentCar === v) ? v.z : person.position.z;
@@ -25125,7 +25125,7 @@ function buildLinhaiCity(g) {
       // 于是贴在建筑周围形成一圈看不见的空气墙 —— 用户实测：
       // 「那个空气墙是每一个都存在，每一个城墙围墙都存在，每一个古建筑上好像都有」。
       const _rot = (rx || ry || rz);
-      if (!_rot && !_detNoCol && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8)) {
+    if (!_rot && !_detNoCol && (_h >= 1.5 || _w >= 0.8 || _d >= 0.8) && !((y - _h / 2) > 4 && _w < 3.2 && _d < 3.2)) {   // 【fix216】挂在 4 米以上、体积又小的装饰件（脊兽/灯笼/飞檐角）不再登记碰撞，消除空中看不见的墙
         // 【fix153】minY 原来是写死的 0 —— 于是挂在楼顶/屋檐上的装饰件（灯笼、脊兽、旗杆、匾额）
         // 会从地面拉出一根**看不见的实心柱子**，一直顶到装饰件的高处，玩家还能顺着爬（用户：
         // "还有很多建筑上方还有看不见的空气墙能攀爬"）。改成按物体自身的下沿登记：
