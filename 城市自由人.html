@@ -912,7 +912,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261102-fix200-sea-huge';
+const BUILD = '20261106-fix201-taxi-btn';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18285,6 +18285,7 @@ function taxiAction(v) {
     const d = Math.hypot(p.dest.x - v.x, p.dest.z - v.z);
     if (d < 12) {
       p.state = 'alighting';
+  p.group.visible = true; p.group.scale.set(1, 1, 1);   // 【fix201】下车动画开始先让乘客现身
       v._taxiAnim = { kind: 'leave', p: p, t: 0, stage: 0 };
       taxiAnimLock = 1;
       setHint('乘客正在下车…');
@@ -18306,6 +18307,7 @@ function taxiAction(v) {
   best.fare = taxiFare(Math.hypot(best.dest.x - TAXI_STAND.x, best.dest.z - TAXI_STAND.z) * 1.6);
   best.state = 'boarding2';
   v._taxiAnim = { kind: 'board', p: best, t: 0, stage: 0 };
+  best.group.visible = true; best.group.scale.set(1, 1, 1);   // 【fix201】上车动画开始先让乘客现身
   taxiAnimLock = 1;
   setHint('乘客正在上车…');
   return true;
@@ -18314,6 +18316,7 @@ function updateTaxiAnim(v, dt) {
   const a = v._taxiAnim;
   if (!a) return;
   const p = a.p;
+  if (p && p.group) p.group.visible = true;   // 【fix201】兜底：动画期间一定可见
   if (!p || !p.group) { v._taxiAnim = null; taxiAnimLock = 0; return; }
   a.t += dt;
   if (a.t > 6) {   // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
@@ -18410,7 +18413,38 @@ function updateTaxiAnim(v, dt) {
     }
   }
 }
+// ===== 【fix201】出租车：走到接客点/下客点时，屏幕中间出现一个大按钮 =====
+let _taxiBtnEl = null;
+function _taxiBtn() {
+  if (_taxiBtnEl) return _taxiBtnEl;
+  const b = document.createElement('div');
+  b.id = 'taxiActBtn';
+  b.style.cssText = 'position:fixed;left:50%;top:58%;transform:translate(-50%,-50%);padding:16px 30px;border-radius:16px;background:linear-gradient(180deg,#ffe27a,#f0b429);color:#3a2a00;font-weight:800;font-size:20px;box-shadow:0 6px 22px rgba(0,0,0,.45);z-index:9998;display:none;cursor:pointer;user-select:none;';
+  b.textContent = '接客';
+  b.onclick = () => { try { if (currentCar && currentCar.isTaxi) taxiAction(currentCar); } catch (e) {} };
+  document.body.appendChild(b);
+  _taxiBtnEl = b;
+  return b;
+}
+function _updateTaxiBtn() {
+  const b = _taxiBtn();
+  if (!(state === 'drive' && currentCar && currentCar.isTaxi)) { b.style.display = 'none'; return; }
+  const v = currentCar;
+  if (v._taxiAnim) { b.style.display = 'none'; return; }
+  if (v.passengers && v.passengers.length) {
+    const ps = v.passengers[0];
+    const d = Math.hypot(ps.dest.x - v.x, ps.dest.z - v.z);
+    if (d < 12) { b.textContent = '下客'; b.style.display = 'block'; return; }
+  } else {
+    const standD = Math.hypot(v.x - TAXI_STAND.x, v.z - TAXI_STAND.z);
+    const waiting = (typeof taxiQueue !== 'undefined') && taxiQueue.some(x => x.state === 'waiting');
+    if (standD <= 18 && waiting) { b.textContent = '接客'; b.style.display = 'block'; return; }
+  }
+  b.style.display = 'none';
+}
+
 function updateTaxi(dt) {
+  try { _updateTaxiBtn(); } catch (e) {}   // 【fix201】接客/下客按钮
   if (currentCar && currentCar.isTaxi && currentCar._taxiAnim) updateTaxiAnim(currentCar, dt);
   // 乘客行为
   for (let i = taxiQueue.length - 1; i >= 0; i--) {
