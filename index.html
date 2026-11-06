@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix240-tap-real';
+const BUILD = '20261106-fix242-tap-global';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26990,7 +26990,124 @@ function buildWoodPagoda(cx, cz, B) {
   })();
 
   // ---- ③ 苏州园林：白墙黛瓦 + 月洞门 + 水池荷花 + 假山 + 水榭 + 六角亭 ----
-  // 【fix237】民居百科：走近显示「查看」按钮 + 百科面板（房屋本体在 buildSuzhouGarden 里建）
+  // 【fix242】把 __bindTap / 捕获拦截 / 民居图鉴移到全局（原来误插在 openRetPanel 里，只有面板打开才执行）
+// 【fix240】手机端点不动的通用解决：不依赖 click（游戏全局 touchstart 会 preventDefault 把 click 吃掉），
+// 直接监听 touchstart / mousedown，自己 stopPropagation + preventDefault 后执行回调。
+function __bindTap(el, fn) {
+  if (!el) return;
+  let last = 0;
+  const h = function (e) {
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - last < 320) return;
+    last = now;
+    try { e.stopPropagation(); } catch (x1) {}
+    try { e.preventDefault(); } catch (x2) {}
+    try { fn(); } catch (x3) {}
+  };
+  el.style.touchAction = "manipulation";
+  el.__tapFn = fn;
+  el.addEventListener("touchstart", h, { passive: false });
+  el.addEventListener("pointerdown", h);
+  el.addEventListener("mousedown", h);
+  el.addEventListener("click", h);
+}
+window.__bindTap = __bindTap;
+
+// 【fix241】① 窗口捕获阶段拦截：游戏在 window/document 上注册了 touchstart 并 preventDefault，
+// 导致按钮既收不到 click 也收不到 touchstart。这里在捕获阶段先做命中检测（elementFromPoint），
+// 命中的是我们的面板/按钮，就直接 stopImmediatePropagation + 手动触发 click。
+(function installTapCapture() {
+  const SEL = "#retPanel,#wikiPanel,#folkDex,#folkList";
+  function hit(x, y) {
+    try {
+      const el = document.elementFromPoint(x, y);
+      return el && el.closest ? el.closest(SEL) : null;
+    } catch (e) { return null; }
+  }
+  function onPress(e) {
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    if (t.clientX === undefined) return;
+    if (!hit(t.clientX, t.clientY)) return;
+    try { e.stopImmediatePropagation(); } catch (x1) {}
+    try { e.preventDefault(); } catch (x2) {}
+    let target = null;
+    try { target = document.elementFromPoint(t.clientX, t.clientY); } catch (x3) {}
+    while (target && target !== document.body) {
+      if (target.__tapFn) { try { target.__tapFn(); } catch (x4) {} return; }
+      target = target.parentElement;
+    }
+  }
+  window.addEventListener("touchstart", onPress, true);
+  window.addEventListener("pointerdown", onPress, true);
+  window.addEventListener("mousedown", onPress, true);
+})();
+// 【fix241】② 民居图鉴：常驻按钮，随时能翻四座传统民居的百科（不依赖走到房子旁边）
+(function folkDex() {
+  const INFO = [
+    { name: '徽派民居', tag: '粉墙黛瓦 · 马头墙',
+      text: '流行于安徽南部古徽州与江西婺源一带。外墙雪白（粉墙）、屋面深灰（黛瓦）；山墙高出屋面、做成阶梯状的马头墙（封火墙），既能防火又可装饰。院内以天井为中心，雨水归入堂前，称「四水归堂」；砖、木、石「三雕」精美。2000 年西递、宏村被列入世界文化遗产。' },
+    { name: '北京四合院', tag: '坐北朝南 · 长幼有序',
+      text: '华北地区典型的院落式住宅。坐北朝南，正房居中给长辈，东西厢房住晚辈，倒座房在南侧作客房杂用。大门多开在东南角（巽位），进门迎面设影壁挡风遮视线。院子宽绰、四面围合，讲究「坎宅巽门」，体现传统家族的伦理秩序。' },
+    { name: '江南水乡民居', tag: '临河而建 · 前店后宅',
+      text: '长江下游苏浙一带的临河聚落。粉墙黛瓦、坡屋顶、木格窗，房屋沿河一字排开；前门临街经商、后门临河取水，屋后设河埠头（水码头）洗衣淘米。天井小而深，便于通风避晒，是「小桥流水人家」的原型。' },
+    { name: '福建土楼', tag: '夯土环楼 · 聚族而居',
+      text: '闽西、闽南客家人与闽南人的夯土高楼，有圆楼、方楼等形制。以生土夯筑，外墙厚可达一两米，底层不开窗、顶层设枪眼，防御性极强。楼内一圈圈房间围合中央祖堂与天井，可容数百人聚族而居。2008 年列入世界文化遗产。' }
+  ];
+  let panel = null;
+  function render(view) {
+    if (!panel) return;
+    const body = panel.querySelector('#dexBody');
+    if (view === 'list') {
+      let h = '<div style="font-size:19px;font-weight:700;color:#5a3a1a;margin-bottom:10px">🏛 传统民居图鉴</div>';
+      for (let i = 0; i < INFO.length; i++) {
+        h += '<div class="dexRow" data-i="' + i + '" style="padding:12px;margin-bottom:8px;border-radius:10px;background:#fffaf0;border:1px solid #d8c49a;cursor:pointer">' +
+             '<div style="font-size:16px;font-weight:700;color:#3a2a12">' + INFO[i].name + '</div>' +
+             '<div style="font-size:12.5px;color:#8a6b42;margin-top:2px">' + INFO[i].tag + '</div></div>';
+      }
+      h += '<div id="dexClose" style="margin-top:6px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div>';
+      body.innerHTML = h;
+      const rows = body.querySelectorAll('.dexRow');
+      for (const r of rows) {
+        window.__bindTap(r, function () { render(parseInt(r.getAttribute('data-i'), 10)); });
+      }
+      window.__bindTap(body.querySelector('#dexClose'), function () { panel.style.display = 'none'; });
+    } else {
+      const d = INFO[view] || INFO[0];
+      body.innerHTML = '<div style="font-size:20px;font-weight:700;color:#5a3a1a">' + d.name + '</div>' +
+        '<div style="font-size:13px;color:#8a6b42;margin:4px 0 12px">' + d.tag + '</div>' +
+        '<div style="font-size:14.5px;line-height:1.85">' + d.text + '</div>' +
+        '<div id="dexBack" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#8a6b42;color:#fff;font-size:15px;font-weight:700">返回目录</div>';
+      window.__bindTap(body.querySelector('#dexBack'), function () { render('list'); });
+    }
+  }
+  function open() {
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'folkList';
+      panel.style.cssText = 'display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:89;align-items:center;justify-content:center;background:rgba(4,10,18,0.62)';
+      panel.innerHTML = '<div id="dexBody" style="width:min(92vw,450px);box-sizing:border-box;max-height:78vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218"></div>';
+      document.body.appendChild(panel);
+    }
+    render('list');
+    panel.style.display = 'flex';
+  }
+  function boot() {
+    if (document.getElementById('folkDex')) return;
+    const b = document.createElement('div');
+    b.id = 'folkDex';
+    b.textContent = '🏛 民居图鉴';
+    b.style.cssText = 'position:fixed;left:12px;bottom:300px;z-index:87;padding:11px 15px;border-radius:22px;background:linear-gradient(180deg,#3f8a63,#2b5f45);color:#eaf6ee;font-size:13.5px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45);border:1px solid #7fc4a0';
+    document.body.appendChild(b);
+    window.__bindTap(b, open);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else setTimeout(boot, 400);
+})();
+
+
+
+  
+// 【fix237】民居百科：走近显示「查看」按钮 + 百科面板（房屋本体在 buildSuzhouGarden 里建）
 (function folkWikiUI() {
   let btn = null, panel = null, cur = null, open = false;
   function ensure() {
@@ -28934,27 +29051,7 @@ function refreshRetBtns() {
   const permed = flightHasPass();
   const d = document.getElementById('retDesc');
   const n = document.getElementById('retNote');
-// 【fix240】手机端点不动的通用解决：不依赖 click（游戏全局 touchstart 会 preventDefault 把 click 吃掉），
-// 直接监听 touchstart / mousedown，自己 stopPropagation + preventDefault 后执行回调。
-function __bindTap(el, fn) {
-  if (!el) return;
-  let last = 0;
-  const h = function (e) {
-    const now = (window.performance && performance.now) ? performance.now() : Date.now();
-    if (now - last < 320) return;
-    last = now;
-    try { e.stopPropagation(); } catch (x1) {}
-    try { e.preventDefault(); } catch (x2) {}
-    try { fn(); } catch (x3) {}
-  };
-  el.style.touchAction = "manipulation";
-  el.addEventListener("touchstart", h, { passive: false });
-  el.addEventListener("pointerdown", h);
-  el.addEventListener("mousedown", h);
-  el.addEventListener("click", h);
-}
-window.__bindTap = __bindTap;
-  const bP = document.getElementById('retPerm');
+const bP = document.getElementById('retPerm');
   const bO = document.getElementById('retOnce');
   if (d) d.textContent = '少年，还是忘不掉那座熟悉的小城吗？';
   if (n) n.textContent = '当前金币 ' + gold + (permed ? '　·　永久往返已解锁，返程免费' : '　·　永久往返买一次，以后往返都免费');
