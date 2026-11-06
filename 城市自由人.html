@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix234-ret-panel-tap';
+const BUILD = '20261106-fix235-water-clean';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7453,7 +7453,7 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 
 // ========== 四面环海半透明海面 ==========
 (function addOcean() {
-  const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1a7aaa, transparent: true, opacity: 0.55 });   // 【fix214】主城海面恢复原样
+  const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1f7fb8, transparent: true, opacity: 0.94 });   // 【fix235】原来 0.55 太透，水底草地的绿色透上来变成"绿油油的水"，改成几乎不透明
   const ocean = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2.5, HALF * 2.5), oceanMat);
   window.__oceanMat = oceanMat; window.__oceanMesh = ocean;   // 【fix208】暴露给后面的海面波纹贴图
   ocean.rotation.x = -Math.PI / 2; ocean.position.y = -0.6; scene.add(ocean);
