@@ -919,7 +919,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix219-cops-bob';
+const BUILD = '20261106-fix220-pagoda-hd';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26092,23 +26092,94 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
 
   // ---- ③ 楼阁式木塔（应县木塔风格：五层逐层收分、每层出檐 + 平座栏杆、塔刹）----
-  function buildWoodPagoda(cx, cz, B) {
-    const LV = 5; let y = 0;
-    det(new THREE.CylinderGeometry(B * 1.5, B * 1.72, 1.6, 8), 0xb8b2a4, cx, 0.8, cz);       // 石台基
-    for (let L = 0; L < LV; L++) {
-      const bw = B * (1 - L * 0.085), hh = 5.2 - L * 0.28;
-      det(BX(bw, hh, bw), CY_BEAM, cx, y + 1.6 + hh / 2, cz);                                  // 塔身
-      for (const s of [-1, 1]) {                                                               // 平座栏杆
-        det(BX(bw * 1.34, 0.9, 0.22), 0x6b4a2e, cx, y + 1.6 + hh + 0.45, cz + s * bw * 0.67);
-        det(BX(0.22, 0.9, bw * 1.34), 0x6b4a2e, cx + s * bw * 0.67, y + 1.6 + hh + 0.45, cz);
-      }
-      det(new THREE.ConeGeometry(bw * 1.18, 1.5, 4), CY_TILE, cx, y + 1.6 + hh + 1.5, cz, 0, Math.PI / 4);   // 出檐
-      y += hh + 1.15;
-    }
-    det(new THREE.CylinderGeometry(0.42, 0.62, 3.4, 8), 0xc8a24a, cx, y + 1.6 + 1.9, cz);     // 塔刹
-    det(new THREE.SphereGeometry(0.55, 10, 8), 0xe8c45a, cx, y + 1.6 + 3.9, cz, 0, 0, 0, true);
-    LH_BLD.push({ minX: cx - B * 1.25, maxX: cx + B * 1.25, minZ: cz - B * 1.25, maxZ: cz + B * 1.25, minY: 0, top: y + 1.6 + 4.6 });
+function buildWoodPagoda(cx, cz, B) {
+  // 【fix220】应县木塔重做：石台基三层 + 柱网 + 斗拱 + 平座栏杆 + 四面坡出檐带起翘 + 匾额 + 塔刹
+  const LV = 5;
+  const beamM = CY_BEAM, tileM = CY_TILE;
+  // ---- 台基：三层收分 + 一圈石栏杆 ----
+  det(new THREE.CylinderGeometry(B * 1.30, B * 1.42, 2.2, 8), 0xb8b2a4, cx, 1.1, cz);
+  det(new THREE.CylinderGeometry(B * 1.20, B * 1.26, 0.55, 8), 0xc6c0b2, cx, 2.45, cz);
+  for (let k = 0; k < 36; k++) {
+    const a = k / 36 * Math.PI * 2, rr = B * 1.24;
+    det(BX(0.26, 1.05, 0.26), 0xdcd6c8, cx + Math.cos(a) * rr, 3.25, cz + Math.sin(a) * rr);
+    det(new THREE.SphereGeometry(0.19, 7, 5), 0xdcd6c8, cx + Math.cos(a) * rr, 3.85, cz + Math.sin(a) * rr);
   }
+  let y = 2.75;
+  const tops = [];
+  for (let L2 = 0; L2 < LV; L2++) {
+    const bw = B * (1 - L2 * 0.085), hh = 5.8 - L2 * 0.36;
+    det(BX(bw, hh, bw), beamM, cx, y + hh / 2, cz);                        // 塔身
+    // 柱网：四角 + 每面中间立柱
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      det(BX(0.62, hh, 0.62), 0x59371f, cx + sx * bw * 0.455, y + hh / 2, cz + sz * bw * 0.455);
+    }
+    for (const s2 of [-1, 1]) {
+      det(BX(0.5, hh, 0.5), 0x59371f, cx, y + hh / 2, cz + s2 * bw * 0.455);
+      det(BX(0.5, hh, 0.5), 0x59371f, cx + s2 * bw * 0.455, y + hh / 2, cz);
+    }
+    const by = y + hh;
+    // ---- 斗拱：每面 5 组，两层出跳 ----
+    for (let sd = 0; sd < 4; sd++) {
+      const ang = sd * Math.PI / 2;
+      for (let k = -2; k <= 2; k++) {
+        const off = k * bw * 0.185;
+        const bx2 = cx + Math.cos(ang) * bw * 0.53 - Math.sin(ang) * off;
+        const bz2 = cz + Math.sin(ang) * bw * 0.53 + Math.cos(ang) * off;
+        det(BX(1.55, 0.52, 0.95), 0x7a3f22, bx2, by + 0.28, bz2, 0, ang, 0);
+        det(BX(2.25, 0.34, 1.25), 0x8f4c28, bx2, by + 0.64, bz2, 0, ang, 0);
+        det(BX(0.75, 0.5, 0.75), 0x9a552e, bx2, by + 0.5, bz2, 0, ang, 0);
+      }
+    }
+    // ---- 平座（楼板出挑）+ 栏杆 ----
+    const pw = bw * 1.40;
+    det(BX(pw, 0.4, pw), 0x633f24, cx, by + 0.95, cz);
+    for (const s3 of [-1, 1]) {
+      det(BX(pw, 0.17, 0.22), 0x8d5c35, cx, by + 1.78, cz + s3 * pw * 0.475);
+      det(BX(0.22, 0.17, pw), 0x8d5c35, cx + s3 * pw * 0.475, by + 1.78, cz);
+      for (let k = -4; k <= 4; k++) {
+        det(BX(0.13, 0.85, 0.13), 0x8d5c35, cx + k * pw * 0.105, by + 1.36, cz + s3 * pw * 0.475);
+        det(BX(0.13, 0.85, 0.13), 0x8d5c35, cx + s3 * pw * 0.475, by + 1.36, cz + k * pw * 0.105);
+      }
+    }
+    // ---- 屋檐：四面坡 + 四角起翘 ----
+    const rw = bw * 1.34, rh = 1.75;
+    det(new THREE.ConeGeometry(rw * 1.08, rh, 4), 0x39443d, cx, by + 1.95 + rh / 2, cz, 0, Math.PI / 4);   // 【fix220】屋面改成青灰筒瓦色，不再是翠绿
+    det(new THREE.ConeGeometry(rw * 0.92, 0.55, 4), 0x1f2a33, cx, by + 1.95 + rh + 0.12, cz, 0, Math.PI / 4);   // 屋脊压顶
+    for (let sd2 = 0; sd2 < 4; sd2++) {
+      const a2 = sd2 * Math.PI / 2 + Math.PI / 4;
+      const ex2 = cx + Math.cos(a2) * rw * 0.84, ez2 = cz + Math.sin(a2) * rw * 0.84;
+      det(BX(2.8, 0.26, 0.55), 0x2f3b46, ex2, by + 2.75, ez2, 0, -a2, -0.55);      // 起翘的飞檐角
+      det(new THREE.SphereGeometry(0.3, 7, 5), 0xc8a24a, ex2, by + 3.12, ez2);     // 角铃
+    }
+    // 每层挂 4 盏灯笼（发光）
+    for (let sd3 = 0; sd3 < 4; sd3++) {
+      const a3 = sd3 * Math.PI / 2;
+      det(new THREE.SphereGeometry(0.34, 8, 6), 0xffd08a, cx + Math.cos(a3) * bw * 0.62, by + 2.15, cz + Math.sin(a3) * bw * 0.62, 0, 0, 0, true);
+    }
+    tops.push({ y: by, bw: bw });
+    y = by + 3.5;
+  }
+  // ---- 匾额：最高层正面（南侧）----
+  const tlv = tops[tops.length - 1];
+  det(BX(tlv.bw * 0.56, 1.9, 0.26), 0x2b1a10, cx, tlv.y - 1.5, cz - tlv.bw * 0.56);
+  det(BX(tlv.bw * 0.48, 1.5, 0.1), 0xf0cf78, cx, tlv.y - 1.5, cz - tlv.bw * 0.60, 0, 0, 0, true);
+  det(BX(tlv.bw * 0.56, 0.22, 0.3), 0xc8a24a, cx, tlv.y - 0.5, cz - tlv.bw * 0.56);
+  det(BX(tlv.bw * 0.56, 0.22, 0.3), 0xc8a24a, cx, tlv.y - 2.5, cz - tlv.bw * 0.56);
+  // ---- 塔刹：覆钵 + 相轮 + 宝珠 + 铁链 ----
+  const ty = y;
+  det(new THREE.CylinderGeometry(B * 0.30, B * 0.42, 1.2, 10), 0x8f8a7c, cx, ty + 0.6, cz);
+  det(new THREE.SphereGeometry(B * 0.28, 12, 9), 0xc8a24a, cx, ty + 1.5, cz);
+  for (let k = 0; k < 4; k++) {
+    det(new THREE.TorusGeometry(B * (0.26 - k * 0.045), 0.13, 6, 16), 0xd8b45c, cx, ty + 2.2 + k * 0.55, cz, Math.PI / 2);
+  }
+  det(new THREE.ConeGeometry(B * 0.14, 2.2, 8), 0xd8b45c, cx, ty + 4.6, cz);
+  det(new THREE.SphereGeometry(B * 0.13, 10, 8), 0xffe08a, cx, ty + 5.9, cz, 0, 0, 0, true);
+  for (let k = 0; k < 8; k++) {
+    const a4 = k / 8 * Math.PI * 2;
+    det(BX(0.09, 0.09, B * 1.05), 0x9a8f7a, cx + Math.cos(a4) * B * 0.52, ty + 1.9, cz + Math.sin(a4) * B * 0.52, 0, -a4, -0.42);
+  }
+  LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, maxZ: cz + B * 1.15, minY: 0, top: ty + 6.5 });
+}
 
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
   buildWoodPagoda(2055, ZC - 150, 20);   // 【fix218】16→20   // 【fix217】塔身放大 11->16
