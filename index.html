@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix247-orig-buildings';
+const BUILD = '20261106-fix248-dex-small';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27469,7 +27469,7 @@ window.__bindTap = __bindTap;
     const b = document.createElement('div');
     b.id = 'folkDex';
     b.textContent = '🏛 民居图鉴';
-    b.style.cssText = 'position:fixed;left:12px;bottom:300px;z-index:9991;padding:11px 15px;border-radius:22px;background:linear-gradient(180deg,#3f8a63,#2b5f45);color:#eaf6ee;font-size:13.5px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45);border:1px solid #7fc4a0';
+    b.style.cssText = 'position:fixed;left:10px;bottom:292px;z-index:9991;padding:6px 10px;border-radius:14px;background:linear-gradient(180deg,rgba(63,138,99,.92),rgba(43,95,69,.92));color:#eaf6ee;font-size:11.5px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.4);border:1px solid rgba(127,196,160,.9);opacity:.92';
     document.body.appendChild(b);
     window.__bindTap(b, openList);
   }
