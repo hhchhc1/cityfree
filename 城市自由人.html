@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix313-yongdao';
+const BUILD = '20261107-fix314-garden';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27010,6 +27010,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       plaque('荷芷', AX, TH - 1.9, GZ + TD / 2 + 0.25, 6.4, 2.3, '#2b3a5c', '#e8c86a');
       // 城台顶：谯楼（重檐二层）
       det(BX(TW + 1.4, 0.5, TD + 1.4), 0xb6b0a2, AX, TH + 0.25, GZ);
+      // 【fix314】门楼檐下斗拱 + 彩画
+      for (let i = 0; i < 12; i++) {
+        const bx3 = AX - TW / 2 + 1.6 + i * (TW - 3.2) / 11;
+        det(BX(0.9, 0.55, 1.1), (i % 2 ? 0x2e6b4c : 0x27456e), bx3, TH + 0.55, GZ + TD / 2 + 0.35);
+      }
+      det(BX(TW, 0.5, 0.32), 0xc8a24a, AX, TH + 0.2, GZ + TD / 2 + 0.35);
+      
       // 【fix313】城台垛口（照片里谯楼下面那圈城墙垛子）
       for (const s of [-1, 1]) {
         for (let i = 0; i < 11; i++) {
@@ -27118,6 +27125,28 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
     }
 
+    // 【fix314】院落陈设：花坛 / 松柏 / 石灯 / 大鼓（让院子不再是一整片空地）
+    (function garden() {
+      const spots = [
+        [1938, -270], [2112, -270], [1938, -440], [2112, -440],
+        [1938, -600], [2112, -600], [1962, -150], [2088, -150]
+      ];
+      for (const p of spots) {
+        det(BX(3.4, 0.7, 3.4), 0xb0aa9e, p[0], 0.35, p[1]);
+        det(BX(3.0, 0.35, 3.0), 0x4a3a24, p[0], 0.85, p[1]);
+        det(new THREE.CylinderGeometry(0.42, 0.52, 5.2, 8), 0x5a3a24, p[0], 3.6, p[1]);
+        det(new THREE.SphereGeometry(2.7, 9, 7), 0x2f6238, p[0], 7.0, p[1]);
+        det(new THREE.SphereGeometry(1.9, 8, 6), 0x36703f, p[0] + 1.4, 5.6, p[1] + 1.2);
+        det(new THREE.SphereGeometry(1.6, 8, 6), 0x2b5730, p[0] - 1.6, 5.2, p[1] - 1.1);
+      }
+      // 大门前的大鼓一对
+      for (const s of [-1, 1]) {
+        det(new THREE.CylinderGeometry(1.15, 1.15, 1.5, 14), 0x8a2f2a, AX + s * 20, 1.5, -232);
+        det(new THREE.CylinderGeometry(1.2, 1.2, 0.2, 14), 0xc8a24a, AX + s * 20, 2.2, -232);
+        det(BX(2.4, 0.5, 2.4), 0x6d3a20, AX + s * 20, 0.7, -232);
+      }
+    })();
+    
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
     wing(1905, -186, 10, 48, 4.8); plaque3d('西三房', 1905, 4.6, -207, 5.2, 1.8, '#1b2a4a', '#e8c86a');
     wing(2145, -186, 10, 48, 4.8); plaque3d('东三房', 2145, 4.6, -207, 5.2, 1.8, '#1b2a4a', '#e8c86a');
