@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix246-flight-rain';
+const BUILD = '20261106-fix247-orig-buildings';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27037,130 +27037,13 @@ window.__bindTap = __bindTap;
   window.addEventListener("mousedown", onPress, true);
 })();
 // 【fix241】② 民居图鉴：常驻按钮，随时能翻四座传统民居的百科（不依赖走到房子旁边）
-(function folkDex() {
-  const INFO = [
-    { name: '徽派民居', tag: '粉墙黛瓦 · 马头墙',
-      text: '流行于安徽南部古徽州与江西婺源一带。外墙雪白（粉墙）、屋面深灰（黛瓦）；山墙高出屋面、做成阶梯状的马头墙（封火墙），既能防火又可装饰。院内以天井为中心，雨水归入堂前，称「四水归堂」；砖、木、石「三雕」精美。2000 年西递、宏村被列入世界文化遗产。' },
-    { name: '北京四合院', tag: '坐北朝南 · 长幼有序',
-      text: '华北地区典型的院落式住宅。坐北朝南，正房居中给长辈，东西厢房住晚辈，倒座房在南侧作客房杂用。大门多开在东南角（巽位），进门迎面设影壁挡风遮视线。院子宽绰、四面围合，讲究「坎宅巽门」，体现传统家族的伦理秩序。' },
-    { name: '江南水乡民居', tag: '临河而建 · 前店后宅',
-      text: '长江下游苏浙一带的临河聚落。粉墙黛瓦、坡屋顶、木格窗，房屋沿河一字排开；前门临街经商、后门临河取水，屋后设河埠头（水码头）洗衣淘米。天井小而深，便于通风避晒，是「小桥流水人家」的原型。' },
-    { name: '福建土楼', tag: '夯土环楼 · 聚族而居',
-      text: '闽西、闽南客家人与闽南人的夯土高楼，有圆楼、方楼等形制。以生土夯筑，外墙厚可达一两米，底层不开窗、顶层设枪眼，防御性极强。楼内一圈圈房间围合中央祖堂与天井，可容数百人聚族而居。2008 年列入世界文化遗产。' }
-  ];
-  const COORDS = { 徽派民居: [1762, 62], 北京四合院: [1762, 122], 江南水乡民居: [1762, 182], 福建土楼: [1762, 242] };
-  // 【fix243】不依赖 3D 模型是否建出来：四座民居的坐标与文案在这里一次性登记
-  window.__folkData = INFO.map(function (d) {
-    const c = COORDS[d.name] || [0, 0];
-    return { name: d.name, tag: d.tag, text: d.text, x: c[0], z: c[1] };
-  });
-  let panel = null;
-  function render(view) {
-    if (!panel) return;
-    const body = panel.querySelector('#dexBody');
-    if (view === 'list') {
-      let h = '<div style="font-size:19px;font-weight:700;color:#5a3a1a;margin-bottom:10px">🏛 传统民居图鉴</div>';
-      for (let i = 0; i < INFO.length; i++) {
-        h += '<div class="dexRow" data-i="' + i + '" style="padding:12px;margin-bottom:8px;border-radius:10px;background:#fffaf0;border:1px solid #d8c49a;cursor:pointer">' +
-             '<div style="font-size:16px;font-weight:700;color:#3a2a12">' + INFO[i].name + '</div>' +
-             '<div style="font-size:12.5px;color:#8a6b42;margin-top:2px">' + INFO[i].tag + '</div></div>';
-      }
-      h += '<div id="dexClose" style="margin-top:6px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div>';
-      body.innerHTML = h;
-      const rows = body.querySelectorAll('.dexRow');
-      for (const r of rows) {
-        window.__bindTap(r, function () { render(parseInt(r.getAttribute('data-i'), 10)); });
-      }
-      window.__bindTap(body.querySelector('#dexClose'), function () { panel.style.display = 'none'; });
-    } else {
-      const d = INFO[view] || INFO[0];
-      body.innerHTML = '<div style="font-size:20px;font-weight:700;color:#5a3a1a">' + d.name + '</div>' +
-        '<div style="font-size:13px;color:#8a6b42;margin:4px 0 12px">' + d.tag + '</div>' +
-        '<div style="font-size:14.5px;line-height:1.85">' + d.text + '</div>' +
-        '<div id="dexBack" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#8a6b42;color:#fff;font-size:15px;font-weight:700">返回目录</div>';
-      window.__bindTap(body.querySelector('#dexBack'), function () { render('list'); });
-    }
-  }
-  function open() {
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'folkList';
-      panel.style.cssText = 'display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:9992;align-items:center;justify-content:center;background:rgba(4,10,18,0.62)';
-      panel.innerHTML = '<div id="dexBody" style="width:min(92vw,450px);box-sizing:border-box;max-height:78vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218"></div>';
-      document.body.appendChild(panel);
-    }
-    render('list');
-    panel.style.display = 'flex';
-  }
-  function boot() {
-    if (document.getElementById('folkDex')) return;
-    const b = document.createElement('div');
-    b.id = 'folkDex';
-    b.textContent = '🏛 民居图鉴';
-    b.style.cssText = 'position:fixed;left:12px;bottom:300px;z-index:9991;padding:11px 15px;border-radius:22px;background:linear-gradient(180deg,#3f8a63,#2b5f45);color:#eaf6ee;font-size:13.5px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45);border:1px solid #7fc4a0';
-    document.body.appendChild(b);
-    window.__bindTap(b, open);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else setTimeout(boot, 400);
-})();
+
 
 
 
   
 // 【fix237】民居百科：走近显示「查看」按钮 + 百科面板（房屋本体在 buildSuzhouGarden 里建）
-(function folkWikiUI() {
-  let btn = null, panel = null, cur = null, open = false;
-  function ensure() {
-    if (btn) return true;
-    btn = document.createElement("div");
-    btn.style.cssText = "display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:9990;padding:14px 26px;border-radius:30px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:17px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)";
-    document.body.appendChild(btn);
-    window.__bindTap(btn, function () { if (cur) show(cur); });
-    return true;
-  }
-  function show(d) {
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.id = "wikiPanel";
-      panel.style.cssText = "display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:9993;align-items:center;justify-content:center;background:rgba(4,10,18,0.6)";
-      panel.innerHTML = '<div style="width:min(92vw,470px);box-sizing:border-box;max-height:80vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:20px 18px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218">' +
-        '<div id="wikiTitle" style="font-size:21px;font-weight:700;color:#5a3a1a;margin-bottom:4px"></div>' +
-        '<div id="wikiTag" style="font-size:13px;color:#8a6b42;margin-bottom:12px"></div>' +
-        '<div id="wikiText" style="font-size:14.5px;line-height:1.85"></div>' +
-        '<div id="wikiClose" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div></div>';
-      document.body.appendChild(panel);
-      window.__bindTap(panel.querySelector("#wikiClose"), function () { panel.style.display = "none"; open = false; });
-    }
-    panel.querySelector("#wikiTitle").textContent = d.name;
-    panel.querySelector("#wikiTag").textContent = d.tag;
-    panel.querySelector("#wikiText").textContent = d.text;
-    panel.style.display = "flex";
-    open = true;
-    if (btn) btn.style.display = "none";
-  }
-  window.__wikiPanelOpen = function () { return open; };
-  function tick() {
-    try {
-      const DATA = window.__folkData || [];
-      if (typeof FLIGHT !== "undefined" && (FLIGHT || (typeof RET !== "undefined" && RET))) { if (btn) btn.style.display = "none"; return; }
-      if (!DATA.length || typeof person === "undefined" || !person) return;
-      ensure();
-      let best = null, bd = 1e9;
-      for (const d of DATA) {
-        const dd = Math.hypot(person.position.x - d.x, person.position.z - d.z);
-        if (dd < bd) { bd = dd; best = d; }
-      }
-      if (open && bd > 9.5) { if (panel) panel.style.display = "none"; open = false; }
-      if (!open && bd < 5.0 && best) { cur = best; show(best); return; }
-      if (open) { btn.style.display = "none"; return; }
-      cur = bd < 14 ? best : null;
-      if (cur) { btn.textContent = "📖 查看 · " + cur.name; btn.style.display = "block"; }
-      else if (btn) btn.style.display = "none";
-    } catch (err) {}
-  }
-  setInterval(tick, 400);
-})();
+
 
 (function buildSuzhouGarden() {
     const GX0 = 1700, GX1 = 2040, GZ0 = 10, GZ1 = 292;
@@ -27455,73 +27338,169 @@ window.__bindTap = __bindTap;
       det(BX(1.8, 0.5, 6.2), WOOD, 2020, 0.55, z + 3);
     }
     det(BX(11, 0.42, 190), TILE, 2020, 3.55, 153, 0, 0, 0.06);
-// 【fix237】传统民居 4 座：徽派 / 北京四合院 / 江南水乡 / 福建土楼（门前立名牌，走近可查看百科）
-window.__folkData = window.__folkData || [];
-try {
-  const FOLK = [
-    { name: "徽派民居", tag: "粉墙黛瓦 · 马头墙", x: 1762, z: 62, kind: "hui",
-      text: "流行于安徽南部古徽州与江西婺源一带。外墙雪白（粉墙）、屋面深灰（黛瓦）；山墙高出屋面、做成阶梯状的马头墙（封火墙），既能防火又可装饰。院内以天井为中心，雨水归入堂前，称『四水归堂』；砖、木、石『三雕』精美。2000 年西递、宏村被列入世界文化遗产。" },
-    { name: "北京四合院", tag: "坐北朝南 · 长幼有序", x: 1762, z: 122, kind: "siheyuan",
-      text: "华北地区典型的院落式住宅。坐北朝南，正房居中给长辈，东西厢房住晚辈，倒座房在南侧作客房杂用。大门多开在东南角（巽位），进门迎面设影壁挡风遮视线。院子宽绰、四面围合，讲究『坎宅巽门』，体现传统家族的伦理秩序。" },
-    { name: "江南水乡民居", tag: "临河而建 · 前店后宅", x: 1762, z: 182, kind: "jiangnan",
-      text: "长江下游苏浙一带的临河聚落。粉墙黛瓦、坡屋顶、木格窗，房屋沿河一字排开；前门临街经商、后门临河取水，屋后设河埠头（水码头）洗衣淘米。天井小而深，便于通风避晒，是『小桥流水人家』的原型。" },
-    { name: "福建土楼", tag: "夯土环楼 · 聚族而居", x: 1762, z: 242, kind: "tulou",
-      text: "闽西、闽南客家人与闽南人的夯土高楼，有圆楼、方楼等形制。以生土夯筑，外墙厚可达一两米，底层不开窗、顶层设枪眼，防御性极强。楼内一圈圈房间围合中央祖堂与天井，可容数百人聚族而居。2008 年列入世界文化遗产。" }
+
+
+// 【fix247】民居/古建图鉴：常驻按钮 + 走近光柱自动显示简介
+(function folkWikiAll() {
+  const INFO = [
+    { name: '鼓楼', tag: '重檐 · 晨钟暮鼓',
+      text: '古代城市的报时与报警建筑，多立于城中心十字街口。下层为砖石台基、中开券门供人车通行；上层架设大鼓，晨钟暮鼓报时，遇警则击鼓传讯。屋顶多为重檐歇山或庑殿顶，是城中等级最高的建筑之一。' },
+    { name: '古塔', tag: '楼阁式 · 塔刹',
+      text: '塔随佛教传入中国后与木构楼阁结合，形成「楼阁式塔」：层层出檐、每层设平座栏杆，可登临远眺。塔顶为塔刹（覆钵、相轮、宝珠），既是宗教标志，也是古代城市天际线的焦点。' },
+    { name: '牌楼', tag: '四柱三间 · 三重檐',
+      text: '中国传统入口标志性建筑，多立于街口、寺观或园林门前。四柱三间、层层出檐，上悬匾额题名；木构用红柱朱漆，石构则雕龙刻字。它起标榜、引导与分隔空间的作用，是"門面"的建筑化表达。' },
+    { name: '月洞门', tag: '圆门框景 · 一步一景',
+      text: '江南园林常见的圆形门洞：墙上开圆洞，不装门扇。它既是通道，又是取景框——透过圆洞看对面景致，像一幅圆形的画，这就是中国园林"框景"手法的典型，所谓"一步一景"。' },
+    { name: '水榭', tag: '临水而筑 · 美人靠',
+      text: '建在水边或水上的开敞建筑。平台挑出水面，四周设"美人靠"（曲尺形坐栏），是赏荷、观鱼、纳凉之处。屋顶多为歇山式，体量轻巧通透，与水面互为映照。' },
+    { name: '六角亭', tag: '攒尖顶 · 宝顶',
+      text: '亭是园林里最典型的"点景"建筑：四面通透、不设墙。六角亭六柱六角，顶部为攒尖顶（各条垂脊聚于一点），顶上安宝顶，供人停步歇脚、四面观景。' },
+    { name: '主厅', tag: '三开间 · 歇山顶',
+      text: '厅堂是宅第或园林的主体建筑，用于会客、宴饮。三开间（明间宽、次间窄），前设廊、红柱朱漆，屋顶为歇山顶（一条正脊、四条垂脊），檐下施斗拱，等级高于民居。' },
+    { name: '徽派民居', tag: '粉墙黛瓦 · 马头墙',
+      text: '流行于安徽南部古徽州与江西婺源一带。外墙雪白（粉墙）、屋面深灰（黛瓦）；山墙高出屋面、做成阶梯状的马头墙（封火墙），既能防火又可装饰。院内以天井为中心，雨水归入堂前，称「四水归堂」。2000 年西递、宏村列入世界文化遗产。' },
+    { name: '北京四合院', tag: '坐北朝南 · 长幼有序',
+      text: '华北地区典型的院落式住宅。坐北朝南，正房居中给长辈，东西厢房住晚辈，倒座房在南侧作客房杂用。大门多开在东南角（巽位），进门迎面设影壁挡风遮视线，讲究「坎宅巽门」，体现家族伦理秩序。' },
+    { name: '江南水乡民居', tag: '临河而建 · 前店后宅',
+      text: '长江下游苏浙一带的临河聚落。粉墙黛瓦、坡屋顶、木格窗，房屋沿河一字排开；前门临街经商、后门临河取水，屋后设河埠头（水码头）。天井小而深，便于通风避晒，是「小桥流水人家」的原型。' },
+    { name: '福建土楼', tag: '夯土环楼 · 聚族而居',
+      text: '闽西、闽南客家人与闽南人的夯土高楼，有圆楼、方楼等形制。以生土夯筑，外墙厚可达一两米，底层不开窗、顶层设枪眼，防御性极强。楼内房间围合中央祖堂与天井，可容数百人聚族而居。2008 年列入世界文化遗产。' },
+    { name: '吊脚楼', tag: '依山傍水 · 底层架空',
+      text: '湘西、黔东南、渝东南等山区苗族、土家族、侗族的传统民居。依山就势，用木柱把房屋前半部架空在陡坡或河岸上，形成"吊脚"；底层堆物或养牲畜，上层住人，通风防潮，还能避蛇虫与洪水。' },
+    { name: '陕北窑洞', tag: '黄土拱券 · 冬暖夏凉',
+      text: '黄土高原上利用黄土直立性挖筑的拱形住宅，有靠崖式、下沉式（地坑院）、独立式等。拱券结构承重，厚土保温，冬暖夏凉、节省木材；窑脸装木门窗、炕连灶，被称为"没有建筑师的建筑"。' },
+    { name: '蒙古包', tag: '木架毡包 · 逐水草而居',
+      text: '蒙古族等游牧民族的移动式住所。木制骨架（哈那、乌尼、套脑）外覆毛毡，圆形平面抗风，顶部天窗采光通风；拆卸组装只需一两个小时，用勒勒车驮运，完全适应逐水草而居的生活。' }
   ];
-  for (const f of FOLK) {
-    const x = f.x, z = f.z;
-    det(BX(12, 0.5, 9), 0x9aa0a4, x, 0.25, z);
-    if (f.kind === "tulou") {
-      const cy = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.8, 6.6, 18, 1, true),
-        new THREE.MeshLambertMaterial({ color: 0xc9b184, side: THREE.DoubleSide }));
-      cy.position.set(x, 3.3, z); scene.add(cy);
-      det(new THREE.CylinderGeometry(6.1, 6.1, 0.55, 18), 0x3b3f45, x, 6.95, z);
-      det(new THREE.CylinderGeometry(3.2, 3.2, 0.3, 14), 0x7c4a2c, x, 0.55, z);
-      if (window.LH_BLD) LH_BLD.push({ minX: x - 6, maxX: x + 6, minZ: z - 6, maxZ: z + 6, minY: 0, top: 7.4 });
-    } else {
-      det(BX(9.6, 3.4, 6.8), 0xefeade, x, 2.2, z);
-      det(new THREE.ConeGeometry(7.6, 2.4, 4), 0x3b3f45, x, 5.1, z, 0, Math.PI / 4);
-      det(BX(1.0, 2.2, 0.24), 0x7c4a2c, x, 1.6, z - 3.45);
-      for (const sx of [-1, 1]) det(BX(2.0, 1.4, 0.2), 0x2b3138, x + sx * 2.9, 2.7, z - 3.44);
-      if (f.kind === "hui") {
-        for (const sx of [-1, 1]) {
-          det(BX(0.55, 4.3, 7.3), 0xefeade, x + sx * 4.95, 2.65, z);
-          det(BX(0.8, 0.4, 7.5), 0x3b3f45, x + sx * 4.95, 4.9, z);
-          det(BX(0.55, 5.4, 3.0), 0xefeade, x + sx * 4.95, 3.2, z);
-          det(BX(0.8, 0.4, 3.2), 0x3b3f45, x + sx * 4.95, 6.0, z);
-        }
+  const byName = {};
+  for (const d of INFO) byName[d.name] = d;
+  let btn = null, panel = null, listPanel = null, cur = null, open = false;
+
+  function ensureBtn() {
+    if (btn) return;
+    btn = document.createElement('div');
+    btn.id = 'folkViewBtn';
+    btn.style.cssText = 'display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:9990;padding:13px 24px;border-radius:28px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)';
+    document.body.appendChild(btn);
+    window.__bindTap(btn, function () { if (cur) show(cur); });
+  }
+
+  function show(d) {
+    if (!d) return;
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'wikiPanel';
+      panel.style.cssText = 'display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:9993;align-items:center;justify-content:center;background:rgba(4,10,18,0.6)';
+      panel.innerHTML = '<div style="width:min(92vw,470px);box-sizing:border-box;max-height:80vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:20px 18px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218">' +
+        '<div id="wikiTitle" style="font-size:21px;font-weight:700;color:#5a3a1a;margin-bottom:4px"></div>' +
+        '<div id="wikiTag" style="font-size:13px;color:#8a6b42;margin-bottom:12px"></div>' +
+        '<div id="wikiText" style="font-size:14.5px;line-height:1.85"></div>' +
+        '<div id="wikiClose" style="margin-top:16px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div></div>';
+      document.body.appendChild(panel);
+      window.__bindTap(panel.querySelector('#wikiClose'), function () { panel.style.display = 'none'; open = false; window.__wikiCd = performance.now() + 4000; });
+    }
+    panel.querySelector('#wikiTitle').textContent = d.name;
+    panel.querySelector('#wikiTag').textContent = d.tag;
+    panel.querySelector('#wikiText').textContent = d.text;
+    panel.style.display = 'flex';
+    open = true;
+    if (btn) btn.style.display = 'none';
+  }
+
+  function renderList() {
+    if (!listPanel) return;
+    const body = listPanel.querySelector('#dexBody');
+    let h = '<div style="font-size:19px;font-weight:700;color:#5a3a1a;margin-bottom:10px">🏛 传统民居与古建图鉴</div>';
+    for (let i = 0; i < INFO.length; i++) {
+      h += '<div class="dexRow" data-n="' + i + '" style="padding:11px;margin-bottom:7px;border-radius:10px;background:#fffaf0;border:1px solid #d8c49a">' +
+           '<div style="font-size:15.5px;font-weight:700;color:#3a2a12">' + INFO[i].name + '</div>' +
+           '<div style="font-size:12.5px;color:#8a6b42;margin-top:2px">' + INFO[i].tag + '</div></div>';
+    }
+    h += '<div id="dexClose" style="margin-top:8px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div>';
+    body.innerHTML = h;
+    const rows = body.querySelectorAll('.dexRow');
+    for (const r of rows) {
+      window.__bindTap(r, function () {
+        listPanel.style.display = 'none';
+        show(INFO[parseInt(r.getAttribute('data-n'), 10)]);
+      });
+    }
+    window.__bindTap(body.querySelector('#dexClose'), function () { listPanel.style.display = 'none'; });
+  }
+
+  function openList() {
+    if (!listPanel) {
+      listPanel = document.createElement('div');
+      listPanel.id = 'folkList';
+      listPanel.style.cssText = 'display:none;position:fixed;left:0;top:0;width:100%;height:100%;z-index:9992;align-items:center;justify-content:center;background:rgba(4,10,18,0.62)';
+      listPanel.innerHTML = '<div id="dexBody" style="width:min(92vw,460px);box-sizing:border-box;max-height:80vh;overflow:auto;background:linear-gradient(180deg,#f7f1e0,#efe6d2);border:1px solid #b79b6a;border-radius:14px;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.6);color:#2b2218"></div>';
+      document.body.appendChild(listPanel);
+    }
+    renderList();
+    listPanel.style.display = 'flex';
+  }
+
+  function tick() {
+    try {
+      const M = window.__folkMarkers || [];
+      if (!M.length || typeof person === 'undefined' || !person) return;
+      if (typeof FLIGHT !== 'undefined' && (FLIGHT || (typeof RET !== 'undefined' && RET))) { if (btn) btn.style.display = 'none'; return; }
+      ensureBtn();
+      let best = null, bd = 1e9;
+      for (const m of M) {
+        const dd = Math.hypot(person.position.x - m.x, person.position.z - m.z);
+        if (dd < bd) { bd = dd; best = m; }
       }
-      if (window.LH_BLD) LH_BLD.push({ minX: x - 5.5, maxX: x + 5.5, minZ: z - 4, maxZ: z + 4, minY: 0, top: 6.6 });
-    }
-    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 128;
-    const c2 = cv.getContext("2d");
-    c2.fillStyle = "#f6f1e2"; c2.fillRect(0, 0, 512, 128);
-    c2.strokeStyle = "#7c4a2c"; c2.lineWidth = 10; c2.strokeRect(8, 8, 496, 112);
-    c2.fillStyle = "#2b2218"; c2.font = "bold 64px Microsoft YaHei, SimHei, sans-serif";
-    c2.textAlign = "center"; c2.textBaseline = "middle";
-    c2.fillText(f.name, 256, 68);
-    // 【fix244】民居旁的光柱：远远就能看见"要走到这里"
-    {
-      const pc = f.kind === "hui" ? 0x8ce0ff : (f.kind === "siheyuan" ? 0xffd98a : (f.kind === "jiangnan" ? 0x9dffc4 : 0xffc48a));
-      const px2 = x + 7.2, pz2 = z - 1.5;
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.05, 7.2, 14, 1, true),
-        new THREE.MeshBasicMaterial({ color: pc, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
-      beam.position.set(px2, 3.6, pz2); scene.add(beam);
-      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 7.2, 10, 1, true),
-        new THREE.MeshBasicMaterial({ color: pc, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-      core.position.set(px2, 3.6, pz2); scene.add(core);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.16, 8, 22),
-        new THREE.MeshBasicMaterial({ color: pc, transparent: true, opacity: 0.75 }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(px2, 0.12, pz2); scene.add(ring);
-      window.__folkPillars = window.__folkPillars || [];
-      window.__folkPillars.push({ name: f.name, x: px2, z: pz2 });
-    }
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.35),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, side: THREE.DoubleSide }));
-    plate.position.set(x, 2.9, z - (f.kind === "tulou" ? 6.2 : 4.2));
-    plate.rotation.y = Math.PI;
-    scene.add(plate);
-    if (!window.__folkData.some(function (q) { return q.name === f.name; })) window.__folkData.push({ name: f.name, tag: f.tag, text: f.text, x: x, z: z });
+      if (open && bd > 10.5) { if (panel) panel.style.display = 'none'; open = false; window.__wikiCd = performance.now() + 2500; }
+      if (!open && bd < 5.0 && best && performance.now() > (window.__wikiCd || 0)) { cur = byName[best.name] || null; if (cur) { show(cur); return; } }
+      if (open) { btn.style.display = 'none'; return; }
+      cur = (bd < 30 && best) ? (byName[best.name] || null) : null;
+      if (cur) {
+        const lbl = '📖 查看 · ' + cur.name;
+        if (window.__folkLbl !== lbl) { window.__folkLbl = lbl; btn.textContent = lbl; }
+        if (window.__folkShown !== 1) { window.__folkShown = 1; btn.style.display = 'block'; }
+      } else if (btn && window.__folkShown !== 0) { window.__folkShown = 0; btn.style.display = 'none'; }
+    } catch (e) {}
+  }
+  setInterval(tick, 400);
+
+  function boot() {
+    if (document.getElementById('folkDex')) return;
+    const b = document.createElement('div');
+    b.id = 'folkDex';
+    b.textContent = '🏛 民居图鉴';
+    b.style.cssText = 'position:fixed;left:12px;bottom:300px;z-index:9991;padding:11px 15px;border-radius:22px;background:linear-gradient(180deg,#3f8a63,#2b5f45);color:#eaf6ee;font-size:13.5px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45);border:1px solid #7fc4a0';
+    document.body.appendChild(b);
+    window.__bindTap(b, openList);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else setTimeout(boot, 500);
+})();
+
+// 【fix247】原有传统建筑旁立光柱 + 登记资料点（不再新建房屋，只标注园林里本来就有的建筑）
+window.__folkMarkers = [];
+try {
+  const SPOTS = [
+    { name: "牌楼",   x: 1870, z: -4,   dx: 9.5,  dz: -3,   color: 0xffd08a },
+    { name: "月洞门", x: 1870, z: 11,   dx: -9.5, dz: 3,    color: 0xa9e8ff },
+    { name: "水榭",   x: 1832, z: 139,  dx: 10.5, dz: -8,   color: 0x9dffc4 },
+    { name: "六角亭", x: 1772, z: 232,  dx: 8.5,  dz: 0,    color: 0xffc48a },
+    { name: "主厅",   x: 1962, z: 248,  dx: -16,  dz: -11,  color: 0xd8b4ff },
+    { name: "鼓楼",   x: 1790, z: -285, dx: 14,   dz: 0,    color: 0xffb0b0 },
+    { name: "古塔",   x: 1708, z: -285, dx: -13,  dz: 0,    color: 0xb9d6ff }
+  ];
+  for (const s of SPOTS) {
+    const px = s.x + s.dx, pz = s.z + s.dz;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
+      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+    beam.position.set(px, 3.5, pz); scene.add(beam);
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 7.0, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+    core.position.set(px, 3.5, pz); scene.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 8, 22),
+      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.75 }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring);
+    window.__folkMarkers.push({ name: s.name, x: px, z: pz });
   }
 } catch (e) { window.__folkErr = String(e); }
 
