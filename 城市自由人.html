@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix255-photos-embed';
+const BUILD = '20261106-fix256-axe-preview';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -10893,34 +10893,49 @@ function makeBatModel() {
   return g;
 }
 function makeAxeModel() {
+  // 【fix256】原来的斧头是用一堆薄片 profile 拼的，在商店旋转预览里看着像"两根竖棍加一块楔子"。
+  // 现在改成方块化的实体造型（和玩家本身的美术风格一致），从任何角度看都是斧头。
   var g = new THREE.Group();
-  // 斧柄：两段折线做出微微的 S 弯
-  var h1 = wpCone(0.0135, 0.0155, 0.260, wWood(), 12);
-  h1.position.set(0, 0, 0.060); h1.rotation.x = -0.05; g.add(h1);
-  var h2 = wpCone(0.0155, 0.0130, 0.230, wWood(), 12);
-  h2.position.set(0, 0.010, 0.296); h2.rotation.x = 0.07; g.add(h2);
+  // 木柄（沿 +Z，握把在原点附近）
+  var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.47, 10), wWood());
+  handle.rotation.x = Math.PI / 2;
+  handle.position.set(0, 0, 0.19);
+  g.add(handle);
+  // 缠绳握把
   for (var i = 0; i < 6; i++) {
-    var wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.014, 12), wm(0x2a221b));
-    wrap.rotation.x = Math.PI / 2 - 0.05; wrap.position.set(0, -0.003 + i * 0.001, -0.048 + i * 0.020); g.add(wrap);
+    var wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.0195, 0.0195, 0.015, 10), wm(0x2a221b));
+    wrap.rotation.x = Math.PI / 2;
+    wrap.position.set(0, 0, -0.03 + i * 0.021);
+    g.add(wrap);
   }
-  var buttCap = wpBall(0.0135, wSteelDark(), 10); buttCap.position.set(0, -0.006, -0.072); g.add(buttCap);
-  // 斧头：斧眼 + 斧颊轮廓 + 开刃
-  var eye = wpTube(0.020, 0.020, 0.062, wSteelDark(), 12);
-  eye.rotation.y = Math.PI / 2; eye.position.set(0, 0.008, 0.418); g.add(eye);
-  var cheek = wpProfile([[-0.040, -0.030], [0.030, -0.036], [0.058, -0.010], [0.056, 0.030], [0.010, 0.046], [-0.040, 0.038]], 0.052, wSteel(), 0.008);
-  cheek.position.set(0, 0.010, 0.400); g.add(cheek);
-  var bit = wpProfile([[0.036, -0.030], [0.064, -0.022], [0.068, 0.004], [0.058, 0.030], [0.036, 0.038]], 0.050, wBright(), 0.004);
-  bit.position.set(0, 0.010, 0.400); g.add(bit);
-  var edge2 = wpProfile([[0.056, -0.024], [0.072, 0.002], [0.062, 0.032], [0.058, 0.030], [0.066, 0.002], [0.060, -0.022]], 0.048, wEdge(), 0.002);
-  edge2.position.set(0, 0.010, 0.400); g.add(edge2);
-  // 斧头两侧装饰压纹 + 铆钉
-  for (var s = -1; s <= 1; s += 2) {
-    var deco = wpBox(0.004, 0.026, 0.030, wm(0x55595e));
-    deco.position.set(s * 0.027, 0.010, 0.386); g.add(deco);
-    var pv = wpPin(0.0032, 0.058, wSteel(), 0, 0.008, 0.418); g.add(pv);
+  // 柄尾配重
+  var butt = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.017, 0.022, 10), wSteelDark());
+  butt.rotation.x = Math.PI / 2;
+  butt.position.set(0, 0, -0.048);
+  g.add(butt);
+  // 斧头套（包住柄顶）
+  var sock = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.058, 0.092), wSteelDark());
+  sock.position.set(0, 0.004, 0.398);
+  g.add(sock);
+  // 斧刃主体（向 +X 伸出，厚度在 Y）
+  var head = new THREE.Mesh(new THREE.BoxGeometry(0.098, 0.028, 0.132), wSteel());
+  head.position.set(0.062, 0.004, 0.404);
+  g.add(head);
+  // 刃口：更亮更窄的一条
+  var edge = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.034, 0.140), wBright());
+  edge.position.set(0.114, 0.004, 0.404);
+  g.add(edge);
+  // 后背小锤（斧背）
+  var poll = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.044, 0.062), wSteelDark());
+  poll.position.set(-0.036, 0.004, 0.400);
+  g.add(poll);
+  // 两侧铆钉
+  for (var s2 = -1; s2 <= 1; s2 += 2) {
+    var pin = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.062, 8), wBrass());
+    pin.rotation.z = Math.PI / 2;
+    pin.position.set(0, 0.004, 0.398 + s2 * 0.026);
+    g.add(pin);
   }
-  var collar = wpTube(0.023, 0.023, 0.012, wBrass(), 12);
-  collar.rotation.y = Math.PI / 2; collar.position.set(0, 0.008, 0.374); g.add(collar);
   return g;
 }
 function makeSwordModel() {
@@ -13413,7 +13428,7 @@ const WEAPONS = {
   sword:  { name: '骑士剑', type: 'melee', dmg: 46, range: 3.2, price: 2200,  auto: false, swing: 0.42, icon: '⚔️',  pose: 'sword' },
   axe:    { name: '斧头',   type: 'melee', dmg: 60, range: 3.0, price: 3600,  auto: false, swing: 0.7,  icon: '🪓',  pose: 'axe' },
   hammer: { name: '锤',     type: 'melee', dmg: 78, range: 2.8, price: 5200,  auto: false, swing: 0.9,  icon: '🔨',  pose: 'hammer' },
-  chainsaw:{ name: '链锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
+  chainsaw:{ name: '电锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
   pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
@@ -16158,7 +16173,13 @@ function shopViewShow(cat, key) {
   // 命中缓存：不重建模型，但要把旋转循环重新拉起来（关商店时停掉了）。
   // 必须同时判断 model 还在 —— 只比 curKey 的话，一旦模型被回收过而 key 没清，
   // 就会直接 return，预览从此一片空白（要切到别的物品再切回来才恢复）。
-  if (shopView.curKey === sig && shopView.model) { shopViewStart(); return; }
+  if (shopView.curKey === sig && shopView.model) {
+    // 【fix256】买/装备后 renderShop() 会重写 #shopDetail，画布被移出 DOM。
+    // 缓存命中分支以前直接 return，画布就再也挂不回去 —— 这就是「买了之后预览没了」。
+    const bx0 = document.getElementById('shopView');
+    if (bx0 && shopView.cv && !bx0.contains(shopView.cv)) bx0.appendChild(shopView.cv);
+    shopViewStart(); return;
+  }
   shopView.curKey = sig;
   shopViewStop();
   shopViewFree();
@@ -23137,7 +23158,7 @@ function update(dt) {
   if (_frameCnt % 6 === 0) rebuildNpcGrid();
   tickCollisionSfx(dt);
   atkCd -= dt;
-  // 全自动武器：按住左键/攻击键持续射击（加特林/冲锋枪/步枪/AK47/链锯...），不必反复点击
+  // 全自动武器：按住左键/攻击键持续射击（加特林/冲锋枪/步枪/AK47/电锯...），不必反复点击
   // 【2026-10-13 攻击手感】换弹中不再每帧去调 attack()：原来那样每帧都要刷一次
   // "正在换弹…"提示（白白刷 DOM，手机上还跟着掉帧）。这里自己挡一道，
   // 换弹一结束 / 子弹一补上，下一帧立刻接着打，按着的手不用松开重按。
