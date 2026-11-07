@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix349-backwindows';
+const BUILD = '20261107-fix350-towerhall';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27235,7 +27235,27 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       det(BX(BX0 + 3, 0.4, 13), 0x5c3a26, AX, TH + 0.5 + BH + 0.2, GZ);
       roof(AX, GZ, BX0 + 2, 12, TH + 0.5 + BH + 0.45);
-      det(BX(13, 3.6, 8), CY_BRICK, AX, TH + 0.5 + BH + 4.4, GZ);
+      // 【fix350】谯楼二层：实心砖盒改成敞轩（8 柱 + 栏杆 + 内悬铜钟）
+      {
+        const ty2 = TH + 0.5 + BH + 0.4;
+        det(BX(13, 0.30, 8), 0x6d3a20, AX, ty2 + 0.15, GZ);
+        for (const s of [-1, 1]) {
+          for (let i = 0; i < 4; i++) {
+            const px2 = AX - 4.8 + i * 3.2;
+            det(new THREE.CylinderGeometry(0.30, 0.32, 3.6, 8), 0x7d2f26, px2, ty2 + 1.95, GZ + s * 3.2);
+            det(new THREE.CylinderGeometry(0.46, 0.46, 0.20, 8), 0xa8a294, px2, ty2 + 0.40, GZ + s * 3.2);
+          }
+          det(BX(11.0, 0.16, 0.20), 0x6d3a20, AX, ty2 + 1.35, GZ + s * 3.2);
+          det(BX(11.0, 0.16, 0.20), 0x6d3a20, AX, ty2 + 0.75, GZ + s * 3.2);
+        }
+        for (const s of [-1, 1]) {
+          for (let i = 0; i < 3; i++) det(new THREE.CylinderGeometry(0.30, 0.32, 3.6, 8), 0x7d2f26, AX + s * 6.0, ty2 + 1.95, GZ - 2.4 + i * 2.4);
+        }
+        det(BX(11.6, 3.2, 5.6), 0x2b2118, AX, ty2 + 1.9, GZ);
+        det(new THREE.CylinderGeometry(0.95, 1.15, 1.9, 12), 0x7a5a2a, AX, ty2 + 3.4, GZ);
+        det(new THREE.CylinderGeometry(0.10, 0.10, 1.0, 6), 0x5a4020, AX, ty2 + 4.7, GZ);
+        det(new THREE.SphereGeometry(0.28, 8, 6), 0x6b4a20, AX, ty2 + 3.2, GZ);
+      }
       roof(AX, GZ, 14, 9, TH + 0.5 + BH + 6.2);
       det(new THREE.SphereGeometry(0.5, 8, 6), 0xd8b45c, AX, TH + 0.5 + BH + 9.4, GZ, 0, 0, 0, true);
       for (const s of [-1, 1]) det(BX(0.3, 3.0, 0.3), 0x6d3a20, AX + s * 6, TH + 1.8, GZ - 8);
