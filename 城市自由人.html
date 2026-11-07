@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix319-plaqfix';
+const BUILD = '20261107-fix320-facade';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26913,6 +26913,22 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       det(BX(w + 3, 0.3, 2.6), 0x5c3a26, cx, 0.9 + h + 0.1, cz + d / 2 + 1.3);
       det(BX(w * 0.24, Math.min(3.6, h * 0.6), 0.34), 0x2b1a10, cx, 0.9 + Math.min(3.6, h * 0.6) / 2, cz + d / 2 + 0.2);
+      // 【fix320】厢房立面：中间门、两侧槛窗、每间之间加砖隔墙
+      {
+        const bw3 = w / 3, dh3 = Math.min(3.4, h * 0.68);
+        for (let i = 0; i < 3; i++) {
+          const bx4 = cx - w / 2 + (i + 0.5) * bw3;
+          if (i === 1) {
+            det(BX(0.34, dh3 + 0.4, 0.42), 0x8d867a, bx4 - bw3 * 0.42, 0.9 + (dh3 + 0.4) / 2, cz + d / 2 + 0.12);
+            det(BX(0.34, dh3 + 0.4, 0.42), 0x8d867a, bx4 + bw3 * 0.42, 0.9 + (dh3 + 0.4) / 2, cz + d / 2 + 0.12);
+            det(BX(bw3 * 0.9, 0.34, 0.5), 0x8d867a, bx4, 0.9 + dh3 + 0.55, cz + d / 2 + 0.12);
+          } else {
+            det(BX(bw3 * 0.62, dh3 * 0.62, 0.24), 0x241a12, bx4, 0.9 + dh3 * 0.55 + 0.6, cz + d / 2 + 0.05);
+            for (const dz3 of [-0.7, 0, 0.7]) det(BX(0.10, dh3 * 0.66, 0.3), 0x8a5a34, bx4 + dz3, 0.9 + dh3 * 0.55 + 0.6, cz + d / 2 + 0.1);
+          }
+          det(BX(0.42, h * 0.9, 0.5), CY_BRICK, bx4 - bw3 / 2, 0.9 + h * 0.45, cz + d / 2 + 0.16);
+        }
+      }
       roof(cx, cz, w, d, 0.9 + h + 0.36);
     }
     // ---------- 亭 ----------
@@ -26958,6 +26974,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       // 4) 屋顶两端起翘
       if (isX) { for (const s of [-1, 1]) det(BX(1.4, 0.5, 0.9), 0x3b4148, cx + s * (ow / 2 - 0.3), ry + 0.85, cz); }
       else { for (const s of [-1, 1]) det(BX(0.9, 0.5, 1.4), 0x3b4148, cx, ry + 0.85, cz + s * (od / 2 - 0.3)); }
+      // 【fix320】两端转角石柱
+      for (const s of [-1, 1]) {
+        const ex = isX ? cx + s * (W / 2 + 0.35) : cx;
+        const ez = isX ? cz : cz + s * (D / 2 + 0.35);
+        det(BX(1.0, h + 0.55, 1.0), 0x9d968a, ex, (h + 0.55) / 2, ez);
+        det(BX(1.3, 0.28, 1.3), 0xb6b0a2, ex, h + 0.62, ez);
+      }
       // 5) 登记墙顶，供高度场判断"可以站上去"
       (window.__WALL_TOPS = window.__WALL_TOPS || []).push({
         x0: cx - W / 2 - 0.85, x1: cx + W / 2 + 0.85,
@@ -27158,6 +27181,18 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
     })();
     
+    // 【fix320】东西偏门：墙上开小门楼，拐出去是一小段夹道台阶
+    for (const s of [-1, 1]) {
+      const wx = s < 0 ? X0 : X1, GZ3 = -222;
+      det(BX(4.4, 7.0, 5.6), CY_BRICK, wx, 3.5, GZ3);
+      det(BX(2.4, 4.6, 5.8), 0x1c1511, wx + s * 0.3, 2.3, GZ3);
+      det(BX(5.6, 0.7, 6.4), CY_TILE, wx, 7.35, GZ3);
+      det(BX(6.0, 0.4, 6.8), 0x3b4148, wx, 7.85, GZ3);
+      for (const dz4 of [-2.2, 2.2]) det(new THREE.CylinderGeometry(0.22, 0.26, 4.8, 8), 0x7d2f26, wx + s * 2.4, 2.4, GZ3 + dz4);
+      det(new THREE.SphereGeometry(0.85, 10, 8), 0xb6b0a2, wx + s * 3.2, 0.85, GZ3 - 3.4);
+      det(BX(2.2, 0.7, 2.2), 0xb6b0a2, wx + s * 3.2, 0.35, GZ3 - 3.4);
+    }
+
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
     wing(1905, -186, 10, 48, 4.8); plaque3d('西三房', 1905, 4.5, -161.2, 5.2, 1.8, '#1b2a4a', '#e8c86a');
     wing(2145, -186, 10, 48, 4.8); plaque3d('东三房', 2145, 4.5, -161.2, 5.2, 1.8, '#1b2a4a', '#e8c86a');
