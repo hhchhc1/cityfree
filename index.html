@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix332-inner2';
+const BUILD = '20261107-fix333-zhishi';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26947,6 +26947,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
       }
+      // 【fix333】廊下挂灯：每 12 米一盏红灯笼
+      {
+        const lm2 = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
+        for (let z6 = cz - len / 2 + 6; z6 < cz + len / 2; z6 += 12) {
+          const sp2 = new THREE.Mesh(new THREE.SphereGeometry(0.52, 8, 6), lm2);
+          sp2.position.set(cx + dirX * (d / 2 + 1.55), BASE + 4.55, z6);
+          g.add(sp2);
+          det(BX(0.09, 0.8, 0.09), 0x5a2f18, cx + dirX * (d / 2 + 1.55), 5.25, z6);
+        }
+      }
       // 【fix331】六房陈设：公案 + 坐椅 + 卷宗架
       for (let i3 = 0; i3 < nc; i3++) {
         const pz3 = cz - len / 2 + (i3 + 0.5) * len / nc;
@@ -27220,6 +27230,21 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     })();
     for (const s of [-1, 1]) wing(AX + s * 26, -320, 12, 9, 4.4);
 
+    // 【fix333】衙前执事牌：肃静 / 回避 / 荷芷署 / 正堂（成对站在大门前）
+    (function zhishiPai() {
+      const names = ['肃静', '回避', '荷芷署', '正堂'];
+      let k = 0;
+      for (const sx of [-1, 1]) for (const s2 of [0, 1]) {
+        const bx = AX + sx * (12.5 + s2 * 5.0), bz = -230;
+        det(BX(1.8, 0.24, 1.1), 0x4a2416, bx, 0.12, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx - 0.55, 1.85, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx + 0.55, 1.85, bz);
+        det(BX(1.5, 0.20, 0.32), 0x6d3a20, bx, 3.62, bz);
+        plaque3d(names[k % 4], bx, 2.35, bz + 0.22, 1.30, 2.70, '#241608', '#e8c86a');
+        k++;
+      }
+    })();
+
     // ==================== 5) 戒石亭 ====================
     (function jieshi() {
       const Z = -372;
@@ -27335,6 +27360,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(9.0, 0.14, 8.0), 0xa8a294, AX + 26, BASE + 0.20, pz2);
       }
       for (let i = 0; i < 5; i++) det(BX(8.0, 0.14, 8.0), 0xa8a294, AX - 18 + i * 9, BASE + 0.20, -726);
+      // 【fix333】花园花木：池边低矮花丛 + 两棵松
+      for (const p2 of [[1940, -742], [2110, -742], [1940, -802], [2110, -802], [1975, -730], [2075, -730]]) {
+        det(new THREE.SphereGeometry(1.5, 8, 6), 0x3f7a44, p2[0], BASE + 1.3, p2[1]);
+        det(new THREE.SphereGeometry(1.1, 7, 5), 0x4d8f52, p2[0] + 1.2, BASE + 1.0, p2[1] + 0.9);
+      }
+      for (const p3 of [[1930, -770], [2120, -770]]) {
+        det(new THREE.CylinderGeometry(0.45, 0.55, 6.0, 8), 0x5a3a24, p3[0], BASE + 3.0, p3[1]);
+        det(new THREE.SphereGeometry(3.0, 9, 7), 0x2f6238, p3[0], BASE + 7.0, p3[1]);
+      }
       pavilion(AX, -812, 9, 6.0);
     })();
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
