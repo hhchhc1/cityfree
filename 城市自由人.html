@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix284-pillar-labels';
+const BUILD = '20261106-fix289-torus-fix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27599,8 +27599,13 @@ window.__bindTap = __bindTap;
 window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
   try {
     if (typeof scene === "undefined" || !scene) return;
+    window.__folkScene = scene;                 // fix288：先把场景记下来（清扫/重置都要用）
+    // fix288：只有硬重置过程中才允许真正创建光柱；其它调用（各建筑的注册）一律忽略。
+    // 光柱位置统一由 FOLK_FIX 固定表决定，避免多处注册导致同一栋楼出现多根。
+    if (!window.__folkResetting) { window.__folkBlocked = (window.__folkBlocked || 0) + 1; return; }
     window.__folkMarkers = window.__folkMarkers || [];
-    if (!allowDup && window.__folkMarkers.some(function (m) { return m.name === name; })) return;
+    // fix287：同名只许一根（只有硬重置过程中才允许重建）
+    if (!window.__folkResetting && window.__folkMarkers.some(function (m) { return m.name === name; })) return;
     const px = x, pz = z + (dz === undefined ? -9 : dz);
     const col = color || 0xffd08a;
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
@@ -27654,6 +27659,7 @@ window.__folkLabel = function (name) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
     sp.scale.set(6.4, 1.8, 1);
     sp.renderOrder = 5;
+    sp.userData.folkLabel = 1;
     return sp;
   } catch (e) { return null; }
 };
@@ -27881,6 +27887,11 @@ setInterval(function () {
       keep.push(m);
     }
     if (keep.length !== M2.length) window.__folkMarkers = keep;
+    // 【fix285】数量不是 19 就整片重置（重建比修补确定）
+    if (window.__folkHardReset && window.__folkResetCount && keep.length !== 19) {
+      window.__folkHardReset();
+      return;
+    }
     // 【fix279】按标记清扫：不在保留列表里的光柱网格（孤儿）直接从场景移除。
     // 这解决了"marker 已经被删、但网格还立在原地"的问题 —— 用户看到的两侧光柱就是这个。
     if (window.__folkScene) {
@@ -27894,9 +27905,13 @@ setInterval(function () {
         // 【fix282】按"形状"识别光柱家族，不再只看身份标记：
         // 圆柱 h=7 且 r=0.8/0.3（外束/内芯），或圆环 r=1.4（地面光环）。
         // 任何长得像光柱、却没有有效身份标记的网格，一律算孤儿清掉。
-        const isFolk = (o.geometry.type === 'CylinderGeometry' && Math.abs((pr.height || 0) - 7) < 0.02 &&
-                        (Math.abs((pr.radiusTop || 0) - 0.8) < 0.02 || Math.abs((pr.radiusTop || 0) - 0.3) < 0.02)) ||
-                       (o.geometry.type === 'TorusGeometry' && Math.abs((pr.radius || 0) - 1.4) < 0.02);
+        const isTorus2 = o.geometry.type === 'TorusGeometry';
+        const tr2 = isTorus2 ? !!o.material.transparent
+                             : !!(o.material.transparent && o.material.opacity !== undefined && o.material.opacity < 0.65);
+        const h2 = pr.height || 0, rt2 = pr.radiusTop || 0, rr2 = pr.radius || 0;
+        const isFolk = tr2 && ((o.geometry.type === 'CylinderGeometry' && h2 > 4.5 && h2 < 16 && rt2 < 2.2) ||
+                              (o.geometry.type === 'ConeGeometry' && h2 > 4.5 && h2 < 22) ||
+                              (o.geometry.type === 'TorusGeometry' && rr2 > 0.8 && rr2 < 2.2));
         const k = o.userData && o.userData.folkKey;
         if (k) have[k] = 1;
         const w = new THREE.Vector3();
@@ -27947,6 +27962,59 @@ setInterval(function () {
     document.body.appendChild(b);
     window.__bindTap(b, openList);
   }
+  // 【fix285】光柱硬重置：不再"逐个删重复"，改成**整片清空 + 按固定坐标重建**。
+  // 之前反复清理不掉，是因为光柱在多个代码路径里被建出来，而清理逻辑依赖运行时那个
+  // 会变化的 __folkMarkers 数组。现在只认下面这张固定表（顺序与 INFO 一致，index → 坐标），
+  // 其他任何"长得像光柱"的网格全部删除，然后按表重建 19 根，一一对应。
+  const FOLK_FIX = [
+    [1790, -441], [2021, -575], [1671, -645], [1678, -355], [1880, -7],
+    [1861, 14], [1708, -439], [1863, 157], [1843, 131], [1781, 232],
+    [1946, 237], [1796, 37], [1840, 37], null, [1945, 35],
+    [1880, 37], [1892, 67], [1910, 38], [1848, 71], [1800, 67]
+  ];
+  window.__folkHardReset = function () {
+    try {
+      const s = window.__folkScene;
+      if (!s) return 0;
+      const junk = [];
+      s.traverse(function (o) {
+        if (!o.isMesh || !o.geometry || !o.material) return;
+        const pr = o.geometry.parameters || {};
+        const isTorus = o.geometry.type === 'TorusGeometry';
+        const tr = isTorus ? !!o.material.transparent
+                           : !!(o.material.transparent && o.material.opacity !== undefined && o.material.opacity < 0.65);
+        const h = pr.height || 0, rt = pr.radiusTop || 0, rr = pr.radius || 0;
+        // 【fix286】放宽容差：竖直细长（高 4.5~16，半径 < 2.2）的半透明圆柱/圆锥，
+        // 以及半径 0.8~2.2 的地面圆环，全部视为"光柱家族"。尺寸不同也能清掉。
+        const folk = tr && ((o.geometry.type === 'CylinderGeometry' && h > 4.5 && h < 16 && rt < 2.2) ||
+                            (o.geometry.type === 'ConeGeometry' && h > 4.5 && h < 22) ||
+                            (o.geometry.type === 'TorusGeometry' && rr > 0.8 && rr < 2.2));
+        if (folk) junk.push(o);
+      });
+      const sp = [];
+      s.traverse(function (o) { if (o.isSprite && o.userData && o.userData.folkLabel) sp.push(o); });
+      for (const o of junk) { o.visible = false; if (o.parent) o.parent.remove(o); }
+      for (const o of sp) { if (o.parent) o.parent.remove(o); }
+      window.__folkMarkers = [];
+      window.__folkResetting = true;
+      let n = 0;
+      for (let i = 0; i < INFO.length; i++) {
+        const c = FOLK_FIX[i];
+        if (!c) continue;
+        const nm = INFO[i].name;
+        if (!byName[nm]) continue;
+        window.__folkAddSpot(nm, c[0], c[1], 0xffd08a, 0, true);
+        n++;
+      }
+      window.__folkResetting = false;
+      window.__folkResetCount = (window.__folkResetCount || 0) + 1;
+      window.__folkResetN = n;
+      return n;
+    } catch (e) { window.__folkResetErr = String(e); return -1; }
+  };
+  // 启动后跑两次（建筑可能分阶段建），之后由外层巡检在数量不对时自动再跑
+  setTimeout(function () { try { window.__folkHardReset(); } catch (e) {} }, 6000);
+  setTimeout(function () { try { window.__folkHardReset(); } catch (e) {} }, 14000);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else setTimeout(boot, 500);
 })();
