@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix299-beams';
+const BUILD = '20261107-fix300-lhguard';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25400,6 +25400,7 @@ window.addFarGround();   // 【fix104】走 window，不受作用域限制
 // 而地形/碰撞等其它地方仍拿到河床 -2.6，两边每帧打架，
 // 表现就是用户说的『人物走上去一直上下浮动、不能正常行动』。
 function linhaiHeight(x, z) {
+  if (!window.__LHRDY) return 0.6;   // fix300: LH 未初始化时先给安全高度（读档恢复车辆会提前调用）
   // 【fix164】木栈桥桥面优先（早于河道 -2.6 的判断，否则人会被按进河床）
   if (window.__woodBridge) {
     const _wb2 = window.__woodBridge;
@@ -26679,15 +26680,20 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     }
     // 匾额（真汉字）
     function plaque(txt, x, y, z, w, h, bg, fg, ry) {
+      const _n = String(txt).length;
+      const _W = _n <= 3 ? 512 : (_n <= 5 ? 768 : 1024);
       const cv = document.createElement('canvas');
-      cv.width = 512; cv.height = 192;
+      cv.width = _W; cv.height = 192;
       const c = cv.getContext('2d');
-      c.fillStyle = bg; c.fillRect(0, 0, 512, 192);
-      c.strokeStyle = fg; c.lineWidth = 12; c.strokeRect(10, 10, 492, 172);
+      c.fillStyle = bg; c.fillRect(0, 0, _W, 192);
+      c.strokeStyle = fg; c.lineWidth = 12; c.strokeRect(10, 10, _W - 20, 172);
       c.fillStyle = fg;
-      c.font = 'bold 112px "Microsoft YaHei", SimHei, "Noto Sans SC", sans-serif';
       c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(txt, 256, 100);
+      let _fs = 128;
+      const _font = function () { return 'bold ' + _fs + 'px "Microsoft YaHei", SimHei, "Noto Sans SC", sans-serif'; };
+      c.font = _font();
+      while (_fs > 26 && c.measureText(txt).width > _W - 70) { _fs -= 4; c.font = _font(); }
+      c.fillText(txt, _W / 2, 100);
       const tx = new THREE.CanvasTexture(cv);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx }));
       m.position.set(x, y + BASE, z);
@@ -26823,15 +26829,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 1) 古荷名郡 牌坊（墙外） ====================
     (function paifang() {
       for (const dx of [-19, -9, 0, 9, 19]) {
-        det(new THREE.CylinderGeometry(0.6, 0.7, 10.0, 10), 0x8a2f2a, AX + dx, 5.0, -152);
+        det(new THREE.CylinderGeometry(0.62, 0.74, 15.6, 10), 0x8a2f2a, AX + dx, 7.8, -152);
         det(new THREE.CylinderGeometry(0.95, 1.05, 0.9, 10), 0xb6b0a2, AX + dx, 0.45, -152);
         det(BX(1.5, 1.2, 1.5), 0xc8c2b4, AX + dx, 0.6, -152);
       }
-      for (const s of [-1, 1]) det(BX(42, 0.6, 0.55), 0x6d3a20, AX, 6.8, -152);
-      det(BX(44, 1.0, 1.4), 0x6d3a20, AX, 8.75, -152);
-      plaque('古荷名郡', AX, 7.45, -151.1, 12.5, 4.4, '#1c2f52', '#e8c86a');
-      roof(AX, -152, 48, 5.0, 10.3);
-      for (const s of [-1, 1]) roof(AX + s * 16, -152, 17, 4.0, 9.1);
+      for (const s of [-1, 1]) det(BX(42, 0.7, 0.6), 0x6d3a20, AX, 11.4, -152);
+      det(BX(44, 1.1, 1.5), 0x6d3a20, AX, 13.1, -152);
+      plaque('古荷名郡', AX, 12.35, -151.05, 14.0, 5.0, '#1c2f52', '#e8c86a');
+      roof(AX, -152, 50, 5.4, 15.0);
+      for (const s of [-1, 1]) roof(AX + s * 16.5, -152, 18, 4.2, 13.6);
       for (const s of [-1, 1]) {                        // 红幡
         det(new THREE.CylinderGeometry(0.12, 0.12, 8, 6), 0x6d3a20, AX + s * 24, 4, -150);
         det(BX(2.4, 5.2, 0.12), 0xc0392b, AX + s * 25.4, 5.6, -150);
@@ -27158,6 +27164,29 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(new THREE.SphereGeometry(3.4, 9, 7), 0x356e42, p[0], 7.0, p[1]);
       det(new THREE.SphereGeometry(2.4, 8, 6), 0x2f6238, p[0] + 1.6, 5.6, p[1] + 1.2);
     }
+    // 【fix300】夜间灯笼：自发光小球（MeshBasicMaterial 不受灯光影响），让夜里也能看清中轴
+    (function nightLamps() {
+      const lampMat = new THREE.MeshBasicMaterial({ color: 0xffb765, fog: false });
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, fog: false });
+      for (const z of [-150, -200, -252, -320, -372, -430, -470, -520, -568, -620, -680]) {
+        for (const s of [-1, 1]) {
+          const x = AX + s * 11;
+          det(new THREE.CylinderGeometry(0.12, 0.14, 4.2, 6), 0x3a2a1c, x, 2.1, z);
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), lampMat);
+          b.position.set(x, 4.45 + BASE, z); g.add(b);
+          const c2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), coreMat);
+          c2.position.set(x, 4.45 + BASE, z); g.add(c2);
+        }
+      }
+      for (const z of [-110, -124]) {
+        for (const s of [-1, 1]) {
+          const x = AX + s * 14;
+          det(new THREE.CylinderGeometry(0.12, 0.14, 4.2, 6), 0x3a2a1c, x, 2.1, z);
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), lampMat);
+          b.position.set(x, 4.45 + BASE, z); g.add(b);
+        }
+      }
+    })();
     // 台阶前的抱鼓石
     for (const s of [-1, 1]) det(new THREE.SphereGeometry(0.9, 12, 10), 0xbdb6a6, AX + s * 9, BASE + 0.9, -140);
   })();
@@ -29251,6 +29280,7 @@ const LH = {
   ancX0: DEST.x + 100, ancX1: DEST.x + 630,   // 【fix105】380→630：古建城东扩，给传统院落/木塔留地
   z0: DEST.z - 480, z1: DEST.z + 200
 };
+window.__LHRDY = 1;
 // 【fix79】直接**指向 buildings 数组**，而不是另建一个列表！
 // 原因：钩爪/射线/碰撞（boxHitsBuildings、hasLineOfSight、grappleTarget 等）走的都是
 // buildings，而它们在**加载期**就会被调用（addOutskirts 等），那时 const person 还在 TDZ ——
