@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix322-tiles';
+const BUILD = '20261107-fix323-dougong';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26819,6 +26819,22 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
     }
 
+    // ---------- 斗拱（坐斗 + 拱 + 昂 + 散斗） ----------
+    function dougongRow(cx, cy, cz, w) {
+      const n = Math.max(4, Math.round(w / 2.4)), step = w / n;
+      for (let i = 0; i < n; i++) {
+        const px = cx - w / 2 + step * (i + 0.5);
+        det(BX(0.95, 0.46, 0.95), 0x8a2f2a, px, cy, cz);
+        det(BX(2.0, 0.26, 0.55), 0x2e6b4c, px, cy + 0.34, cz);
+        det(BX(0.55, 0.26, 1.7), 0x27456e, px, cy + 0.34, cz);
+        det(BX(0.40, 1.15, 0.40), 0x9b3b2f, px, cy + 0.52, cz + 0.66, -0.52, 0, 0);
+        det(BX(0.40, 0.24, 0.40), 0xc8a24a, px - 0.72, cy + 0.52, cz);
+        det(BX(0.40, 0.24, 0.40), 0xc8a24a, px + 0.72, cy + 0.52, cz);
+      }
+      det(BX(w + 0.6, 0.40, 0.40), 0x2e6b4c, cx, cy - 0.38, cz + 0.10);
+      det(BX(w + 0.6, 0.12, 0.44), 0xc8a24a, cx, cy - 0.62, cz + 0.10);
+    }
+
     // ---------- 正殿 ----------
     function hall(cx, cz, w, d, h, opt) {
       const o = opt || {};
@@ -26850,14 +26866,10 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       det(BX(dw2 + 0.5, 0.30, 0.52), 0xc8a24a, cx, 1.2 + dh2 + 0.1, cz + d / 2 + 0.03);
       // 【fix311】檐下斗拱 + 青绿彩画额枋 + 大红灯笼（照片里最抢眼的装饰）
-      const _nB = Math.max(4, Math.round(w / 2.2));
-      for (let i2 = 0; i2 < _nB; i2++) {
-        const bx2 = cx - w / 2 + (i2 + 0.5) * (w / _nB);
-        det(BX(0.86, 0.50, 1.10), (i2 % 2 ? 0x2e6b4c : 0x27456e), bx2, 1.2 + h + 0.02, cz + d / 2 + 1.85);
-        det(BX(0.50, 0.34, 0.80), 0x9b3b2f, bx2, 1.2 + h - 0.42, cz + d / 2 + 1.85);
-      }
-      det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.98, cz + d / 2 + 1.72);
-      det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 1.28, cz + d / 2 + 1.72);
+      // 【fix323】真斗拱：坐斗 + 十字拱 + 昂 + 散斗
+      dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
+      det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.30, cz + d / 2 + 1.72);
+      det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 0.60, cz + d / 2 + 1.72);
       const _lant = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
       for (const s2 of [-1, 1]) for (const dd of [0.30, 0.42]) {
         const lx = cx + s2 * w * dd;
