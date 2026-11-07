@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix257-drum-photo';
+const BUILD = '20261106-fix258-gate-wall';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25791,6 +25791,10 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   // 城楼 / 门楼（3 座，沿城墙分布）
   function buildGateTower(cz, h) {
+  try {
+    if (window.__folkAddSpot) window.__folkAddSpot("城楼", wallX, cz, 0xffb0b0, 15, true);
+    else (window.__folkPending = window.__folkPending || []).push(["城楼", wallX, cz, 0xffb0b0, 15, true]);
+  } catch (e0) {}
   // 【fix99】城门楼也要登记！原来它完全没登记碰撞 —— 用户：『这个古建筑是虚拟的，
   // 直接就可以走进去』。城门楼比城墙厚实，单独给一个 18m 见方的盒子。
   LH_BLD.push({ minX: wallX - 9, maxX: wallX + 9, minZ: cz - 9, maxZ: cz + 9, minY: 0, top: h + 8 });
@@ -25835,9 +25839,13 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
     return bg;
   }
   for (const cz of [Z0 + 120, ZC, Z1 - 120]) buildGateTower(cz, 10.5);
+try {
+  if (window.__folkAddSpot) window.__folkAddSpot("城墙", wallX - 20, ZC + 70, 0xd9c9a8, 0);
+  else (window.__folkPending = window.__folkPending || []).push(["城墙", wallX - 20, ZC + 70, 0xd9c9a8, 0]);
+} catch (e0) {}
   // 飞檐楼阁（多层殿阁，越往里越高）
   function buildPagoda(px, pz, levels, baseW) {
-  try { if (window.__folkAddSpot) window.__folkAddSpot('古塔', px, pz, 0xb9d6ff, -(baseW * 0.30 + 4), true); else (window.__folkPending = window.__folkPending || []).push(['古塔', px, pz, 0xb9d6ff, -(baseW * 0.62 + 9), true]); } catch (e0) {}
+  try { if (window.__folkAddSpot) window.__folkAddSpot('古塔', px, pz, 0xb9d6ff, -(baseW * 0.42 + 5), true); else (window.__folkPending = window.__folkPending || []).push(['古塔', px, pz, 0xb9d6ff, -(baseW * 0.62 + 9), true]); } catch (e0) {}
   // 【fix81】古建也要登记进 buildings（LH_BLD 就是它）—— 之前只有 CBD 楼和城墙进去过，
   // 所以古建区完全不能攀爬（用户：『古代楼房还是没有算到楼房里边，也不能攀爬』）。
   LH_BLD.push({ minX: px - baseW * 0.45, maxX: px + baseW * 0.45, minZ: pz - baseW * 0.45, maxZ: pz + baseW * 0.45, minY: 0, top: 1.6 + levels * 6.4 + 4 });   // 【fix218】原来 top 是 baseW*0.95*levels+5（22宽3层≈68米），整座塔上方 50 米都是看不见的墙
@@ -27401,6 +27409,10 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
       text: '古代城市的报时与报警建筑，多立于城中心十字街口。下层为砖石台基、中开券门供人车通行；上层架设大鼓，晨钟暮鼓报时，遇警则击鼓传讯。屋顶多为重檐歇山或庑殿顶，是城中等级最高的建筑之一。' },
     { name: '古塔', tag: '楼阁式 · 塔刹',
       text: '塔随佛教传入中国后与木构楼阁结合，形成「楼阁式塔」：层层出檐、每层设平座栏杆，可登临远眺。塔顶为塔刹（覆钵、相轮、宝珠），既是宗教标志，也是古代城市天际线的焦点。' },
+    { name: '城楼', tag: '城门之上 · 重檐楼阁',
+      text: '城门楼建在城墙门洞的正上方，是整座城的「脸面」：砖石台基开券门供人车通行，台上起两层重檐楼阁（多为歇山或庑殿顶）。平时用于瞭望、报时、稽查出入，战时则是守城的指挥点与弓箭手的制高点，门额上悬匾题写城门名。' },
+    { name: '城墙', tag: '夯土青砖 · 垛口马道',
+      text: '城墙是古代城市的防御主体。早期夯土版筑，明代以后大量包砌青砖；墙顶外侧砌垛口（射击孔），内侧筑女墙，中间是马道可骑马通行。城门处常加筑瓮城（月城），敌军入瓮后可四面夹击，所谓「瓮中捉鳖」。' },
     { name: '牌楼', tag: '四柱三间 · 三重檐',
       text: '中国传统入口标志性建筑，多立于街口、寺观或园林门前。四柱三间、层层出檐，上悬匾额题名；木构用红柱朱漆，石构则雕龙刻字。它起标榜、引导与分隔空间的作用，是"門面"的建筑化表达。' },
     { name: '月洞门', tag: '圆门框景 · 一步一景',
