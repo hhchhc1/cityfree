@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix298-tdz';
+const BUILD = '20261107-fix299-beams';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6357,7 +6357,9 @@ var AIRLINER = null;
   const pos = g2.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const wx = CX + pos.getX(i), wz = CZ + pos.getZ(i);
-    pos.setY(i, terrainHeight(wx, wz) + 0.04);
+    const _hy = terrainHeight(wx, wz);
+    // 【fix299】压平区压到水面时，草皮会变成浮在水上的绿板 —— 低于水面的顶点一律沉下去
+    pos.setY(i, (_hy < 0.9 ? _hy - 4.0 : _hy) + 0.04);
   }
   pos.needsUpdate = true;
   g2.computeVertexNormals();
@@ -28625,7 +28627,8 @@ setInterval(function () {
         const folk = tr && ((o.geometry.type === 'CylinderGeometry' && h > 4.5 && h < 16 && rt < 2.2) ||
                             (o.geometry.type === 'ConeGeometry' && h > 4.5 && h < 22) ||
                             (o.geometry.type === 'TorusGeometry' && rr > 0.8 && rr < 2.2));
-        if (folk) junk.push(o);
+        // 【fix299】只清古建城（x>1600）的光柱：原来全场景扫，把机场登机光柱、开发者紫色光柱、任务绿光柱一起删了
+        if (folk) { o.updateWorldMatrix(true, false); if (o.matrixWorld.elements[12] > 1600) junk.push(o); }
       });
       const sp = [];
       s.traverse(function (o) { if (o.isSprite && o.userData && o.userData.folkLabel) sp.push(o); });
