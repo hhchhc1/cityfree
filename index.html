@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix341-bazi';
+const BUILD = '20261107-fix342-steles';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27271,6 +27271,18 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     })();
     for (const s of [-1, 1]) wing(AX + s * 26, -320, 12, 9, 4.4);
 
+    // 【fix342】前院碑刻：三块记事碑（碑座 + 碑身 + 碑帽 + 字）
+    (function steles() {
+      const list = [[AX - 46, -196, '荷芷署重修记', '乾隆二十三年'], [AX + 46, -196, '州治题名碑', '道光九年'], [AX - 46, -262, '公生明训碑', '康熙五十年']];
+      for (const it of list) {
+        det(BX(2.6, 0.5, 1.6), 0xa8a294, it[0], 0.25, it[1]);
+        det(BX(1.8, 2.6, 0.44), 0xb0aa9e, it[0], 1.85, it[1]);
+        det(BX(2.1, 0.36, 0.62), 0xb8b4a8, it[0], 3.34, it[1]);
+        plaque3d(it[2], it[0], 2.20, it[1] + 0.26, 1.45, 0.95, '#b8b4a8', '#2b2b2b');
+        plaque3d(it[3], it[0], 1.45, it[1] + 0.26, 1.30, 0.42, '#b8b4a8', '#4a3f34');
+      }
+    })();
+
     // 【fix334】东西跨院：偏门外各一座小院（下沉台地 + 院墙 + 厢房 + 影壁 + 石桌）
     for (const sd of [-1, 1]) {
       const gx = sd < 0 ? X0 : X1, ex = gx + sd * 48;
@@ -27382,6 +27394,10 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(0.34, 0.26, 296), 0x2e6b4c, lx, 4.22, -305);
       det(BX(4.4, 0.24, 296), 0x49505a, lx - s * 1.9, 4.34, -305, 0, 0, s * 0.16);
       det(BX(0.5, 0.34, 296), 0x3b4148, lx - s * 3.9, 3.86, -305);
+      // 【fix342】廊外侧矮墙：把廊子后面封起来（原来直接透空）
+      det(BX(0.55, 2.30, 296), 0x9d968a, lx + s * 2.0, 1.15, -305);
+      det(BX(0.75, 0.30, 296), 0x3b4148, lx + s * 2.0, 2.42, -305);
+      for (let zw = -160; zw > -452; zw -= 12) det(BX(0.62, 2.30, 0.5), 0xb0aa9e, lx + s * 2.0, 1.15, zw);
       for (let z9 = -158; z9 > -452; z9 -= 10) det(BX(0.30, 0.30, 0.30), 0x5a2f18, lx, 4.10, z9);
     }
 
