@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix264-bridge-joint';
+const BUILD = '20261106-fix265-gate-pillar2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25811,13 +25811,13 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   // 城楼 / 门楼（3 座，沿城墙分布）
   function buildGateTower(cz, h) {
     try {
-    const _gz = 26;
+    const _gx = 15;
     if (window.__folkAddSpot) {
-      window.__folkAddSpot("城楼", wallX, cz, 0xffb0b0, _gz, true);
-      window.__folkAddSpot("城楼", wallX, cz, 0xffb0b0, -_gz, true);
+      window.__folkAddSpot("城楼", wallX + _gx, cz, 0xffb0b0, 0, true);
+      window.__folkAddSpot("城楼", wallX - _gx, cz, 0xffb0b0, 0, true);
     } else {
-      (window.__folkPending = window.__folkPending || []).push(["城楼", wallX, cz, 0xffb0b0, _gz, true]);
-      (window.__folkPending = window.__folkPending || []).push(["城楼", wallX, cz, 0xffb0b0, -_gz, true]);
+      (window.__folkPending = window.__folkPending || []).push(["城楼", wallX + _gx, cz, 0xffb0b0, 0, true]);
+      (window.__folkPending = window.__folkPending || []).push(["城楼", wallX - _gx, cz, 0xffb0b0, 0, true]);
     }
   } catch (e0) {}
   // 【fix99】城门楼也要登记！原来它完全没登记碰撞 —— 用户：『这个古建筑是虚拟的，
@@ -25865,8 +25865,8 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   for (const cz of [Z0 + 120, ZC, Z1 - 120]) buildGateTower(cz, 10.5);
 try {
-  if (window.__folkAddSpot) window.__folkAddSpot("城墙", wallX - 20, ZC + 70, 0xd9c9a8, 0);
-  else (window.__folkPending = window.__folkPending || []).push(["城墙", wallX - 20, ZC + 70, 0xd9c9a8, 0]);
+  if (window.__folkAddSpot) window.__folkAddSpot("城墙", wallX + 22, ZC + 70, 0xd9c9a8, 0);
+  else (window.__folkPending = window.__folkPending || []).push(["城墙", wallX + 22, ZC + 70, 0xd9c9a8, 0]);
 } catch (e0) {}
   // 飞檐楼阁（多层殿阁，越往里越高）
   function buildPagoda(px, pz, levels, baseW) {
