@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix330-clean';
+const BUILD = '20261107-fix331-jieshi';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26947,6 +26947,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
       }
+      // 【fix331】六房陈设：公案 + 坐椅 + 卷宗架
+      for (let i3 = 0; i3 < nc; i3++) {
+        const pz3 = cz - len / 2 + (i3 + 0.5) * len / nc;
+        const fxx = cx - dirX * 1.4;
+        det(BX(2.4, 0.16, 1.1), 0x6d3a20, fxx, 2.05, pz3);
+        for (const dz5 of [-0.9, 0.9]) det(BX(0.18, 0.85, 0.18), 0x5a2f18, fxx, 1.62, pz3 + dz5);
+        det(BX(0.9, 0.12, 0.9), 0x8a5a34, fxx - dirX * 1.5, 1.60, pz3);
+        det(BX(1.8, 1.9, 0.5), 0x5a3a24, cx - dirX * (d / 2 - 0.9), 2.0, pz3 + 2.2);
+        for (let k5 = 0; k5 < 3; k5++) det(BX(1.5, 0.16, 0.36), 0xc8b48a, cx - dirX * (d / 2 - 0.9), 2.42 + k5 * 0.5, pz3 + 2.2);
+      }
       // 【fix325】六房匾额（吏/户/礼/兵/刑/工）
       if (nameList && nameList.length) {
         for (let i2 = 0; i2 < nameList.length && i2 < nc; i2++) {
@@ -27213,15 +27223,29 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 5) 戒石亭 ====================
     (function jieshi() {
       const Z = -372;
-      det(BX(7, 0.5, 7), 0xbdb6a6, AX, 0.25, Z);
-      for (const s of [-1, 1]) for (const t of [-1, 1]) {
-        det(new THREE.CylinderGeometry(0.3, 0.32, 4.6, 8), 0x7d2f26, AX + s * 2.6, 2.8, Z + t * 2.6);
+      // 【fix331】戒石亭：正方形碑亭 + 巨碑（正面「公生明」）+ 石栏
+      det(BX(9.0, 0.55, 9.0), 0xbdb6a6, AX, 0.28, Z);
+      det(BX(8.2, 0.18, 8.2), 0xc8c2b4, AX, 0.64, Z);
+      for (const s of [-1, 1]) for (const t2 of [-1, 1]) {
+        det(new THREE.CylinderGeometry(0.34, 0.38, 5.4, 10), 0x7d2f26, AX + s * 3.2, 3.25, Z + t2 * 3.2);
+        det(new THREE.CylinderGeometry(0.55, 0.55, 0.32, 10), 0x9a9078, AX + s * 3.2, 0.82, Z + t2 * 3.2);
       }
-      det(BX(6.2, 0.34, 6.2), 0x5c3a26, AX, 5.2, Z);
-      roof(AX, Z, 6.4, 6.4, 5.5);
-      det(BX(2.2, 3.0, 0.55), 0xa8a29a, AX, 2.2, Z);
-      det(BX(2.6, 0.5, 1.0), 0xb8b4a8, AX, 0.6, Z);
-      plaque('戒石', AX, 2.5, Z + 0.32, 1.5, 2.0, '#a8a29a', '#2b2b2b');
+      det(BX(7.6, 0.42, 7.6), 0x5c3a26, AX, 6.05, Z);
+      det(BX(3.0, 0.30, 3.0), 0x2e6b4c, AX, 6.36, Z);
+      roof(AX, Z, 7.6, 7.6, 5.95);
+      // 碑座（龟趺）+ 碑身 + 碑帽
+      det(BX(3.6, 0.9, 2.4), 0xa8a29a, AX, 1.15, Z);
+      det(BX(2.8, 3.6, 0.52), 0xb0aa9e, AX, 3.45, Z);
+      det(BX(3.2, 0.46, 0.80), 0xb8b4a8, AX, 5.42, Z);
+      plaque('公生明', AX, 3.70, Z + 0.30, 2.20, 2.90, '#b8b4a8', '#2b2b2b');
+      plaque('尔俸尔禄 民膏民脂', AX, 2.35, Z + 0.30, 2.10, 0.75, '#b8b4a8', '#43382f');
+      // 石栏
+      for (const s of [-1, 1]) {
+        for (let i = -2; i <= 2; i++) {
+          det(BX(0.30, 1.1, 0.30), 0xc0bab0, AX + s * 4.2, 1.15, Z + i * 2.0);
+          det(BX(0.24, 0.60, 1.7), 0xb6b0a6, AX + s * 4.2, 0.90, Z + i * 2.0 + 1.0);
+        }
+      }
     })();
 
     // ==================== 6) 东西长庑（六房） ====================
