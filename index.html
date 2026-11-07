@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix326-yulu';
+const BUILD = '20261107-fix327-caihua';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26896,6 +26896,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
       det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.30, cz + d / 2 + 1.72);
       det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 0.60, cz + d / 2 + 1.72);
+      // 【fix327】旋子彩画：额枋上一圈金旋子（外金环 + 内青芯）
+      {
+        const nX = Math.max(6, Math.round(w / 2.6));
+        for (let i = 0; i < nX; i++) {
+          const px = cx - w / 2 + (i + 0.5) * w / nX;
+          det(new THREE.CylinderGeometry(0.34, 0.34, 0.10, 10), 0xc8a24a, px, 1.2 + h - 0.30, cz + d / 2 + 1.58, Math.PI / 2, 0, 0);
+          det(new THREE.CylinderGeometry(0.17, 0.17, 0.13, 10), 0x2e6b4c, px, 1.2 + h - 0.30, cz + d / 2 + 1.56, Math.PI / 2, 0, 0);
+        }
+      }
       const _lant = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
       for (const s2 of [-1, 1]) for (const dd of [0.30, 0.42]) {
         const lx = cx + s2 * w * dd;
@@ -26996,6 +27005,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
           }
           det(BX(0.42, h * 0.9, 0.5), CY_BRICK, bx4 - bw3 / 2, 0.9 + h * 0.45, cz + d / 2 + 0.16);
         }
+      }
+      // 【fix327】墀头：硬山两端挑出的装饰砖 + 木压顶
+      for (const s of [-1, 1]) {
+        det(BX(0.95, 1.6, 1.5), 0x9d968a, cx + s * (w / 2 + 0.12), 0.9 + h - 0.85, cz + d / 2 - 0.25);
+        det(BX(1.15, 0.32, 1.7), 0x6d3a20, cx + s * (w / 2 + 0.12), 0.9 + h - 0.06, cz + d / 2 - 0.25);
       }
       roof(cx, cz, w, d, 0.9 + h + 0.36, null, null, 'yingshan');
     }
@@ -27285,6 +27299,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(5.2, p[2], 5.2), 0x8a8578, p[0], BASE + p[2] / 2, p[1]);
         det(BX(3.2, p[2] * 0.6, 3.2), 0x7d786c, p[0] + 1.6, BASE + p[2] * 0.3, p[1] + 1.4);
       }
+      // 【fix327】园路：小块石板铺成环池小径（分块，不用整片大网格）
+      for (let i = 0; i < 9; i++) {
+        const pz2 = -726 - i * 10.5;
+        det(BX(9.0, 0.14, 8.0), 0xa8a294, AX - 26, BASE + 0.20, pz2);
+        det(BX(9.0, 0.14, 8.0), 0xa8a294, AX + 26, BASE + 0.20, pz2);
+      }
+      for (let i = 0; i < 5; i++) det(BX(8.0, 0.14, 8.0), 0xa8a294, AX - 18 + i * 9, BASE + 0.20, -726);
       pavilion(AX, -812, 9, 6.0);
     })();
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
