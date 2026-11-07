@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix291-yamen';
+const BUILD = '20261107-fix292b-yamen-full';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22581,7 +22581,7 @@ function drawFullMap() {
   const ANC_BLD = [
     ['鼓楼', 1790, -441, 30, 30],
     ['木塔', 1830, -700, 52, 52],
-    ['霍州署', 2025, -448, 252, 516],
+    ['霍州署', 2025, -420, 274, 564],
     ['城门楼', 1656, -645, 24, 20],
     ['城门楼', 1656, -425, 24, 20],
     ['城门楼', 1656, -205, 24, 20],
@@ -26580,193 +26580,356 @@ try {
 LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, maxZ: cz + B * 1.15, minY: 0, top: ty + 6.5 });
 }
 
-    // ==================== 【fix291】霍州署（仿山西霍州署 · 古建城东半部）====================
-  // 用户："城墙里边这么大的空地都放这些小物件，太不好看了……仿照霍州署，最大程度还原。"
-  // 形制（南北中轴 x=2025，自南向北）：照壁 → 木牌坊 → 大门 → 仪门 → 东西六房 →
-  // 月台 → 大堂 → 二堂 → 内宅；东侧谯楼（钟楼）、西侧监狱，四角角楼，四周青砖院墙压瓦。
-  // 全部走 det()（共享材质），上千个构件也不增加 draw call。
+    // ==================== 【fix292】霍州署（第二轮·补齐形制与细节）====================
+  // 用户 2026-11-07：「这么大的空地就这么点面积才占……没有台阶、没有阁楼、没有石头路、
+  // 没有审判大堂、没有偏房、没有监狱、没有知州府、没有师爷房」。这一版按霍州署真实形制重做：
+  //   中轴 x=2025，自南向北：照壁→牌坊→大门→仪门→六房(东西各六间)→月台(三级台阶)→
+  //   大堂(审案)→二堂→内宅(知州府，带后花园)；东西两侧：师爷房/刑名幕厅、钟楼、鼓楼、
+  //   监狱院(高墙铁栅)、马神庙、土地祠、库房、厨房、井亭；全院青砖铺地 + 石板甬道 + 回廊。
   (function buildYamen() {
-    const X0 = 1900, X1 = 2150, ZS = -205, ZN = -690;
-    const WALL_H = 5.4;
+    const AX = 2025, X0 = 1890, X1 = 2160, ZS = -170, ZN = -700;
+    const WALL_H = 5.6;
 
-    // ---- 悬山瓦顶（屋脊沿 x 轴）----
-    function ymRoof(cx, cz, w, d, y, tileC) {
-      const ow = w + 2.6, od = d + 2.6, sl = 0.42, sh = od * 0.27;
-      for (const s of [-1, 1]) {
-        det(BX(ow, 0.42, od * 0.60), tileC, cx, y + sh * 0.52, cz + s * od * 0.245, s * sl, 0, 0);
-        det(BX(ow, 0.26, 0.55), 0x3d434a, cx, y - 0.02, cz + s * od * 0.475);
+    // ---------- 贴图（青砖地 / 石板路），只做 4 张，draw call 几乎不涨 ----------
+    function mkTex(px, draw, rx, ry) {
+      const cv = document.createElement('canvas');
+      cv.width = px; cv.height = px;
+      draw(cv.getContext('2d'), px);
+      const tx = new THREE.CanvasTexture(cv);
+      tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+      tx.repeat.set(rx, ry);
+      return tx;
+    }
+    const texPave = mkTex(256, (c, N) => {
+      c.fillStyle = '#9b948a'; c.fillRect(0, 0, N, N);
+      for (let y = 0; y < N; y += 32) {
+        for (let x = 0; x < N; x += 64) {
+          const ox = ((y / 32) % 2) * 32;
+          c.fillStyle = 'rgba(' + (140 + Math.random() * 26 | 0) + ',' + (134 + Math.random() * 22 | 0) + ',' + (124 + Math.random() * 20 | 0) + ',1)';
+          c.fillRect(x + ox + 1, y + 1, 62, 30);
+        }
       }
-      det(BX(ow * 1.004, 0.54, 0.95), 0x474036, cx, y + sh + 0.05, cz);
+      c.strokeStyle = 'rgba(90,86,78,0.55)'; c.lineWidth = 1;
+      for (let y = 0; y <= N; y += 32) { c.beginPath(); c.moveTo(0, y); c.lineTo(N, y); c.stroke(); }
+      for (let y = 0; y < N; y += 32) {
+        const ox = ((y / 32) % 2) * 32;
+        for (let x = 0; x <= N; x += 64) { c.beginPath(); c.moveTo(x + ox, y); c.lineTo(x + ox, y + 32); c.stroke(); }
+      }
+    }, 14, 28);
+    const texSlab = mkTex(256, (c, N) => {
+      c.fillStyle = '#b3ab9c'; c.fillRect(0, 0, N, N);
+      for (let y = 0; y < N; y += 42) {
+        for (let x = 0; x < N; x += 42) {
+          c.fillStyle = 'rgba(' + (176 + Math.random() * 24 | 0) + ',' + (168 + Math.random() * 22 | 0) + ',' + (152 + Math.random() * 22 | 0) + ',1)';
+          c.fillRect(x + 2, y + 2, 38, 38);
+        }
+      }
+      c.strokeStyle = 'rgba(110,104,92,0.7)'; c.lineWidth = 2;
+      for (let y = 0; y <= N; y += 42) { c.beginPath(); c.moveTo(0, y); c.lineTo(N, y); c.stroke(); }
+      for (let x = 0; x <= N; x += 42) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, N); c.stroke(); }
+    }, 2, 40);
+    const M_PAVE = new THREE.MeshLambertMaterial({ map: texPave });
+    const M_SLAB = new THREE.MeshLambertMaterial({ map: texSlab });
+
+    function plane(w, d, x, z, y, mat, ry) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+      m.rotation.x = -Math.PI / 2;
+      if (ry) m.rotation.z = ry;
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    }
+
+    // ---------- 瓦顶：拆成若干条"瓦垄"，深浅相间，远看有质感 ----------
+    function ymRoof(cx, cz, w, d, y, tileA, tileB) {
+      const ow = w + 2.8, od = d + 2.8, sl = 0.46, sh = od * 0.30;
+      const cols = 7;
+      const cw = ow / cols;
+      for (let i = 0; i < cols; i++) {
+        const px = cx - ow / 2 + cw * (i + 0.5);
+        const c = (i % 2) ? (tileA || CY_TILE) : (tileB || 0x4a5057);
+        for (const s of [-1, 1]) {
+          det(BX(cw, 0.40, od * 0.58), c, px, y + sh * 0.50, cz + s * od * 0.245, s * sl, 0, 0);
+        }
+      }
+      for (const s of [-1, 1]) det(BX(ow, 0.30, 0.7), 0x3d434a, cx, y - 0.04, cz + s * od * 0.475);   // 檐口
+      det(BX(ow * 1.008, 0.58, 1.0), 0x474036, cx, y + sh + 0.06, cz);                                // 正脊
+      for (const sx of [-1, 1]) det(BX(0.9, 0.85, 1.1), 0x474036, cx + sx * ow * 0.505, y + sh * 0.55, cz, 0, 0, sx * 0.35);  // 正吻
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        det(BX(1.8, 0.34, 0.7), tileC, cx + sx * ow * 0.40, y + sh * 0.45, cz + sz * od * 0.40, sz * sl * 0.9, 0, sx * 0.26);
+        det(BX(2.0, 0.34, 0.75), tileA || CY_TILE, cx + sx * ow * 0.40, y + sh * 0.45, cz + sz * od * 0.40, sz * sl * 0.9, 0, sx * 0.30);
       }
     }
 
-    // ---- 正殿（正面朝 +z，前檐带廊 + 斗拱 + 匾额）----
+    // ---------- 台阶 ----------
+    function stairs(cx, cz, w, n, sh, dir) {
+      for (let i = 0; i < n; i++) {
+        const hh = sh * (n - i);
+        det(BX(w, hh, 1.0), 0xcac4b6, cx, hh / 2, cz + dir * (i * 1.0 + 0.5));
+      }
+      det(BX(w * 0.34, 0.12, n * 1.0), 0xbdb6a6, cx, sh * n + 0.06, cz + dir * n * 0.5);   // 御路
+    }
+
+    // ---------- 正殿 ----------
     function ymHall(cx, cz, w, d, h, opt) {
       const o = opt || {};
-      det(BX(w + 5.2, 1.1, d + 5.2), 0xb6b0a2, cx, 0.55, cz);
-      det(BX(w, h, d), o.wall || CY_BRICK, cx, 1.1 + h / 2, cz);
-      const nc = Math.max(3, Math.round(w / 3.8));
+      det(BX(w + 6, 1.15, d + 6), 0xb6b0a2, cx, 0.57, cz);
+      det(BX(w, h, d), o.wall || CY_BRICK, cx, 1.15 + h / 2, cz);
+      const nc = Math.max(3, Math.round(w / 3.6));
       for (let i = 0; i < nc; i++) {
         const px = cx - w / 2 + 2 + i * (w - 4) / (nc - 1);
-        det(new THREE.CylinderGeometry(0.44, 0.48, h + 0.5, 10), 0x6d3a20, px, 1.1 + (h + 0.5) / 2, cz + d / 2 + 1.9);
-        det(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 10), 0x9a9078, px, 1.25, cz + d / 2 + 1.9);
-        det(BX(1.3, 0.40, 0.85), 0x7a3f22, px, 1.1 + h + 0.25, cz + d / 2 + 0.35);
-        det(BX(1.85, 0.26, 1.1), 0x8f4c28, px, 1.1 + h + 0.55, cz + d / 2 + 0.35);
+        det(new THREE.CylinderGeometry(0.46, 0.50, h + 0.5, 10), 0x6d3a20, px, 1.15 + (h + 0.5) / 2, cz + d / 2 + 2.1);
+        det(new THREE.CylinderGeometry(0.58, 0.58, 0.32, 10), 0x9a9078, px, 1.3, cz + d / 2 + 2.1);
+        det(BX(1.3, 0.40, 0.9), 0x7a3f22, px, 1.15 + h + 0.25, cz + d / 2 + 0.4);      // 斗拱一层
+        det(BX(1.9, 0.28, 1.15), 0x8f4c28, px, 1.15 + h + 0.55, cz + d / 2 + 0.4);     // 斗拱二层
       }
-      det(BX(w + 3.6, 0.34, 3.0), 0x5c3a26, cx, 1.1 + h + 0.12, cz + d / 2 + 1.6);
-      det(BX(w + 0.5, 0.6, 0.42), 0x8a2f2a, cx, 1.1 + h - 0.22, cz + d / 2 + 0.06);
-      det(BX(w + 0.5, 0.34, 0.36), 0xc8a24a, cx, 1.1 + h - 0.62, cz + d / 2 + 0.07);
-      const dh = Math.min(5.0, h * 0.72);
-      det(BX(Math.min(6.2, w * 0.24), dh, 0.42), 0x33200f, cx, 1.1 + dh / 2, cz + d / 2 + 0.24);
+      det(BX(w + 4.2, 0.36, 3.4), 0x5c3a26, cx, 1.15 + h + 0.12, cz + d / 2 + 1.8);     // 廊檐
+      det(BX(w + 0.6, 0.62, 0.45), 0x8a2f2a, cx, 1.15 + h - 0.22, cz + d / 2 + 0.06);   // 额枋
+      det(BX(w + 0.6, 0.34, 0.38), 0xc8a24a, cx, 1.15 + h - 0.64, cz + d / 2 + 0.07);
+      const dh = Math.min(5.4, h * 0.72);
+      det(BX(Math.min(7.0, w * 0.26), dh, 0.44), 0x33200f, cx, 1.15 + dh / 2, cz + d / 2 + 0.26);
       for (const s of [-1, 1]) {
-        det(BX(w * 0.16, dh * 0.62, 0.34), 0x2c1c10, cx + s * w * 0.28, 1.1 + dh * 0.55, cz + d / 2 + 0.24);
-        det(BX(w * 0.02, dh, 0.36), 0xc8a24a, cx + s * w * 0.20, 1.1 + dh / 2, cz + d / 2 + 0.25);
+        det(BX(w * 0.15, dh * 0.60, 0.36), 0x2c1c10, cx + s * w * 0.28, 1.15 + dh * 0.55, cz + d / 2 + 0.26);
+        det(BX(w * 0.02, dh, 0.38), 0xc8a24a, cx + s * w * 0.20, 1.15 + dh / 2, cz + d / 2 + 0.27);
       }
-      ymRoof(cx, cz, w, d, 1.1 + h + 0.42, o.tile || CY_TILE);
+      ymRoof(cx, cz, w, d, 1.15 + h + 0.42);
       if (o.plaque !== false) {
-        det(BX(w * 0.30, 1.55, 0.32), 0x241a12, cx, 1.1 + h + 0.02, cz + d / 2 + 0.30);
-        det(BX(w * 0.255, 1.15, 0.10), 0xd8b45c, cx, 1.1 + h + 0.02, cz + d / 2 + 0.45, 0, 0, 0, true);
+        det(BX(w * 0.32, 1.7, 0.34), 0x241a12, cx, 1.15 + h + 0.05, cz + d / 2 + 0.32);
+        det(BX(w * 0.27, 1.25, 0.10), 0xd8b45c, cx, 1.15 + h + 0.05, cz + d / 2 + 0.48, 0, 0, 0, true);
       }
+      if (o.steps !== false) stairs(cx, cz + d / 2 + 3.0, Math.min(w * 0.6, 14), 3, 0.36, 1);
     }
 
-    // ---- 廊房 / 六房（长向沿 z，正面朝 dirX：+1 朝东，-1 朝西）----
-    function sideHall(cx, cz, len, dirX, h) {
-      const d = 9.2, hh = h || 5.2;
-      det(BX(d + 4, 0.9, len + 4), 0xb6b0a2, cx, 0.45, cz);
-      det(BX(d, hh, len), CY_BRICK, cx, 0.9 + hh / 2, cz);
-      const nc = Math.max(2, Math.round(len / 5.2));
+    // ---------- 偏房 / 廊房（长向沿 z，正面朝 dirX） ----------
+    function sideHall(cx, cz, len, dirX, h, rooms) {
+      const d = 10.0, hh = h || 5.6;
+      det(BX(d + 4.4, 0.95, len + 4), 0xb6b0a2, cx, 0.48, cz);
+      det(BX(d, hh, len), CY_BRICK, cx, 0.95 + hh / 2, cz);
+      const nr = rooms || Math.max(2, Math.round(len / 18));
+      const nc = nr * 2;
       for (let i = 0; i <= nc; i++) {
         const pz = cz - len / 2 + i * len / nc;
-        det(new THREE.CylinderGeometry(0.38, 0.42, hh + 0.4, 8), 0x6d3a20, cx + dirX * 3.6, 0.9 + (hh + 0.4) / 2, pz);
-        det(BX(1.15, 0.34, 0.75), 0x7a3f22, cx + dirX * 2.4, 0.9 + hh + 0.22, pz);
-        if (i < nc) det(BX(0.3, 2.4, 2.2), 0x2c1c10, cx + dirX * (d / 2 + 0.06), 2.1, pz + len / nc * 0.5);
+        det(new THREE.CylinderGeometry(0.40, 0.44, hh + 0.4, 8), 0x6d3a20, cx + dirX * 3.9, 0.95 + (hh + 0.4) / 2, pz);
+        det(BX(1.2, 0.36, 0.8), 0x7a3f22, cx + dirX * 2.5, 0.95 + hh + 0.24, pz);
       }
-      det(BX(d + 4, 0.34, len + 4), 0x5c3a26, cx + dirX * 1.4, 0.9 + hh + 0.06, cz);
+      for (let i = 0; i < nr; i++) {                      // 每间：门 + 窗 + 匾
+        const pz = cz - len / 2 + (i + 0.5) * len / nr;
+        det(BX(0.34, 2.6, 2.4), 0x2c1c10, cx + dirX * (d / 2 + 0.07), 2.2, pz);
+        det(BX(0.30, 1.5, 3.0), 0x3a2a1a, cx + dirX * (d / 2 + 0.07), 3.9, pz - len / nr * 0.30);
+        det(BX(0.24, 0.75, 2.2), 0x241a12, cx + dirX * (d / 2 + 0.12), 0.95 + hh - 0.55, pz);
+      }
+      det(BX(d + 4.4, 0.36, len + 4), 0x5c3a26, cx + dirX * 1.5, 0.95 + hh + 0.06, cz);   // 廊檐
       for (const s of [-1, 1]) {
-        det(BX((d + 4) * 0.62, 0.40, len + 4), CY_TILE, cx + s * (d + 4) * 0.245, 0.9 + hh + 0.62, cz, 0, 0, -s * 0.42);
+        det(BX((d + 4.4) * 0.60, 0.40, len + 4), (s > 0 ? CY_TILE : 0x4a5057), cx + s * (d + 4.4) * 0.245, 0.95 + hh + 0.64, cz, 0, 0, -s * 0.44);
       }
-      det(BX(1.0, 0.5, len + 4.2), 0x474036, cx, 0.9 + hh + 1.30, cz);
+      det(BX(1.1, 0.52, len + 4.4), 0x474036, cx, 0.95 + hh + 1.34, cz);
+      stairs(cx + dirX * (d / 2 + 2.6), cz - len / 2 + len / nr * 0.5, 8, 2, 0.30, 1);
     }
 
-    // ---- 角楼 ----
-    function pavilion(cx, cz, sz, h) {
-      det(BX(sz, h, sz), CY_BRICK, cx, h / 2, cz);
-      det(BX(sz + 1.8, 0.5, sz + 1.8), 0x5c3a26, cx, h + 0.2, cz);
-      det(new THREE.ConeGeometry(sz * 1.08, 3.6, 4), CY_TILE, cx, h + 2.2, cz, 0, Math.PI / 4, 0);
-      det(new THREE.SphereGeometry(0.42, 8, 6), 0xc8a24a, cx, h + 4.35, cz, 0, 0, 0, true);
-    }
-
-    // ---- 谯楼（钟楼）----
-    function bellTower(cx, cz) {
-      det(BX(15, 8, 15), 0x8a8378, cx, 4, cz);
-      det(BX(15.6, 0.5, 15.6), 0x5c3a26, cx, 8.2, cz);
-      det(BX(10, 4.6, 10), CY_BRICK, cx, 10.6, cz);
-      for (const s of [-1, 1]) for (const t of [-1, 1]) {
-        det(new THREE.CylinderGeometry(0.34, 0.36, 4.8, 8), 0x6d3a20, cx + s * 4.2, 10.6, cz + t * 4.2);
+    // ---------- 回廊（柱 + 檐 + 坐凳栏）----------
+    function corridor(cx, cz, len, dirX) {
+      det(BX(4.6, 0.30, len + 2), 0xb6b0a2, cx, 0.15, cz);
+      for (let i = 0; i <= Math.round(len / 4); i++) {
+        const pz = cz - len / 2 + i * 4;
+        det(new THREE.CylinderGeometry(0.26, 0.28, 3.6, 8), 0x7a4a26, cx, 1.95, pz);
+        det(BX(3.6, 0.24, 0.9), 0x5c3a26, cx, 3.62, pz);
       }
-      det(BX(16, 0.5, 16), 0x5c3a26, cx, 13.2, cz);
-      det(new THREE.ConeGeometry(9.8, 5.4, 4), CY_TILE, cx, 16.2, cz, 0, Math.PI / 4, 0);
-      det(new THREE.SphereGeometry(0.55, 8, 6), 0xd8b45c, cx, 19.1, cz, 0, 0, 0, true);
-      det(BX(3.6, 2.6, 0.35), 0x241a12, cx, 8.6, cz + 7.6);
-      det(BX(3.0, 2.0, 0.12), 0xd8b45c, cx, 8.6, cz + 7.8, 0, 0, 0, true);
+      det(BX(0.24, 0.30, len), 0x8a2f2a, cx + dirX * 2.2, 1.55, cz);    // 坐凳栏
+      det(BX(1.0, 0.42, len + 1.6), 0x474036, cx, 4.0, cz);              // 廊顶脊
+      for (const s of [-1, 1]) det(BX(2.6, 0.32, len + 1.6), (s > 0 ? CY_TILE : 0x4a5057), cx + s * 1.25, 3.86, cz, 0, 0, -s * 0.42);
     }
 
-    // ---- 木牌坊（三间四柱三楼）----
-    function paifang(cx, cz) {
-      for (const dx of [-18, -9, 0, 9, 18]) {
-        det(new THREE.CylinderGeometry(0.55, 0.64, 9.4, 10), 0x8a2f2a, cx + dx, 4.7, cz);
-        det(new THREE.CylinderGeometry(0.85, 0.95, 0.7, 10), 0xb6b0a2, cx + dx, 0.35, cz);
+    // ---------- 二层楼阁 ----------
+    function tower2(cx, cz, sz, h) {
+      det(BX(sz + 3, 1.0, sz + 3), 0xb6b0a2, cx, 0.5, cz);
+      det(BX(sz, h, sz), CY_BRICK, cx, 1.0 + h / 2, cz);
+      for (const s of [-1, 1]) for (const t of [-1, 1]) det(new THREE.CylinderGeometry(0.36, 0.38, h, 8), 0x6d3a20, cx + s * sz * 0.42, 1.0 + h / 2, cz + t * sz * 0.42);
+      det(BX(sz + 3.4, 0.42, sz + 3.4), 0x5c3a26, cx, 1.0 + h + 0.2, cz);
+      det(BX(sz * 0.72, h * 0.62, sz * 0.72), CY_BRICK, cx, 1.0 + h + 0.42 + h * 0.31, cz);
+      for (const s of [-1, 1]) det(BX(0.3, 2.2, sz * 0.5), 0x2c1c10, cx + s * (sz * 0.36 + 0.15), 1.0 + h + 1.3, cz);
+      ymRoof(cx, cz, sz * 0.82, sz * 0.82, 1.0 + h + 0.42 + h * 0.62 + 0.3);
+      det(new THREE.SphereGeometry(0.45, 8, 6), 0xd8b45c, cx, 1.0 + h + 0.42 + h * 0.62 + 3.2, cz, 0, 0, 0, true);
+    }
+
+    // ---------- 攒尖亭 ----------
+    function pavilion(cx, cz, r, h) {
+      det(new THREE.CylinderGeometry(r * 1.15, r * 1.2, 0.5, 6), 0xbdb6a6, cx, 0.25, cz);
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        det(new THREE.CylinderGeometry(0.26, 0.28, h, 8), 0x7a4a26, cx + Math.cos(a) * r, 0.5 + h / 2, cz + Math.sin(a) * r);
       }
-      for (const s of [-1, 1]) det(BX(38, 0.55, 0.5), 0x6d3a20, cx, 6.4, cz);
-      det(BX(40, 0.9, 1.2), 0x6d3a20, cx, 8.2, cz);
-      det(BX(13, 1.7, 1.3), 0x24365e, cx, 7.0, cz);
-      det(BX(12, 1.2, 0.2), 0xd8b45c, cx, 7.0, cz + 0.7, 0, 0, 0, true);
-      ymRoof(cx, cz, 44, 4.6, 9.7, CY_TILE);
-      for (const s of [-1, 1]) ymRoof(cx + s * 15, cz, 15, 3.6, 8.6, CY_TILE);
+      det(BX(r * 2.2, 0.3, r * 2.2), 0x5c3a26, cx, 0.5 + h, cz);
+      det(new THREE.ConeGeometry(r * 1.75, h * 0.62, 6), CY_TILE, cx, 0.5 + h + h * 0.31, cz);
+      det(new THREE.SphereGeometry(0.30, 8, 6), 0xc8a24a, cx, 0.5 + h + h * 0.66, cz, 0, 0, 0, true);
     }
 
-    // ---- 照壁 ----
-    function zhaobi(cx, cz) {
-      det(BX(26, 0.8, 2.8), 0xb6b0a2, cx, 0.4, cz);
-      det(BX(22, 4.8, 1.1), 0x8f887c, cx, 3.2, cz);
-      det(BX(22.6, 0.5, 1.9), CY_TILE, cx, 5.7, cz);
-      det(BX(17, 2.8, 0.2), 0x9a938a, cx, 3.3, cz + 0.62);
-      for (const s of [-1, 1]) det(BX(1.3, 5.8, 1.7), 0x8f887c, cx + s * 11.5, 2.9, cz);
+    // ---------- 院墙（青砖 + 瓦顶） ----------
+    function wallSeg(x0, z0, x1, z1, h) {
+      const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0);
+      det(BX(w || 1.2, h, d || 1.2), CY_BRICK, (x0 + x1) / 2, h / 2, (z0 + z1) / 2);
+      det(BX((w || 1.2) + 1.6, 0.5, (d || 1.2) + 1.6), CY_TILE, (x0 + x1) / 2, h + 0.18, (z0 + z1) / 2);
     }
 
-    // ---- 院墙 ----
-    function wallX(x, z0, z1) {
-      det(BX(1.3, WALL_H, Math.abs(z1 - z0)), CY_BRICK, x, WALL_H / 2, (z0 + z1) / 2);
-      det(BX(2.4, 0.5, Math.abs(z1 - z0) + 0.4), CY_TILE, x, WALL_H + 0.2, (z0 + z1) / 2);
+    // ---------- 地面：全院青砖 + 石板甬道 ----------
+    plane(268, 528, AX, -435, 0.08, M_PAVE);
+    plane(14, 520, AX, -435, 0.11, M_SLAB);
+    for (const z of [-320, -455, -520]) plane(250, 11, AX, z, 0.11, M_SLAB);
+    plane(11, 470, 1958, -435, 0.11, M_SLAB);
+    plane(11, 470, 2092, -435, 0.11, M_SLAB);
+
+    // ---------- 院墙（南留 26m 大门洞） ----------
+    wallSeg(X0, ZN, X0, ZS, WALL_H);
+    wallSeg(X1, ZN, X1, ZS, WALL_H);
+    wallSeg(X0 - 0.8, ZN, X1 + 0.8, ZN, WALL_H);
+    wallSeg(X0, ZS, 2012, ZS, WALL_H);
+    wallSeg(2038, ZS, X1, ZS, WALL_H);
+    for (const z of [-320, -455, -520]) { wallSeg(X0, z, 2013, z, 4.4); wallSeg(2037, z, X1, z, 4.4); }
+
+    // ---------- 前院：照壁 / 牌坊 / 大门 / 门房 ----------
+    det(BX(26, 0.8, 2.8), 0xb6b0a2, AX, 0.4, -138);
+    det(BX(22, 4.9, 1.2), 0x8f887c, AX, 3.25, -138);
+    det(BX(22.6, 0.5, 2.0), CY_TILE, AX, 5.85, -138);
+    det(BX(17, 2.9, 0.2), 0x9a938a, AX, 3.4, -137.4);
+    for (const s of [-1, 1]) det(BX(1.4, 5.9, 1.8), 0x8f887c, AX + s * 11.6, 2.95, -138);
+
+    for (const dx of [-19, -9.5, 0, 9.5, 19]) {
+      det(new THREE.CylinderGeometry(0.58, 0.66, 9.6, 10), 0x8a2f2a, AX + dx, 4.8, -158);
+      det(new THREE.CylinderGeometry(0.9, 1.0, 0.8, 10), 0xb6b0a2, AX + dx, 0.4, -158);
     }
-    function wallZ(z, x0, x1) {
-      det(BX(Math.abs(x1 - x0), WALL_H, 1.3), CY_BRICK, (x0 + x1) / 2, WALL_H / 2, z);
-      det(BX(Math.abs(x1 - x0) + 0.4, 0.5, 2.4), CY_TILE, (x0 + x1) / 2, WALL_H + 0.2, z);
+    for (const s of [-1, 1]) det(BX(40, 0.55, 0.5), 0x6d3a20, AX, 6.5, -158);
+    det(BX(42, 0.95, 1.3), 0x6d3a20, AX, 8.35, -158);
+    det(BX(14, 1.8, 1.4), 0x24365e, AX, 7.1, -158);
+    det(BX(13, 1.3, 0.2), 0xd8b45c, AX, 7.1, -185.3, 0, 0, 0, true);
+    ymRoof(AX, -158, 46, 4.8, 9.9);
+    for (const s of [-1, 1]) ymRoof(AX + s * 15.5, -158, 16, 3.8, 8.7);
+
+    ymHall(AX, -232, 34, 14, 9.6, {});                       // 大门
+    for (const s of [-1, 1]) {                               // 门房 / 班房
+      sideHall(AX + s * 28, -238, 18, -s, 4.6, 2);
+    }
+    for (const s of [-1, 1]) {                               // 石狮 + 上马石
+      det(BX(2.8, 1.0, 2.8), 0xb6b0a2, AX + s * 13, 0.5, -212);
+      det(BX(1.6, 1.7, 2.2), 0x9a958c, AX + s * 13, 1.95, -212);
+      det(new THREE.SphereGeometry(0.98, 10, 8), 0x9a958c, AX + s * 13, 3.2, -211.4);
+      det(BX(3.2, 0.9, 1.6), 0xbdb6a6, AX + s * 20, 0.45, -206);
+    }
+    for (const s of [-1, 1]) {                               // 旗杆
+      det(new THREE.CylinderGeometry(0.16, 0.2, 11, 8), 0x8a4a2c, AX + s * 24, 5.5, -196);
+      det(BX(2.6, 1.4, 0.1), 0xc0392b, AX + s * 25.2, 9.6, -196);
     }
 
-    // ---- 地面铺装（不登记碰撞，避免把院子变成台阶）----
-    _detNoCol = true;
-    det(BX(246, 0.10, 483), 0x9a938a, 2025, 0.05, -447.5);
-    det(BX(10, 0.16, 478), 0xb2a894, 2025, 0.12, -447);
-    for (const z of [-320, -455, -520]) det(BX(246, 0.14, 9), 0xb2a894, 2025, 0.11, z);
-    _detNoCol = false;
+    ymHall(AX, -298, 26, 10, 8.2, {});                       // 仪门
+    corridor(1966, -375, 116, 1);                            // 西回廊
+    corridor(2084, -375, 116, -1);                           // 东回廊
 
-    // ---- 院墙（南面留 24 米大门洞）----
-    wallX(X0, ZN, ZS);
-    wallX(X1, ZN, ZS);
-    wallZ(ZN, X0 - 0.7, X1 + 0.7);
-    wallZ(ZS, X0, 2013);
-    wallZ(ZS, 2037, X1);
-    for (const z of [-320, -455, -520]) { wallZ(z, X0, 2012); wallZ(z, 2038, X1); }
+    // ---------- 六房：东西各六间 ----------
+    sideHall(1946, -388, 124, 1, 5.6, 6);
+    sideHall(2104, -388, 124, -1, 5.6, 6);
+    // 师爷房 / 刑名幕厅（中院东西配殿）
+    ymHall(1958, -470, 24, 12, 7.0, {});
+    ymHall(2092, -470, 24, 12, 7.0, {});
+    tower2(2128, -330, 9, 5.2);                              // 东钟楼
+    tower2(1922, -330, 9, 5.2);                              // 西鼓楼
 
-    // ---- 建筑本体 ----
-    zhaobi(2025, -172);
-    paifang(2025, -190);
-    ymHall(2025, -238, 30, 11, 8.2, {});          // 大门（门厅）
-    ymHall(2025, -300, 24, 9, 7.4, {});           // 仪门
-    sideHall(1950, -388, 118, 1, 5.2);            // 西六房（吏户礼兵刑工）
-    sideHall(2100, -388, 118, -1, 5.2);           // 东六房
-    det(BX(50, 1.3, 26), 0xb6b0a2, 2025, 0.65, -462);   // 月台
-    ymHall(2025, -486, 38, 20, 12.2, {});         // 大堂
-    ymHall(2025, -566, 28, 15, 9.2, {});          // 二堂
-    ymHall(2025, -640, 30, 16, 9.0, {});          // 内宅
-    sideHall(1966, -600, 44, 1, 5.0);             // 内宅西厢
-    sideHall(2084, -600, 44, -1, 5.0);            // 内宅东厢
-    bellTower(2118, -330);                        // 谯楼
-    det(BX(16, 5.0, 14), 0x8a8378, 1932, 2.5, -556);      // 监狱
-    det(BX(17.2, 0.5, 15.2), CY_TILE, 1932, 5.2, -556);
-    for (const c of [[X0, ZS], [X1, ZS], [X0, ZN], [X1, ZN]]) pavilion(c[0], c[1], 7.5, 6.2);
+    // ---------- 月台 + 大堂（审案） ----------
+    det(BX(56, 1.7, 30), 0xb6b0a2, AX, 0.85, -448);
+    for (const s of [-1, 1]) det(BX(1.0, 1.1, 30), 0xc8c2b4, AX + s * 28, 2.25, -448);   // 月台栏杆
+    det(BX(1.0, 1.1, 30), 0xc8c2b4, AX - 28, 2.25, -448);
+    stairs(AX, -464, 20, 5, 0.34, 1);
+    stairs(AX - 20, -464, 8, 4, 0.34, 1);
+    stairs(AX + 20, -464, 8, 4, 0.34, 1);
+    ymHall(AX, -486, 46, 22, 13.0, { plaque: true, steps: false });   // 大堂（面阔七间）
+    det(BX(14, 0.5, 10), 0x5c3a26, AX, 14.6, -497);                    // 抱厦
+    det(BX(12, 0.42, 9), CY_TILE, AX, 15.4, -497);
+    det(BX(10, 1.2, 0.4), 0x241a12, AX, 5.2, -474.6);                  // 堂内案桌
+    det(BX(3.2, 0.9, 0.3), 0x8a2f2a, AX, 4.4, -477.2);
+    for (const s of [-1, 1]) det(BX(0.4, 5.0, 0.4), 0x6d3a20, AX + s * 16, 2.5, -474.6);
 
-    // ---- 陈设：石狮、石灯笼、古柏 ----
-    for (const s of [-1, 1]) {
-      const sx = 2025 + s * 12, sz = -218;
-      det(BX(2.6, 1.0, 2.6), 0xb6b0a2, sx, 0.5, sz);
-      det(BX(1.6, 1.6, 2.1), 0x9a958c, sx, 1.9, sz);
-      det(new THREE.SphereGeometry(0.95, 10, 8), 0x9a958c, sx, 3.1, sz + 0.5);
-      det(new THREE.SphereGeometry(0.34, 8, 6), 0x8a857c, sx + s * 0.45, 3.55, sz + 1.15);
+    // ---------- 二堂 / 后院厢房 ----------
+    ymHall(AX, -560, 32, 16, 10.0, {});
+    sideHall(1962, -566, 40, 1, 5.4, 2);
+    sideHall(2088, -566, 40, -1, 5.4, 2);
+
+    // ---------- 内宅（知州府）----------
+    ymHall(AX, -640, 38, 18, 11.0, {});
+    sideHall(1964, -636, 46, 1, 5.6, 3);
+    sideHall(2086, -636, 46, -1, 5.6, 3);
+    wallSeg(1946, -600, 2104, -600, 4.2);                    // 内宅门墙
+    // 后花园：水池 + 假山 + 亭 + 月洞门
+    plane(46, 34, 2060, -682, 0.16, new THREE.MeshLambertMaterial({ color: 0x2f7f96 }));
+    for (const p of [[2042, -676], [2056, -690], [2072, -674], [2086, -688]]) {
+      det(new THREE.SphereGeometry(2.1, 8, 6), 0x7d7a70, p[0], 1.4, p[1]);
+      det(new THREE.SphereGeometry(1.3, 7, 5), 0x8d8a7e, p[0] + 1.2, 2.6, p[1] + 0.8);
+    }
+    pavilion(2082, -668, 4.2, 4.4);
+    det(new THREE.CylinderGeometry(2.4, 2.4, 0.4, 16), 0xb6b0a2, 1972, 0.2, -672);
+    det(new THREE.CylinderGeometry(2.0, 2.0, 0.3, 16), 0x3a3f45, 1972, 0.45, -672);
+
+    // ---------- 监狱院（西侧高墙 + 铁栅）----------
+    wallSeg(1902, -560, 1958, -560, 7.0);
+    wallSeg(1902, -640, 1958, -640, 7.0);
+    wallSeg(1902, -640, 1902, -560, 7.0);
+    wallSeg(1958, -640, 1958, -560, 7.0);
+    for (let i = 0; i < 7; i++) det(new THREE.CylinderGeometry(0.09, 0.09, 4.4, 6), 0x3a3f45, 1930 + i * 0.55, 2.6, -562);
+    det(BX(12, 4.4, 0.5), 0x2b3038, 1958, 2.4, -600);
+    det(BX(10, 3.0, 8), 0x7a7468, 1930, 1.5, -620);           // 狱神庙
+    det(BX(11, 0.4, 9), CY_TILE, 1930, 3.2, -620);
+    for (let i = 0; i < 4; i++) {                             // 牢房隔间
+      det(BX(6, 3.2, 0.5), 0x8a8478, 1930, 1.6, -600 + i * 8);
+    }
+
+    // ---------- 东侧：马神庙 / 土地祠 / 库房 / 厨房 ----------
+    ymHall(2110, -600, 18, 12, 6.2, { plaque: false });
+    ymHall(2110, -660, 14, 10, 5.4, { plaque: false });
+    sideHall(2138, -500, 30, -1, 4.6, 3);                     // 库房
+    sideHall(1912, -500, 30, 1, 4.6, 3);                      // 厨房
+    pavilion(1968, -352, 3.2, 3.6);                           // 井亭
+    pavilion(2100, -556, 3.0, 3.4);
+
+    // ---------- 石碑 / 古柏 / 灯笼 ----------
+    for (const p of [[1978, -232], [2072, -232], [1978, -300], [2072, -300]]) {
+      det(BX(1.8, 0.5, 1.1), 0xb8b4a8, p[0], 0.25, p[1]);
+      det(BX(1.1, 2.2, 0.34), 0x9a958c, p[0], 1.55, p[1]);
+      det(BX(1.3, 0.3, 0.5), 0x8a857c, p[0], 2.75, p[1]);
     }
     for (const z of [-262, -342, -422, -502, -582]) {
       for (const s of [-1, 1]) {
-        const lx = 2025 + s * 9.5;
-        det(new THREE.CylinderGeometry(0.55, 0.65, 0.5, 8), 0xb8b4a8, lx, 0.25, z);
-        det(new THREE.CylinderGeometry(0.22, 0.26, 1.5, 8), 0xb8b4a8, lx, 1.25, z);
-        det(BX(0.9, 0.9, 0.9), 0xc8c4b8, lx, 2.45, z);
-        det(BX(0.5, 0.5, 0.5), 0xffd9a0, lx, 2.45, z, 0, 0, 0, true);
-        det(new THREE.ConeGeometry(1.05, 0.75, 6), 0x9a958c, lx, 3.25, z);
+        const lx = AX + s * 11;
+        det(new THREE.CylinderGeometry(0.6, 0.7, 0.55, 8), 0xb8b4a8, lx, 0.28, z);
+        det(new THREE.CylinderGeometry(0.24, 0.28, 1.7, 8), 0xb8b4a8, lx, 1.4, z);
+        det(BX(1.0, 1.0, 1.0), 0xc8c4b8, lx, 2.65, z);
+        det(BX(0.56, 0.56, 0.56), 0xffd9a0, lx, 2.65, z, 0, 0, 0, true);
+        det(new THREE.ConeGeometry(1.15, 0.8, 6), 0x9a958c, lx, 3.55, z);
       }
     }
     function cypress(cx, cz, h) {
-      det(new THREE.CylinderGeometry(0.42, 0.56, h * 0.45, 7), 0x5a3a24, cx, h * 0.22, cz);
-      det(new THREE.ConeGeometry(h * 0.30, h * 0.62, 8), 0x2f5f3a, cx, h * 0.62, cz);
-      det(new THREE.ConeGeometry(h * 0.22, h * 0.45, 8), 0x37694a, cx, h * 0.86, cz);
+      det(new THREE.CylinderGeometry(0.45, 0.6, h * 0.42, 7), 0x5a3a24, cx, h * 0.21, cz);
+      det(new THREE.ConeGeometry(h * 0.30, h * 0.60, 8), 0x2f5f3a, cx, h * 0.60, cz);
+      det(new THREE.ConeGeometry(h * 0.22, h * 0.42, 8), 0x37694a, cx, h * 0.84, cz);
     }
-    for (const p of [[1968, -262], [2082, -262], [1968, -302], [2082, -302], [1958, -478], [2092, -478], [1966, -598], [2084, -598]]) {
+    for (const p of [[1930, -250], [2120, -250], [1930, -300], [2120, -300], [1908, -470], [2142, -470], [1908, -560], [2142, -660], [1986, -690], [2110, -690], [1960, -520], [2090, -520]]) {
       cypress(p[0], p[1], 13);
     }
+  
+    // ---------- 【fix292b】前院回廊 / 轿厅 / 抱鼓石 / 月洞门 / 檐下灯笼 ----------
+    corridor(1940, -240, 104, 1);
+    corridor(2110, -240, 104, -1);
+    sideHall(2118, -292, 26, -1, 5.2, 2);            // 轿厅
+    sideHall(1932, -292, 26, 1, 5.2, 2);             // 库房
+    for (const s of [-1, 1]) {                        // 抱鼓石
+      det(new THREE.CylinderGeometry(0.9, 0.9, 0.7, 12), 0xbdb6a6, AX + s * 8, 0.9, -224);
+      det(BX(1.1, 0.5, 1.1), 0xc8c2b4, AX + s * 8, 0.25, -224);
+    }
+    det(BX(1.4, 4.6, 10), 0x8f887c, 2016, 2.3, -700);                    // 月洞门砖墙
+    det(new THREE.TorusGeometry(2.1, 0.55, 8, 18), 0x8f887c, 2016, 2.4, -695.6, 0, Math.PI / 2, 0);
+    for (const row of [[-472, 46], [-548, 32], [-628, 38]]) {            // 檐下红灯笼
+      for (let i = -2; i <= 2; i++) {
+        const lx = AX + i * row[1] / 5.2;
+        det(new THREE.SphereGeometry(0.42, 8, 6), 0xc0392b, lx, 7.55, row[0]);
+        det(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 6), 0x5a3a24, lx, 8.1, row[0]);
+      }
+    }
   })();
-// ---- 布置：在新扩出的东侧台地（x 1950~2160）----
+  // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
   buildWoodPagoda(1830, ZC - 275, 20);   // 【fix218】16→20   // 【fix217】塔身放大 11->16
   /* fix291: 让位给霍州署 */
   /* fix291: 让位给霍州署 */
