@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix348-moongate2';
+const BUILD = '20261107-fix349-backwindows';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26955,6 +26955,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
       }
+      // 【fix349】后墙开窗：每间一扇（暗窗芯 + 3 竖棂 + 石框）
+      for (let i5 = 0; i5 < nc; i5++) {
+        const pz5 = cz - len / 2 + (i5 + 0.5) * len / nc;
+        const wx5 = cx - dirX * (d / 2 + 0.06);
+        det(BX(0.22, 2.0, 1.9), 0x9a948a, wx5, 3.55, pz5);
+        det(BX(0.16, 1.6, 1.5), 0x1a120c, wx5, 3.55, pz5);
+        for (let m5 = -1; m5 <= 1; m5++) det(BX(0.20, 1.6, 0.10), 0x8a5a34, wx5 - dirX * 0.04, 3.55, pz5 + m5 * 0.45);
+        det(BX(0.20, 0.12, 1.5), 0x8a5a34, wx5 - dirX * 0.04, 3.55, pz5);
+      }
       // 【fix344】每间门头小牌（吏房·一 … 按间编号）
       {
         const sufx = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
@@ -27548,6 +27557,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
         det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
       }
+      // 【fix349】池中荷叶（12 片，贴水面）
+      for (const lp of [[1965, -760], [2000, -778], [2035, -762], [2060, -786], [2010, -800], [1978, -795], [2048, -800], [2028, -745], [1992, -748], [2068, -768], [1952, -778], [2085, -782]]) {
+        det(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 10), 0x3f7a44, lp[0], BASE + 0.92, lp[1]);
+        det(new THREE.CylinderGeometry(0.10, 0.10, 0.10, 6), 0x2f6238, lp[0], BASE + 0.97, lp[1]);
+      }
       // 【fix346】叠石加密：再加 6 组假山（原 4 组）
       for (const p5 of [[1900, -742], [2150, -742], [1900, -806], [2150, -806], [2010, -826], [2040, -726]]) {
         det(new THREE.SphereGeometry(2.0, 7, 6), 0x8a8578, p5[0], BASE + 1.2, p5[1]);
@@ -27614,6 +27628,20 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s of [-1, 1]) for (let i = -3; i <= 3; i++) {
         det(BX(0.36, 1.2, 0.36), 0xc8c2b4, AX + s * 19.6, 2.75, YC + i * 3.0);
         det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, AX + s * 19.6, 3.45, YC + i * 3.0);
+      }
+      // 【fix349】大堂前仪仗：肃静 / 回避 牌（成对立在踏跺两侧）
+      {
+        const nm = ['肃静', '回避', '荷芷署', '正堂'];
+        let kk = 0;
+        for (const s of [-1, 1]) for (const s2 of [0, 1]) {
+          const bx9 = AX + s * (6.2 + s2 * 2.6), bz9 = YC + 13.2;
+          det(BX(1.4, 0.20, 0.9), 0x4a2416, bx9, 0.10, bz9);
+          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 - 0.42, 1.65, bz9);
+          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 + 0.42, 1.65, bz9);
+          det(BX(1.25, 0.18, 0.26), 0x6d3a20, bx9, 3.24, bz9);
+          plaque3d(nm[kk % 4], bx9, 2.10, bz9 + 0.18, 1.15, 2.40, '#241608', '#e8c86a');
+          kk++;
+        }
       }
       // 【fix346】月台前陈设：铜鹤一对 + 铜龟一对 + 日晷
       {
