@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix344-doorplates';
+const BUILD = '20261107-fix345-gatedoors';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27191,6 +27191,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(OW, 5.2, 0.6), 0x2b2f33, AX, 2.6, GZ - TD / 2 - 0.1);
       det(BX(OW, 5.2, 0.6), 0x2b2f33, AX, 2.6, GZ + TD / 2 + 0.1);
       plaque3d('荷芷', AX, TH - 1.9, GZ + TD / 2 + 0.25, 6.4, 2.3, '#2b3a5c', '#e8c86a');
+      // 【fix345】城门洞门扇：两扇厚木门 + 门钉 + 门环（原来是个空缺口）
+      for (const s of [-1, 1]) {
+        // 两扇门贴在门洞两侧（中间留 3 米通道，人可以走进去）
+        det(BX(3.0, 5.05, 0.38), 0x6b2b22, AX + s * 3.0, 2.52, GZ + 0.15);
+        det(BX(2.9, 0.22, 0.42), 0x4a1c16, AX + s * 3.0, 0.12, GZ + 0.15);
+        for (let r5 = 0; r5 < 5; r5++) for (let c5 = 0; c5 < 3; c5++)
+          det(new THREE.SphereGeometry(0.125, 6, 5), 0xc8a24a, AX + s * (2.0 + c5 * 0.95), 1.25 + r5 * 0.88, GZ + 0.37);
+        det(new THREE.CylinderGeometry(0.28, 0.28, 0.10, 12), 0xc8a24a, AX + s * 4.05, 2.70, GZ + 0.40, Math.PI / 2, 0, 0);
+        det(BX(0.22, 2.6, 0.10), 0x4a1c16, AX + s * 4.05, 2.70, GZ + 0.44);
+      }
       // 城台顶：谯楼（重檐二层）
       det(BX(TW + 1.4, 0.5, TD + 1.4), 0xb6b0a2, AX, TH + 0.25, GZ);
       // 【fix314】门楼檐下斗拱 + 彩画
@@ -27533,6 +27543,18 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.45, 0.55, 6.0, 8), 0x5a3a24, p3[0], BASE + 3.0, p3[1]);
         det(new THREE.SphereGeometry(3.0, 9, 7), 0x2f6238, p3[0], BASE + 7.0, p3[1]);
       }
+      // 【fix345】花园游廊：凉亭两侧接出一段廊子（8 柱 + 瓦顶）
+      for (const s of [-1, 1]) {
+        for (let i6 = 1; i6 <= 4; i6++) {
+          const cxp = AX + s * (5.0 + i6 * 3.0);
+          det(new THREE.CylinderGeometry(0.26, 0.28, 3.4, 8), 0x7d2f26, cxp, BASE + 1.7 + 1.2, -812);
+          det(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 8), 0xa8a294, cxp, BASE + 1.32, -812);
+        }
+        det(BX(12.0, 0.26, 3.4), 0x49505a, AX + s * 11.0, BASE + 4.55, -812);
+        det(BX(12.0, 0.30, 0.5), 0x453e34, AX + s * 11.0, BASE + 4.72, -812);
+        det(BX(12.0, 0.34, 0.5), 0x6d3a20, AX + s * 11.0, BASE + 4.30, -813.6);
+      }
+      for (const s of [-1, 1]) det(BX(0.5, 0.5, 3.4), 0x453e34, AX + s * 17.0, BASE + 4.90, -812);
       pavilion(AX, -812, 9, 6.0);
     })();
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
