@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix351-carving';
+const BUILD = '20261107-fix352-steps';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26955,6 +26955,12 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
       }
+      // 【fix352】每间门前两级石阶
+      for (let i8 = 0; i8 < nc; i8++) {
+        const pz9 = cz - len / 2 + (i8 + 0.5) * len / nc;
+        det(BX(2.4, 0.28, 2.2), 0xb0aa9e, cx + dirX * (d / 2 + 0.95), 0.14, pz9);
+        det(BX(2.2, 0.26, 1.6), 0xb8b4a8, cx + dirX * (d / 2 + 0.60), 0.42, pz9);
+      }
       // 【fix351】窗下矮柜 + 文房（每间后窗下）
       for (let i7 = 0; i7 < nc; i7++) {
         const pz7 = cz - len / 2 + (i7 + 0.5) * len / nc;
@@ -27235,6 +27241,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
           det(BX(1.5, 1.6, 0.9), 0x9a948a, mx, TH + 0.8, GZ + s * (TD / 2 - 0.45));
         }
         det(BX(0.9, 1.3, TD), 0x9a948a, AX + s * (TW / 2 - 0.45), TH + 0.65, GZ);
+      }
+      // 【fix352】城台顶登记到可站立面（用钩爪可以爬上谯楼）
+      (window.__WALL_TOPS = window.__WALL_TOPS || []).push({ x0: AX - TW / 2, x1: AX + TW / 2, z0: GZ - TD / 2, z1: GZ + TD / 2, top: TH + BASE + 0.5 });
+      // 城台顶四周女儿墙（站在城头有护栏）
+      for (const s of [-1, 1]) {
+        det(BX(TW, 0.9, 0.55), 0x9a948a, AX, TH + 0.95, GZ + s * (TD / 2 - 0.28));
+        det(BX(0.55, 0.9, TD), 0x9a948a, AX + s * (TW / 2 - 0.28), TH + 0.95, GZ);
       }
       const BX0 = 20, BH = 5.2;
       det(BX(BX0, BH, 11), CY_BRICK, AX, TH + 0.5 + BH / 2, GZ);
