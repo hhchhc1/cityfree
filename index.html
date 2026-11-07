@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix251-dex-14';
+const BUILD = '20261106-fix252-towers';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26051,9 +26051,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   // 鼓楼立在古建城的**正中心**（原中心那座殿阁让位，移到西侧）
   buildDrumTower(LH.ancX0 + 140, ZC);
-try { if (window.__folkAddSpot) window.__folkAddSpot('鼓楼', LH.ancX0 + 140, ZC, 0xffb0b0); } catch (eS) {}
+try { (window.__folkPending = window.__folkPending || []).push(['鼓楼', LH.ancX0 + 140, ZC, 0xffb0b0]); } catch (eS) {}
   buildPagoda(LH.ancX0 + 58, ZC, 3, 22);
-try { if (window.__folkAddSpot) window.__folkAddSpot('古塔', LH.ancX0 + 58, ZC, 0xb9d6ff); } catch (eS) {}
+try { (window.__folkPending = window.__folkPending || []).push(['古塔', LH.ancX0 + 58, ZC, 0xb9d6ff]); } catch (eS) {}
   buildPagoda(LH.ancX0 + 150, Z0 + 150, 3, 22);
   buildPagoda(LH.ancX0 + 150, Z1 - 150, 3, 22);
   buildPagoda(LH.ancX0 + 224, ZC - 90, 2, 19);
@@ -27361,6 +27361,12 @@ window.__folkAddSpot = function (name, x, z, color, dz) {
     ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring);
     window.__folkMarkers.push({ name: name, x: px, z: pz });
   } catch (e) { window.__folkSpotErr = String(e); }
+  // 补建"在 helper 定义之前就建好"的建筑（鼓楼/古塔）
+  try {
+    const pend = window.__folkPending || [];
+    for (let i = 0; i < pend.length; i++) { window.__folkAddSpot(pend[i][0], pend[i][1], pend[i][2], pend[i][3]); }
+    window.__folkPending = [];
+  } catch (e2) {}
 };
 // 【fix247】民居/古建图鉴：常驻按钮 + 走近光柱自动显示简介
 (function folkWikiAll() {
