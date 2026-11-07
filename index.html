@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix327-caihua';
+const BUILD = '20261107-fix330-clean';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27183,10 +27183,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(GAP + 2.4, 0.5, 0.5), 0x2e6b4c, AX, 1.1 + 7.4, Z + D / 2 + 0.2);
       plaque3d('仪门', AX, 8.55, Z + D / 2 + 0.6, 8.2, 2.5, '#1b2a4a', '#e8c86a');
       // 红色栅栏门（照片里最醒目的那排红栏杆）
+      // 中间留 5.2 米门道，红栏杆只拦两侧开间
       for (let i = 0; i < 22; i++) {
         const bx = AX - GAP / 2 + 0.5 + i * (GAP - 1) / 21;
+        if (Math.abs(bx - AX) < 2.9) continue;
         det(new THREE.CylinderGeometry(0.16, 0.16, 5.6, 6), 0xa8322a, bx, 1.1 + 2.9, Z + D / 2 + 0.9);
       }
+      for (const s of [-1, 1]) det(new THREE.CylinderGeometry(0.34, 0.38, 6.2, 10), 0x7d2f26, AX + s * 2.9, 1.1 + 3.1, Z + D / 2 + 0.9);
+      det(BX(6.4, 0.9, 0.55), 0x8a2f2a, AX, 1.1 + 6.3, Z + D / 2 + 0.9);
+      det(BX(6.8, 0.22, 0.6), 0xc8a24a, AX, 1.1 + 5.8, Z + D / 2 + 0.9);
       det(BX(GAP, 0.34, 0.34), 0xa8322a, AX, 1.1 + 5.4, Z + D / 2 + 0.9);
       det(BX(GAP, 0.34, 0.34), 0xa8322a, AX, 1.1 + 1.4, Z + D / 2 + 0.9);
       // 四根红柱
@@ -27319,11 +27324,31 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 7) 亲民堂（大堂） ====================
     (function datong() {
       const Z = -470;
-      det(BX(38, 1.6, 30), 0xb6b0a2, AX, 0.8, Z);                      // 月台
-      for (const s of [-1, 1]) det(BX(1.0, 1.1, 30), 0xc8c2b4, AX + s * 18.6, 2.0, Z);
-      det(BX(38, 1.1, 1.0), 0xc8c2b4, AX, 2.0, Z - 14.5);
-      stairs(AX, Z + 15.5, 14, 5, 0.32, 1);
-      stairs(AX, Z - 15.6, 10, 4, 0.32, -1);
+      // 【fix329】月台整体南移到殿前（原来半个压在殿身下面）
+      const YC = Z + 22;
+      det(BX(40, 1.6, 20), 0xb6b0a2, AX, 0.8, YC);
+      for (const s of [-1, 1]) det(BX(1.0, 1.15, 20), 0xc8c2b4, AX + s * 19.6, 2.02, YC);
+      det(BX(40, 1.15, 1.0), 0xc8c2b4, AX, 2.02, YC + 9.5);
+      // 望柱 + 栏板（月台南沿 + 两翼）
+      for (let i = -6; i <= 6; i++) {
+        const px = AX + i * 3.0;
+        det(BX(0.36, 1.2, 0.36), 0xc8c2b4, px, 2.75, YC + 9.5);
+        det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, px, 3.45, YC + 9.5);
+        if (i < 6) {
+          det(BX(2.7, 0.62, 0.18), 0xc0bab0, px + 1.5, 2.62, YC + 9.5);
+          det(BX(2.2, 0.34, 0.12), 0xa8a294, px + 1.5, 2.62, YC + 9.44);
+        }
+      }
+      for (const s of [-1, 1]) for (let i = -3; i <= 3; i++) {
+        det(BX(0.36, 1.2, 0.36), 0xc8c2b4, AX + s * 19.6, 2.75, YC + i * 3.0);
+        det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, AX + s * 19.6, 3.45, YC + i * 3.0);
+      }
+      // 御路：中间雕石斜坡，两侧踏跺
+      for (const s of [-1, 1]) stairs(AX + s * 5.4, YC + 11.0, 4.6, 5, 0.32, 1);
+      det(BX(5.4, 0.34, 6.6), 0xc0bab0, AX, 0.94, YC + 10.6, 0.29, 0, 0);
+      for (let i = 0; i < 3; i++) det(BX(3.8, 0.10, 1.10), 0xa8a294, AX, 0.66 + i * 0.64, YC + 13.0 - i * 1.7, 0.29, 0, 0);
+      for (const s of [-1, 1]) det(BX(0.55, 0.44, 6.7), 0xb0aa9e, AX + s * 2.85, 1.00, YC + 10.6, 0.29, 0, 0);
+      (window.__FLOORS = window.__FLOORS || []).push({ x0: AX - 20, x1: AX + 20, z0: YC - 10, z1: YC + 10, top: BASE + 1.6 });
       hall(AX, Z - 4, 64, 30, 16.6, { plaque: '亲民堂', steps: false });
       // 【fix311】大堂内景：屏风 + 公案 + 三块匾 + 楹联 + 宫灯（照片里知州审案的场面）
       (function courtroom() {
@@ -27363,35 +27388,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         }
       })();
       // 【fix315】月台栏杆 + 石灯 + 石狮（大堂前那块高台）
-      (function yuetai() {
-        const YZ = Z - 15.6;
-        for (let i = -6; i <= 6; i++) {
-          const px = AX + i * 3.0;
-          det(BX(0.34, 1.15, 0.34), 0xc8c2b4, px, 1.6 + 0.58, YZ - 7.2);
-          det(new THREE.SphereGeometry(0.24, 6, 5), 0xbdb6a6, px, 1.6 + 1.20, YZ - 7.2);
-          if (i < 6) {
-            det(BX(3.0, 0.16, 0.22), 0xc0bab0, px + 1.5, 1.6 + 0.95, YZ - 7.2);
-            det(BX(2.55, 0.60, 0.16), 0xc0bab0, px + 1.5, 1.6 + 0.52, YZ - 7.2);
-            det(BX(2.05, 0.34, 0.10), 0xa8a294, px + 1.5, 1.6 + 0.52, YZ - 7.24);
-          }
-        }
-        for (const s of [-1, 1]) {
-          for (let i = -2; i <= 2; i++) {
-            det(BX(0.34, 1.15, 0.34), 0xc8c2b4, AX + s * 18.0, 1.6 + 0.58, YZ - 7.2 + i * -3.0);
-            det(new THREE.SphereGeometry(0.24, 6, 5), 0xbdb6a6, AX + s * 18.0, 1.6 + 1.20, YZ - 7.2 + i * -3.0);
-          }
-        }
-        for (const s of [-1, 1]) {
-          det(new THREE.CylinderGeometry(0.22, 0.28, 2.9, 8), 0x8d867a, AX + s * 20, 1.6 + 1.45, YZ - 3);
-          det(BX(0.72, 0.72, 0.72), 0xb6b0a2, AX + s * 20, 1.6 + 3.05, YZ - 3);
-          det(BX(0.54, 0.66, 0.54), 0xf3d9a4, AX + s * 20, 1.6 + 3.74, YZ - 3);
-        }
-        for (const s of [-1, 1]) {
-          det(BX(2.2, 0.9, 2.2), 0xb6b0a2, AX + s * 22, 1.6 + 0.45, YZ - 15);
-          det(BX(1.3, 1.5, 1.8), 0x9a958c, AX + s * 22, 1.6 + 1.55, YZ - 15);
-          det(new THREE.SphereGeometry(0.8, 9, 7), 0x9a958c, AX + s * 22, 1.6 + 2.65, YZ - 14.5);
-        }
-      })();
+      // 【fix330】旧的月台栏杆块已删除（位置压在殿身里，与新建月台重复）
       // 抱厦（卷棚）
       det(BX(20, 0.7, 9), 0x5c3a26, AX, 8.6, Z + 12);
       for (const s of [-1, 1]) for (const t of [0, 1]) det(new THREE.CylinderGeometry(0.42, 0.44, 7.4, 8), 0x7d2f26, AX + s * 8.6, 3.7, Z + 8.5 + t * 5.5);
