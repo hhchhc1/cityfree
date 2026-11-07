@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix294-yamen-flash';
+const BUILD = '20261107-fix296-yamen-ground';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22581,7 +22581,7 @@ function drawFullMap() {
   const ANC_BLD = [
     ['鼓楼', 1790, -441, 30, 30],
     ['木塔', 1830, -700, 52, 52],
-    ['霍州署', 2025, -426, 280, 574],
+    ['荷芷署', 2025, -426, 300, 600],
     ['城门楼', 1656, -645, 24, 20],
     ['城门楼', 1656, -425, 24, 20],
     ['城门楼', 1656, -205, 24, 20],
@@ -26580,16 +26580,26 @@ try {
 LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, maxZ: cz + B * 1.15, minY: 0, top: ty + 6.5 });
 }
 
-    // ==================== 【fix293】霍州署（第三轮·按实景照片 1:1 重排）====================
+    // ==================== 【fix293】荷芷署（第三轮·按实景照片 1:1 重排）====================
   // 参考用户 2026-11-07 提供的实景照片与州治舆图，形制如下（中轴 x=2025，自南向北）：
-  //   古霍名郡牌坊 → 州治门楼(砖城台+拱门+重檐谯楼) → 霍州署大门(悬山+大台阶+石狮+石碑)
+  //   古荷名郡牌坊 → 州治门楼(砖城台+拱门+重檐谯楼) → 荷芷署大门(悬山+大台阶+石狮+石碑)
   //   → 仪门 → 戒石亭 → 亲民堂(大堂，抱厦+月台+东西耳房) → 退思堂(二堂) → 内宅(知州宅)
   // 两侧：东西长庑(六房，连续廊柱)、吏廨、税课局、土地祠、广福仓、预储仓、库楼、仕贤馆、
   //       判官宅、申明亭、乐亭；院内：石板甬道、青砖铺地、花坛松竹、石灯、红灯笼、大鼓。
-  // 匾额全部用 canvas 生成汉字贴图（霍州署/亲民堂/退思堂/正大光明/古霍名郡/霍州…）。
+  // 匾额全部用 canvas 生成汉字贴图（荷芷署/亲民堂/退思堂/正大光明/古荷名郡/霍州…）。
   (function buildYamen() {
     const AX = 2025, X0 = 1886, X1 = 2164, ZS = -140, ZN = -712;
-    const WALL_H = 7.2;
+    const WALL_H = 9.2;
+    const BASE = 2.6;                      // 整个荷芷署坐落在 2.6m 高的台基上
+    const YG = new THREE.Group();
+    YG.position.set(0, BASE, 0);
+    g.add(YG);
+    const det0 = det;
+    const det = function (geo, hex, x, y, z, rx, ry, rz, glow, to) {
+      const n0 = LH_BLD.length;
+      det0(geo, hex, x, y, z, rx, ry, rz, glow, to || YG);
+      for (let i = n0; i < LH_BLD.length; i++) { LH_BLD[i].minY += BASE; LH_BLD[i].top += BASE; }
+    };
 
     // ---------- 贴图 ----------
     function mkTex(px, draw, rx, ry) {
@@ -26648,22 +26658,22 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     function plane(w, d, x, z, y, mat) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set(x, y, z);
+      m.position.set(x, y + BASE, z);
       g.add(m);
       return m;
     }
     function slabBox(w, d, x, z, y) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), M_SLAB);
-      m.position.set(x, y, z);
+      m.position.set(x, y + BASE, z);
       g.add(m);
       return m;
     }
     // 砖墙（带砖缝贴图，登记碰撞）
     function brickBox(w, h, d, x, y, z, noCol) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M_BRICK);
-      m.position.set(x, y, z);
+      m.position.set(x, y + BASE, z);
       g.add(m);
-      if (!noCol) LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: Math.max(0, y - h / 2), top: y + h / 2 });
+      if (!noCol) LH_BLD.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: Math.max(0, y - h / 2) + BASE, top: y + h / 2 + BASE });
       return m;
     }
     // 匾额（真汉字）
@@ -26679,7 +26689,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       c.fillText(txt, 256, 100);
       const tx = new THREE.CanvasTexture(cv);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx }));
-      m.position.set(x, y, z);
+      m.position.set(x, y + BASE, z);
       if (ry) m.rotation.y = ry;
       g.add(m);
       return m;
@@ -26798,13 +26808,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     }
 
     // ==================== 地面 ====================
-    plane(X1 - X0 - 2, ZS - ZN - 6, AX, (ZS + ZN) / 2, 0.16, M_PAVE);
-    slabBox(16, ZS - ZN - 20, AX, (ZS + ZN) / 2, 0.28);
-    for (const z of [-320, -430, -520, -600]) {
-      const lw = (AX - 8) - (X0 + 8);
-      slabBox(lw, 11, X0 + 8 + lw / 2, z, 0.30);
-      slabBox(lw, 11, X1 - 8 - lw / 2, z, 0.30);
-    }
+    // 地面铺装见文件末尾 podiumPlaza（青砖/条石/方砖/卵石）
 
     // ==================== 院墙 ====================
     wallSeg(X0, ZN, X0, ZS, WALL_H);
@@ -26814,7 +26818,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     wallSeg(2038, ZS, X1, ZS, WALL_H);
     for (const z of [-320, -430, -520, -600]) { wallSeg(X0, z, 2015, z, 4.6); wallSeg(2035, z, X1, z, 4.6); }
 
-    // ==================== 1) 古霍名郡 牌坊（墙外） ====================
+    // ==================== 1) 古荷名郡 牌坊（墙外） ====================
     (function paifang() {
       for (const dx of [-19, -9, 0, 9, 19]) {
         det(new THREE.CylinderGeometry(0.6, 0.7, 10.0, 10), 0x8a2f2a, AX + dx, 5.0, -152);
@@ -26823,7 +26827,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       for (const s of [-1, 1]) det(BX(42, 0.6, 0.55), 0x6d3a20, AX, 6.8, -152);
       det(BX(44, 1.0, 1.4), 0x6d3a20, AX, 8.75, -152);
-      plaque('古霍名郡', AX, 7.45, -151.1, 12.5, 4.4, '#1c2f52', '#e8c86a');
+      plaque('古荷名郡', AX, 7.45, -151.1, 12.5, 4.4, '#1c2f52', '#e8c86a');
       roof(AX, -152, 48, 5.0, 10.3);
       for (const s of [-1, 1]) roof(AX + s * 16, -152, 17, 4.0, 9.1);
       for (const s of [-1, 1]) {                        // 红幡
@@ -26852,7 +26856,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       det(BX(OW, 5.2, 0.6), 0x2b2f33, AX, 2.6, GZ - TD / 2 - 0.1);
       det(BX(OW, 5.2, 0.6), 0x2b2f33, AX, 2.6, GZ + TD / 2 + 0.1);
-      plaque('霍州', AX, TH - 1.9, GZ + TD / 2 + 0.25, 6.4, 2.3, '#2b3a5c', '#e8c86a');
+      plaque('荷芷', AX, TH - 1.9, GZ + TD / 2 + 0.25, 6.4, 2.3, '#2b3a5c', '#e8c86a');
       // 城台顶：谯楼（重檐二层）
       det(BX(TW + 1.4, 0.5, TD + 1.4), 0xb6b0a2, AX, TH + 0.25, GZ);
       const BX0 = 20, BH = 5.2;
@@ -26869,8 +26873,8 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s of [-1, 1]) det(BX(0.3, 3.0, 0.3), 0x6d3a20, AX + s * 6, TH + 1.8, GZ - 8);
     })();
 
-    // ==================== 3) 霍州署大门（悬山 + 大台阶 + 石碑） ====================
-    hall(AX, -252, 34, 15, 10.0, { plaque: '霍州署', stepN: 7 });
+    // ==================== 3) 荷芷署大门（悬山 + 大台阶 + 石碑） ====================
+    hall(AX, -252, 34, 15, 10.0, { plaque: '荷芷署', stepN: 7 });
     for (const s of [-1, 1]) {
       det(BX(2.8, 1.1, 2.8), 0xb6b0a2, AX + s * 13, 0.55, -232);
       det(BX(1.6, 1.9, 2.3), 0x9a958c, AX + s * 13, 2.1, -232);
@@ -27004,7 +27008,182 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       for (const p of [[1902, -200], [2148, -200], [1902, -256], [2148, -256], [1902, -500], [2148, -500], [1902, -620], [2148, -620], [1970, -704], [2080, -704], [1912, -398], [2138, -398]]) cypress(p[0], p[1], 13);
     })();
+  // ==================== 地面铺装（按霍州署实景：青砖 / 条石 / 方砖 / 卵石，全部灰调）====================
+  function mkTex2(px, draw, rx, ry) {
+    const cv = document.createElement('canvas');
+    cv.width = px; cv.height = px;
+    draw(cv.getContext('2d'), px);
+    const tx = new THREE.CanvasTexture(cv);
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+    tx.repeat.set(rx, ry);
+    return tx;
+  }
+  // ① 青砖地：300×150 灰蓝砖，细缝
+  const texQing = mkTex2(256, (c, N) => {
+    c.fillStyle = '#7f8386'; c.fillRect(0, 0, N, N);
+    for (let y = 0; y < N; y += 32) {
+      const ox = ((y / 32) % 2) * 32;
+      for (let x = -64; x < N; x += 64) {
+        const g = 118 + (Math.random() * 18 | 0);
+        c.fillStyle = 'rgb(' + (g - 6) + ',' + g + ',' + (g + 4) + ')';
+        c.fillRect(x + ox + 1, y + 1, 62, 30);
+      }
+    }
+    c.strokeStyle = 'rgba(70,74,78,0.7)'; c.lineWidth = 1;
+    for (let y = 0; y <= N; y += 32) { c.beginPath(); c.moveTo(0, y); c.lineTo(N, y); c.stroke(); }
+  }, 16, 34);
+  // ② 条石甬道：长条青石
+  const texTiao = mkTex2(256, (c, N) => {
+    c.fillStyle = '#9aa0a1'; c.fillRect(0, 0, N, N);
+    for (let y = 0; y < N; y += 64) {
+      for (let x = 0; x < N; x += 128) {
+        const g = 150 + (Math.random() * 20 | 0);
+        c.fillStyle = 'rgb(' + g + ',' + (g + 2) + ',' + (g + 1) + ')';
+        c.fillRect(x + 2, y + 2, 124, 60);
+      }
+    }
+    c.strokeStyle = 'rgba(96,100,102,0.8)'; c.lineWidth = 3;
+    for (let y = 0; y <= N; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(N, y); c.stroke(); }
+    for (let x = 0; x <= N; x += 128) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, N); c.stroke(); }
+  }, 2, 46);
+  // ③ 方砖：500 方砖，颜色略深（后宅）
+  const texFang = mkTex2(256, (c, N) => {
+    c.fillStyle = '#8b8f90'; c.fillRect(0, 0, N, N);
+    for (let y = 0; y < N; y += 64) {
+      for (let x = 0; x < N; x += 64) {
+        const g = 134 + (Math.random() * 16 | 0);
+        c.fillStyle = 'rgb(' + g + ',' + (g + 3) + ',' + (g + 2) + ')';
+        c.fillRect(x + 2, y + 2, 60, 60);
+      }
+    }
+    c.strokeStyle = 'rgba(84,88,90,0.75)'; c.lineWidth = 2;
+    for (let y = 0; y <= N; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(N, y); c.stroke(); }
+    for (let x = 0; x <= N; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, N); c.stroke(); }
+  }, 10, 10);
+  // ④ 卵石小径（花园）
+  const texPeb = mkTex2(256, (c, N) => {
+    c.fillStyle = '#8d8b83'; c.fillRect(0, 0, N, N);
+    for (let i = 0; i < 420; i++) {
+      const r = 5 + Math.random() * 7, x = Math.random() * N, y = Math.random() * N;
+      const g = 120 + (Math.random() * 50 | 0);
+      c.fillStyle = 'rgb(' + g + ',' + (g - 2) + ',' + (g - 8) + ')';
+      c.beginPath(); c.ellipse(x, y, r, r * 0.78, Math.random() * 3, 0, 6.3); c.fill();
+    }
+  }, 6, 6);
+  const M_QING = new THREE.MeshLambertMaterial({ map: texQing });
+  const M_TIAO = new THREE.MeshLambertMaterial({ map: texTiao });
+  const M_FANG = new THREE.MeshLambertMaterial({ map: texFang });
+  const M_PEB = new THREE.MeshLambertMaterial({ map: texPeb });
+  for (const mm of [M_QING, M_TIAO, M_FANG, M_PEB]) { mm.polygonOffset = true; mm.polygonOffsetFactor = -3; mm.polygonOffsetUnits = -8; }
+
+  // 台基 + 南面大台阶 + 前广场
+  (function podiumPlaza() {
+    const bm = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 + 2.4, BASE, ZS - ZN + 2.4), M_BRICK);
+    bm.position.set(AX, BASE / 2, (ZS + ZN) / 2);
+    g.add(bm);
+    // 台沿条石
+    det(BX(X1 - X0 + 5, 0.45, 1.8), 0xbdb6a6, AX, BASE + 0.2, ZS + 0.6);
+    det(BX(1.8, 0.45, ZS - ZN), 0xbdb6a6, X0 + 0.5, BASE + 0.2, (ZS + ZN) / 2);
+    det(BX(1.8, 0.45, ZS - ZN), 0xbdb6a6, X1 - 0.5, BASE + 0.2, (ZS + ZN) / 2);
+    // 南面 13 级大台阶（地面 → 台面）
+    for (let i = 0; i < 13; i++) {
+      const hh = 2.6 * (i + 1) / 13, zz = -88.4 - i * 1.15;
+      const m2 = new THREE.Mesh(new THREE.BoxGeometry(30, hh, 1.2), M_TIAO);
+      m2.position.set(AX, hh / 2, zz);
+      g.add(m2);
+    }
+    for (const s of [-1, 1]) {
+      const cw2 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.9, 16), M_BRICK);
+      cw2.position.set(AX + s * 16.2, 1.45, -96);
+      g.add(cw2);
+    }
+    // 前广场：条石铺地（在台基上）
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 8, 40), M_TIAO);
+    pm.rotation.x = -Math.PI / 2;
+    pm.position.set(AX, BASE + 0.2, -124);
+    g.add(pm);
+    // 照壁
+    det(BX(26, 0.8, 2.8), 0xb6b0a2, AX, 0.4, -110);
+    det(BX(22, 5.0, 1.2), 0x8f887c, AX, 3.3, -110);
+    det(BX(22.6, 0.5, 2.0), CY_TILE, AX, 5.95, -110);
+    det(BX(17, 3.0, 0.2), 0x9a938a, AX, 3.45, -109.4);
+    for (const s of [-1, 1]) det(BX(1.4, 6.0, 1.8), 0x8f887c, AX + s * 11.6, 3.0, -110);
+    // 石狮
+    for (const s of [-1, 1]) {
+      det(BX(2.6, 1.0, 2.6), 0xb6b0a2, AX + s * 10, 0.5, -120);
+      det(BX(1.5, 1.7, 2.1), 0x9a958c, AX + s * 10, 1.95, -120);
+      det(new THREE.SphereGeometry(0.95, 10, 8), 0x9a958c, AX + s * 10, 3.2, -119.4);
+    }
+    for (const s of [-1, 1]) {
+      det(new THREE.CylinderGeometry(0.16, 0.2, 12, 8), 0x8a4a2c, AX + s * 20, 6, -122);
+      det(BX(2.6, 5.4, 0.12), 0xc0392b, AX + s * 21.3, 8.6, -122);
+    }
+    for (const s of [-1, 1]) {
+      det(BX(2.0, 0.5, 1.4), 0xb8b4a8, AX + s * 26, 0.25, -118);
+      det(BX(1.4, 3.2, 0.4), 0xa8a29a, AX + s * 26, 1.8, -118);
+      for (let k = 0; k < 3; k++) det(BX(0.4, 2.0, 0.4), 0xa8a49a, AX + s * (30 + k * 2), 1.0, -122);
+    }
+    for (const p of [[1906, -122], [2144, -122]]) {
+      det(new THREE.CylinderGeometry(0.7, 0.95, 5.2, 7), 0x5a3a24, p[0], 2.6, p[1]);
+      det(new THREE.SphereGeometry(3.4, 9, 7), 0x356e42, p[0], 7.0, p[1]);
+      det(new THREE.SphereGeometry(2.4, 8, 6), 0x2f6238, p[0] + 1.6, 5.6, p[1] + 1.2);
+    }
+    // 中院：青砖铺地（大面）
+    const pg = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 4, 560), M_QING);
+    pg.rotation.x = -Math.PI / 2;
+    pg.position.set(AX, BASE + 0.16, (ZS + ZN) / 2);
+    g.add(pg);
+    // 内宅：方砖
+    const pf = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 6, 110), M_FANG);
+    pf.rotation.x = -Math.PI / 2;
+    pf.position.set(AX, BASE + 0.19, -655);
+    g.add(pf);
+    // 后花园卵石
+    const pp = new THREE.Mesh(new THREE.PlaneGeometry(90, 70), M_PEB);
+    pp.rotation.x = -Math.PI / 2;
+    pp.position.set(AX + 20, BASE + 0.2, -680);
+    g.add(pp);
+    // 甬道：条石（中线宽 14m，直贯全院）
+    const m4 = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 566), M_TIAO);
+    m4.position.set(AX, BASE + 0.24, (ZS + ZN) / 2);
+    g.add(m4);
+    // 御路石（中线正中的整块石雕）
+    const m5 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.26, 566), M_TIAO);
+    m5.position.set(AX, BASE + 0.26, (ZS + ZN) / 2);
+    g.add(m5);
+    // 横向甬道分左右两段
+    for (const z of [-320, -430, -520, -600]) {
+      const lw = (AX - 8) - (X0 + 8);
+      for (const xx of [X0 + 8 + lw / 2, X1 - 8 - lw / 2]) {
+        const m6 = new THREE.Mesh(new THREE.BoxGeometry(lw, 0.2, 10), M_TIAO);
+        m6.position.set(xx, BASE + 0.24, z);
+        g.add(m6);
+      }
+    }
+    // 台阶前的抱鼓石
+    for (const s of [-1, 1]) det(new THREE.SphereGeometry(0.9, 12, 10), 0xbdb6a6, AX + s * 9, BASE + 0.9, -140);
   })();
+  })();  // 【fix295】荷芷署台基 + 城墙顶可站立（钩爪上墙不再被弹下来）
+  try {
+    const _lh0 = linhaiHeight;
+    const _YB = 2.6, _WTOP = 2.6 + 9.2;
+    linhaiHeight = function (x, z) {
+      let h = _lh0(x, z);
+      if (x > 1880 && x < 2170 && z < -84 && z > -770) {
+        let bb = _YB;
+        if (z > -102) bb = _YB * (-86 - z) / 16;
+        if (bb > h) h = bb;
+      }
+      let py = 0;
+      try { const pp = window.__folkPos && window.__folkPos(); if (pp) py = pp.y; } catch (eP) {}
+      if (py > _WTOP - 2.4 && x > 1880 && x < 2170 && z < -136 && z > -718) {
+        if (Math.abs(x - 1886) < 0.85 || Math.abs(x - 2164) < 0.85) return _WTOP;
+        if (Math.abs(z + 140) < 0.85 || Math.abs(z + 712) < 0.85) return _WTOP;
+      }
+      return h;
+    };
+    window.__yamenPlateau = 1;
+  } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
   buildWoodPagoda(1830, ZC - 275, 20);   // 【fix218】16→20   // 【fix217】塔身放大 11->16
   /* fix291: 让位给霍州署 */
