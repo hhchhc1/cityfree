@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix278-beams3';
+const BUILD = '20261106-fix281-beam-repair';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27606,12 +27606,17 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
     beam.position.set(px, 3.5, pz); scene.add(beam);
+    // 【fix279】给三块网格打上身份标记：name@x,z。
+    // 去重时按标记扫场景清理，不再依赖 marker 数组是否还持有这些网格。
+    try { window.__folkScene = scene; } catch (e0) {}
+    const _fk = name + '@' + Math.round(px) + ',' + Math.round(pz);
+    beam.userData.folkKey = _fk;
     const core = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 7.0, 10, 1, true),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-    core.position.set(px, 3.5, pz); scene.add(core);
+    core.position.set(px, 3.5, pz); scene.add(core); core.userData.folkKey = _fk;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 8, 22),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75 }));
-    ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring);
+    ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring); ring.userData.folkKey = _fk;
     window.__folkMarkers.push({ name: name, x: px, z: pz, obj: [beam, core, ring] });
   } catch (e) { window.__folkSpotErr = String(e); }
   // 补建"在 helper 定义之前就建好"的建筑（鼓楼/古塔）
@@ -27848,6 +27853,31 @@ setInterval(function () {
       keep.push(m);
     }
     if (keep.length !== M2.length) window.__folkMarkers = keep;
+    // 【fix279】按标记清扫：不在保留列表里的光柱网格（孤儿）直接从场景移除。
+    // 这解决了"marker 已经被删、但网格还立在原地"的问题 —— 用户看到的两侧光柱就是这个。
+    if (window.__folkScene) {
+      const ok = {};
+      for (const m of keep) ok[m.name + '@' + Math.round(m.x) + ',' + Math.round(m.z)] = m;
+      const have = {};
+      const junk = [];
+      window.__folkScene.traverse(function (o) {
+        if (o.isMesh && o.userData && o.userData.folkKey) {
+          have[o.userData.folkKey] = 1;
+          if (!ok[o.userData.folkKey]) junk.push(o);
+        }
+      });
+      for (const o of junk) { o.visible = false; if (o.parent) o.parent.remove(o); }
+      // 【fix281】有资料点却没有网格的，补建一根（保证"有词条就一定有可见光柱"）
+      for (const k in ok) {
+        if (have[k]) continue;
+        const m = ok[k];
+        try {
+          const n0 = window.__folkMarkers.length;
+          window.__folkAddSpot(m.name, m.x, m.z, 0xffd08a, 0, true);
+          if (window.__folkMarkers.length > n0) window.__folkMarkers.length = n0;   // 只补网格，不加重复资料点
+        } catch (e3) {}
+      }
+    }
     const p = window.__folkPos ? window.__folkPos() : null;
     if (!p) return;
     const flying = window.__folkFlying ? window.__folkFlying() : false;
@@ -27885,16 +27915,14 @@ try {
   ];
   for (const s of SPOTS) {
     const px = s.x + s.dx, pz = s.z + s.dz;
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
-      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
-    beam.position.set(px, 3.5, pz); scene.add(beam);
-    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 7.0, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-    core.position.set(px, 3.5, pz); scene.add(core);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 8, 22),
-      new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.75 }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring);
-    window.__folkMarkers.push({ name: s.name, x: px, z: pz, obj: [beam, core, ring] });
+    // 【fix280】这 5 根是 fix247 的老代码，**自己直接建网格**、没走 __folkAddSpot，
+    // 所以既没有身份标记、也不会被去重清掉。结果就是同一栋楼旁边多出一根"看得见、走进去没反应"的死光柱。
+    // 现在统一走 __folkAddSpot（allowDup=false），保证一种建筑只有一根，且能被清扫逻辑管理。
+    if (window.__folkAddSpot) {
+      window.__folkAddSpot(s.name, px, pz, s.color, 0, false);
+    } else {
+      (window.__folkPending = window.__folkPending || []).push([s.name, px, pz, s.color, 0, false]);
+    }
   }
 } catch (e) { window.__folkErr = String(e); }
 
