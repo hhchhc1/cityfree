@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix343-rooms';
+const BUILD = '20261107-fix344-doorplates';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26765,12 +26765,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       return m;
     }
     // 【fix307】立体匾：整块就是一个盒子，正面贴字，不会再有"框把字挡住"
-    function plaque3d(txt, x, y, z, w, h, bg, fg) {
+    function plaque3d(txt, x, y, z, w, h, bg, fg, ry) {
       const tx = plaqueTex(txt, bg, fg);
       const side = new THREE.MeshLambertMaterial({ color: 0x2a1c14 });
       const front = new THREE.MeshBasicMaterial({ map: tx });
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.26), [side, side, side, side, front, side]);
       m.position.set(x, y + BASE, z);
+      if (ry) m.rotation.y = ry;
       g.add(m);
       return m;
     }
@@ -26953,6 +26954,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         const pz = cz - len / 2 + i * len / nc;
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
+      }
+      // 【fix344】每间门头小牌（吏房·一 … 按间编号）
+      {
+        const sufx = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+        for (let i4 = 0; i4 < nc; i4++) {
+          const pz4 = cz - len / 2 + (i4 + 0.5) * len / nc;
+          const nm4 = (nameList && nameList.length) ? nameList[i4 % nameList.length] : '六房';
+          plaque3d(nm4 + '·' + sufx[i4 % 10], cx + dirX * (d / 2 - 0.02), 4.05, pz4, 1.55, 0.62, '#1b2a4a', '#e8c86a', dirX > 0 ? Math.PI / 2 : -Math.PI / 2);
+        }
       }
       // 【fix343】六房每间加隔墙，把通间分成真正的一间间
       for (let i2 = 0; i2 <= nc; i2++) {
