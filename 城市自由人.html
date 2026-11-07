@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix357-chuantang';
+const BUILD = '20261107-fix358-bridgerail';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27602,6 +27602,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(43, 0.25, 27), 0x3c6f8a, AX, BASE + 0.86, -772);
       det(BX(46.6, 0.30, 30.6), 0x9a948a, AX, BASE + 1.00, -772);
       det(BX(5.0, 0.30, 32), 0x8d867a, AX, BASE + 1.22, -772);
+      // 【fix358】曲桥栏杆：两侧望柱 + 扶手（原来桥面是光板）
+      for (const s of [-1, 1]) {
+        for (let i13 = -3; i13 <= 3; i13++) {
+          const pz13 = -772 + i13 * 5.0;
+          det(BX(0.26, 1.0, 0.26), 0xb6b0a2, AX + s * 2.3, BASE + 1.87, pz13);
+          det(new THREE.SphereGeometry(0.20, 6, 5), 0xa8a294, AX + s * 2.3, BASE + 2.47, pz13);
+          if (i13 < 3) det(BX(0.16, 0.14, 4.6), 0xb0aa9e, AX + s * 2.3, BASE + 2.20, pz13 + 2.5);
+          if (i13 < 3) det(BX(0.12, 0.34, 4.4), 0xa8a294, AX + s * 2.3, BASE + 1.60, pz13 + 2.5);
+        }
+      }
       for (const s of [-1, 1]) for (let i = 0; i < 6; i++) det(BX(0.26, 0.95, 0.26), 0xa8a294, AX + s * 2.3, BASE + 1.72, -788 + i * 6);
       for (const p of [[1958, -796, 7.2], [2094, -796, 6.4], [1988, -746, 5.0], [2064, -746, 4.6]]) {
         det(BX(5.2, p[2], 5.2), 0x8a8578, p[0], BASE + p[2] / 2, p[1]);
@@ -27865,6 +27875,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(0.34, 0.26, L9), 0x2e6b4c, AX + s * (W / 2), 4.90, cz9);
       }
       roof(AX, cz9, W + 1, L9, 5.25, null, null, 'yingshan');
+      // 【fix358】穿堂两侧：1.15 米矮墙 + 每间花窗（原来两侧全开）
+      for (const s of [-1, 1]) {
+        det(BX(0.45, 1.15, L9), 0x9d968a, AX + s * (W / 2 + 0.05), 1.32, cz9);
+        det(BX(0.60, 0.18, L9), 0xa8a294, AX + s * (W / 2 + 0.05), 1.93, cz9);
+        for (let z10 = z0 - 2.7; z10 > z1; z10 -= 5.4) {
+          det(BX(0.22, 1.55, 1.15), 0x1a120c, AX + s * (W / 2 + 0.05), 2.85, z10);
+          for (let m10 = -1; m10 <= 1; m10++) det(BX(0.26, 1.55, 0.11), 0x8a5a34, AX + s * (W / 2 + 0.05), 2.85, z10 + m10 * 0.38);
+          det(BX(0.26, 0.12, 1.15), 0x8a5a34, AX + s * (W / 2 + 0.05), 2.85, z10);
+        }
+      }
       for (const s of [-1, 1]) det(BX(W + 1.6, 0.5, 2.2), 0xb0aa9e, AX, 0.25, s < 0 ? z1 + 1.0 : z0 - 1.0);
     })();
 
