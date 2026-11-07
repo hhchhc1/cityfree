@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix306-plaquez';
+const BUILD = '20261107-fix307-plaquebox';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26736,25 +26736,41 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       return m;
     }
     // 匾额（真汉字）
-    function plaque(txt, x, y, z, w, h, bg, fg, ry) {
+    function plaqueTex(txt, bg, fg) {
       const _n = String(txt).length;
-      const _W = _n <= 3 ? 512 : (_n <= 5 ? 768 : 1024);
+      const _W = _n <= 3 ? 512 : (_n <= 5 ? 768 : 1024), _H = 256;
       const cv = document.createElement('canvas');
-      cv.width = _W; cv.height = 192;
+      cv.width = _W; cv.height = _H;
       const c = cv.getContext('2d');
-      c.fillStyle = bg; c.fillRect(0, 0, _W, 192);
-      c.strokeStyle = fg; c.lineWidth = 12; c.strokeRect(10, 10, _W - 20, 172);
-      c.fillStyle = fg;
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      let _fs = 128;
+      c.fillStyle = bg; c.fillRect(0, 0, _W, _H);
+      c.strokeStyle = fg; c.lineWidth = 14; c.strokeRect(12, 12, _W - 24, _H - 24);
+      c.strokeStyle = 'rgba(255,220,140,0.55)'; c.lineWidth = 4; c.strokeRect(30, 30, _W - 60, _H - 60);
+      c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
+      let _fs = 150;
       const _font = function () { return 'bold ' + _fs + 'px "Microsoft YaHei", SimHei, "Noto Sans SC", sans-serif'; };
       c.font = _font();
-      while (_fs > 26 && c.measureText(txt).width > _W - 70) { _fs -= 4; c.font = _font(); }
-      c.fillText(txt, _W / 2, 100);
+      while (_fs > 24 && c.measureText(txt).width > _W - 90) { _fs -= 4; c.font = _font(); }
+      c.fillText(txt, _W / 2, _H / 2 + 4);
       const tx = new THREE.CanvasTexture(cv);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx }));
+      tx.maxFilter = THREE.LinearFilter;
+      return tx;
+    }
+    // 平面匾（挂在额枋外侧）
+    function plaque(txt, x, y, z, w, h, bg, fg, ry) {
+      const tx = plaqueTex(txt, bg, fg);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tx, transparent: false }));
       m.position.set(x, y + BASE, z);
       if (ry) m.rotation.y = ry;
+      g.add(m);
+      return m;
+    }
+    // 【fix307】立体匾：整块就是一个盒子，正面贴字，不会再有"框把字挡住"
+    function plaque3d(txt, x, y, z, w, h, bg, fg) {
+      const tx = plaqueTex(txt, bg, fg);
+      const side = new THREE.MeshLambertMaterial({ color: 0x2a1c14 });
+      const front = new THREE.MeshBasicMaterial({ map: tx });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.26), [side, side, side, side, front, side]);
+      m.position.set(x, y + BASE, z);
       g.add(m);
       return m;
     }
@@ -26805,11 +26821,8 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       roof(cx, cz, w, d, 1.2 + h + 0.44);
       if (o.plaque) {
-        const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.45;
-        det(BX(w * 0.42, w * 0.42 * 0.32 + 0.6, 0.28), 0x241a12, cx, py, pz - 0.12);
-        det(BX(w * 0.42 + 0.5, 0.26, 0.55), 0xc8a24a, cx, py + w * 0.42 * 0.16 + 0.42, pz - 0.07);
-        for (const ss of [-1, 1]) det(BX(0.3, w * 0.42 * 0.32 + 0.6, 0.32), 0xc8a24a, cx + ss * (w * 0.21 + 0.15), py, pz - 0.12);
-        plaque(o.plaque, cx, py, pz + 0.22, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
+        const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.55;
+        plaque3d(o.plaque, cx, py, pz, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
       }
       if (o.steps !== false) stairs(cx, cz + d / 2 + 3.2, Math.min(w * 0.62, 16), o.stepN || 4, 0.36, 1);
     }
@@ -31263,6 +31276,9 @@ window.focus();
   // 双 rAF：第一帧先把加载画面绘制出来，第二帧再开始重活
   requestAnimationFrame(function () { requestAnimationFrame(start); });
 })();
+
+
+
 </script>
 </body>
 </html>
