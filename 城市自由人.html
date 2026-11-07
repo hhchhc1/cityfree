@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix314-garden';
+const BUILD = '20261107-fix315-backyard';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26648,7 +26648,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
   //       判官宅、申明亭、乐亭；院内：石板甬道、青砖铺地、花坛松竹、石灯、红灯笼、大鼓。
   // 匾额全部用 canvas 生成汉字贴图（荷芷署/亲民堂/退思堂/正大光明/古荷名郡/霍州…）。
   (function buildYamen(DET) {
-    const AX = 2025, X0 = 1886, X1 = 2164, ZS = -140, ZN = -712;
+    const AX = 2025, X0 = 1886, X1 = 2164, ZS = -140, ZN = -830;
     const WALL_H = 9.2;
     const BASE = 2.6;                      // 整个荷芷署坐落在 2.6m 高的台基上
     const YG = new THREE.Group();
@@ -27111,6 +27111,39 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     gallery(2132, -400, 150, -1, 6.0);
     gallery(1918, -560, 110, 1, 5.8);
     gallery(2132, -560, 110, -1, 5.8);
+    // 【fix315】后花园：花墙月洞门 + 水池 + 假山 + 凉亭 + 曲桥（把北院再拉大一进）
+    (function backGarden() {
+      // 花墙 + 月洞门（-712 处分隔中院与后园）
+      const GZ2 = -712, GW = 11;
+      wallSeg(X0, GZ2, AX - GW, GZ2, 4.2);
+      wallSeg(AX + GW, GZ2, X1, GZ2, 4.2);
+      for (const s of [-1, 1]) {
+        det(BX(3.2, 4.2, 1.5), CY_BRICK, AX + s * (GW + 1.6), 2.1, GZ2);
+        det(BX(3.6, 0.5, 1.9), 0x3b4148, AX + s * (GW + 1.6), 4.35, GZ2);
+      }
+      // 园地铺装
+      const gp = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 8, 112), M_PEB);
+      gp.rotation.x = -Math.PI / 2;
+      gp.position.set(AX, BASE + 0.14, -770);
+      g.add(gp);
+      // 水池（青石池壁）
+      det(BX(46, 0.75, 30), 0xb0aa9e, AX, BASE + 0.37, -772);
+      det(BX(43, 0.25, 27), 0x3c6f8a, AX, BASE + 0.80, -772);
+      det(BX(46.6, 0.30, 30.6), 0x9a948a, AX, BASE + 0.92, -772);
+      // 曲桥
+      det(BX(5.0, 0.30, 32), 0x8d867a, AX, BASE + 1.15, -772);
+      for (const s of [-1, 1]) for (let i = 0; i < 6; i++)
+        det(BX(0.26, 0.95, 0.26), 0xa8a294, AX + s * 2.3, BASE + 1.65, -788 + i * 6);
+      // 假山
+      for (const p of [[1958, -796, 7.2], [2094, -796, 6.4], [1988, -746, 5.0], [2064, -746, 4.6]]) {
+        det(new THREE.ConeGeometry(3.2, p[2], 7), 0x8a8578, p[0], BASE + p[2] / 2, p[1]);
+        det(new THREE.ConeGeometry(2.2, p[2] * 0.7, 6), 0x7d786c, p[0] + 2.2, BASE + p[2] * 0.35, p[1] + 1.4);
+      }
+      // 凉亭（后园主景）
+      pavilion(AX, -812, 11, 6.2);
+      plaque3d('乐寿亭', AX, 4.4, -806.4, 5.4, 1.9, '#1b2a4a', '#e8c86a');
+    })();
+
     // 【fix313】甬道：两侧石栏 + 石灯（照片里甬道两侧是一排石柱和石灯）
     for (const s of [-1, 1]) {
       for (let z = -152; z > -462; z -= 6) {
@@ -27199,6 +27232,32 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
           const b = new THREE.Mesh(new THREE.SphereGeometry(0.46, 10, 8), lm);
           b.position.set(AX + sx * 12, BASE + 8.2, IZ + sz * 7); g.add(b);
+        }
+      })();
+      // 【fix315】月台栏杆 + 石灯 + 石狮（大堂前那块高台）
+      (function yuetai() {
+        const YZ = Z - 15.6;
+        for (let i = -6; i <= 6; i++) {
+          const px = AX + i * 3.0;
+          det(BX(0.34, 1.15, 0.34), 0xc8c2b4, px, 1.6 + 0.58, YZ - 7.2);
+          det(new THREE.SphereGeometry(0.24, 6, 5), 0xbdb6a6, px, 1.6 + 1.20, YZ - 7.2);
+          if (i < 6) det(BX(3.0, 0.16, 0.22), 0xc0bab0, px + 1.5, 1.6 + 0.95, YZ - 7.2);
+        }
+        for (const s of [-1, 1]) {
+          for (let i = -2; i <= 2; i++) {
+            det(BX(0.34, 1.15, 0.34), 0xc8c2b4, AX + s * 18.0, 1.6 + 0.58, YZ - 7.2 + i * -3.0);
+            det(new THREE.SphereGeometry(0.24, 6, 5), 0xbdb6a6, AX + s * 18.0, 1.6 + 1.20, YZ - 7.2 + i * -3.0);
+          }
+        }
+        for (const s of [-1, 1]) {
+          det(new THREE.CylinderGeometry(0.22, 0.28, 2.9, 8), 0x8d867a, AX + s * 20, 1.6 + 1.45, YZ - 3);
+          det(BX(0.72, 0.72, 0.72), 0xb6b0a2, AX + s * 20, 1.6 + 3.05, YZ - 3);
+          det(BX(0.54, 0.66, 0.54), 0xf3d9a4, AX + s * 20, 1.6 + 3.74, YZ - 3);
+        }
+        for (const s of [-1, 1]) {
+          det(BX(2.2, 0.9, 2.2), 0xb6b0a2, AX + s * 22, 1.6 + 0.45, YZ - 15);
+          det(BX(1.3, 1.5, 1.8), 0x9a958c, AX + s * 22, 1.6 + 1.55, YZ - 15);
+          det(new THREE.SphereGeometry(0.8, 9, 7), 0x9a958c, AX + s * 22, 1.6 + 2.65, YZ - 14.5);
         }
       })();
       // 抱厦（卷棚）
@@ -27408,9 +27467,9 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       g.add(pp2);
 
     // 中院青砖地（最底层，整片一张）
-    const pg = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 6, 454), M_QING);
+    const pg = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 6, 684), M_QING);
     pg.rotation.x = -Math.PI / 2;
-    pg.position.set(AX, BASE + 0.05, -373);
+    pg.position.set(AX, BASE + 0.05, -488);
     g.add(pg);
     // 前广场 + 主甬道：条石（同高、绝不重叠，接缝对齐）
 const m4a = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 - 10, 0.16, 10), M_TIAO);
@@ -27503,7 +27562,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
     const _YB = 2.6, _WTOP = 2.6 + 9.2;
     linhaiHeight = function (x, z) {
       let h = _lh0(x, z);
-      if (x > 1880 && x < 2170 && z < -84 && z > -770) {
+      if (x > 1880 && x < 2170 && z < -84 && z > -838) {
         let bb = _YB;
         if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
         if (bb > h) h = bb;
@@ -27519,7 +27578,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
           }
         }
       }
-      if (py > _WTOP - 2.4 && x > 1880 && x < 2170 && z < -136 && z > -718) {
+      if (py > _WTOP - 2.4 && x > 1880 && x < 2170 && z < -136 && z > -836) {
         if (Math.abs(x - 1886) < 0.85 || Math.abs(x - 2164) < 0.85) return _WTOP;
         if (Math.abs(z + 140) < 0.85 || Math.abs(z + 712) < 0.85) return _WTOP;
       }
