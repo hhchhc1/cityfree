@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix266-woodpagoda';
+const BUILD = '20261106-fix267-one-pagoda';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25873,11 +25873,11 @@ try {
   try {
     const _dz = baseW * 0.42 + 5;
     if (window.__folkAddSpot) {
-      window.__folkAddSpot('古塔', px, pz, 0xb9d6ff, -_dz, true);
-      window.__folkAddSpot('古塔', px, pz, 0xb9d6ff, _dz, true);
+      window.__folkAddSpot('楼阁', px, pz, 0xb9d6ff, -_dz, true);
+      window.__folkAddSpot('楼阁', px, pz, 0xb9d6ff, _dz, true);
     } else {
-      (window.__folkPending = window.__folkPending || []).push(['古塔', px, pz, 0xb9d6ff, -_dz, true]);
-      (window.__folkPending = window.__folkPending || []).push(['古塔', px, pz, 0xb9d6ff, _dz, true]);
+      (window.__folkPending = window.__folkPending || []).push(['楼阁', px, pz, 0xb9d6ff, -_dz, true]);
+      (window.__folkPending = window.__folkPending || []).push(['楼阁', px, pz, 0xb9d6ff, _dz, true]);
     }
   } catch (e0) {}
   // 【fix81】古建也要登记进 buildings（LH_BLD 就是它）—— 之前只有 CBD 楼和城墙进去过，
