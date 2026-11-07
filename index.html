@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix297-yamen-floor2';
+const BUILD = '20261107-fix298-tdz';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26587,17 +26587,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
   // 两侧：东西长庑(六房，连续廊柱)、吏廨、税课局、土地祠、广福仓、预储仓、库楼、仕贤馆、
   //       判官宅、申明亭、乐亭；院内：石板甬道、青砖铺地、花坛松竹、石灯、红灯笼、大鼓。
   // 匾额全部用 canvas 生成汉字贴图（荷芷署/亲民堂/退思堂/正大光明/古荷名郡/霍州…）。
-  (function buildYamen() {
+  (function buildYamen(DET) {
     const AX = 2025, X0 = 1886, X1 = 2164, ZS = -140, ZN = -712;
     const WALL_H = 9.2;
     const BASE = 2.6;                      // 整个荷芷署坐落在 2.6m 高的台基上
     const YG = new THREE.Group();
     YG.position.set(0, BASE, 0);
     g.add(YG);
-    const det0 = det;
     const det = function (geo, hex, x, y, z, rx, ry, rz, glow, to) {
       const n0 = LH_BLD.length;
-      det0(geo, hex, x, y, z, rx, ry, rz, glow, to || YG);
+      DET(geo, hex, x, y, z, rx, ry, rz, glow, to || YG);
       for (let i = n0; i < LH_BLD.length; i++) { LH_BLD[i].minY += BASE; LH_BLD[i].top += BASE; }
     };
 
@@ -27160,7 +27159,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 台阶前的抱鼓石
     for (const s of [-1, 1]) det(new THREE.SphereGeometry(0.9, 12, 10), 0xbdb6a6, AX + s * 9, BASE + 0.9, -140);
   })();
-  })();  // 【fix295】荷芷署台基 + 城墙顶可站立（钩爪上墙不再被弹下来）
+  })(det);  // 【fix295】荷芷署台基 + 城墙顶可站立（钩爪上墙不再被弹下来）
   try {
     const _lh0 = linhaiHeight;
     const _YB = 2.6, _WTOP = 2.6 + 9.2;
