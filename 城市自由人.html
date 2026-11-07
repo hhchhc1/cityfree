@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix265-gate-pillar2';
+const BUILD = '20261106-fix266-woodpagoda';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26363,7 +26363,23 @@ function buildWoodPagoda(cx, cz, B) {
     const a4 = k / 8 * Math.PI * 2;
     det(BX(0.09, 0.09, B * 1.05), 0x9a8f7a, cx + Math.cos(a4) * B * 0.52, ty + 1.9, cz + Math.sin(a4) * B * 0.52, 0, -a4, -0.42);
   }
-  LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, maxZ: cz + B * 1.15, minY: 0, top: ty + 6.5 });
+  // 【fix266】应县木塔（buildWoodPagoda）从来没登记过资料点，所以这座塔前一根光柱都没有。
+// 台基半径约 B*1.4，光柱放在 B*1.55+3 的外圈，东南西北各一根，走哪边都能碰到。
+try {
+  const _r2 = B * 1.55 + 3;
+  if (window.__folkAddSpot) {
+    window.__folkAddSpot('古塔', cx, cz - _r2, 0xb9d6ff, 0, true);
+    window.__folkAddSpot('古塔', cx, cz + _r2, 0xb9d6ff, 0, true);
+    window.__folkAddSpot('古塔', cx - _r2, cz, 0xb9d6ff, 0, true);
+    window.__folkAddSpot('古塔', cx + _r2, cz, 0xb9d6ff, 0, true);
+  } else {
+    (window.__folkPending = window.__folkPending || []).push(['古塔', cx, cz - _r2, 0xb9d6ff, 0, true]);
+    (window.__folkPending = window.__folkPending || []).push(['古塔', cx, cz + _r2, 0xb9d6ff, 0, true]);
+    (window.__folkPending = window.__folkPending || []).push(['古塔', cx - _r2, cz, 0xb9d6ff, 0, true]);
+    (window.__folkPending = window.__folkPending || []).push(['古塔', cx + _r2, cz, 0xb9d6ff, 0, true]);
+  }
+} catch (e0) {}
+LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, maxZ: cz + B * 1.15, minY: 0, top: ty + 6.5 });
 }
 
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
