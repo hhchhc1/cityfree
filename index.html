@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix340-caihua2';
+const BUILD = '20261107-fix341-bazi';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26959,6 +26959,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(0.55, 0.16, 4.6), 0x6d3a20, cx + dirX * (d / 2 + 1.55), 1.30, z7 + 2.3);
         det(BX(0.30, 0.42, 4.6), 0x5a2f18, cx + dirX * (d / 2 + 1.62), 0.98, z7 + 2.3);
       }
+      // 【fix341】室内灯：每 9 米一盏（夜里屋里不再全黑）
+      {
+        const lmI = new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false });
+        for (let zi = cz - len / 2 + 5; zi < cz + len / 2; zi += 9) {
+          const bi = new THREE.Mesh(new THREE.SphereGeometry(0.32, 7, 5), lmI);
+          bi.position.set(cx - dirX * 1.8, BASE + 4.30, zi); g.add(bi);
+          det(BX(0.06, 0.5, 0.06), 0x5a2f18, cx - dirX * 1.8, 4.62, zi);
+        }
+      }
       // 【fix333】廊下挂灯：每 12 米一盏红灯笼
       {
         const lm2 = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
@@ -27250,6 +27259,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(1.6, 1.9, 2.2), 0x9a958c, AX + s * 15, 1.95, Z + D / 2 + 5.5);
         det(new THREE.SphereGeometry(1.0, 10, 8), 0x9a958c, AX + s * 15, 3.35, Z + D / 2 + 6.1);
       }
+      // 【fix341】仪门两侧八字墙（撇山影壁）
+      for (const s of [-1, 1]) {
+        const bx = AX + s * 25.5, bz = -313;
+        det(BX(11, 4.8, 0.9), 0x9d968a, bx, 2.4, bz, 0, s * 0.52, 0);
+        det(BX(11.6, 0.55, 1.35), 0x3b4148, bx, 5.02, bz, 0, s * 0.52, 0);
+        det(BX(8.0, 2.2, 0.24), 0x8a2f2a, bx + s * 0.2, 2.6, bz + 0.55, 0, s * 0.52, 0);
+      }
       // 台阶
       stairs(AX, Z + D / 2 + 4.0, 18, 5, 0.22, 1);
     })();
@@ -27461,6 +27477,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.SphereGeometry(4.2, 9, 7), 0x2f6238, p4[0], 10.5, p4[1]);
         det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
         det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
+      }
+      // 【fix341】池岸石矶：自然石护岸（沿池边 20 块）
+      for (let i = 0; i < 20; i++) {
+        const ang = i / 20 * Math.PI * 2;
+        const rx = AX + Math.cos(ang) * 24.5, rz = -772 + Math.sin(ang) * 16.5;
+        det(new THREE.SphereGeometry(1.25, 6, 5), 0x8a8578, rx, BASE + 0.62, rz);
+        det(new THREE.SphereGeometry(0.85, 6, 4), 0x7d786c, rx + 1.0, BASE + 0.42, rz + 0.7);
       }
       // 【fix333】花园花木：池边低矮花丛 + 两棵松
       for (const p2 of [[1940, -742], [2110, -742], [1940, -802], [2110, -802], [1975, -730], [2075, -730]]) {
