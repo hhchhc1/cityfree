@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix300-lhguard';
+const BUILD = '20261107-fix302-orphanfix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28588,8 +28588,8 @@ setInterval(function () {
         // 之前只认光柱那三种尺寸，宽一点的装饰光带就漏掉了 —— 用户看到的"很多无意义光柱"就是这些。
         const glowish = o.material && o.material.transparent && o.material.opacity !== undefined && o.material.opacity < 0.6 &&
                         (o.geometry.type === 'CylinderGeometry' || o.geometry.type === 'ConeGeometry' || o.geometry.type === 'TorusGeometry');
-        if (w.x > 1000 && (isFolk || glowish) && (!k || !ok[k])) junk.push(o);
-        else if (isFolk && (!k || !ok[k])) junk.push(o);
+        if (w.x > 1600 && (isFolk || glowish) && (!k || !ok[k])) junk.push(o);
+        else if (isFolk && w.x > 1600 && (!k || !ok[k])) junk.push(o);
       });
       for (const o of junk) { o.visible = false; if (o.parent) o.parent.remove(o); }
       // 【fix281】有资料点却没有网格的，补建一根（保证"有词条就一定有可见光柱"）
@@ -29614,6 +29614,20 @@ window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.9 };   // 【
   AIRLINER.userData.pillarGroup = pw;
   AIRLINER.userData.pillarBeam = beam;
   AIRLINER.userData.pillarPos = { x: pillarX, z: pillarZ };
+  // 【fix301】机场光柱自愈：光柱巡检会把这两根透明圆柱当成「古建多余光柱」删掉（只剩地面光环），
+  // 这里每 2 秒检查一次，掉了就重新挂回去。
+  window.__fixFlightBeam = function () {
+    try {
+      if (beam.parent !== pw) pw.add(beam);
+      if (core.parent !== pw) pw.add(core);
+      if (ring.parent !== pw) pw.add(ring);
+      if (planeSign.parent !== pw) pw.add(planeSign);
+      beam.visible = true; core.visible = true; ring.visible = true; planeSign.visible = true;
+      return 1;
+    } catch (e) { return 0; }
+  };
+  setInterval(function () { try { window.__fixFlightBeam(); } catch (e) {} }, 2000);
+  setTimeout(function () { try { window.__fixFlightBeam(); } catch (e) {} }, 7200);
   // 机票面板的三个按钮（只绑一次）
   const _flPerm = document.getElementById('flBuyPerm');
   const _flOnce = document.getElementById('flBuyOnce');
