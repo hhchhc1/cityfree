@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix324-rail';
+const BUILD = '20261107-fix326-yulu';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26776,7 +26776,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     }
 
     // ---------- 瓦顶（瓦垄分条 + 正脊 + 龙吻 + 起翘） ----------
-    function roof(cx, cz, w, d, y, a, b) {
+    function roof(cx, cz, w, d, y, a, b, st) {
       const ow = w + 3.0, od = d + 3.0, sl = 0.48, sh = od * 0.31;
       const cols = Math.max(7, Math.min(44, Math.round(ow / 1.7)));
       const cw = ow / cols;
@@ -26810,6 +26810,26 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         det(BX(1.05, 0.34, od * 0.46), 0x3b4148, cx + sx * ow * 0.435, y + sh * 0.42, cz + sz * od * 0.30, sz * sl * 0.95, 0, sx * 0.34);
         det(BX(2.1, 0.34, 0.8), a || CY_TILE, cx + sx * ow * 0.40, y + sh * 0.45, cz + sz * od * 0.40, sz * sl * 0.9, 0, sx * 0.32);
+      }
+      // 【fix325】屋顶形制多样化：硬山 / 悬山 / 歇山
+      const ST = st || 'yingshan';
+      if (ST === 'yingshan') {
+        for (const s of [-1, 1]) det(BX(1.0, od * 0.26, od * 0.90), CY_BRICK, cx + s * (w / 2 + 0.55), y + 0.28, cz);
+      } else if (ST === 'xuanshan') {
+        for (const s of [-1, 1]) {
+          det(BX(3.4, 0.36, od * 0.96), a || CY_TILE, cx + s * (ow / 2 + 1.5), y - 0.04, cz);
+          for (let i = 0; i < 4; i++) det(BX(0.52, 0.38, 0.52), 0x6d3a20, cx + s * (w / 2 + 1.05), y - 0.22, cz - od * 0.33 + i * od * 0.22);
+        }
+      } else if (ST === 'xieshan') {
+        const ow2 = ow * 0.56, od2 = od * 0.52;
+        for (const s of [-1, 1]) det(BX(1.2, od * 0.22, od * 0.86), 0x8a2f2a, cx + s * (ow * 0.245), y + sh * 0.46, cz);
+        const n2 = Math.max(5, Math.round(ow2 / 2.2)), cw2 = ow2 / n2;
+        for (let i = 0; i < n2; i++) {
+          const px = cx - ow2 / 2 + cw2 * (i + 0.5);
+          for (const s of [-1, 1]) det(BX(cw2, 0.34, od2 * 0.56), (i % 2 ? (a || CY_TILE) : (b || 0x49505a)), px, y + sh * 1.02, cz + s * od2 * 0.22, s * 0.33, 0, 0);
+        }
+        det(BX(ow2 * 1.02, 0.44, 0.95), 0x453e34, cx, y + sh * 1.02 + od2 * 0.15, cz);
+        for (const s of [-1, 1]) det(BX(0.9, 0.8, 1.1), 0x453e34, cx + s * ow2 * 0.51, y + sh * 1.02 + od2 * 0.10, cz, 0, 0, s * 0.3);
       }
     }
     function stairs(cx, cz, w, n, sh, dir) {
@@ -26883,7 +26903,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         sp.position.set(lx, BASE + 1.2 + h - 0.62, cz + d / 2 + 1.15); g.add(sp);
         det(BX(0.10, 0.85, 0.10), 0x6d3a20, lx, 1.2 + h - 0.10, cz + d / 2 + 1.15);
       }
-      roof(cx, cz, w, d, 1.2 + h + 0.44);
+      roof(cx, cz, w, d, 1.2 + h + 0.44, o.tileA, o.tileB, o.roofStyle || 'xieshan');
       if (o.plaque) {
         const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.55;
         plaque3d(o.plaque, cx, py, pz, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
@@ -26907,7 +26927,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     }
 
     // ---------- 长庑 / 六房（连续廊柱，沿 z） ----------
-    function gallery(cx, cz, len, dirX, h) {
+    function gallery(cx, cz, len, dirX, h, nameList) {
       const d = 9.0, hh = h || 5.8;
       det(BX(d + 4, 0.95, len + 6), 0xb6b0a2, cx, 0.48, cz);
       det(BX(1.1, hh, len), CY_BRICK, cx - dirX * (d / 2), 0.95 + hh / 2, cz);      // 后墙
@@ -26917,6 +26937,14 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         const pz = cz - len / 2 + i * len / nc;
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
+      }
+      // 【fix325】六房匾额（吏/户/礼/兵/刑/工）
+      if (nameList && nameList.length) {
+        for (let i2 = 0; i2 < nameList.length && i2 < nc; i2++) {
+          const pz2 = cz - len / 2 + (i2 + 0.5) * len / nc;
+          const pm = plaque3d(nameList[i2], cx - dirX * (d / 2 - 0.62), 4.85, pz2, 2.9, 1.1, '#1b2a4a', '#e8c86a');
+          if (pm) pm.rotation.y = dirX > 0 ? Math.PI / 2 : -Math.PI / 2;
+        }
       }
       // 【fix308】六房：每个开间都做成真房间 —— 门洞 / 槛窗 / 隔墙
       const bw = len / nc;
@@ -26969,7 +26997,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
           det(BX(0.42, h * 0.9, 0.5), CY_BRICK, bx4 - bw3 / 2, 0.9 + h * 0.45, cz + d / 2 + 0.16);
         }
       }
-      roof(cx, cz, w, d, 0.9 + h + 0.36);
+      roof(cx, cz, w, d, 0.9 + h + 0.36, null, null, 'yingshan');
     }
     // ---------- 亭 ----------
     function pavilion(cx, cz, r, h, txt) {
@@ -27111,7 +27139,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     })();
 
     // ==================== 3) 荷芷署大门（悬山 + 大台阶 + 石碑） ====================
-    hall(AX, -252, 38, 17, 11.2, { plaque: '荷芷署', stepN: 7 });
+    hall(AX, -252, 38, 17, 11.2, { plaque: '荷芷署', stepN: 7, roofStyle: 'xuanshan' });
     for (const s of [-1, 1]) {
       det(BX(2.8, 1.1, 2.8), 0xb6b0a2, AX + s * 13, 0.55, -232);
       det(BX(1.6, 1.9, 2.3), 0x9a958c, AX + s * 13, 2.1, -232);
@@ -27180,10 +27208,14 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 6) 东西长庑（六房） ====================
     gallery(1918, -400, 150, 1, 6.0);
     gallery(2132, -400, 150, -1, 6.0);
-    gallery(1918, -560, 110, 1, 5.8);
-    gallery(2132, -560, 110, -1, 5.8);
+    gallery(1918, -560, 110, 1, 5.8, ['承发房', '架阁库']);
+    gallery(2132, -560, 110, -1, 5.8, ['招房', '库房']);
     // 【fix315】后花园：花墙月洞门 + 水池 + 假山 + 凉亭 + 曲桥（把北院再拉大一进）
     // 后花园暂时停用：这一段会让无头浏览器卡死（已回退，后续用别的方式重做）
+
+    // 【fix325】甬道御路石：中间一条整石带 + 每 4 米一道石缝
+    det(BX(3.8, 0.12, 330), 0xbdb6a6, AX, 0.30, -305);
+    for (let zy = -145; zy > -468; zy -= 4) det(BX(3.9, 0.05, 0.24), 0x9a948a, AX, 0.37, zy);
 
     // 【fix313】甬道：两侧石栏 + 石灯（照片里甬道两侧是一排石柱和石灯）
     for (const s of [-1, 1]) {
