@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix338-plaques3d';
+const BUILD = '20261107-fix339-arc';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27337,6 +27337,9 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (let z8 = -158; z8 > -452; z8 -= 5.0) {
         det(new THREE.CylinderGeometry(0.26, 0.30, 3.9, 8), 0x7d2f26, lx, 1.95, z8);
         det(new THREE.CylinderGeometry(0.44, 0.44, 0.24, 8), 0x9a9078, lx, 0.12, z8);
+        // 【fix339】廊下坐凳（美人靠）
+        det(BX(0.58, 0.16, 4.2), 0x6d3a20, lx - s * 0.35, 1.30, z8 - 2.4);
+        det(BX(0.28, 0.44, 4.2), 0x5a2f18, lx - s * 0.62, 0.98, z8 - 2.4);
       }
       det(BX(0.42, 0.34, 296), 0x6d3a20, lx, 3.95, -305);
       // 【fix336】廊下红灯笼（每 20 米）
@@ -27539,7 +27542,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       // 抱厦（卷棚）
       det(BX(22, 0.7, 10), 0x5c3a26, AX, 8.6, Z + 17);
       for (const s of [-1, 1]) for (const t of [0, 1]) det(new THREE.CylinderGeometry(0.42, 0.44, 7.4, 8), 0x7d2f26, AX + s * 9.4, 3.7, Z + 13.5 + t * 6.0);
-      roof(AX, Z + 17, 22, 10, 9.4);
+      // 【fix339】抱厦卷棚：弧形分段瓦顶（不是一块平瓦）
+      for (let k = -3; k <= 3; k++) {
+        const a3 = k * 0.155;
+        det(BX(22.6, 0.28, 1.62), (k % 2 ? CY_TILE : 0x49505a), AX, 9.72 + Math.cos(a3) * 0.62, Z + 17 + k * 1.52, a3, 0, 0);
+      }
+      det(BX(22.8, 0.34, 0.9), 0x453e34, AX, 10.42, Z + 17);
+      for (const s of [-1, 1]) det(BX(0.9, 0.9, 1.1), 0x453e34, AX + s * 11.6, 10.05, Z + 17, 0, 0, s * 0.36);
       // 东西耳房（议事厅 / 刑厅）
       wing(AX - 30, Z - 2, 16, 14, 6.4);
       wing(AX + 30, Z - 2, 16, 14, 6.4);
