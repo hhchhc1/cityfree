@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix272-cityguide';
+const BUILD = '20261106-fix273-splitmap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22452,9 +22452,15 @@ var mapZoom = 1;
 const MAP_ZOOM_MAX = 5;
 function mapClampZoom(z) { return Math.max(1, Math.min(MAP_ZOOM_MAX, z)); }
 // 大地图缩放系数（cover：铺满宽度，裁上下）。drawFullMap 和钳制逻辑共用，抽成函数避免两处算错。
-// 【fix271】大地图范围扩到包含新城市（荷芷市 x1550~2280 / z-765~-85）、古建城与园林。
-const MAP_X0 = -630, MAP_X1 = 2420, MAP_Z0 = -830, MAP_Z1 = 590;
-function mapScale(W, H) { return Math.max(W / (MAP_X1 - MAP_X0), H / (MAP_Z1 - MAP_Z0)); }
+// 【fix273】用户要求：不要两座城一起显示 —— 人在这座城就只显示这座城。
+// x > 700 判定为荷芷市（新城）；否则为老城。
+function mapBounds() {
+  const px = (typeof person !== 'undefined' && person) ? person.position.x : 0;
+  return px > 700
+    ? { x0: 1020, x1: 2260, z0: -830, z1: 400, isNew: true }
+    : { x0: -630, x1: 640, z0: -830, z1: 590, isNew: false };
+}
+function mapScale(W, H) { const b = mapBounds(); return Math.max(W / (b.x1 - b.x0), H / (b.z1 - b.z0)); }
 // 【fix40 性能】大地图重绘调度器。
 // 问题：拖动时每个 pointermove / touchmove 都同步调一次 drawFullMap()，而它会遍历
 //       全部建筑（数千个 fillRect）+ 全部车流/NPC/掉落物重画一遍。120Hz 触屏上单指拖动
@@ -22477,40 +22483,54 @@ function drawFullMap() {
   // 单指/指针拖动 = 平移（mapPanX/Y）；双指捏合 / 滚轮 = 缩放（mapZoom）。实际比例 s = 基准×缩放，
   // 平移上限按缩放后的图幅算 —— 缩得越大，可平移范围越大（等于把地图放大了看）。
   // 【2026-10-21·fix38 用户要求】"放大版的地图弄成可以用手移动的"。
+  const _b = mapBounds();
   const s = mapScale(W, H) * mapZoom;
-  const _mw = (MAP_X1 - MAP_X0) * s, _mh = (MAP_Z1 - MAP_Z0) * s;
+  const _mw = (_b.x1 - _b.x0) * s, _mh = (_b.z1 - _b.z0) * s;
   const _maxPanX = Math.max(0, (_mw - W) / 2), _maxPanY = Math.max(0, (_mh - H) / 2);
   mapPanX = Math.max(-_maxPanX, Math.min(_maxPanX, mapPanX));
   mapPanY = Math.max(-_maxPanY, Math.min(_maxPanY, mapPanY));
   // 【fix15 用户要求】"点开地图要铺满手机宽度"：用 cover 铺满宽度（只裁上下多余海域）。
-  const ox = (W - _mw) / 2 - MAP_X0 * s + mapPanX;
-  const oy = (H - _mh) / 2 - MAP_Z0 * s + mapPanY;
+  const ox = (W - _mw) / 2 - _b.x0 * s + mapPanX;
+  const oy = (H - _mh) / 2 - _b.z0 * s + mapPanY;
   const X = wx => ox + wx * s, Y = wz => oy + wz * s;
   ctx.clearRect(0, 0, W, H);
   // 海洋底色
   ctx.fillStyle = '#1a4a68'; ctx.fillRect(0, 0, W, H);
-  // 城市核心
-  ctx.fillStyle = '#262d3a'; ctx.fillRect(X(-CITY), Y(-CITY), CITY * 2 * s, CITY * 2 * s);
+  if (!_b.isNew) {
+    // 老城核心街区
+    ctx.fillStyle = '#262d3a';
+    ctx.fillRect(X(-CITY), Y(-CITY), CITY * 2 * s, CITY * 2 * s);
+  } else {
+    // 【fix273】新城市：先把河画出来（护城河主河道 x 1510~1630，从 z-765 一直向南到 z322）
+    const rx0 = 1510, rx1 = 1630, rz0 = -765, rz1 = 322;
+    ctx.fillStyle = '#2f6f96';
+    ctx.fillRect(X(rx0), Y(rz0), (rx1 - rx0) * s, (rz1 - rz0) * s);
+    ctx.strokeStyle = 'rgba(140,200,225,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(X(rx0), Y(rz0), (rx1 - rx0) * s, (rz1 - rz0) * s);
+  }
   // 新区域标注
-  const zones = [
+  const zones = _b.isNew ? [
+    { x: 1241, z: 119, r: 265, color: '#5b4a8a', name: '霓虹楼群' },
+    { x: 1120, z: -285, r: 175, color: '#6a6a72', name: '机场' },
+    { x: 1800, z: -430, r: 185, color: '#7a5a2a', name: '古建城' },
+    { x: 1880, z: 120, r: 130, color: '#3f7a3f', name: '园林' },
+    { x: 1570, z: 250, r: 0.1, color: '#1a6f9f', name: '荷芷河' },
+  ] : [
     { x: 280, z: 200, r: 70, color: '#3a7a3a', name: '体育场' },
-    // 【2026-10-22·fix41】机场迁址到城市正北空地（中心 0,-257），大地图标注同步
     { x: 0, z: -257, r: 155, color: '#6a6a72', name: '机场' },
     { x: 260, z: -200, r: 50, color: '#1a6f9f', name: '码头' },
     { x: 230, z: 100, r: 20, color: '#cc3333', name: '摩天轮' },
     { x: -200, z: -280, r: 40, color: '#3a9a3a', name: '高尔夫' },
     { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: '#b8a15a', name: '南岛' },
-  // 【fix271】新城市片区
-  { x: 2110, z: -430, r: 300, color: '#8a6a3a', name: '荷芷市' },
-  { x: 1790, z: -430, r: 175, color: '#7a5a2a', name: '古建城' },
-  { x: 1880, z: 120, r: 125, color: '#3f7a3f', name: '园林' },
   ];
   for (const z of zones) {
     ctx.fillStyle = z.color + '44';
     ctx.beginPath(); ctx.arc(X(z.x), Y(z.z), z.r * s, 0, 7); ctx.fill();
     ctx.fillStyle = '#ffffff88';
     ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(z.name, X(z.x), Y(z.z) + 3);
+    const _ly = (z.r > 60) ? Y(z.z - z.r * 0.62) : Y(z.z) + 3;   // fix273: 大区块的标签写在圆的上缘，免得被左下角按钮挡住
+    ctx.fillText(z.name, X(z.x), _ly);
   }
   // 【fix272】新城市导览：主要建筑画成方块 + 名字，并补一套示意路网
   ctx.save();
