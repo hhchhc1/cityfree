@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix358-bridgerail';
+const BUILD = '20261107-fix359-baoshashou';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27844,6 +27844,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       // 抱厦（卷棚）
       det(BX(22, 0.7, 10), 0x5c3a26, AX, 8.6, Z + 17);
       for (const s of [-1, 1]) for (const t of [0, 1]) det(new THREE.CylinderGeometry(0.42, 0.44, 7.4, 8), 0x7d2f26, AX + s * 9.4, 3.7, Z + 13.5 + t * 6.0);
+      // 【fix359】抱厦两侧石栏（原来抱厦两侧是敞开的）
+      for (const s of [-1, 1]) {
+        for (let i14 = 0; i14 <= 4; i14++) {
+          const pz14 = Z + 12.4 + i14 * 2.3;
+          det(BX(0.30, 1.10, 0.30), 0xc0bab0, AX + s * 11.2, 0.55, pz14);
+          det(new THREE.SphereGeometry(0.20, 6, 5), 0xb6b0a6, AX + s * 11.2, 1.24, pz14);
+          if (i14 < 4) det(BX(0.16, 0.46, 2.0), 0xb6b0a6, AX + s * 11.2, 0.62, pz14 + 1.15);
+        }
+      }
       // 【fix339】抱厦卷棚：弧形分段瓦顶（不是一块平瓦）
       for (let k = -3; k <= 3; k++) {
         const a3 = k * 0.155;
@@ -27912,6 +27921,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (let i10 = 0; i10 < 4; i10++) det(BX(2.3, 0.14, 0.42), 0x4a2416, AX + 16.6, BASE + 0.45 + i10 * 0.66, BZ + 5.0);
       for (let i11 = 0; i11 < 12; i11++) det(BX(0.42, 0.32, 0.30), [0xc8b48a, 0x8a5a34, 0x2b3a5c][i11 % 3], AX + 15.6 + (i11 % 6) * 0.36, BASE + 0.62 + Math.floor(i11 / 6) * 0.66, BZ + 5.0);
     })();
+    for (const s of [-1, 1]) wing(AX + s * 28, -568, 14, 12, 5.4);
+    // 【fix359】退思堂院内：两个花坛 + 两棵松
+    for (const s of [-1, 1]) {
+      det(BX(6.4, 0.75, 6.4), 0xa8a294, AX + s * 23, 0.37, -545);
+      det(BX(5.6, 0.30, 5.6), 0x4a3a24, AX + s * 23, 0.85, -545);
+      det(new THREE.SphereGeometry(1.7, 8, 6), 0x3f7a44, AX + s * 23, 2.0, -545);
+      det(new THREE.CylinderGeometry(0.34, 0.42, 4.4, 8), 0x4a3020, AX + s * 23, 2.6, -545);
+      det(new THREE.SphereGeometry(2.6, 9, 7), 0x2f6238, AX + s * 23, 5.6, -545);
+    }
     for (const s of [-1, 1]) wing(AX + s * 28, -568, 14, 12, 5.4);
 
     // ==================== 9) 内宅（知州宅） ====================
