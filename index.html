@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix321-garden';
+const BUILD = '20261107-fix322-tiles';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26777,16 +26777,38 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // ---------- 瓦顶（瓦垄分条 + 正脊 + 龙吻 + 起翘） ----------
     function roof(cx, cz, w, d, y, a, b) {
-      const ow = w + 3.0, od = d + 3.0, sl = 0.48, sh = od * 0.31, cols = 9, cw = ow / cols;
+      const ow = w + 3.0, od = d + 3.0, sl = 0.48, sh = od * 0.31;
+      const cols = Math.max(7, Math.min(44, Math.round(ow / 1.7)));
+      const cw = ow / cols;
+      // 瓦垄：一垄一垄的筒瓦 + 板瓦，两坡对称
       for (let i = 0; i < cols; i++) {
         const px = cx - ow / 2 + cw * (i + 0.5);
         const col = (i % 2) ? (a || CY_TILE) : (b || 0x49505a);
-        for (const s of [-1, 1]) det(BX(cw, 0.40, od * 0.58), col, px, y + sh * 0.50, cz + s * od * 0.245, s * sl, 0, 0);
+        for (const s of [-1, 1]) {
+          det(BX(cw, 0.40, od * 0.58), col, px, y + sh * 0.50, cz + s * od * 0.245, s * sl, 0, 0);
+          // 垄背的一道细脊（筒瓦凸起）
+          det(BX(cw * 0.26, 0.16, od * 0.58), 0x555c64, px, y + sh * 0.50 + 0.24, cz + s * od * 0.245, s * sl, 0, 0);
+        }
+      }
+      // 檐口：滴水 + 圆形瓦当
+      const nw = Math.max(6, Math.min(40, Math.round(ow / 2.4)));
+      for (let i = 0; i < nw; i++) {
+        const px = cx - ow / 2 + (i + 0.5) * ow / nw;
+        for (const s of [-1, 1]) det(new THREE.CylinderGeometry(0.28, 0.28, 0.30, 8), 0x4b5158, px, y - 0.16, cz + s * (od * 0.487), Math.PI / 2, 0, 0);
       }
       for (const s of [-1, 1]) det(BX(ow, 0.30, 0.75), 0x3b4148, cx, y - 0.05, cz + s * od * 0.475);
+      // 正脊 + 两道垂脊 + 脊兽 + 宝顶
       det(BX(ow * 1.01, 0.62, 1.05), 0x453e34, cx, y + sh + 0.08, cz);
-      for (const sx of [-1, 1]) det(BX(0.95, 0.95, 1.15), 0x453e34, cx + sx * ow * 0.505, y + sh * 0.58, cz, 0, 0, sx * 0.38);
+      det(BX(ow * 0.995, 0.22, 0.62), 0x555c64, cx, y + sh + 0.44, cz);
+      for (const sx of [-1, 1]) {
+        det(BX(0.95, 0.95, 1.15), 0x453e34, cx + sx * ow * 0.505, y + sh * 0.58, cz, 0, 0, sx * 0.38);
+        for (let b2 = 0; b2 < 3; b2++)
+          det(BX(0.55, 0.30 + b2 * 0.10, 0.55), 0x5a6270, cx + sx * (ow * 0.44 - b2 * 1.15), y + sh + 0.55 + b2 * 0.12, cz);
+        det(new THREE.SphereGeometry(0.30, 8, 6), 0x7a8492, cx + sx * (ow * 0.505 + 0.2), y + sh + 0.30, cz);
+      }
+      // 四角垂脊（戗脊）
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        det(BX(1.05, 0.34, od * 0.46), 0x3b4148, cx + sx * ow * 0.435, y + sh * 0.42, cz + sz * od * 0.30, sz * sl * 0.95, 0, sx * 0.34);
         det(BX(2.1, 0.34, 0.8), a || CY_TILE, cx + sx * ow * 0.40, y + sh * 0.45, cz + sz * od * 0.40, sz * sl * 0.9, 0, sx * 0.32);
       }
     }
