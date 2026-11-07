@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix248-dex-small';
+const BUILD = '20261106-fix249-real-spots';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26051,7 +26051,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   }
   // 鼓楼立在古建城的**正中心**（原中心那座殿阁让位，移到西侧）
   buildDrumTower(LH.ancX0 + 140, ZC);
+try { if (window.__folkAddSpot) window.__folkAddSpot('鼓楼', LH.ancX0 + 140, ZC, 0xffb0b0); } catch (eS) {}
   buildPagoda(LH.ancX0 + 58, ZC, 3, 22);
+try { if (window.__folkAddSpot) window.__folkAddSpot('古塔', LH.ancX0 + 58, ZC, 0xb9d6ff); } catch (eS) {}
   buildPagoda(LH.ancX0 + 150, Z0 + 150, 3, 22);
   buildPagoda(LH.ancX0 + 150, Z1 - 150, 3, 22);
   buildPagoda(LH.ancX0 + 224, ZC - 90, 2, 19);
@@ -27340,6 +27342,26 @@ window.__bindTap = __bindTap;
     det(BX(11, 0.42, 190), TILE, 2020, 3.55, 153, 0, 0, 0.06);
 
 
+// 【fix249】给"原有的"民居/古建加光柱的统一入口：谁建的房子，谁自己报坐标，避免我手写坐标对不上
+window.__folkAddSpot = function (name, x, z, color, dz) {
+  try {
+    if (typeof scene === "undefined" || !scene) return;
+    window.__folkMarkers = window.__folkMarkers || [];
+    if (window.__folkMarkers.some(function (m) { return m.name === name; })) return;
+    const px = x, pz = z + (dz === undefined ? -9 : dz);
+    const col = color || 0xffd08a;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+    beam.position.set(px, 3.5, pz); scene.add(beam);
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 7.0, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+    core.position.set(px, 3.5, pz); scene.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 8, 22),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring);
+    window.__folkMarkers.push({ name: name, x: px, z: pz });
+  } catch (e) { window.__folkSpotErr = String(e); }
+};
 // 【fix247】民居/古建图鉴：常驻按钮 + 走近光柱自动显示简介
 (function folkWikiAll() {
   const INFO = [
@@ -27485,9 +27507,8 @@ try {
     { name: "月洞门", x: 1870, z: 11,   dx: -9.5, dz: 3,    color: 0xa9e8ff },
     { name: "水榭",   x: 1832, z: 139,  dx: 10.5, dz: -8,   color: 0x9dffc4 },
     { name: "六角亭", x: 1772, z: 232,  dx: 8.5,  dz: 0,    color: 0xffc48a },
-    { name: "主厅",   x: 1962, z: 248,  dx: -16,  dz: -11,  color: 0xd8b4ff },
-    { name: "鼓楼",   x: 1790, z: -285, dx: 14,   dz: 0,    color: 0xffb0b0 },
-    { name: "古塔",   x: 1708, z: -285, dx: -13,  dz: 0,    color: 0xb9d6ff }
+    { name: "主厅",   x: 1962, z: 248,  dx: -16,  dz: -11,  color: 0xd8b4ff }
+
   ];
   for (const s of SPOTS) {
     const px = s.x + s.dx, pz = s.z + s.dz;
@@ -27676,6 +27697,7 @@ try {
         furnish(cx, cz);
         for (let k = -1; k <= 1; k++) bx(w - 0.9, 0.2, 0.28, 0x53331e, cx, h - 0.3, cz + k * 2.6);
       })(1796, 46);
+try { if (window.__folkAddSpot) window.__folkAddSpot('徽派民居', 1796, 46, 9232639); } catch (eS) {}
 
       // ---------- 2) 北京四合院 ----------
       (function siheyuan(cx, cz) {
@@ -27744,6 +27766,7 @@ try {
         put(new THREE.CylinderGeometry(0.7, 0.7, 0.14, 10), 0x9aa0a4, cx - 5, 0.75, cz + 5.4);
         for (const s of [-1, 1]) put(BX(0.5, 0.4, 0.5), 0x8d8b84, cx - 5 + s * 1.4, 0.3, cz + 5.4);
       })(1840, 46);
+try { if (window.__folkAddSpot) window.__folkAddSpot('北京四合院', 1840, 46, 16767370); } catch (eS) {}
 
       // ---------- 3) 贵州石板房 ----------
       (function shibanfang(cx, cz) {
@@ -27795,6 +27818,7 @@ try {
         bx(2.4, 0.16, 1.6, 0x8a6a3a, cx + 3, 1.3, cz - 2.2);
         bx(3.6, 0.6, 1.4, 0x6b4a2c, cx + 4.6, 0.3, cz + 2.2);
       })(1880, 46);
+try { if (window.__folkAddSpot) window.__folkAddSpot('石板房', 1880, 46, 14079702); } catch (eS) {}
 
       // ---------- 4) 湘西吊脚楼（下层架空，可走进去） ----------
       (function diaojiao(cx, cz) {
@@ -27825,6 +27849,7 @@ try {
         // 檐下挂的一排辣椒/玉米
         for (let i = 0; i < 8; i++) put(new THREE.SphereGeometry(0.12, 6, 5), i % 2 ? 0xc0392b : 0xd8a83a, cx - 3.5 + i * 1.0, floorY + 2.55, cz + d / 2 + 0.1);
       })(1910, 47);
+try { if (window.__folkAddSpot) window.__folkAddSpot('吊脚楼', 1910, 47, 10354628); } catch (eS) {}
 
       // ---------- 5) 福建土楼 ----------
       (function tulou(cx, cz) {
@@ -27887,6 +27912,7 @@ try {
         bx(2.4, 0.12, 0.12, 0x6b4a2c, cx - 3.2, 2.5, cz + 1.2);
         for (let i = 0; i < 4; i++) bx(0.5, 0.3, 0.5, 0x8a3a2c, cx - 4.1 + i * 0.6, 2.75, cz + 1.2);
       })(1945, 44);
+try { if (window.__folkAddSpot) window.__folkAddSpot('福建土楼', 1945, 44, 16761994); } catch (eS) {}
 
       // ---------- 6) 蒙古包 ----------
       (function yurt(cx, cz) {
@@ -27919,6 +27945,7 @@ try {
         for (const s of [-1, 1]) putM(BX(1.1, 0.45, 1.1), detMat(0x8a5a34), cx + s * 1.7, 0.28, cz);
         for (let i = 0; i < 5; i++) putM(new THREE.CylinderGeometry(0.14, 0.16, 0.5, 6), detMat(0x9a3b2c), cx + 2.6, 0.25, cz - 1.6 + i * 0.7);
       })(1800, 76);
+try { if (window.__folkAddSpot) window.__folkAddSpot('蒙古包', 1800, 76, 13625599); } catch (eS) {}
 
       // ---------- 7) 陕北窑洞（窑口朝北，对着街） ----------
       (function yaodong(cx, cz) {
@@ -27969,6 +27996,7 @@ try {
         bx(span + 4, 0.7, 0.5, 0xa87a48, cx, 0.35, cz - 3.6);
         for (let i = 0; i < 6; i++) putM(new THREE.SphereGeometry(0.13, 6, 5), detMat(0xd8a83a), cx - span / 2 - 1.4, 2.5 - i * 0.36, cz - 0.4);
       })(1848, 80);
+try { if (window.__folkAddSpot) window.__folkAddSpot('陕北窑洞', 1848, 80, 16765088); } catch (eS) {}
 
       // ---------- 8) 广东镬耳屋（门朝北，对着街） ----------
       (function wokhouse(cx, cz) {
@@ -27998,6 +28026,7 @@ try {
         litRoom(cx, cz, w - 1.2, d - 1.2, h - 0.8, 0.62);
         furnish(cx, cz + 0.5);
       })(1892, 76);
+try { if (window.__folkAddSpot) window.__folkAddSpot('广东镬耳屋', 1892, 76, 14202111); } catch (eS) {}
 
       // ---------- 石板街 + 街沿 + 石凳 + 竹丛 + 村口牌坊 ----------
       pbox(200, 0.09, 7.0, 'stone', 1868, 0.05, 62, 2.5);
@@ -28679,7 +28708,15 @@ function flightTick(dt) {
     else if (_tt < FLIGHT_T.land) _vv = 0.50;
     flightAudioSet(_vv); }
   const F = FLIGHT; if (!F) return;
-  F.t = Math.min(FLIGHT_T.done, F.t + dt);
+  // 【fix250】飞行时间改成"固定步长累积"：原来 F.t += dt，帧间隔一抖，飞机就一快一慢。
+  // 现在每 1/60 秒推进一小步，最多补 6 步；掉帧时宁可整体略慢，也不再忽快忽慢。
+  F.acc = (F.acc || 0) + Math.min(dt, 0.10);
+  {
+    const _S = 1 / 60;
+    let _n = 0;
+    while (F.acc >= _S && _n < 6) { F.t = Math.min(FLIGHT_T.done, F.t + _S); F.acc -= _S; _n++; }
+    if (_n >= 6) F.acc = 0;
+  }
   const t = F.t;
   clearInput();                                   // 演出期间玩家不能操作
   const ks = flightSample(t);
