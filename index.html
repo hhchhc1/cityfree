@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix302-orphanfix';
+const BUILD = '20261107-fix303-scrolls';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15859,6 +15859,34 @@ const SHOP_CATS = [
 ];
 // 消星卡：1000 元，买下**立刻生效**（不用进背包、不用手动使用）
 const WANTED_CARD = { key: 'wantedcard', icon: '🎫', name: '消星卡', price: 1000 };
+// 【fix303】传送卷轴（用户要求）：800 元一张，买下即传送，任何地方都能用。
+const TP_SCROLLS = [
+  { key: 'tpcity', icon: '📜', name: '传送卷轴 · 古建筑城', price: 800, x: 2025, z: -132, label: '古建筑城 · 荷芷署前' },
+  { key: 'tpisland', icon: '📜', name: '传送卷轴 · 南岛', price: 800, x: 0, z: 440, label: '南岛' },
+  { key: 'tpairport', icon: '📜', name: '传送卷轴 · 机场', price: 800, x: null, z: null, label: '荷芷机场' }
+];
+function useTpScroll(k) {
+  const s = TP_SCROLLS.filter(function (v) { return v.key === k; })[0];
+  if (!s) return;
+  if (gold < s.price) { setHint('金币不够，还差 ' + (s.price - gold) + ' 金币'); return; }
+  let tx = s.x, tz = s.z;
+  if (k === 'tpairport') {
+    try {
+      const p = AIRLINER && AIRLINER.userData && AIRLINER.userData.pillarPos;
+      if (p) { tx = p.x; tz = p.z + 9; }
+    } catch (e) {}
+    if (tx === null || tx === undefined) { tx = 1120; tz = -240; }
+  }
+  gold -= s.price; sfx('coin');
+  try {
+    let gy = 0.6;
+    try { gy = personGroundY(tx, tz); } catch (e1) { gy = terrainHeight(tx, tz); }
+    person.position.set(tx, gy + 0.2, tz);
+    try { vy = 0; } catch (e0) {}
+  } catch (e2) {}
+  try { showOverlay('传送 · ' + s.label, 1.8); } catch (e3) {}
+  try { renderShop(); } catch (e4) {}
+}
 let shopCat = 'weapons';
 let shopSel = null;
 
@@ -15918,6 +15946,7 @@ function buildShopData() {
   // 服饰
   SHOP_CATS[3].items = [];
   for (const key in CLOTHES) {
+    if (key === 'nitro') continue;   // 【fix303】氮气引擎挪到「道具」栏
     const cl = CLOTHES[key];
     const owned = ownedClothes.includes(key);
     // 互斥锁：同组里已经装备了别的 → 这一件买不了
@@ -16368,7 +16397,11 @@ function renderShopDetail(item) {
       if (shopCat === 'weapons') buyWeapon(item.key);
       else if (shopCat === 'ammo') buyAmmo(item.key);
       else if (shopCat === 'cars') buyCar(item.key);
-      else if (shopCat === 'items') useWantedCard();      // 【2026-10-13】消星卡：买下即用
+      else if (shopCat === 'items') {   // 【fix303】道具栏按 key 分发
+        if (item.key === 'wantedcard') useWantedCard();
+        else if (item.key === 'nitro') buyClothes('nitro');
+        else useTpScroll(item.key);
+      }      // 【2026-10-13】消星卡：买下即用
       else if (shopCat === 'clothes') buyClothes(item.key);
     }
   });
