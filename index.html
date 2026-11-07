@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix304-scrolls2';
+const BUILD = '20261107-fix305-stairs';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15861,7 +15861,7 @@ const SHOP_CATS = [
 const WANTED_CARD = { key: 'wantedcard', icon: '🎫', name: '消星卡', price: 1000 };
 // 【fix303】传送卷轴（用户要求）：800 元一张，买下即传送，任何地方都能用。
 const TP_SCROLLS = [
-  { key: 'tpcity', icon: '📜', name: '传送卷轴 · 古建筑城', price: 800, x: 2025, z: -132, label: '古建筑城 · 荷芷署前' },
+  { key: 'tpcity', icon: '📜', name: '传送卷轴 · 古建筑城', price: 800, x: 2025, z: -146, label: '古建筑城 · 荷芷署牌坊前' },
   { key: 'tpisland', icon: '📜', name: '传送卷轴 · 南岛', price: 800, x: 0, z: 440, label: '南岛' },
   { key: 'tpairport', icon: '📜', name: '传送卷轴 · 机场', price: 800, x: null, z: null, label: '荷芷机场' }
 ];
@@ -27142,34 +27142,65 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
   for (const mm of [M_QING, M_TIAO, M_FANG, M_PEB]) { mm.polygonOffset = true; mm.polygonOffsetFactor = -3; mm.polygonOffsetUnits = -8; }
 
   // 台基 + 南面大台阶 + 前广场
-  (function podiumPlaza() {
-    const bm = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 + 2.4, BASE, ZS - ZN + 2.4), M_BRICK);
-    bm.position.set(AX, BASE / 2, (ZS + ZN) / 2);
-    g.add(bm);
-    // 台沿条石
-    det(BX(X1 - X0 + 5, 0.45, 1.8), 0xbdb6a6, AX, BASE + 0.2, ZS + 0.6);
-    det(BX(1.8, 0.45, ZS - ZN), 0xbdb6a6, X0 + 0.5, BASE + 0.2, (ZS + ZN) / 2);
-    det(BX(1.8, 0.45, ZS - ZN), 0xbdb6a6, X1 - 0.5, BASE + 0.2, (ZS + ZN) / 2);
-    // 南面 13 级大台阶（地面 → 台面）
-    for (let i = 0; i < 13; i++) {
-      const hh = 2.6 * (i + 1) / 13, zz = -88.4 - i * 1.15;
-      const m2 = new THREE.Mesh(new THREE.BoxGeometry(30, hh, 1.2), M_TIAO);
-      m2.position.set(AX, hh / 2, zz);
-      g.add(m2);
-    }
-    for (const s of [-1, 1]) {
-      const cw2 = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.9, 16), M_BRICK);
-      cw2.position.set(AX + s * 16.2, 1.45, -96);
-      g.add(cw2);
-    }
+    (function podiumPlaza() {
+      const ZP = -136;                 // 台面南沿（台阶顶）
+      const ZB = -124;                 // 台阶底（广场边）
+      const SW = 26, NSTEP = 18;
+      const treadDeep = (ZB - ZP) / NSTEP;
+      // 台基主体
+      const bm = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 + 3.0, BASE, ZP - ZN), M_BRICK);
+      bm.position.set(AX, BASE / 2, (ZP + ZN) / 2);
+      g.add(bm);
+      // 须弥座三层线脚
+      det(BX(X1 - X0 + 4.6, 0.34, 1.3), 0x9a948a, AX, 0.22, ZP + 0.65);
+      det(BX(X1 - X0 + 4.2, 0.30, 1.15), 0xa8a29a, AX, 0.62, ZP + 0.58);
+      det(BX(X1 - X0 + 5.0, 0.36, 1.45), 0xbdb6a6, AX, 0.95, ZP + 0.72);
+      for (const sx of [X0 - 1.1, X1 + 1.1]) {
+        det(BX(1.3, 0.34, ZP - ZN), 0x9a948a, sx, 0.22, (ZP + ZN) / 2);
+        det(BX(1.45, 0.36, ZP - ZN), 0xbdb6a6, sx, 0.95, (ZP + ZN) / 2);
+      }
+      // 18 级大台阶（每级带石棱）
+      for (let i = 0; i < NSTEP; i++) {
+        const hh = BASE * (i + 1) / NSTEP;
+        const zz = ZB - (i + 0.5) * treadDeep;
+        const st = new THREE.Mesh(new THREE.BoxGeometry(SW, hh, treadDeep + 0.02), M_TIAO);
+        st.position.set(AX, hh / 2, zz);
+        g.add(st);
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(SW, 0.13, 0.24), M_TIAO);
+        nose.position.set(AX, hh + 0.065, zz + treadDeep / 2);
+        g.add(nose);
+      }
+      // 垂带 + 望柱
+      for (const s2 of [-1, 1]) {
+        const cw = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.1, ZB - ZP + 1.6), M_BRICK);
+        cw.position.set(AX + s2 * (SW / 2 + 1.0), 1.55, (ZB + ZP) / 2);
+        g.add(cw);
+        det(BX(1.8, 0.26, ZB - ZP + 1.8), 0xbdb6a6, AX + s2 * (SW / 2 + 1.0), 3.18, (ZB + ZP) / 2);
+        for (let k = 0; k <= 4; k++) {
+          const zz2 = ZB - k * (ZB - ZP) / 4;
+          det(new THREE.CylinderGeometry(0.26, 0.30, 1.1, 8), 0xc8c2b4, AX + s2 * (SW / 2 + 1.0), 3.85, zz2);
+          det(new THREE.SphereGeometry(0.3, 8, 6), 0xbdb6a6, AX + s2 * (SW / 2 + 1.0), 4.5, zz2);
+        }
+      }
+      // 台面南沿望柱
+      for (let k = -7; k <= 7; k++) {
+        const px2 = AX + k * 3.9;
+        det(new THREE.CylinderGeometry(0.24, 0.28, 1.0, 8), 0xc8c2b4, px2, BASE + 0.5, ZP - 0.55);
+        det(new THREE.SphereGeometry(0.27, 8, 6), 0xbdb6a6, px2, BASE + 1.08, ZP - 0.55);
+      }
+      // 台面上的牌坊前石铺
+      const pp2 = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 - 6, 0.16, 66), M_TIAO);
+      pp2.position.set(AX, BASE + 0.10, -176);
+      g.add(pp2);
+
     // 中院青砖地（最底层，整片一张）
     const pg = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 6, 454), M_QING);
     pg.rotation.x = -Math.PI / 2;
     pg.position.set(AX, BASE + 0.05, -373);
     g.add(pg);
     // 前广场 + 主甬道：条石（同高、绝不重叠，接缝对齐）
-    const m4a = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 - 10, 0.16, 42), M_TIAO);
-    m4a.position.set(AX, BASE + 0.18, -125);
+const m4a = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0 - 10, 0.16, 10), M_TIAO);
+m4a.position.set(AX, BASE + 0.18, -141);
     g.add(m4a);
     const m4b = new THREE.Mesh(new THREE.BoxGeometry(14, 0.16, 560), M_TIAO);
     m4b.position.set(AX, BASE + 0.18, -426);
@@ -27197,30 +27228,35 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     const pp = new THREE.Mesh(new THREE.BoxGeometry(96, 0.14, 66), M_PEB);
     pp.position.set(AX + 18, BASE + 0.34, -678);
     g.add(pp);
-    // 【fix297】前广场陈设：照壁 / 石狮 / 旗杆 / 下马碑 / 拴马桩 / 古槐
-    det(BX(26, 0.8, 2.8), 0xb6b0a2, AX, 0.4, -110);
-    det(BX(22, 5.0, 1.2), 0x8f887c, AX, 3.3, -110);
-    det(BX(22.6, 0.5, 2.0), CY_TILE, AX, 5.95, -110);
-    det(BX(17, 3.0, 0.2), 0x9a938a, AX, 3.45, -109.4);
-    for (const s of [-1, 1]) det(BX(1.4, 6.0, 1.8), 0x8f887c, AX + s * 11.6, 3.0, -110);
-    for (const s of [-1, 1]) {
-      det(BX(2.6, 1.0, 2.6), 0xb6b0a2, AX + s * 10, 0.5, -120);
-      det(BX(1.5, 1.7, 2.1), 0x9a958c, AX + s * 10, 1.95, -120);
-      det(new THREE.SphereGeometry(0.95, 10, 8), 0x9a958c, AX + s * 10, 3.2, -119.4);
-      det(new THREE.SphereGeometry(0.34, 8, 6), 0x8a857c, AX + s * 10.5, 3.7, -118.4);
+    // 【fix305】前广场陈设（地面标高，不是台基）：照壁 / 石狮 / 旗杆 / 下马碑 / 拴马桩 / 古槐
+    const detG = function (geo, hex, x, y, z, rx, ry, rz, glow) { DET(geo, hex, x, y - BASE, z, rx, ry, rz, glow); };
+    const pmp = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 - 4, 30), M_TIAO);
+    pmp.rotation.x = -Math.PI / 2;
+    pmp.position.set(AX, 0.17, -109);
+    g.add(pmp);
+    detG(BX(26, 0.9, 3.0), 0xb6b0a2, AX, 0.45, -100);
+    detG(BX(22, 5.2, 1.3), 0x8f887c, AX, 3.5, -100);
+    detG(BX(22.8, 0.5, 2.1), CY_TILE, AX, 6.2, -100);
+    detG(BX(17, 3.1, 0.22), 0x9a938a, AX, 3.6, -99.4);
+    for (const s2 of [-1, 1]) detG(BX(1.5, 6.3, 1.9), 0x8f887c, AX + s2 * 11.7, 3.15, -100);
+    for (const s2 of [-1, 1]) {
+      detG(BX(2.6, 1.0, 2.6), 0xb6b0a2, AX + s2 * 9.5, 0.5, -113);
+      detG(BX(1.5, 1.7, 2.1), 0x9a958c, AX + s2 * 9.5, 1.95, -113);
+      detG(new THREE.SphereGeometry(0.95, 10, 8), 0x9a958c, AX + s2 * 9.5, 3.2, -112.4);
     }
-    for (const s of [-1, 1]) {
-      det(new THREE.CylinderGeometry(0.16, 0.2, 12, 8), 0x8a4a2c, AX + s * 20, 6, -122);
-      det(BX(2.6, 5.4, 0.12), 0xc0392b, AX + s * 21.3, 8.6, -122);
-      det(BX(2.0, 0.5, 1.4), 0xb8b4a8, AX + s * 26, 0.25, -118);
-      det(BX(1.4, 3.2, 0.4), 0xa8a29a, AX + s * 26, 1.8, -118);
-      for (let k = 0; k < 3; k++) det(BX(0.4, 2.0, 0.4), 0xa8a49a, AX + s * (30 + k * 2), 1.0, -122);
+    for (const s2 of [-1, 1]) {
+      detG(new THREE.CylinderGeometry(0.16, 0.2, 12, 8), 0x8a4a2c, AX + s2 * 19, 6, -116);
+      detG(BX(2.6, 5.4, 0.12), 0xc0392b, AX + s2 * 20.3, 8.6, -116);
+      detG(BX(2.0, 0.5, 1.4), 0xb8b4a8, AX + s2 * 25, 0.25, -108);
+      detG(BX(1.4, 3.2, 0.4), 0xa8a29a, AX + s2 * 25, 1.8, -108);
+      for (let k = 0; k < 3; k++) detG(BX(0.4, 2.0, 0.4), 0xa8a49a, AX + s2 * (29 + k * 2), 1.0, -112);
     }
-    for (const p of [[1906, -122], [2144, -122]]) {
-      det(new THREE.CylinderGeometry(0.7, 0.95, 5.2, 7), 0x5a3a24, p[0], 2.6, p[1]);
-      det(new THREE.SphereGeometry(3.4, 9, 7), 0x356e42, p[0], 7.0, p[1]);
-      det(new THREE.SphereGeometry(2.4, 8, 6), 0x2f6238, p[0] + 1.6, 5.6, p[1] + 1.2);
+    for (const p of [[1906, -112], [2144, -112]]) {
+      detG(new THREE.CylinderGeometry(0.7, 0.95, 5.2, 7), 0x5a3a24, p[0], 2.6, p[1]);
+      detG(new THREE.SphereGeometry(3.4, 9, 7), 0x356e42, p[0], 7.0, p[1]);
+      detG(new THREE.SphereGeometry(2.4, 8, 6), 0x2f6238, p[0], 5.6, p[1] + 1.2);
     }
+
     // 【fix300】夜间灯笼：自发光小球（MeshBasicMaterial 不受灯光影响），让夜里也能看清中轴
     (function nightLamps() {
       const lampMat = new THREE.MeshBasicMaterial({ color: 0xffb765, fog: false });
@@ -27255,7 +27291,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       let h = _lh0(x, z);
       if (x > 1880 && x < 2170 && z < -84 && z > -770) {
         let bb = _YB;
-        if (z > -102) bb = _YB * (-86 - z) / 16;
+        if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
         if (bb > h) h = bb;
       }
       let py = 0;
