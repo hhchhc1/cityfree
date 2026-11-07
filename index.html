@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix276-photos3';
+const BUILD = '20261106-fix278-beams3';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27790,6 +27790,9 @@ const byName = {};
     } catch (e) {}
   }
   setInterval(tick, 400);
+  // 【fix277】把作用域里的 person / FLIGHT 暴露出去，外层定时器才能取到
+  window.__folkPos = function () { try { return { x: person.position.x, z: person.position.z }; } catch (e) { return null; } };
+  window.__folkFlying = function () { try { return !!(FLIGHT || (typeof RET !== 'undefined' && RET)); } catch (e) { return false; } };
 // 【fix270】用户要求：**一种建筑只保留一根光柱**（同类型多根太乱，也浪费绘制）。
 // 场景建完后统一去重：每种名字只留一根；古塔优先留木塔西侧那根（玩家常走的方向）。
 setTimeout(function () {
@@ -27822,21 +27825,39 @@ setTimeout(function () {
     window.__folkMarkers = out;
   } catch (e) {}
 }, 2500);
-// 【fix263】光柱裁剪：31 根光柱 × 每根 3 层半透明网格，飞行时全在视锥里，
-// 半透明大面积的 overdraw 是空中掉帧的主因。飞行中直接全部隐藏，地面只留 150 米内的。
+// 【fix277】光柱的"同类型只留一根"改为**每 0.5 秒持续强制**（原来只在 2.5 秒跑一次，
+// 晚注册的楼阁光柱躲过了那一次，所以同一栋楼两边各有一根）。顺便把距离裁剪修好：
+// 之前这里直接引用 person / FLIGHT，它们是 IIFE 内部变量，外层拿不到 → 抛异常被 catch 吞掉，
+// 去重和飞行隐藏其实**一次都没执行**。
 setInterval(function () {
   try {
     const M2 = window.__folkMarkers || [];
-    if (!M2.length || typeof person === 'undefined' || !person) return;
-    const flying = (typeof FLIGHT !== 'undefined' && FLIGHT) || (typeof RET !== 'undefined' && RET);
-    const px2 = person.position.x, pz2 = person.position.z;
+    if (!M2.length) return;
+    const kill = function (m) {
+      const objs = Array.isArray(m.obj) ? m.obj : (m.obj ? [m.obj] : []);
+      for (const o of objs) { o.visible = false; if (o.parent) o.parent.remove(o); }
+    };
+    const seen = {};
+    const keep = [];
     for (const m of M2) {
-      if (!m.obj) continue;
-      const vis = !flying && Math.hypot(px2 - m.x, pz2 - m.z) < 150;
-      if (Array.isArray(m.obj)) { for (const o of m.obj) o.visible = vis; } else { m.obj.visible = vis; }
+      if (window.__folkInfoNames && !window.__folkInfoNames[m.name]) { kill(m); continue; }
+      // 古塔：只认木塔西侧那根（x<2050），其余先砍掉再谈去重
+      if (m.name === '古塔' && m.x > 2050) { kill(m); continue; }
+      if (seen[m.name]) { kill(m); continue; }
+      seen[m.name] = 1;
+      keep.push(m);
     }
-  } catch (e) {}
-}, 500);
+    if (keep.length !== M2.length) window.__folkMarkers = keep;
+    const p = window.__folkPos ? window.__folkPos() : null;
+    if (!p) return;
+    const flying = window.__folkFlying ? window.__folkFlying() : false;
+    for (const m of keep) {
+      if (!m.obj) continue;
+      const vis = !flying && Math.hypot(p.x - m.x, p.z - m.z) < 150;
+      const objs = Array.isArray(m.obj) ? m.obj : [m.obj];
+      for (const o of objs) o.visible = vis;
+    }
+  } catch (err) {}}, 500);
 
   function boot() {
     if (document.getElementById('folkDex')) return;
