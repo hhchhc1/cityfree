@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix333-zhishi';
+const BUILD = '20261107-fix334-courts';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26947,6 +26947,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
       }
+      // 【fix334】廊下坐凳栏杆（美人靠）
+      for (let z7 = cz - len / 2 + 3; z7 < cz + len / 2; z7 += 5.4) {
+        det(BX(0.55, 0.16, 4.6), 0x6d3a20, cx + dirX * (d / 2 + 1.55), 1.30, z7 + 2.3);
+        det(BX(0.30, 0.42, 4.6), 0x5a2f18, cx + dirX * (d / 2 + 1.62), 0.98, z7 + 2.3);
+      }
       // 【fix333】廊下挂灯：每 12 米一盏红灯笼
       {
         const lm2 = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
@@ -27230,6 +27235,29 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     })();
     for (const s of [-1, 1]) wing(AX + s * 26, -320, 12, 9, 4.4);
 
+    // 【fix334】东西跨院：偏门外各一座小院（下沉台地 + 院墙 + 厢房 + 影壁 + 石桌）
+    for (const sd of [-1, 1]) {
+      const gx = sd < 0 ? X0 : X1, ex = gx + sd * 48;
+      // 台地（顶面与主台基同高）
+      det(BX(52, 2.6, 120), 0xb6b0a2, gx + sd * 26, -1.30, -222);
+      det(BX(52, 0.2, 120), 0xc8c2b4, gx + sd * 26, 0.02, -222);
+      // 三面院墙
+      wallSeg(gx + sd * 2, -162, gx + sd * 50, -162, 4.4);
+      wallSeg(gx + sd * 2, -282, gx + sd * 50, -282, 4.4);
+      wallSeg(gx + sd * 50, -162, gx + sd * 50, -282, 4.4);
+      // 厢房
+      wing(ex, -252, 16, 22, 4.8);
+      plaque3d(sd < 0 ? '西跨院' : '东跨院', ex, 4.4, -240.4, 4.6, 1.6, '#1b2a4a', '#e8c86a');
+      // 影壁（正对院门）
+      det(BX(10, 3.4, 0.9), 0x9d968a, gx + sd * 18, 1.7, -222);
+      det(BX(10.8, 0.4, 1.3), 0x3b4148, gx + sd * 18, 3.5, -222);
+      det(BX(4.0, 2.0, 0.3), 0x8a2f2a, gx + sd * 18, 1.7, -222.6);
+      // 石桌 + 两个石凳
+      det(new THREE.CylinderGeometry(1.1, 1.1, 0.22, 12), 0xb6b0a2, gx + sd * 30, 1.05, -192);
+      det(new THREE.CylinderGeometry(0.26, 0.30, 0.95, 8), 0xa8a294, gx + sd * 30, 0.48, -192);
+      for (const s5 of [-1, 1]) det(new THREE.CylinderGeometry(0.52, 0.48, 0.55, 10), 0xb0aa9e, gx + sd * 30 + s5 * 2.0, 0.28, -192);
+    }
+
     // 【fix333】衙前执事牌：肃静 / 回避 / 荷芷署 / 正堂（成对站在大门前）
     (function zhishiPai() {
       const names = ['肃静', '回避', '荷芷署', '正堂'];
@@ -27360,6 +27388,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(9.0, 0.14, 8.0), 0xa8a294, AX + 26, BASE + 0.20, pz2);
       }
       for (let i = 0; i < 5; i++) det(BX(8.0, 0.14, 8.0), 0xa8a294, AX - 18 + i * 9, BASE + 0.20, -726);
+      // 【fix334】后院古槐（三棵，让屋顶轮廓不单调）
+      for (const p4 of [[X0 + 12, -700], [X1 - 12, -700], [AX - 46, -686]]) {
+        det(new THREE.CylinderGeometry(0.7, 0.95, 8.0, 8), 0x4a3020, p4[0], 4.0, p4[1]);
+        det(new THREE.SphereGeometry(4.2, 9, 7), 0x2f6238, p4[0], 10.5, p4[1]);
+        det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
+        det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
+      }
       // 【fix333】花园花木：池边低矮花丛 + 两棵松
       for (const p2 of [[1940, -742], [2110, -742], [1940, -802], [2110, -802], [1975, -730], [2075, -730]]) {
         det(new THREE.SphereGeometry(1.5, 8, 6), 0x3f7a44, p2[0], BASE + 1.3, p2[1]);
@@ -27784,7 +27819,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
     const _YB = 2.6, _WTOP = 2.6 + 9.2;
     linhaiHeight = function (x, z) {
       let h = _lh0(x, z);
-      if (x > 1880 && x < 2170 && z < -84 && z > -838) {
+      if ((x > 1880 && x < 2170 && z < -84 && z > -838) || (x > 1786 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2264 && z > -288 && z < -156)) {
         let bb = _YB;
         if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
         if (bb > h) h = bb;
