@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix270-one-beam';
+const BUILD = '20261106-fix271-newmap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22147,7 +22147,10 @@ const minimapZones = [
   { x: 0, z: -257, r: 150, color: 'rgba(100,100,120,0.15)', name: '机场' },
   { x: 0, z: 0, r: 25, color: 'rgba(58,122,58,0.12)', name: '市中心' },
   { x: 260, z: -200, r: 50, color: 'rgba(26,111,159,0.12)', name: '码头' },
-  { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)', name: '南岛' }
+  { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: 'rgba(238,220,130,0.2)', name: '南岛' },
+  { x: 2110, z: -430, r: 300, color: 'rgba(210,160,90,0.16)', name: '荷芷市' },
+  { x: 1790, z: -430, r: 175, color: 'rgba(190,140,70,0.16)', name: '古建城' },
+  { x: 1880, z: 120, r: 125, color: 'rgba(90,170,90,0.18)', name: '园林' }
 ];
 // ========== 赛车检查点的地图标点 ==========
 // 之前 6 个黄色检查点只在 3D 场景里生成，地图上一个点都没有，
@@ -22449,7 +22452,9 @@ var mapZoom = 1;
 const MAP_ZOOM_MAX = 5;
 function mapClampZoom(z) { return Math.max(1, Math.min(MAP_ZOOM_MAX, z)); }
 // 大地图缩放系数（cover：铺满宽度，裁上下）。drawFullMap 和钳制逻辑共用，抽成函数避免两处算错。
-function mapScale(W, H) { return Math.max(W / (WORLD_LIMIT_X * 2), H / (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN)); }
+// 【fix271】大地图范围扩到包含新城市（荷芷市 x1550~2280 / z-765~-85）、古建城与园林。
+const MAP_X0 = -630, MAP_X1 = 2420, MAP_Z0 = -830, MAP_Z1 = 590;
+function mapScale(W, H) { return Math.max(W / (MAP_X1 - MAP_X0), H / (MAP_Z1 - MAP_Z0)); }
 // 【fix40 性能】大地图重绘调度器。
 // 问题：拖动时每个 pointermove / touchmove 都同步调一次 drawFullMap()，而它会遍历
 //       全部建筑（数千个 fillRect）+ 全部车流/NPC/掉落物重画一遍。120Hz 触屏上单指拖动
@@ -22473,13 +22478,13 @@ function drawFullMap() {
   // 平移上限按缩放后的图幅算 —— 缩得越大，可平移范围越大（等于把地图放大了看）。
   // 【2026-10-21·fix38 用户要求】"放大版的地图弄成可以用手移动的"。
   const s = mapScale(W, H) * mapZoom;
-  const _mw = WORLD_LIMIT_X * 2 * s, _mh = (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s;
+  const _mw = (MAP_X1 - MAP_X0) * s, _mh = (MAP_Z1 - MAP_Z0) * s;
   const _maxPanX = Math.max(0, (_mw - W) / 2), _maxPanY = Math.max(0, (_mh - H) / 2);
   mapPanX = Math.max(-_maxPanX, Math.min(_maxPanX, mapPanX));
   mapPanY = Math.max(-_maxPanY, Math.min(_maxPanY, mapPanY));
   // 【fix15 用户要求】"点开地图要铺满手机宽度"：用 cover 铺满宽度（只裁上下多余海域）。
-  const ox = (W - WORLD_LIMIT_X * 2 * s) / 2 + WORLD_LIMIT_X * s + mapPanX;
-  const oy = (H - (WORLD_LIMIT_Z_MAX - WORLD_LIMIT_Z_MIN) * s) / 2 - WORLD_LIMIT_Z_MIN * s + mapPanY;
+  const ox = (W - _mw) / 2 - MAP_X0 * s + mapPanX;
+  const oy = (H - _mh) / 2 - MAP_Z0 * s + mapPanY;
   const X = wx => ox + wx * s, Y = wz => oy + wz * s;
   ctx.clearRect(0, 0, W, H);
   // 海洋底色
@@ -22495,6 +22500,10 @@ function drawFullMap() {
     { x: 230, z: 100, r: 20, color: '#cc3333', name: '摩天轮' },
     { x: -200, z: -280, r: 40, color: '#3a9a3a', name: '高尔夫' },
     { x: ISLAND_X, z: ISLAND_Z, r: ISLAND_R, color: '#b8a15a', name: '南岛' },
+  // 【fix271】新城市片区
+  { x: 2110, z: -430, r: 300, color: '#8a6a3a', name: '荷芷市' },
+  { x: 1790, z: -430, r: 175, color: '#7a5a2a', name: '古建城' },
+  { x: 1880, z: 120, r: 125, color: '#3f7a3f', name: '园林' },
   ];
   for (const z of zones) {
     ctx.fillStyle = z.color + '44';
@@ -22503,6 +22512,25 @@ function drawFullMap() {
     ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(z.name, X(z.x), Y(z.z) + 3);
   }
+  // 【fix271】新城市补充：古城墙轮廓 + 古建资料点（光柱位置）
+  ctx.save();
+  ctx.strokeStyle = 'rgba(201,162,39,0.75)';
+  ctx.lineWidth = Math.max(1.5, 6 * s);
+  ctx.strokeRect(X(1656), Y(-765), (2280 - 1656) * s, (765 - 85) * s);
+  ctx.restore();
+  try {
+    const _fm = window.__folkMarkers || [];
+    for (const m of _fm) {
+      const mx = X(m.x), my = Y(m.z);
+      ctx.fillStyle = 'rgba(255,214,120,0.9)';
+      ctx.beginPath(); ctx.arc(mx, my, 2.6, 0, 7); ctx.fill();
+      if (s > 0.55) {
+        ctx.fillStyle = 'rgba(255,236,190,0.85)';
+        ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(m.name, mx, my - 6);
+      }
+    }
+  } catch (e) {}
   // 道路
   ctx.strokeStyle = '#4a5568'; ctx.lineWidth = Math.max(1, ROAD * s);
   for (const r of roads) {
