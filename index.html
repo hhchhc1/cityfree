@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix345-gatedoors';
+const BUILD = '20261107-fix346-bronze';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27527,6 +27527,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
         det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
       }
+      // 【fix346】叠石加密：再加 6 组假山（原 4 组）
+      for (const p5 of [[1900, -742], [2150, -742], [1900, -806], [2150, -806], [2010, -826], [2040, -726]]) {
+        det(new THREE.SphereGeometry(2.0, 7, 6), 0x8a8578, p5[0], BASE + 1.2, p5[1]);
+        det(new THREE.SphereGeometry(1.5, 7, 5), 0x7d786c, p5[0] + 1.6, BASE + 0.9, p5[1] + 1.2);
+        det(new THREE.SphereGeometry(1.1, 6, 5), 0x94907f, p5[0] - 1.4, BASE + 0.7, p5[1] - 1.1);
+        det(new THREE.SphereGeometry(0.8, 6, 5), 0x8a8578, p5[0] + 0.6, BASE + 2.5, p5[1] - 0.6);
+      }
       // 【fix341】池岸石矶：自然石护岸（沿池边 20 块）
       for (let i = 0; i < 20; i++) {
         const ang = i / 20 * Math.PI * 2;
@@ -27586,6 +27593,31 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s of [-1, 1]) for (let i = -3; i <= 3; i++) {
         det(BX(0.36, 1.2, 0.36), 0xc8c2b4, AX + s * 19.6, 2.75, YC + i * 3.0);
         det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, AX + s * 19.6, 3.45, YC + i * 3.0);
+      }
+      // 【fix346】月台前陈设：铜鹤一对 + 铜龟一对 + 日晷
+      {
+        const BR = 0x6f6a52, BR2 = 0x837c5e;
+        for (const s of [-1, 1]) {
+          const hx = AX + s * 9.5, hz = YC + 11.5;
+          det(BX(1.6, 0.30, 1.6), 0x9d968a, hx, 0.15, hz);
+          for (const s2 of [-1, 1]) det(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 6), BR, hx + s2 * 0.22, 0.95, hz);
+          det(new THREE.CylinderGeometry(0.30, 0.52, 1.5, 10), BR, hx, 2.05, hz, 0, 0, Math.PI / 2);
+          det(new THREE.CylinderGeometry(0.10, 0.12, 1.5, 8), BR2, hx + s * 0.62, 2.85, hz, 0, 0, -s * 0.28);
+          det(new THREE.SphereGeometry(0.24, 8, 6), BR2, hx + s * 0.92, 3.48, hz);
+          det(new THREE.CylinderGeometry(0.02, 0.09, 0.55, 6), 0xb08a3a, hx + s * 1.22, 3.42, hz, 0, 0, Math.PI / 2);
+          det(new THREE.CylinderGeometry(0.02, 0.34, 0.85, 8), BR, hx - s * 0.95, 2.20, hz, 0, 0, Math.PI / 2 - s * 0.35);
+        }
+        for (const s of [-1, 1]) {
+          const gx2 = AX + s * 15.5, gz2 = YC + 11.5;
+          det(BX(2.0, 0.34, 1.6), 0x9d968a, gx2, 0.17, gz2);
+          det(new THREE.SphereGeometry(0.72, 10, 6), BR, gx2, 0.80, gz2);
+          det(new THREE.CylinderGeometry(0.26, 0.32, 0.5, 8), BR2, gx2 + s * 0.95, 0.62, gz2, 0, 0, Math.PI / 2);
+          det(new THREE.SphereGeometry(0.22, 7, 5), BR2, gx2 + s * 1.28, 0.66, gz2);
+          for (let k7 = 0; k7 < 3; k7++) det(BX(1.1, 0.10, 0.16), 0x5f5a44, gx2, 1.10 + k7 * 0.18, gz2 + 0.18 - k7 * 0.18);
+        }
+        det(new THREE.CylinderGeometry(0.45, 0.55, 1.9, 8), 0x9d968a, AX, 0.95, YC + 11.5);
+        det(new THREE.CylinderGeometry(1.25, 1.25, 0.18, 16), 0x8a8578, AX, 2.0, YC + 11.5, 0.62, 0, 0);
+        det(BX(0.10, 2.6, 0.10), 0xb08a3a, AX, 2.55, YC + 11.5, 0.62, 0, 0);
       }
       // 【fix336】月台四角宫灯
       {
