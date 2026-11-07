@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix308-liufang';
+const BUILD = '20261107-fix309-walls';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26897,10 +26897,34 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       roof(cx, cz, sz * 0.80, sz * 0.80, 1.0 + h + 0.42 + h * 0.60 + 0.3);
     }
     // ---------- 院墙 ----------
+    // 【fix309】院墙重做：石基 + 收分墙身 + 瓦顶（原来是一块灰板压一条深色板，像围墙模型）
     function wallSeg(x0, z0, x1, z1, h) {
-      const w = Math.abs(x1 - x0), d = Math.abs(z1 - z0);
-      brickBox(w || 1.4, h, d || 1.4, (x0 + x1) / 2, h / 2, (z0 + z1) / 2);
-      det(BX((w || 1.4) + 1.8, 0.55, (d || 1.4) + 1.8), CY_TILE, (x0 + x1) / 2, h + 0.2, (z0 + z1) / 2);
+      const w0 = Math.abs(x1 - x0), d0 = Math.abs(z1 - z0);
+      const W = w0 || 1.4, D = d0 || 1.4;
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const isX = W >= D;
+      // 1) 石基：比墙身宽 0.7，高 0.95
+      det(BX(W + 0.7, 0.95, D + 0.7), 0x9d968a, cx, 0.48, cz);
+      // 2) 墙身收分：下段宽 0.34，上段收窄
+      brickBox(W + 0.34, (h - 0.95) * 0.55, D + 0.34, cx, 0.95 + (h - 0.95) * 0.28, cz);
+      brickBox(W, (h - 0.95) * 0.5, D, cx, 0.95 + (h - 0.95) * 0.75, cz);
+      // 3) 瓦顶：两坡 + 正脊，出檐 0.95
+      const ow = W + 1.9, od = D + 1.9, ry = h + 0.30;
+      for (const s of [-1, 1]) {
+        if (isX) det(BX(ow, 0.28, od * 0.56), (s > 0 ? CY_TILE : 0x4c525a), cx, ry + 0.16, cz + s * od * 0.235, s * 0.44, 0, 0);
+        else det(BX(ow * 0.56, 0.28, od), (s > 0 ? CY_TILE : 0x4c525a), cx + s * ow * 0.235, ry + 0.16, cz, 0, 0, -s * 0.44);
+      }
+      if (isX) det(BX(ow, 0.36, 0.72), 0x3b4148, cx, ry + 0.66, cz);
+      else det(BX(0.72, 0.36, od), 0x3b4148, cx, ry + 0.66, cz);
+      // 4) 屋顶两端起翘
+      if (isX) { for (const s of [-1, 1]) det(BX(1.4, 0.5, 0.9), 0x3b4148, cx + s * (ow / 2 - 0.3), ry + 0.85, cz); }
+      else { for (const s of [-1, 1]) det(BX(0.9, 0.5, 1.4), 0x3b4148, cx, ry + 0.85, cz + s * (od / 2 - 0.3)); }
+      // 5) 登记墙顶，供高度场判断"可以站上去"
+      (window.__WALL_TOPS = window.__WALL_TOPS || []).push({
+        x0: cx - W / 2 - 0.85, x1: cx + W / 2 + 0.85,
+        z0: cz - D / 2 - 0.85, z1: cz + D / 2 + 0.85,
+        top: BASE + ry + 0.80
+      });
     }
 
     // ==================== 地面 ====================
@@ -27327,6 +27351,15 @@ m4a.position.set(AX, BASE + 0.18, -141);
       }
       let py = 0;
       try { const pp = window.__folkPos && window.__folkPos(); if (pp) py = pp.y; } catch (eP) {}
+      // 【fix309】任何登记过的院墙：人到了墙顶附近就按墙顶高度站住（钩爪爬上去不再掉下来）
+      if (py > 3.0 && window.__WALL_TOPS) {
+        for (let wi = 0; wi < window.__WALL_TOPS.length; wi++) {
+          const wt = window.__WALL_TOPS[wi];
+          if (x > wt.x0 && x < wt.x1 && z > wt.z0 && z < wt.z1 && py > wt.top - 1.9) {
+            if (wt.top > h) h = wt.top;
+          }
+        }
+      }
       if (py > _WTOP - 2.4 && x > 1880 && x < 2170 && z < -136 && z > -718) {
         if (Math.abs(x - 1886) < 0.85 || Math.abs(x - 2164) < 0.85) return _WTOP;
         if (Math.abs(z + 140) < 0.85 || Math.abs(z + 712) < 0.85) return _WTOP;
