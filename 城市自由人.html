@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix334-courts';
+const BUILD = '20261107-fix335-corridor';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27276,6 +27276,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 5) 戒石亭 ====================
     (function jieshi() {
       const Z = -372;
+      // 【fix335】碑亭挂灯（夜里亮）
+      {
+        const lm3 = new THREE.MeshBasicMaterial({ color: 0xffb765, fog: false });
+        for (const s of [-1, 1]) {
+          const b3 = new THREE.Mesh(new THREE.SphereGeometry(0.40, 8, 6), lm3);
+          b3.position.set(AX + s * 3.2, BASE + 5.0, Z + 3.2); g.add(b3);
+          det(BX(0.08, 0.7, 0.08), 0x5a2f18, AX + s * 3.2, 5.4, Z + 3.2);
+        }
+      }
       // 【fix331】戒石亭：正方形碑亭 + 巨碑（正面「公生明」）+ 石栏
       det(BX(9.0, 0.55, 9.0), 0xbdb6a6, AX, 0.28, Z);
       det(BX(8.2, 0.18, 8.2), 0xc8c2b4, AX, 0.64, Z);
@@ -27308,6 +27317,20 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     gallery(2132, -560, 110, -1, 5.8, ['招房', '库房']);
     // 【fix315】后花园：花墙月洞门 + 水池 + 假山 + 凉亭 + 曲桥（把北院再拉大一进）
     // 后花园暂时停用：这一段会让无头浏览器卡死（已回退，后续用别的方式重做）
+
+    // 【fix335】甬道两侧廊：柱列 + 檩枋 + 单坡瓦顶（州署甬道两侧的廊）
+    for (const s of [-1, 1]) {
+      const lx = AX + s * 11.5;
+      for (let z8 = -158; z8 > -452; z8 -= 5.0) {
+        det(new THREE.CylinderGeometry(0.26, 0.30, 3.9, 8), 0x7d2f26, lx, 1.95, z8);
+        det(new THREE.CylinderGeometry(0.44, 0.44, 0.24, 8), 0x9a9078, lx, 0.12, z8);
+      }
+      det(BX(0.42, 0.34, 296), 0x6d3a20, lx, 3.95, -305);
+      det(BX(0.34, 0.26, 296), 0x2e6b4c, lx, 4.22, -305);
+      det(BX(4.4, 0.24, 296), 0x49505a, lx - s * 1.9, 4.34, -305, 0, 0, s * 0.16);
+      det(BX(0.5, 0.34, 296), 0x3b4148, lx - s * 3.9, 3.86, -305);
+      for (let z9 = -158; z9 > -452; z9 -= 10) det(BX(0.30, 0.30, 0.30), 0x5a2f18, lx, 4.10, z9);
+    }
 
     // 【fix325】甬道御路石：中间一条整石带 + 每 4 米一道石缝
     det(BX(3.8, 0.12, 330), 0xbdb6a6, AX, 0.30, -305);
