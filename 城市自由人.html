@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix346-bronze';
+const BUILD = '20261107-fix348-moongate2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27500,6 +27500,27 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const GZ2 = -712, GW = 11;
       wallSeg(X0, GZ2, AX - GW, GZ2, 4.2);
       wallSeg(AX + GW, GZ2, X1, GZ2, 4.2);
+      // 【fix347】六房与甬道廊之间铺条石（原来是土色空地）
+    for (const s of [-1, 1]) {
+      const px7 = AX + s * 56;
+      det(BX(84, 0.12, 292), 0xb0aa9e, px7, 0.05, -306);
+      for (let zp = -162; zp > -450; zp -= 4.0) det(BX(84, 0.04, 0.16), 0x9a948a, px7, 0.13, zp);
+      for (let xp = -40; xp <= 40; xp += 8.0) det(BX(0.16, 0.04, 292), 0x9a948a, px7 + xp, 0.13, -306);
+    }
+
+    // 【fix347】花墙月洞门：圆洞 + 白灰圈 + 上方补墙（原来是个 22 米的缺口）
+      {
+        const r7 = 1.70, cx7 = AX, cy7 = 1.90;
+        det(BX(GW - r7 - 0.3, 4.2, 1.5), CY_BRICK, cx7 - (r7 + 0.3 + (GW - r7 - 0.3) / 2), 2.1, GZ2);
+        det(BX(GW - r7 - 0.3, 4.2, 1.5), CY_BRICK, cx7 + (r7 + 0.3 + (GW - r7 - 0.3) / 2), 2.1, GZ2);
+        det(BX(r7 * 2 + 1.2, 0.55, 1.5), CY_BRICK, cx7, 4.2 - 0.27, GZ2);
+        for (let i = 0; i < 14; i++) {
+          const a7 = Math.PI * i / 13;
+          det(BX(0.62, 0.62, 1.6), 0xb8b4a8, cx7 + Math.cos(a7) * (r7 + 0.3), cy7 + Math.sin(a7) * (r7 + 0.3), GZ2);
+        }
+        det(BX(1.0, 2.6, 1.7), CY_BRICK, cx7 - (r7 + 0.85), 1.30, GZ2);
+        det(BX(1.0, 2.6, 1.7), CY_BRICK, cx7 + (r7 + 0.85), 1.30, GZ2);
+      }
       for (const s of [-1, 1]) {
         det(BX(3.2, 4.2, 1.5), CY_BRICK, AX + s * (GW + 1.6), 2.1, GZ2);
         det(BX(3.6, 0.5, 1.9), 0x3b4148, AX + s * (GW + 1.6), 4.35, GZ2);
