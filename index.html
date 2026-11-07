@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix245-folk-row';
+const BUILD = '20261106-fix246-flight-rain';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27143,6 +27143,7 @@ window.__bindTap = __bindTap;
   function tick() {
     try {
       const DATA = window.__folkData || [];
+      if (typeof FLIGHT !== "undefined" && (FLIGHT || (typeof RET !== "undefined" && RET))) { if (btn) btn.style.display = "none"; return; }
       if (!DATA.length || typeof person === "undefined" || !person) return;
       ensure();
       let best = null, bd = 1e9;
@@ -27158,7 +27159,7 @@ window.__bindTap = __bindTap;
       else if (btn) btn.style.display = "none";
     } catch (err) {}
   }
-  setInterval(tick, 250);
+  setInterval(tick, 400);
 })();
 
 (function buildSuzhouGarden() {
@@ -28495,7 +28496,25 @@ function flightAudioStart() {
     lfo.connect(lfoGain); lfoGain.connect(gain.gain);
     src.connect(lp); lp.connect(lp2); lp2.connect(gain); gain.connect(ctx.destination);
     src.start(); lfo.start();
-    FLIGHT_AUDIO = { ctx: ctx, src: src, lfo: lfo, gain: gain, lp: lp };
+    // 【fix246】雨声改走同一个 AudioContext：<audio> 元素在手机上常被自动播放策略拦掉，
+  // 而这里是在玩家点「登机」的手势里创建的，权限一定成立。
+  try { if (ctx.state === "suspended") ctx.resume(); } catch (eR0) {}
+  let rainSrc = null, rainGain = null;
+  try {
+    if (typeof WEATHER !== "undefined" && WEATHER && WEATHER.kind === "rain") {
+      const rlen = Math.floor(sr * 3);
+      const rbuf = ctx.createBuffer(1, rlen, sr);
+      const rd = rbuf.getChannelData(0);
+      for (let i2 = 0; i2 < rlen; i2++) rd[i2] = (Math.random() * 2 - 1) * 0.6;
+      rainSrc = ctx.createBufferSource(); rainSrc.buffer = rbuf; rainSrc.loop = true;
+      const rhp = ctx.createBiquadFilter(); rhp.type = "highpass"; rhp.frequency.value = 650;
+      const rlp = ctx.createBiquadFilter(); rlp.type = "lowpass"; rlp.frequency.value = 5600;
+      rainGain = ctx.createGain(); rainGain.gain.value = 0.20;
+      rainSrc.connect(rhp); rhp.connect(rlp); rlp.connect(rainGain); rainGain.connect(ctx.destination);
+      rainSrc.start();
+    }
+  } catch (eR1) {}
+  FLIGHT_AUDIO = { ctx: ctx, src: src, lfo: lfo, gain: gain, lp: lp, rainSrc: rainSrc, rainGain: rainGain };
   } catch (e) { console.error('[flight audio]', e); }
 }
 function flightAudioSet(v) {                    // v = 0..1 推力强度
@@ -28511,7 +28530,7 @@ function flightAudioStop() {
   FLIGHT_AUDIO = null;
   try {
     A.gain.gain.setTargetAtTime(0.0001, A.ctx.currentTime, 0.30);
-    setTimeout(function () { try { A.src.stop(); A.lfo.stop(); A.ctx.close(); } catch (e) {} }, 1500);
+    setTimeout(function () { try { A.src.stop(); A.lfo.stop(); if (A.rainSrc) A.rainSrc.stop(); A.ctx.close(); } catch (e) {} }, 1500);
   } catch (e) {}
 }function startFlightShow() {
   // 【fix133】开车冲到登机口也会弹出机票面板 → 人在车里就起飞了：车载音乐一路跟着响，
