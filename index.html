@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix303-scrolls';
+const BUILD = '20261107-fix304-scrolls2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -16005,6 +16005,30 @@ function buildShopData() {
     ],
     desc: '一次性道具，刷卡瞬间生效：把通缉星级全部清零，并抹掉所有人（警察、居民、帮派）对你的仇恨，'
       + '围上来的警车会掉头离场。适合被满城追捕时脱身。刷完继续犯罪还会重新涨星。'
+  });
+  // 【fix303】传送卷轴 ×3（800 元一次，买下即传）
+  for (const sc of TP_SCROLLS) {
+    SHOP_CATS[4].items.push({
+      key: sc.key, icon: sc.icon, name: sc.name, price: sc.price,
+      owned: false, equipped: false, consumable: true,
+      stats: [
+        { label: '目的地', val: sc.label, cls: 'pos' },
+        { label: '用法', val: '买下立刻传送' },
+        { label: '价格', val: sc.price + ' 💰' }
+      ],
+      desc: '一次性传送卷轴，售价 ' + sc.price + ' 金币。买下瞬间把你送到「' + sc.label + '」，不管当时在城里哪个角落 —— 包括正在被追、正在开车。用完即消失，可反复购买。'
+    });
+  }
+  // 【fix303】氮气引擎（从服饰挪到道具）
+  SHOP_CATS[4].items.push({
+    key: 'nitro', icon: CLOTHES.nitro.icon, name: CLOTHES.nitro.name, price: CLOTHES.nitro.price,
+    owned: false, equipped: false, consumable: false,
+    stats: [
+      { label: '效果', val: '赛车极速 +0.6 档', cls: 'pos' },
+      { label: '作用', val: '装在你开的车上' },
+      { label: '价格', val: CLOTHES.nitro.price + ' 💰' }
+    ],
+    desc: '氮气加速引擎，装上后大幅提升赛车最高速度。买一次永久生效，可随时在车里按氮气键喷射。'
   });
 }
 
