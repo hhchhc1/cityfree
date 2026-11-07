@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix267-one-pagoda';
+const BUILD = '20261106-fix268-skillcap-grass';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6348,7 +6348,23 @@ var AIRLINER = null;
 
   // 草地场坪（把压平区铺上草色，和周围丘陵区分开）
   // 尺寸严格收在实测净空区 x∈[-125,125]、z∈[-298,-216] 之内：再往外西北角会碰到环道。
-  put(box(252, 0.06, 82), M.grass, CX, 0.02, CZ);
+  // 【fix268】原来这里是一块 252×82 的平板草皮，浮在地形上 —— 遇到坡地/水面就露出一整块硬边绿面。
+// 改成按地形起伏的网格草地（42×14 段），每个顶点贴合 terrainHeight，不再悬空。
+(function airportGrass() {
+  const segX = 42, segZ = 14;
+  const g2 = new THREE.PlaneGeometry(252, 82, segX, segZ);
+  g2.rotateX(-Math.PI / 2);
+  const pos = g2.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const wx = CX + pos.getX(i), wz = CZ + pos.getZ(i);
+    pos.setY(i, terrainHeight(wx, wz) + 0.04);
+  }
+  pos.needsUpdate = true;
+  g2.computeVertexNormals();
+  const m2 = new THREE.Mesh(g2, M.grass);
+  m2.position.set(CX, 0, CZ);
+  scene.add(m2);
+})();
 
   // ================= 跑道（210m × 24m，沿 X；地面已压平到 0）=================
   put(box(RUN_HALF * 2 + 8, 0.12, 24), M.asphalt, CX, 0.06, RUN_Z);
@@ -22638,7 +22654,7 @@ function renderStats() {
   for (const sk of SKILLS) {
     const cur = player[sk.key] || 0;
     // Task #11：开发者模式放开 10 点上限，方便核对"加到很高时加成还合不合理"
-    const cap = devMode ? 99 : sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
+    const cap = sk.max;   // fix268：开发者模式同样最多 10 点   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
     const maxed = cur >= cap, afford = player.skillPoints > 0 && !maxed;
     const now = skillGain(sk, cur);
     const next = maxed ? 0 : skillGain(sk, cur + 1) - now;
@@ -22681,7 +22697,7 @@ function renderStats() {
 function buySkill(key) {
   const sk = SKILLS.find(s => s.key === key); if (!sk) return;
   // Task #11：开发者模式突破 10 点上限（上限 99），好核对高加点时的加成曲线
-  const cap = devMode ? 99 : sk.max;   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
+  const cap = sk.max;   // fix268：开发者模式同样最多 10 点   // 【fix207】开发者模式不再放宽到 99，和普通模式一致
   if (player[sk.key] >= cap) return;
   if (player.skillPoints <= 0) { setHint('技能点不足，去击杀敌人升级'); return; }
   // 【2026-10-13】加点前先记下"这一行到底会改哪个数值、加完变成多少"。
