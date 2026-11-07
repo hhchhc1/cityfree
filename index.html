@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix282-beam-sweep2';
+const BUILD = '20261106-fix284-pillar-labels';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27629,6 +27629,34 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
     }
   } catch (e2) {}
 };
+// 【fix284】每根光柱上方挂一个名字牌：玩家一眼就能看出这根柱子标的是哪座建筑，
+// 不会再出现"立在那儿不知道干嘛"的无意义光柱。
+window.__folkLabel = function (name) {
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 72;
+    const g = cv.getContext('2d');
+    g.fillStyle = 'rgba(18,26,20,0.72)';
+    g.beginPath();
+    const r = 16, w = 256, h = 72;
+    g.moveTo(r, 0); g.lineTo(w - r, 0); g.quadraticCurveTo(w, 0, w, r);
+    g.lineTo(w, h - r); g.quadraticCurveTo(w, h, w - r, h);
+    g.lineTo(r, h); g.quadraticCurveTo(0, h, 0, h - r);
+    g.lineTo(0, r); g.quadraticCurveTo(0, 0, r, 0);
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,220,150,0.85)'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = '#ffeec0';
+    g.font = 'bold 34px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(name, 128, 38);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(6.4, 1.8, 1);
+    sp.renderOrder = 5;
+    return sp;
+  } catch (e) { return null; }
+};
 // 【fix247】民居/古建图鉴：常驻按钮 + 走近光柱自动显示简介
 (function folkWikiAll() {
   const INFO = [
@@ -27871,7 +27899,15 @@ setInterval(function () {
                        (o.geometry.type === 'TorusGeometry' && Math.abs((pr.radius || 0) - 1.4) < 0.02);
         const k = o.userData && o.userData.folkKey;
         if (k) have[k] = 1;
-        if (isFolk && (!k || !ok[k])) junk.push(o);
+        const w = new THREE.Vector3();
+        o.getWorldPosition(w);
+        // 【fix283】古建城/园林片区（x>1000）里所有"半透明发光体"都算可疑：
+        // 只要不是由资料点生成的（没有 folkKey 或 key 不在保留列表），一律清掉。
+        // 之前只认光柱那三种尺寸，宽一点的装饰光带就漏掉了 —— 用户看到的"很多无意义光柱"就是这些。
+        const glowish = o.material && o.material.transparent && o.material.opacity !== undefined && o.material.opacity < 0.6 &&
+                        (o.geometry.type === 'CylinderGeometry' || o.geometry.type === 'ConeGeometry' || o.geometry.type === 'TorusGeometry');
+        if (w.x > 1000 && (isFolk || glowish) && (!k || !ok[k])) junk.push(o);
+        else if (isFolk && (!k || !ok[k])) junk.push(o);
       });
       for (const o of junk) { o.visible = false; if (o.parent) o.parent.remove(o); }
       // 【fix281】有资料点却没有网格的，补建一根（保证"有词条就一定有可见光柱"）
@@ -27893,6 +27929,12 @@ setInterval(function () {
       const vis = !flying && Math.hypot(p.x - m.x, p.z - m.z) < 150;
       const objs = Array.isArray(m.obj) ? m.obj : [m.obj];
       for (const o of objs) o.visible = vis;
+      // 名字牌：懒创建 + 只在 60 米内显示（远处看不见就不占绘制）
+      if (!m.label && window.__folkLabel && window.__folkScene) {
+        m.label = window.__folkLabel(m.name);
+        if (m.label) { m.label.position.set(m.x, 8.8, m.z); window.__folkScene.add(m.label); }
+      }
+      if (m.label) m.label.visible = vis && !flying && Math.hypot(p.x - m.x, p.z - m.z) < 60;
     }
   } catch (err) {}}, 500);
 
