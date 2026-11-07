@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix316-safegarden';
+const BUILD = '20261107-fix319-plaqfix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26801,7 +26801,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     function hall(cx, cz, w, d, h, opt) {
       const o = opt || {};
       det(BX(w + 6.5, 1.2, d + 6.5), 0xb6b0a2, cx, 0.6, cz);
-      det(BX(w, h, d), CY_BRICK, cx, 1.2 + h / 2, cz);
+      // 【fix317】殿身空心化：四面墙 + 门洞，可以走进去看内景
+      const tW = 0.9, dw2 = Math.min(9.0, w * 0.30), dh2 = Math.min(7.2, h * 0.72);
+      const segW = Math.max(1.2, (w - dw2) / 2);
+      det(BX(w, 0.16, d), 0x8a8578, cx, 1.28, cz);
+      det(BX(w, h, tW), CY_BRICK, cx, 1.2 + h / 2, cz - d / 2 + tW / 2);
+      for (const s of [-1, 1]) det(BX(tW, h, d - tW), CY_BRICK, cx + s * (w / 2 - tW / 2), 1.2 + h / 2, cz);
+      for (const s of [-1, 1]) det(BX(segW, h, tW), CY_BRICK, cx + s * (dw2 / 2 + segW / 2), 1.2 + h / 2, cz + d / 2 - tW / 2);
+      det(BX(dw2, h - dh2, tW), CY_BRICK, cx, 1.2 + dh2 + (h - dh2) / 2, cz + d / 2 - tW / 2);
+      (window.__FLOORS = window.__FLOORS || []).push({ x0: cx - w / 2 + tW, x1: cx + w / 2 - tW, z0: cz - d / 2 + tW, z1: cz + d / 2, top: BASE + 1.2 });
       const nc = Math.max(3, Math.round(w / 4.8));
       for (let i = 0; i < nc; i++) {
         const px = cx - w / 2 + 2 + i * (w - 4) / (nc - 1);
@@ -26813,12 +26821,12 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(w + 4.4, 0.38, 2.6), 0x5c3a26, cx, 1.2 + h + 0.12, cz + d / 2 + 1.5);
       det(BX(w + 0.7, 0.66, 0.5), 0x8a2f2a, cx, 1.2 + h - 0.24, cz + d / 2 + 0.06);
       det(BX(w + 0.7, 0.36, 0.4), 0xc8a24a, cx, 1.2 + h - 0.68, cz + d / 2 + 0.07);
-      const dh = Math.min(5.6, h * 0.72);
-      det(BX(Math.min(7.6, w * 0.28), dh, 0.46), 0x2b1a10, cx, 1.2 + dh / 2, cz + d / 2 + 0.27);
+      // 门框（金漆）+ 两侧槛窗，中间留空可以走进去
       for (const s of [-1, 1]) {
-        det(BX(w * 0.14, dh * 0.60, 0.38), 0x22160c, cx + s * w * 0.29, 1.2 + dh * 0.55, cz + d / 2 + 0.27);
-        det(BX(0.16, dh, 0.40), 0xc8a24a, cx + s * w * 0.21, 1.2 + dh / 2, cz + d / 2 + 0.28);
+        det(BX(0.22, dh2, 0.46), 0xc8a24a, cx + s * (dw2 / 2 - 0.1), 1.2 + dh2 / 2, cz + d / 2 + 0.03);
+        det(BX(w * 0.13, dh2 * 0.55, 0.34), 0x2b1a10, cx + s * (dw2 / 2 + segW * 0.55), 1.2 + dh2 * 0.72, cz + d / 2 + 0.03);
       }
+      det(BX(dw2 + 0.5, 0.30, 0.52), 0xc8a24a, cx, 1.2 + dh2 + 0.1, cz + d / 2 + 0.03);
       // 【fix311】檐下斗拱 + 青绿彩画额枋 + 大红灯笼（照片里最抢眼的装饰）
       const _nB = Math.max(4, Math.round(w / 2.2));
       for (let i2 = 0; i2 < _nB; i2++) {
@@ -27151,12 +27159,12 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     })();
     
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
-    wing(1905, -186, 10, 48, 4.8); plaque3d('西三房', 1905, 4.6, -207, 5.2, 1.8, '#1b2a4a', '#e8c86a');
-    wing(2145, -186, 10, 48, 4.8); plaque3d('东三房', 2145, 4.6, -207, 5.2, 1.8, '#1b2a4a', '#e8c86a');
-    pavilion(1962, -224, 7.0, 5.4); plaque3d('申明亭', 1962, 3.4, -219.4, 4.4, 1.5, '#1b2a4a', '#e8c86a');
-    pavilion(2088, -224, 7.0, 5.4); plaque3d('乐亭', 2088, 3.4, -219.4, 4.0, 1.5, '#1b2a4a', '#e8c86a');
-    wing(1950, -690, 14, 16, 5.2); plaque3d('马王庙', 1950, 4.6, -683, 5.4, 1.8, '#1b2a4a', '#e8c86a');
-    wing(2100, -690, 14, 16, 5.2); plaque3d('库楼', 2100, 4.6, -683, 4.6, 1.8, '#1b2a4a', '#e8c86a');
+    wing(1905, -186, 10, 48, 4.8); plaque3d('西三房', 1905, 4.5, -161.2, 5.2, 1.8, '#1b2a4a', '#e8c86a');
+    wing(2145, -186, 10, 48, 4.8); plaque3d('东三房', 2145, 4.5, -161.2, 5.2, 1.8, '#1b2a4a', '#e8c86a');
+    pavilion(1962, -224, 7.0, 5.4); det(BX(5.6, 2.0, 0.26), 0x2a1c12, 1962, 5.35, -217.2); plaque3d('申明亭', 1962, 5.35, -216.9, 4.4, 1.5, '#1b2a4a', '#e8c86a');
+    pavilion(2088, -224, 7.0, 5.4); det(BX(5.2, 2.0, 0.26), 0x2a1c12, 2088, 5.35, -217.2); plaque3d('乐亭', 2088, 5.35, -216.9, 4.0, 1.5, '#1b2a4a', '#e8c86a');
+    wing(1950, -690, 14, 16, 5.2); plaque3d('马王庙', 1950, 4.6, -681.4, 5.4, 1.8, '#1b2a4a', '#e8c86a');
+    wing(2100, -690, 14, 16, 5.2); plaque3d('库楼', 2100, 4.6, -681.4, 4.6, 1.8, '#1b2a4a', '#e8c86a');
 
     // ==================== 7) 亲民堂（大堂） ====================
     (function datong() {
@@ -27166,11 +27174,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(38, 1.1, 1.0), 0xc8c2b4, AX, 2.0, Z - 14.5);
       stairs(AX, Z + 15.5, 14, 5, 0.32, 1);
       stairs(AX, Z - 15.6, 10, 4, 0.32, -1);
-      hall(AX, Z - 4, 50, 24, 14.4, { plaque: '亲民堂', steps: false });
+      hall(AX, Z - 4, 64, 30, 16.6, { plaque: '亲民堂', steps: false });
       // 【fix311】大堂内景：屏风 + 公案 + 三块匾 + 楹联 + 宫灯（照片里知州审案的场面）
       (function courtroom() {
         const IZ = Z + 2;
-        const BACK = IZ - 10.5;
+        const BACK = (Z - 4) - 16.6;
         // 屏风：海水朝阳（深蓝底 + 金色圆日）
         const scrMat = new THREE.MeshLambertMaterial({ color: 0x24506e });
         const scr = new THREE.Mesh(new THREE.PlaneGeometry(15.5, 7.8), scrMat);
@@ -27539,6 +27547,13 @@ m4a.position.set(AX, BASE + 0.18, -141);
       }
       let py = 0;
       try { const pp = window.__folkPos && window.__folkPos(); if (pp) py = pp.y; } catch (eP) {}
+      // 【fix317】殿内地面：走进殿门后站在室内地坪上
+      if (py > 2.4 && window.__FLOORS) {
+        for (let fi = 0; fi < window.__FLOORS.length; fi++) {
+          const fl = window.__FLOORS[fi];
+          if (x > fl.x0 && x < fl.x1 && z > fl.z0 && z < fl.z1 && fl.top > h) h = fl.top;
+        }
+      }
       // 【fix309】任何登记过的院墙：人到了墙顶附近就按墙顶高度站住（钩爪爬上去不再掉下来）
       if (py > 3.0 && window.__WALL_TOPS) {
         for (let wi = 0; wi < window.__WALL_TOPS.length; wi++) {
