@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix268-skillcap-grass';
+const BUILD = '20261106-fix269-flight-clock';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28738,6 +28738,7 @@ function flightAudioStop() {
   if (FLIGHT || !AIRLINER) return;
   FLIGHT = {
     t: 0,
+  startMs: performance.now(),   // fix269: 飞行时间用挂钟算
     path: null, pathLen: 0,
     camPos: new THREE.Vector3(), camAim: new THREE.Vector3(), camInit: false,
     fogNear: scene.fog.near, fogFar: scene.fog.far,
@@ -28880,13 +28881,9 @@ function flightTick(dt) {
   const F = FLIGHT; if (!F) return;
   // 【fix250】飞行时间改成"固定步长累积"：原来 F.t += dt，帧间隔一抖，飞机就一快一慢。
   // 现在每 1/60 秒推进一小步，最多补 6 步；掉帧时宁可整体略慢，也不再忽快忽慢。
-  F.acc = (F.acc || 0) + Math.min(dt, 0.10);
-  {
-    const _S = 1 / 60;
-    let _n = 0;
-    while (F.acc >= _S && _n < 6) { F.t = Math.min(FLIGHT_T.done, F.t + _S); F.acc -= _S; _n++; }
-    if (_n >= 6) F.acc = 0;
-  }
+  // fix269: 不再累加 dt / 补步，直接读挂钟 —— 位移与帧率完全解耦，不会再一顿一顿。
+  if (!F.startMs) F.startMs = performance.now();
+  F.t = Math.min(FLIGHT_T.done, (performance.now() - F.startMs) / 1000);
   const t = F.t;
   clearInput();                                   // 演出期间玩家不能操作
   const ks = flightSample(t);
