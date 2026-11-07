@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix335-corridor';
+const BUILD = '20261107-fix336-tower';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27056,6 +27056,19 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s of [-1, 1]) for (const t of [-1, 1]) det(new THREE.CylinderGeometry(0.36, 0.38, h, 8), 0x7d2f26, cx + s * sz * 0.42, 1.0 + h / 2, cz + t * sz * 0.42);
       det(BX(sz + 3.4, 0.42, sz + 3.4), 0x5c3a26, cx, 1.0 + h + 0.2, cz);
       det(BX(sz * 0.72, h * 0.60, sz * 0.72), CY_BRICK, cx, 1.0 + h + 0.42 + h * 0.30, cz);
+      // 【fix336】谯楼二层四面开窗：木框 + 暗窗芯 + 竖棂
+      {
+        const wy = 1.0 + h + 0.42 + h * 0.30, ww = sz * 0.72;
+        for (const s of [-1, 1]) {
+          for (const s2 of [-1, 1]) {
+            det(BX(3.0, 3.0, 0.28), 0x6d3a20, cx + s * 2.6, wy, cz + s2 * (ww / 2 + 0.05));
+            det(BX(2.5, 2.5, 0.22), 0x1a120c, cx + s * 2.6, wy, cz + s2 * (ww / 2 + 0.13));
+            for (let m = -1; m <= 1; m++) det(BX(0.12, 2.5, 0.26), 0x8a5a34, cx + s * 2.6 + m * 0.8, wy, cz + s2 * (ww / 2 + 0.17));
+            det(BX(0.28, 3.0, 0.28), 0x6d3a20, cx + s2 * (ww / 2 + 0.05), wy, cz + s * 2.6);
+            det(BX(0.22, 2.5, 2.5), 0x1a120c, cx + s2 * (ww / 2 + 0.13), wy, cz + s * 2.6);
+          }
+        }
+      }
       roof(cx, cz, sz * 0.80, sz * 0.80, 1.0 + h + 0.42 + h * 0.60 + 0.3);
     }
     // ---------- 院墙 ----------
@@ -27326,6 +27339,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.CylinderGeometry(0.44, 0.44, 0.24, 8), 0x9a9078, lx, 0.12, z8);
       }
       det(BX(0.42, 0.34, 296), 0x6d3a20, lx, 3.95, -305);
+      // 【fix336】廊下红灯笼（每 20 米）
+      {
+        const lm5 = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
+        for (let zl = -168; zl > -450; zl -= 20) {
+          const b5 = new THREE.Mesh(new THREE.SphereGeometry(0.46, 8, 6), lm5);
+          b5.position.set(lx, BASE + 3.35, zl); g.add(b5);
+          det(BX(0.08, 0.6, 0.08), 0x5a2f18, lx, 3.95, zl);
+        }
+      }
       det(BX(0.34, 0.26, 296), 0x2e6b4c, lx, 4.22, -305);
       det(BX(4.4, 0.24, 296), 0x49505a, lx - s * 1.9, 4.34, -305, 0, 0, s * 0.16);
       det(BX(0.5, 0.34, 296), 0x3b4148, lx - s * 3.9, 3.86, -305);
@@ -27458,6 +27480,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s of [-1, 1]) for (let i = -3; i <= 3; i++) {
         det(BX(0.36, 1.2, 0.36), 0xc8c2b4, AX + s * 19.6, 2.75, YC + i * 3.0);
         det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, AX + s * 19.6, 3.45, YC + i * 3.0);
+      }
+      // 【fix336】月台四角宫灯
+      {
+        const lm4 = new THREE.MeshBasicMaterial({ color: 0xffc07a, fog: false });
+        for (const s of [-1, 1]) for (const s2 of [-1, 1]) {
+          const b4 = new THREE.Mesh(new THREE.SphereGeometry(0.44, 8, 6), lm4);
+          b4.position.set(AX + s * 18.5, BASE + 4.2, YC + s2 * 8.6); g.add(b4);
+          det(BX(0.10, 1.2, 0.10), 0x5a2f18, AX + s * 18.5, 4.9, YC + s2 * 8.6);
+        }
       }
       // 御路：中间雕石斜坡，两侧踏跺
       for (const s of [-1, 1]) stairs(AX + s * 5.4, YC + 11.0, 4.6, 5, 0.32, 1);
