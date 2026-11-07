@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix355-furnish2';
+const BUILD = '20261107-fix356-lanes';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27556,7 +27556,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const GZ2 = -712, GW = 11;
       wallSeg(X0, GZ2, AX - GW, GZ2, 4.2);
       wallSeg(AX + GW, GZ2, X1, GZ2, 4.2);
-      // 【fix347】六房与甬道廊之间铺条石（原来是土色空地）
+      // 【fix356】六房后墙与院墙之间的窄巷：铺地 + 排水沟 + 石墩
+    for (const s of [-1, 1]) {
+      const lx2 = AX + s * 124;
+      det(BX(26, 0.12, 496), 0xaaa394, lx2, 0.06, -452);
+      for (let zl2 = -206; zl2 > -698; zl2 -= 4.0) det(BX(26, 0.04, 0.15), 0x98917f, lx2, 0.13, zl2);
+      det(BX(2.2, 0.16, 496), 0x8f8877, AX + s * 112.5, 0.08, -452);
+      for (let zl3 = -220; zl3 > -690; zl3 -= 40) det(new THREE.CylinderGeometry(0.42, 0.46, 0.55, 8), 0xa8a294, lx2 + s * 8, 0.30, zl3);
+    }
+
+    // 【fix347】六房与甬道廊之间铺条石（原来是土色空地）
     for (const s of [-1, 1]) {
       const px7 = AX + s * 56;
       det(BX(84, 0.12, 292), 0xb0aa9e, px7, 0.05, -306);
@@ -27603,6 +27612,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.SphereGeometry(4.2, 9, 7), 0x2f6238, p4[0], 10.5, p4[1]);
         det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
         det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
+      }
+      // 【fix356】竹林：池东一片（14 竿，三节竹身 + 竹叶）
+      for (let i12 = 0; i12 < 14; i12++) {
+        const px12 = 2122 + (i12 % 4) * 3.2 + (i12 % 3) * 0.8;
+        const pz12 = -746 - Math.floor(i12 / 4) * 4.2 - (i12 % 2) * 1.4;
+        const h12 = 6.5 + (i12 % 3) * 0.9;
+        det(new THREE.CylinderGeometry(0.16, 0.20, h12, 7), 0x6d8a3a, px12, BASE + h12 / 2, pz12);
+        for (let j12 = 0; j12 < 3; j12++) det(new THREE.CylinderGeometry(0.18, 0.18, 0.14, 7), 0x55702c, px12, BASE + 1.6 + j12 * 1.7, pz12);
+        for (let k12 = 0; k12 < 3; k12++) det(new THREE.SphereGeometry(0.72, 5, 4), 0x4d8f52, px12 + (k12 - 1) * 0.9, BASE + h12 - 0.4 - k12 * 0.5, pz12 + (k12 % 2 ? 0.7 : -0.7));
       }
       // 【fix354】后园石桌石凳（两组）
       for (const sp of [[1938, -822], [2112, -822]]) {
