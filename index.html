@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix293-yamen-11';
+const BUILD = '20261107-fix294-yamen-flash';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26642,10 +26642,18 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     const M_PAVE = new THREE.MeshLambertMaterial({ map: texPave });
     const M_SLAB = new THREE.MeshLambertMaterial({ map: texSlab });
     const M_BRICK = new THREE.MeshLambertMaterial({ map: texBrick });
+    M_PAVE.polygonOffset = true; M_PAVE.polygonOffsetFactor = -2; M_PAVE.polygonOffsetUnits = -6;
+    M_SLAB.polygonOffset = true; M_SLAB.polygonOffsetFactor = -4; M_SLAB.polygonOffsetUnits = -12;
 
     function plane(w, d, x, z, y, mat) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
       m.rotation.x = -Math.PI / 2;
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    }
+    function slabBox(w, d, x, z, y) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), M_SLAB);
       m.position.set(x, y, z);
       g.add(m);
       return m;
@@ -26704,10 +26712,10 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const o = opt || {};
       det(BX(w + 6.5, 1.2, d + 6.5), 0xb6b0a2, cx, 0.6, cz);
       det(BX(w, h, d), CY_BRICK, cx, 1.2 + h / 2, cz);
-      const nc = Math.max(3, Math.round(w / 3.4));
+      const nc = Math.max(3, Math.round(w / 4.8));
       for (let i = 0; i < nc; i++) {
         const px = cx - w / 2 + 2 + i * (w - 4) / (nc - 1);
-        det(new THREE.CylinderGeometry(0.48, 0.52, h + 0.5, 10), 0x7d2f26, px, 1.2 + (h + 0.5) / 2, cz + d / 2 + 2.2);
+        det(new THREE.CylinderGeometry(0.36, 0.40, h + 0.5, 10), 0x7d2f26, px, 1.2 + (h + 0.5) / 2, cz + d / 2 + 2.2);
         det(new THREE.CylinderGeometry(0.6, 0.6, 0.34, 10), 0x9a9078, px, 1.35, cz + d / 2 + 2.2);
         det(BX(1.35, 0.42, 0.95), 0x6d3a20, px, 1.2 + h + 0.26, cz + d / 2 + 0.4);
         det(BX(2.0, 0.30, 1.2), 0x8a4426, px, 1.2 + h + 0.58, cz + d / 2 + 0.4);
@@ -26722,7 +26730,12 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(0.16, dh, 0.40), 0xc8a24a, cx + s * w * 0.21, 1.2 + dh / 2, cz + d / 2 + 0.28);
       }
       roof(cx, cz, w, d, 1.2 + h + 0.44);
-      if (o.plaque) plaque(o.plaque, cx, 1.2 + h + 0.15, cz + d / 2 + 0.55, w * 0.30, w * 0.30 * 0.36, '#1b2a4a', '#e8c86a');
+      if (o.plaque) {
+        const py = 1.2 + h - 1.05, pz = cz + d / 2 + 2.80;
+        det(BX(w * 0.36, w * 0.36 * 0.34 + 0.5, 0.26), 0x241a12, cx, py, pz - 0.10);
+        det(BX(w * 0.36 + 0.4, 0.22, 0.5), 0xc8a24a, cx, py + w * 0.36 * 0.17 + 0.36, pz - 0.06);
+        plaque(o.plaque, cx, py, pz, w * 0.34, w * 0.34 * 0.32, '#1b2a4a', '#e8c86a');
+      }
       if (o.steps !== false) stairs(cx, cz + d / 2 + 3.2, Math.min(w * 0.62, 16), o.stepN || 4, 0.36, 1);
     }
 
@@ -26785,9 +26798,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     }
 
     // ==================== 地面 ====================
-    plane(X1 - X0 - 2, ZS - ZN - 6, AX, (ZS + ZN) / 2, 0.08, M_PAVE);
-    plane(16, ZS - ZN - 20, AX, (ZS + ZN) / 2, 0.12, M_SLAB);
-    for (const z of [-320, -430, -520, -600]) plane(X1 - X0 - 20, 11, AX, z, 0.12, M_SLAB);
+    plane(X1 - X0 - 2, ZS - ZN - 6, AX, (ZS + ZN) / 2, 0.16, M_PAVE);
+    slabBox(16, ZS - ZN - 20, AX, (ZS + ZN) / 2, 0.28);
+    for (const z of [-320, -430, -520, -600]) {
+      const lw = (AX - 8) - (X0 + 8);
+      slabBox(lw, 11, X0 + 8 + lw / 2, z, 0.30);
+      slabBox(lw, 11, X1 - 8 - lw / 2, z, 0.30);
+    }
 
     // ==================== 院墙 ====================
     wallSeg(X0, ZN, X0, ZS, WALL_H);
