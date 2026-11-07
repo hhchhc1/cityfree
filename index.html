@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix309-walls';
+const BUILD = '20261107-fix310-paifang';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26941,15 +26941,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // ==================== 1) 古荷名郡 牌坊（墙外） ====================
     (function paifang() {
       for (const dx of [-19, -9, 0, 9, 19]) {
-        det(new THREE.CylinderGeometry(0.62, 0.74, 15.6, 10), 0x8a2f2a, AX + dx, 7.8, -152);
+        det(new THREE.CylinderGeometry(0.68, 0.82, 20.0, 10), 0x8a2f2a, AX + dx, 10.0, -152);
         det(new THREE.CylinderGeometry(0.95, 1.05, 0.9, 10), 0xb6b0a2, AX + dx, 0.45, -152);
         det(BX(1.5, 1.2, 1.5), 0xc8c2b4, AX + dx, 0.6, -152);
       }
-      for (const s of [-1, 1]) det(BX(42, 0.7, 0.6), 0x6d3a20, AX, 11.4, -152);
-      det(BX(44, 1.1, 1.5), 0x6d3a20, AX, 13.1, -152);
-      plaque('古荷名郡', AX, 12.35, -151.05, 14.0, 5.0, '#1c2f52', '#e8c86a');
-      roof(AX, -152, 50, 5.4, 15.0);
-      for (const s of [-1, 1]) roof(AX + s * 16.5, -152, 18, 4.2, 13.6);
+      for (const s of [-1, 1]) det(BX(42, 0.8, 0.7), 0x6d3a20, AX, 14.8, -152);
+      det(BX(44, 1.3, 1.7), 0x6d3a20, AX, 17.0, -152);
+      plaque('古荷名郡', AX, 15.85, -151.02, 15.6, 5.6, '#1c2f52', '#e8c86a');
+      roof(AX, -152, 50, 5.4, 19.2);
+      for (const s of [-1, 1]) roof(AX + s * 16.5, -152, 18, 4.2, 17.4);
       for (const s of [-1, 1]) {                        // 红幡
         det(new THREE.CylinderGeometry(0.12, 0.12, 8, 6), 0x6d3a20, AX + s * 24, 4, -150);
         det(BX(2.4, 5.2, 0.12), 0xc0392b, AX + s * 25.4, 5.6, -150);
