@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix281-beam-repair';
+const BUILD = '20261106-fix282-beam-sweep2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27861,10 +27861,17 @@ setInterval(function () {
       const have = {};
       const junk = [];
       window.__folkScene.traverse(function (o) {
-        if (o.isMesh && o.userData && o.userData.folkKey) {
-          have[o.userData.folkKey] = 1;
-          if (!ok[o.userData.folkKey]) junk.push(o);
-        }
+        if (!o.isMesh || !o.geometry) return;
+        const pr = o.geometry.parameters || {};
+        // 【fix282】按"形状"识别光柱家族，不再只看身份标记：
+        // 圆柱 h=7 且 r=0.8/0.3（外束/内芯），或圆环 r=1.4（地面光环）。
+        // 任何长得像光柱、却没有有效身份标记的网格，一律算孤儿清掉。
+        const isFolk = (o.geometry.type === 'CylinderGeometry' && Math.abs((pr.height || 0) - 7) < 0.02 &&
+                        (Math.abs((pr.radiusTop || 0) - 0.8) < 0.02 || Math.abs((pr.radiusTop || 0) - 0.3) < 0.02)) ||
+                       (o.geometry.type === 'TorusGeometry' && Math.abs((pr.radius || 0) - 1.4) < 0.02);
+        const k = o.userData && o.userData.folkKey;
+        if (k) have[k] = 1;
+        if (isFolk && (!k || !ok[k])) junk.push(o);
       });
       for (const o of junk) { o.visible = false; if (o.parent) o.parent.remove(o); }
       // 【fix281】有资料点却没有网格的，补建一根（保证"有词条就一定有可见光柱"）
