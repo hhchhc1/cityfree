@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix310-paifang';
+const BUILD = '20261107-fix311-detail';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26819,6 +26819,22 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(w * 0.14, dh * 0.60, 0.38), 0x22160c, cx + s * w * 0.29, 1.2 + dh * 0.55, cz + d / 2 + 0.27);
         det(BX(0.16, dh, 0.40), 0xc8a24a, cx + s * w * 0.21, 1.2 + dh / 2, cz + d / 2 + 0.28);
       }
+      // 【fix311】檐下斗拱 + 青绿彩画额枋 + 大红灯笼（照片里最抢眼的装饰）
+      const _nB = Math.max(4, Math.round(w / 2.2));
+      for (let i2 = 0; i2 < _nB; i2++) {
+        const bx2 = cx - w / 2 + (i2 + 0.5) * (w / _nB);
+        det(BX(0.86, 0.50, 1.10), (i2 % 2 ? 0x2e6b4c : 0x27456e), bx2, 1.2 + h + 0.02, cz + d / 2 + 1.85);
+        det(BX(0.50, 0.34, 0.80), 0x9b3b2f, bx2, 1.2 + h - 0.42, cz + d / 2 + 1.85);
+      }
+      det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.98, cz + d / 2 + 1.72);
+      det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 1.28, cz + d / 2 + 1.72);
+      const _lant = new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x4a1008 });
+      for (const s2 of [-1, 1]) for (const dd of [0.30, 0.42]) {
+        const lx = cx + s2 * w * dd;
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(0.62, 10, 8), _lant);
+        sp.position.set(lx, BASE + 1.2 + h - 0.62, cz + d / 2 + 1.15); g.add(sp);
+        det(BX(0.10, 0.85, 0.10), 0x6d3a20, lx, 1.2 + h - 0.10, cz + d / 2 + 1.15);
+      }
       roof(cx, cz, w, d, 1.2 + h + 0.44);
       if (o.plaque) {
         const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.55;
@@ -27042,6 +27058,43 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       stairs(AX, Z + 15.5, 14, 5, 0.32, 1);
       stairs(AX, Z - 15.6, 10, 4, 0.32, -1);
       hall(AX, Z - 4, 50, 24, 14.4, { plaque: '亲民堂', steps: false });
+      // 【fix311】大堂内景：屏风 + 公案 + 三块匾 + 楹联 + 宫灯（照片里知州审案的场面）
+      (function courtroom() {
+        const IZ = Z + 2;
+        const BACK = IZ - 10.5;
+        // 屏风：海水朝阳（深蓝底 + 金色圆日）
+        const scrMat = new THREE.MeshLambertMaterial({ color: 0x24506e });
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(15.5, 7.8), scrMat);
+        scr.position.set(AX, BASE + 5.6, BACK + 0.55); g.add(scr);
+        const sun = new THREE.Mesh(new THREE.CircleGeometry(1.7, 20), new THREE.MeshBasicMaterial({ color: 0xc8a24a }));
+        sun.position.set(AX + 2.4, BASE + 6.4, BACK + 0.62); g.add(sun);
+        det(BX(16.6, 8.8, 0.30), 0x6d3a20, AX, BASE + 5.6, BACK + 0.35);
+        det(BX(17.2, 0.4, 0.5), 0xc8a24a, AX, BASE + 9.9, BACK + 0.4);
+        // 三块匾：正大光明 / 执法如山 / 克己奉公
+        plaque3d('正大光明', AX, 10.6, BACK + 0.75, 9.6, 2.9, '#24407a', '#e8c86a');
+        plaque3d('执法如山', AX - 13.2, 9.9, BACK + 0.75, 7.0, 2.2, '#1f5c3a', '#e8c86a');
+        plaque3d('克己奉公', AX + 13.2, 9.9, BACK + 0.75, 7.0, 2.2, '#1f5c3a', '#e8c86a');
+        // 公案（红漆大案）
+        det(BX(7.0, 1.15, 2.8), 0x8a2f2a, AX, BASE + 1.75, IZ + 1.0);
+        det(BX(7.6, 0.22, 3.2), 0x6d3a20, AX, BASE + 2.42, IZ + 1.0);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1])
+          det(BX(0.34, 1.2, 0.34), 0x5a1f1c, AX + sx * 3.1, BASE + 0.6, IZ + 1.0 + sz * 1.15);
+        // 案上：令签筒 + 印盒 + 惊堂木
+        det(new THREE.CylinderGeometry(0.22, 0.26, 0.9, 8), 0x8a2f2a, AX - 2.0, BASE + 2.95, IZ + 0.6);
+        det(BX(0.7, 0.5, 0.7), 0xc8a24a, AX + 1.6, BASE + 2.8, IZ + 0.6);
+        det(BX(0.8, 0.24, 0.5), 0x3a2416, AX + 0.2, BASE + 2.65, IZ + 2.1);
+        // 楹联（红底金边竖板）
+        for (const sx of [-1, 1]) {
+          det(BX(0.7, 7.4, 0.22), 0x2b1a10, AX + sx * 9.6, BASE + 5.4, BACK + 0.8);
+          det(BX(0.46, 6.9, 0.26), 0x7d2f26, AX + sx * 9.6, BASE + 5.4, BACK + 0.86);
+        }
+        // 宫灯四盏（自发光）
+        const lm = new THREE.MeshBasicMaterial({ color: 0xffb765, fog: false });
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.46, 10, 8), lm);
+          b.position.set(AX + sx * 12, BASE + 8.2, IZ + sz * 7); g.add(b);
+        }
+      })();
       // 抱厦（卷棚）
       det(BX(20, 0.7, 9), 0x5c3a26, AX, 8.6, Z + 12);
       for (const s of [-1, 1]) for (const t of [0, 1]) det(new THREE.CylinderGeometry(0.42, 0.44, 7.4, 8), 0x7d2f26, AX + s * 8.6, 3.7, Z + 8.5 + t * 5.5);
