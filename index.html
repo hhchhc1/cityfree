@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix258-gate-wall';
+const BUILD = '20261106-fix259-pavilion';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27275,6 +27275,10 @@ window.__bindTap = __bindTap;
     // 三层楼阁（园子里最高的那座：台基 + 三层木构 + 三重檐 + 塔刹）
     (function pagoda() {
       const px = 1930, pz = 126;
+  try {
+    if (window.__folkAddSpot) window.__folkAddSpot("楼阁", px, pz, 0xffe0a8, -13);
+    else (window.__folkPending = window.__folkPending || []).push(["楼阁", px, pz, 0xffe0a8, -13]);
+  } catch (e0) {}
       let y = 0;
       det(BX(18, 1.0, 18), 0xb0aa9a, px, 0.5, pz);                                  // 台基
       det(BX(19, 0.26, 19), 0xa8a294, px, 1.13, pz);
@@ -27302,6 +27306,10 @@ window.__bindTap = __bindTap;
     // 桥亭（曲桥中段起一座小亭子）
     (function bridgePavilion() {
       const px = 1863, pz = 166;
+  try {
+    if (window.__folkAddSpot) window.__folkAddSpot("桥亭", px, pz, 0xc9f0ff, -9);
+    else (window.__folkPending = window.__folkPending || []).push(["桥亭", px, pz, 0xc9f0ff, -9]);
+  } catch (e0) {}
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         det(new THREE.CylinderGeometry(0.2, 0.22, 2.8, 8), 0x9a3b2c, px + sx * 3.0, 1.8, pz + sz * 3.0);
       }
@@ -27417,6 +27425,10 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
       text: '中国传统入口标志性建筑，多立于街口、寺观或园林门前。四柱三间、层层出檐，上悬匾额题名；木构用红柱朱漆，石构则雕龙刻字。它起标榜、引导与分隔空间的作用，是"門面"的建筑化表达。' },
     { name: '月洞门', tag: '圆门框景 · 一步一景',
       text: '江南园林常见的圆形门洞：墙上开圆洞，不装门扇。它既是通道，又是取景框——透过圆洞看对面景致，像一幅圆形的画，这就是中国园林"框景"手法的典型，所谓"一步一景"。' },
+    { name: '楼阁', tag: '三层重檐 · 塔刹',
+      text: '楼阁是园林里体量最大、可以登临的建筑：一般二至三层木构，每层外挑一圈腰檐和平座栏杆，人可以逐层登高望远。屋顶多用歇山或攒尖，顶端起塔刹。它往往占据全园的制高点，是构图的视觉中心，所谓「欲穷千里目，更上一层楼」。' },
+    { name: '桥亭', tag: '跨水而建 · 中途歇脚',
+      text: '桥亭是架在桥上的小亭，多见于曲桥中段或桥头，四柱敞空、顶上覆瓦。它既是遮阳避雨的歇脚处，也是把长桥「断开」、让水面有虚有实的造景手段；坐在亭中可平视水面，是赏荷观鱼的好位置。' },
     { name: '水榭', tag: '临水而筑 · 美人靠',
       text: '建在水边或水上的开敞建筑。平台挑出水面，四周设"美人靠"（曲尺形坐栏），是赏荷、观鱼、纳凉之处。屋顶多为歇山式，体量轻巧通透，与水面互为映照。' },
     { name: '六角亭', tag: '攒尖顶 · 宝顶',
