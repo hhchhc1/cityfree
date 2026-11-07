@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix305-stairs';
+const BUILD = '20261107-fix306-plaquez';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26809,7 +26809,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(w * 0.42, w * 0.42 * 0.32 + 0.6, 0.28), 0x241a12, cx, py, pz - 0.12);
         det(BX(w * 0.42 + 0.5, 0.26, 0.55), 0xc8a24a, cx, py + w * 0.42 * 0.16 + 0.42, pz - 0.07);
         for (const ss of [-1, 1]) det(BX(0.3, w * 0.42 * 0.32 + 0.6, 0.32), 0xc8a24a, cx + ss * (w * 0.21 + 0.15), py, pz - 0.12);
-        plaque(o.plaque, cx, py, pz, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
+        plaque(o.plaque, cx, py, pz + 0.22, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
       }
       if (o.steps !== false) stairs(cx, cz + d / 2 + 3.2, Math.min(w * 0.62, 16), o.stepN || 4, 0.36, 1);
     }
