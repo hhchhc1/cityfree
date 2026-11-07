@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix271-newmap';
+const BUILD = '20261106-fix272-cityguide';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22512,6 +22512,68 @@ function drawFullMap() {
     ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(z.name, X(z.x), Y(z.z) + 3);
   }
+  // 【fix272】新城市导览：主要建筑画成方块 + 名字，并补一套示意路网
+  ctx.save();
+  // --- 示意路网（古建城纵向 4 条、横向 6 条；园林 2 条）---
+  ctx.strokeStyle = 'rgba(120,132,152,0.45)';
+  ctx.lineWidth = Math.max(1, 5 * s);
+  for (const gx of [1700, 1860, 2020, 2180]) {
+    ctx.beginPath(); ctx.moveTo(X(gx), Y(-765)); ctx.lineTo(X(gx), Y(-85)); ctx.stroke();
+  }
+  for (const gz of [-645, -535, -425, -315, -205, -115]) {
+    ctx.beginPath(); ctx.moveTo(X(1656), Y(gz)); ctx.lineTo(X(2280), Y(gz)); ctx.stroke();
+  }
+  for (const gz of [70, 170]) {
+    ctx.beginPath(); ctx.moveTo(X(1730), Y(gz)); ctx.lineTo(X(2060), Y(gz)); ctx.stroke();
+  }
+  // --- 主要建筑方块 ---
+  const ANC_BLD = [
+    ['鼓楼', 1790, -441, 30, 30],
+    ['木塔', 2055, -575, 52, 52],
+    ['城门楼', 1656, -645, 24, 20],
+    ['城门楼', 1656, -425, 24, 20],
+    ['城门楼', 1656, -205, 24, 20],
+    ['楼阁', 1708, -425, 30, 30],
+    ['楼阁', 1800, -615, 26, 26],
+    ['楼阁', 1800, -235, 26, 26],
+    ['楼阁', 1874, -515, 26, 26],
+    ['楼阁', 1874, -335, 26, 26],
+    ['主厅', 1946, 237, 32, 26],
+    ['水榭', 1843, 131, 18, 18],
+    ['六角亭', 1781, 232, 11, 11],
+    ['牌楼', 1880, -7, 16, 7],
+    ['月洞门', 1861, 14, 9, 5],
+    ['桥亭', 1863, 157, 9, 9],
+    ['徽派民居', 1796, 37, 14, 14],
+    ['四合院', 1840, 37, 14, 14],
+    ['石板房', 1880, 37, 14, 14],
+    ['吊脚楼', 1910, 38, 14, 14],
+    ['福建土楼', 1945, 35, 16, 16],
+    ['蒙古包', 1800, 67, 12, 12],
+    ['陕北窑洞', 1848, 71, 14, 12],
+    ['广东镬耳屋', 1892, 67, 14, 14]
+  ];
+  for (const a of ANC_BLD) {
+    const bx = X(a[1] - a[3] / 2), by = Y(a[2] - a[4] / 2);
+    ctx.fillStyle = 'rgba(126,104,74,0.85)';
+    ctx.fillRect(bx, by, a[3] * s, a[4] * s);
+    ctx.strokeStyle = 'rgba(238,214,160,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx, by, a[3] * s, a[4] * s);
+  }
+  try { window.__ancNames = {}; for (const a of ANC_BLD) window.__ancNames[a[0]] = 1; } catch (e) {}
+  // --- 名字：放大到 s>0.5 才写，避免糊成一团 ---
+  if (s > 0.5) {
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    for (const a of ANC_BLD) {
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillText(a[0], X(a[1]) + 1, Y(a[2] - a[4] / 2) - 4);
+      ctx.fillStyle = '#ffe9b0';
+      ctx.fillText(a[0], X(a[1]), Y(a[2] - a[4] / 2) - 5);
+    }
+  }
+  ctx.restore();
   // 【fix271】新城市补充：古城墙轮廓 + 古建资料点（光柱位置）
   ctx.save();
   ctx.strokeStyle = 'rgba(201,162,39,0.75)';
@@ -22524,7 +22586,7 @@ function drawFullMap() {
       const mx = X(m.x), my = Y(m.z);
       ctx.fillStyle = 'rgba(255,214,120,0.9)';
       ctx.beginPath(); ctx.arc(mx, my, 2.6, 0, 7); ctx.fill();
-      if (s > 0.55) {
+      if (s > 0.55 && !window.__ancNames) {
         ctx.fillStyle = 'rgba(255,236,190,0.85)';
         ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(m.name, mx, my - 6);
