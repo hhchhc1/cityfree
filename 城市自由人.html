@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix289-torus-fix';
+const BUILD = '20261106-fix290-map-legend';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22529,11 +22529,8 @@ function drawFullMap() {
   for (const z of zones) {
     ctx.fillStyle = z.color + '44';
     ctx.beginPath(); ctx.arc(X(z.x), Y(z.z), z.r * s, 0, 7); ctx.fill();
-    ctx.fillStyle = '#ffffff88';
-    ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-    const _ly = (z.r > 60) ? Y(z.z - z.r * 0.62) : Y(z.z) + 3;   // fix273: 大区块的标签写在圆的上缘，免得被左下角按钮挡住
-    ctx.fillText(z.name, X(z.x), _ly);
   }
+  // 【fix290】名字改到最后统一画（见函数末尾）：先画必被楼块/城墙盖住。
   // 【fix274】南岸新区（科技城 / 霓虹楼群）：x 965~1518，z -80~318，两纵三横路网 + 楼块
   if (_b.isNew) {
     ctx.save();
@@ -22645,7 +22642,7 @@ function drawFullMap() {
       const mx = X(m.x), my = Y(m.z);
       ctx.fillStyle = 'rgba(255,214,120,0.9)';
       ctx.beginPath(); ctx.arc(mx, my, 2.6, 0, 7); ctx.fill();
-      if (s > 0.55 && !window.__ancNames) {
+      if (s > 0.8 && !window.__ancNames) {
         ctx.fillStyle = 'rgba(255,236,190,0.85)';
         ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(m.name, mx, my - 6);
@@ -22710,6 +22707,42 @@ function drawFullMap() {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(active ? '!' : '?', X(q.x), Y(q.z));
     }
+  }
+  // 【fix290】区块名 + 图标：最后画，深色底，绝不会被任何图形盖住
+  const _ICO = _b.isNew ? ['🏙️', '✈️', '🏯', '🌿', '🌊'] : ['⚽', '✈️', '⚓', '🎡', '⛳', '🏝️'];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < zones.length; i++) {
+    const z = zones[i];
+    const label = (_ICO[i] || '') + ' ' + z.name;
+    ctx.font = 'bold 11px sans-serif';
+    const tw = ctx.measureText(label).width;
+    const px2 = X(z.x);
+    const py2 = (z.r > 60) ? Y(z.z - z.r * 0.62) : Y(z.z) + 3;
+    const bw = tw + 14, bh = 18;
+    ctx.fillStyle = 'rgba(8,14,22,0.74)';
+    ctx.fillRect(px2 - bw / 2, py2 - bh / 2, bw, bh);
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)'; ctx.lineWidth = 1;
+    ctx.strokeRect(px2 - bw / 2, py2 - bh / 2, bw, bh);
+    ctx.fillStyle = '#eef4ff';
+    ctx.fillText(label, px2, py2 + 0.5);
+  }
+  // 图例（右上角）：和主城区地图一样，图标 + 文字
+  const _LEG = _b.isNew
+    ? [['🏙️', '霓虹楼群'], ['🏯', '古建城'], ['🌿', '园林'], ['✈️', '机场'], ['🌊', '荷芷河']]
+    : [['⚽', '体育场'], ['✈️', '机场'], ['⚓', '码头'], ['🎡', '摩天轮'], ['⛳', '高尔夫'], ['🏝️', '南岛']];
+  ctx.font = '11px sans-serif';
+  let _lw = 0;
+  for (const it of _LEG) _lw = Math.max(_lw, ctx.measureText(it[1]).width + 38);
+  const _lh = 19, _lx = W - _lw - 16, _ly0 = 70;
+  ctx.fillStyle = 'rgba(8,14,22,0.62)';
+  ctx.fillRect(_lx - 10, _ly0 - 12, _lw + 14, _LEG.length * _lh + 14);
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1;
+  ctx.strokeRect(_lx - 10, _ly0 - 12, _lw + 14, _LEG.length * _lh + 14);
+  for (let i = 0; i < _LEG.length; i++) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#eef4ff';
+    ctx.fillText(_LEG[i][0], _lx, _ly0 + i * _lh + 3);
+    ctx.fillText(_LEG[i][1], _lx + 22, _ly0 + i * _lh + 3);
   }
   drawRaceCheckpointMarkers(ctx, X, Y, null);
 }
