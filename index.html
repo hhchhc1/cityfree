@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix356-lanes';
+const BUILD = '20261107-fix357-chuantang';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27557,6 +27557,14 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       wallSeg(X0, GZ2, AX - GW, GZ2, 4.2);
       wallSeg(AX + GW, GZ2, X1, GZ2, 4.2);
       // 【fix356】六房后墙与院墙之间的窄巷：铺地 + 排水沟 + 石墩
+    // 【fix357】窄巷落水口：每 20 米一个（盖板 + 暗槽）
+    for (const s of [-1, 1]) {
+      for (let zd = -220; zd > -690; zd -= 20) {
+        det(BX(1.2, 0.10, 1.2), 0x6b6a62, AX + s * 112.5, 0.17, zd);
+        det(BX(1.0, 0.04, 1.0), 0x2b2b2b, AX + s * 112.5, 0.23, zd);
+        for (let kd = -1; kd <= 1; kd++) det(BX(1.0, 0.05, 0.10), 0x8a857a, AX + s * 112.5, 0.24, zd + kd * 0.34);
+      }
+    }
     for (const s of [-1, 1]) {
       const lx2 = AX + s * 124;
       det(BX(26, 0.12, 496), 0xaaa394, lx2, 0.06, -452);
@@ -27839,6 +27847,25 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       plaque3d('议事厅', AX - 30, 5.6, Z + 5.4, 6.0, 2.2, '#1b2a4a', '#e8c86a');
       plaque3d('刑厅', AX + 30, 5.6, Z + 5.4, 5.2, 2.2, '#1b2a4a', '#e8c86a');
       // 【fix337】旧的大堂内景已删除（与 fix311 的 courtroom 重复，且旧匾是黑色平板）
+    })();
+
+    // 【fix357】穿堂：大堂后门到退思堂前檐的连廊（原来两进之间是空院子）
+    (function chuantang() {
+      const z0 = -489, z1 = -557, W = 9.0, cz9 = (z0 + z1) / 2, L9 = Math.abs(z1 - z0);
+      det(BX(W + 3, 0.55, L9 + 2), 0xb6b0a2, AX, 0.28, cz9);
+      det(BX(W, 0.14, L9), 0x8a8578, AX, 0.60, cz9);
+      for (let z9 = z0 - 1.5; z9 > z1; z9 -= 5.4) {
+        for (const s of [-1, 1]) {
+          det(new THREE.CylinderGeometry(0.28, 0.30, 3.9, 8), 0x7d2f26, AX + s * (W / 2), 2.60, z9);
+          det(new THREE.CylinderGeometry(0.44, 0.44, 0.22, 8), 0x9a9078, AX + s * (W / 2), 0.75, z9);
+        }
+      }
+      for (const s of [-1, 1]) {
+        det(BX(0.40, 0.34, L9), 0x6d3a20, AX + s * (W / 2), 4.62, cz9);
+        det(BX(0.34, 0.26, L9), 0x2e6b4c, AX + s * (W / 2), 4.90, cz9);
+      }
+      roof(AX, cz9, W + 1, L9, 5.25, null, null, 'yingshan');
+      for (const s of [-1, 1]) det(BX(W + 1.6, 0.5, 2.2), 0xb0aa9e, AX, 0.25, s < 0 ? z1 + 1.0 : z0 - 1.0);
     })();
 
     // ==================== 8) 退思堂（二堂） ====================
