@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix307-plaquebox';
+const BUILD = '20261107-fix308-liufang';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26838,7 +26838,25 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         const pz = cz - len / 2 + i * len / nc;
         det(new THREE.CylinderGeometry(0.34, 0.36, hh + 0.4, 8), 0x7d2f26, cx + dirX * (d / 2 + 1.6), 0.95 + (hh + 0.4) / 2, pz);
         det(BX(1.0, 0.3, 0.8), 0x6d3a20, cx + dirX * (d / 2 + 0.8), 0.95 + hh + 0.2, pz);
-        if (i % 2 === 0) det(BX(0.2, 1.6, 2.6), 0x241a12, cx + dirX * (d / 2 + 0.1), 2.6, pz + len / nc * 0.5);   // 窗
+      }
+      // 【fix308】六房：每个开间都做成真房间 —— 门洞 / 槛窗 / 隔墙
+      const bw = len / nc;
+      for (let i = 0; i < nc; i++) {
+        const bz = cz - len / 2 + (i + 0.5) * bw;
+        const wallZ = cx - dirX * (d / 2);
+        if (i % 3 === 0) {
+          det(BX(0.30, 2.9, 1.9), 0x1c1511, wallZ + dirX * 0.30, 1.95 + 1.45 - 0.95, bz);
+          det(BX(0.42, 3.15, 0.22), 0x8d867a, wallZ + dirX * 0.34, 0.95 + 1.5, bz - 1.2);
+          det(BX(0.42, 3.15, 0.22), 0x8d867a, wallZ + dirX * 0.34, 0.95 + 1.5, bz + 1.2);
+          det(BX(0.42, 0.26, 2.7), 0x8d867a, wallZ + dirX * 0.34, 0.95 + 3.02, bz);
+          det(BX(0.55, 0.22, 2.5), 0xa8a294, wallZ + dirX * 0.30, 0.95 + 0.11, bz);
+        } else {
+          det(BX(0.26, 1.95, 2.05), 0x5e3420, wallZ + dirX * 0.26, 0.95 + 2.05, bz);
+          det(BX(0.30, 1.6, 1.72), 0x241a12, wallZ + dirX * 0.30, 0.95 + 2.05, bz);
+          for (const dz of [-0.55, 0, 0.55]) det(BX(0.36, 1.75, 0.10), 0x8a5a34, wallZ + dirX * 0.32, 0.95 + 2.05, bz + dz);
+          det(BX(0.36, 0.10, 1.9), 0x8a5a34, wallZ + dirX * 0.32, 0.95 + 2.05, bz);
+        }
+        det(BX(d - 2.2, hh * 0.92, 0.5), CY_BRICK, cx - dirX * 0.6, 0.95 + hh * 0.46, bz - bw / 2);
       }
       det(BX(d + 4, 0.4, len + 6), 0x5c3a26, cx, 0.95 + hh + 0.1, cz);
       for (const s of [-1, 1]) det(BX((d + 4) * 0.62, 0.42, len + 6), (s > 0 ? CY_TILE : 0x49505a), cx + s * (d + 4) * 0.245, 0.95 + hh + 0.7, cz, 0, 0, -s * 0.46);
