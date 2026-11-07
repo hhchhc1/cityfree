@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix269-flight-clock';
+const BUILD = '20261106-fix270-one-beam';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26384,10 +26384,9 @@ function buildWoodPagoda(cx, cz, B) {
 try {
   const _r2 = B * 1.55 + 3;
   if (window.__folkAddSpot) {
+    window.__folkAddSpot('古塔', cx - _r2, cz, 0xb9d6ff, 0, true);
     window.__folkAddSpot('古塔', cx, cz - _r2, 0xb9d6ff, 0, true);
     window.__folkAddSpot('古塔', cx, cz + _r2, 0xb9d6ff, 0, true);
-    window.__folkAddSpot('古塔', cx - _r2, cz, 0xb9d6ff, 0, true);
-    window.__folkAddSpot('古塔', cx + _r2, cz, 0xb9d6ff, 0, true);
   } else {
     (window.__folkPending = window.__folkPending || []).push(['古塔', cx, cz - _r2, 0xb9d6ff, 0, true]);
     (window.__folkPending = window.__folkPending || []).push(['古塔', cx, cz + _r2, 0xb9d6ff, 0, true]);
@@ -27640,6 +27639,31 @@ const byName = {};
     } catch (e) {}
   }
   setInterval(tick, 400);
+// 【fix270】用户要求：**一种建筑只保留一根光柱**（同类型多根太乱，也浪费绘制）。
+// 场景建完后统一去重：每种名字只留一根；古塔优先留木塔西侧那根（玩家常走的方向）。
+setTimeout(function () {
+  try {
+    const M = window.__folkMarkers || [];
+    const groups = {};
+    for (const m of M) { (groups[m.name] = groups[m.name] || []).push(m); }
+    const out = [];
+    for (const name in groups) {
+      const list = groups[name];
+      let pick = list[0];
+      if (name === '古塔') {
+        const west = list.filter(function (m) { return m.x < 2050; });
+        if (west.length) pick = west[0];
+      }
+      out.push(pick);
+      for (const m of list) {
+        if (m === pick) continue;
+        const objs = Array.isArray(m.obj) ? m.obj : (m.obj ? [m.obj] : []);
+        for (const o of objs) { o.visible = false; if (o.parent) o.parent.remove(o); }
+      }
+    }
+    window.__folkMarkers = out;
+  } catch (e) {}
+}, 2500);
 // 【fix263】光柱裁剪：31 根光柱 × 每根 3 层半透明网格，飞行时全在视锥里，
 // 半透明大面积的 overdraw 是空中掉帧的主因。飞行中直接全部隐藏，地面只留 150 米内的。
 setInterval(function () {
@@ -28879,8 +28903,6 @@ function flightTick(dt) {
     else if (_tt < FLIGHT_T.land) _vv = 0.50;
     flightAudioSet(_vv); }
   const F = FLIGHT; if (!F) return;
-  // 【fix250】飞行时间改成"固定步长累积"：原来 F.t += dt，帧间隔一抖，飞机就一快一慢。
-  // 现在每 1/60 秒推进一小步，最多补 6 步；掉帧时宁可整体略慢，也不再忽快忽慢。
   // fix269: 不再累加 dt / 补步，直接读挂钟 —— 位移与帧率完全解耦，不会再一顿一顿。
   if (!F.startMs) F.startMs = performance.now();
   F.t = Math.min(FLIGHT_T.done, (performance.now() - F.startMs) / 1000);
