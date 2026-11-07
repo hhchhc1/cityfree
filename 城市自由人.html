@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261106-fix263-beam-cull';
+const BUILD = '20261106-fix264-bridge-joint';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7554,7 +7554,26 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     const southRailCenter = (southRampStart + southRampEnd) / 2;
     railS.position.set(side, terrainHeight(0, southRailCenter) + 0.5, southRailCenter); scene.add(railS);
   }
-  // 桥面：无碰撞阻挡，terrainHeight控制行走高度，引桥和桥面同高度平滑过渡
+  // 【fix264】桥头堡：桥面南端原本悬在沙滩上方，下面是个黑洞，沙子和桥面对不上。
+// 这里补一段实心石砌堤岸，从海底一路填到桥面高度，宽度比桥面略宽，彻底盖住接缝。
+const abutMat = new THREE.MeshLambertMaterial({ color: 0x9a938a });
+const abutS = new THREE.Mesh(new THREE.BoxGeometry(13, 9, 30), abutMat);
+abutS.position.set(0, bridgeY - 4.5, BRIDGE_END_Z + 12);
+scene.add(abutS);
+const abutN = new THREE.Mesh(new THREE.BoxGeometry(13, 9, 30), abutMat);
+abutN.position.set(0, bridgeY - 4.5, BRIDGE_DECK_START_Z - 12);
+scene.add(abutN);
+// 桥头引道：从桥面高度平铺到岸上，避免桥面尽头直接断掉
+for (const [cz2, dir] of [[BRIDGE_END_Z, 1], [BRIDGE_DECK_START_Z, -1]]) {
+  for (let i = 0; i < 10; i++) {
+    const zz = cz2 + dir * (i * 2 + 1);
+    const gy = Math.max(bridgeY - 0.2, terrainHeight(0, zz));
+    const pv = new THREE.Mesh(new THREE.BoxGeometry(11, 0.4, 2.2), bridgeMat);
+    pv.position.set(0, gy - 0.2, zz);
+    scene.add(pv);
+  }
+}
+// 桥面：无碰撞阻挡，terrainHeight控制行走高度，引桥和桥面同高度平滑过渡
 })();
 
 // ========== 新增地图元素（仿汤米快跑风格）==========
