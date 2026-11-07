@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix352-steps';
+const BUILD = '20261107-fix354-carpet';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27249,6 +27249,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(TW, 0.9, 0.55), 0x9a948a, AX, TH + 0.95, GZ + s * (TD / 2 - 0.28));
         det(BX(0.55, 0.9, TD), 0x9a948a, AX + s * (TW / 2 - 0.28), TH + 0.95, GZ);
       }
+      // 【fix354】折返马道已撤除：65 米坡道会横穿前院、挡住甬道，改为保留钩爪登城
       const BX0 = 20, BH = 5.2;
       det(BX(BX0, BH, 11), CY_BRICK, AX, TH + 0.5 + BH / 2, GZ);
       for (let i = 0; i < 6; i++) {
@@ -27603,6 +27604,12 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(new THREE.SphereGeometry(3.0, 8, 6), 0x36703f, p4[0] + 3.0, 9.0, p4[1] + 2.2);
         det(new THREE.SphereGeometry(2.6, 8, 6), 0x2b5730, p4[0] - 3.2, 8.6, p4[1] - 2.0);
       }
+      // 【fix354】后园石桌石凳（两组）
+      for (const sp of [[1938, -822], [2112, -822]]) {
+        det(new THREE.CylinderGeometry(1.0, 1.0, 0.20, 12), 0xb6b0a2, sp[0], BASE + 1.62, sp[1]);
+        det(new THREE.CylinderGeometry(0.26, 0.30, 0.95, 8), 0xa8a294, sp[0], BASE + 1.10, sp[1]);
+        for (const sd2 of [-1, 1]) det(new THREE.CylinderGeometry(0.48, 0.44, 0.55, 10), 0xb0aa9e, sp[0] + sd2 * 1.9, BASE + 0.90, sp[1]);
+      }
       // 【fix351】花架：水池北侧一座紫藤架（6 柱 + 横梁 + 藤条）
       {
         const pz8 = -836;
@@ -27685,6 +27692,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(0.36, 1.2, 0.36), 0xc8c2b4, AX + s * 19.6, 2.75, YC + i * 3.0);
         det(new THREE.SphereGeometry(0.26, 6, 5), 0xbdb6a6, AX + s * 19.6, 3.45, YC + i * 3.0);
       }
+      // 【fix354】大堂地毯 + 三个拜垫（审案时原告被告跪的地方）
+      det(BX(9.0, 0.06, 14.0), 0x8a2f2a, AX, 1.30, Z - 1.0);
+      det(BX(8.4, 0.04, 13.2), 0xa8402f, AX, 1.34, Z - 1.0);
+      for (const s of [-1, 1]) det(BX(1.6, 0.18, 1.6), 0x6d3a20, AX + s * 4.2, 1.42, Z + 4.5);
+      det(BX(1.8, 0.18, 1.8), 0x6d3a20, AX, 1.42, Z + 6.0);
       // 【fix349】大堂前仪仗：肃静 / 回避 牌（成对立在踏跺两侧）
       {
         const nm = ['肃静', '回避', '荷芷署', '正堂'];
