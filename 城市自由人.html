@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix373-hookinside';
+const BUILD = '20261107-fix374-floorback';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27324,15 +27324,9 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // 【fix362】整座衙署的石台基：衙署以前只有一份'隐形地面'，视觉上房子是浮在街面上的
     // 这里铺一整块 2.6 米高的石台（台面与高度场一致），所有殿宇都实打实站在石台上
-    // 【fix372】台基改成纯视觉（无碰撞）：原来这块 286×700 的实心碰撞体会让钩爪误判、把人往台外甩
-    (function podiumVis() {
-      const mSide = new THREE.MeshLambertMaterial({ color: 0x9d968a });
-      const mTop = new THREE.MeshLambertMaterial({ color: 0xb6b0a2 });
-      const b1 = new THREE.Mesh(new THREE.BoxGeometry(286, 3.6, 700), mSide);
-      b1.position.set(AX, 0.80 + BASE, -485); g.add(b1);
-      const b2 = new THREE.Mesh(new THREE.BoxGeometry(286, 0.14, 700), mTop);
-      b2.position.set(AX, 2.67 + BASE, -485); g.add(b2);
-    })();
+    // 【fix374】台基恢复碰撞：上一版做成纯视觉后，钩爪落点没有实体地板，人会掉到台面底下
+    det(BX(286, 3.6, 700), 0x9d968a, AX, 0.80, -485);
+    det(BX(286, 0.14, 700), 0xb6b0a2, AX, 2.67, -485);
     // 台面四周压顶石 + 收边
     for (const s of [-1, 1]) {
       det(BX(288, 0.34, 1.6), 0xc0bab0, AX, 2.62, -485 + s * 349);
