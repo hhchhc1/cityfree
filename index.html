@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix366-zhai';
+const BUILD = '20261107-fix367-gongantai';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27867,14 +27867,21 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(16.6, 8.8, 0.30), 0x6d3a20, AX, BASE + 5.6, BACK + 0.35);
         det(BX(17.2, 0.4, 0.5), 0xc8a24a, AX, BASE + 9.9, BACK + 0.4);
         // 三块匾：正大光明 / 执法如山 / 克己奉公
-        plaque3d('正大光明', AX, 10.6, BACK + 0.75, 9.6, 2.9, '#24407a', '#e8c86a');
-        plaque3d('执法如山', AX - 13.2, 9.9, BACK + 0.75, 7.0, 2.2, '#1f5c3a', '#e8c86a');
-        plaque3d('克己奉公', AX + 13.2, 9.9, BACK + 0.75, 7.0, 2.2, '#1f5c3a', '#e8c86a');
-        // 公案（红漆大案）
-        det(BX(7.0, 1.15, 2.8), 0x8a2f2a, AX, BASE + 1.75, IZ + 1.0);
-        det(BX(7.6, 0.22, 3.2), 0x6d3a20, AX, BASE + 2.42, IZ + 1.0);
+        plaque3d('正大光明', AX, 10.9, BACK + 0.75, 8.6, 2.9, '#24407a', '#e8c86a');
+        plaque3d('執法如山', AX - 11.0, 9.2, BACK + 0.75, 6.4, 2.2, '#1f5c3a', '#e8c86a');
+        plaque3d('克己奉公', AX + 11.0, 9.2, BACK + 0.75, 6.4, 2.2, '#1f5c3a', '#e8c86a');
+        // 【fix367】照霍州署照片：砖砌审案高台 + 台前原告石/被告石 + 顶梁"正廳"竖匾
+        det(BX(11.0, 0.52, 4.2), 0x9a958c, AX, BASE + 1.62, IZ - 5.4);     // 砖台
+        det(BX(11.6, 0.12, 4.8), 0xa8a29a, AX, BASE + 1.94, IZ - 5.4);
+        for (let q = 0; q < 13; q++) det(BX(0.9, 0.50, 0.14), 0x8a8578, AX - 5.0 + q * 0.83, BASE + 1.66, IZ - 3.36);
+        det(BX(4.6, 0.10, 2.2), 0x2b2f33, AX, BASE + 1.42, IZ - 1.2);       // 原告石
+        det(BX(4.6, 0.10, 2.2), 0x2b2f33, AX, BASE + 1.42, IZ + 2.6);       // 被告石
+        plaque3d('正廳', AX, BASE + 12.4, IZ - 9.6, 3.0, 4.4, '#241608', '#e8c86a');
+        // 公案（红漆大案，架在台上）
+        det(BX(7.0, 1.15, 2.8), 0x8a2f2a, AX, BASE + 2.56, IZ - 4.6);
+        det(BX(7.6, 0.22, 3.2), 0x6d3a20, AX, BASE + 3.23, IZ - 4.6);
         for (const sx of [-1, 1]) for (const sz of [-1, 1])
-          det(BX(0.34, 1.2, 0.34), 0x5a1f1c, AX + sx * 3.1, BASE + 0.6, IZ + 1.0 + sz * 1.15);
+          det(BX(0.34, 1.2, 0.34), 0x5a1f1c, AX + sx * 3.1, BASE + 1.98, IZ - 4.6 + sz * 1.15);
         // 案上：令签筒 + 印盒 + 惊堂木
         det(new THREE.CylinderGeometry(0.22, 0.26, 0.9, 8), 0x8a2f2a, AX - 2.0, BASE + 2.95, IZ + 0.6);
         det(BX(0.7, 0.5, 0.7), 0xc8a24a, AX + 1.6, BASE + 2.8, IZ + 0.6);
