@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix375-podiumtop';
+const BUILD = '20261107-fix376-tf';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28556,6 +28556,23 @@ m4a.position.set(AX, BASE + 0.18, -141);
       }
       return h;
     };
+    // 【fix376】根因补丁：人物的落地判定用的是 terrainHeight（基础地形），不是 linhaiHeight。
+    // 衙署整块台地的 2.6 米只写在 linhaiHeight 里，所以人一旦离地（跳/钩爪）再落下，
+    // 就按街面高度 0.5 算，直接穿过台面掉到台子内部 —— 这就是"掉到地板底下"。
+    // 这里把同一块台地高度也补进 terrainHeight，两条路径就一致了。
+    try {
+      const _th0 = terrainHeight;
+      terrainHeight = function (x, z) {
+        let h = _th0(x, z);
+        if ((x > 1880 && x < 2170 && z < -84 && z > -838) || (x > 1786 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2264 && z > -288 && z < -156)) {
+          let bb = 2.6;
+          if (z > -136) { bb = 2.6 * (-124 - z) / 12; if (bb < 0) bb = 0; }
+          if (bb > h) h = bb;
+        }
+        return h;
+      };
+      window.__yamenTerrainFix = 1;
+    } catch (eT4) { window.__yamenTerrainFixErr = String(eT4); }
     window.__yamenPlateau = 1;
   } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
