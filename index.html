@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix383-courtdeco';
+const BUILD = '20261107-fix384-underfloor';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26879,6 +26879,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const tW = 0.9, dw2 = Math.min(9.0, w * 0.30), dh2 = Math.min(7.2, h * 0.72);
       const segW = Math.max(1.2, (w - dw2) / 2);
       det(BX(w, 0.16, d), 0x54483c, cx, 1.28, cz);
+      det(BX(w - 1.6, 1.55, d - 1.6), 0x1a1611, cx, 0.50, cz);   // 【fix384】地坪下实心垫层
       for (let fx = -w / 2 + 1.2; fx < w / 2 - 0.8; fx += 2.4) det(BX(0.09, 0.03, d - 1.8), 0x3b322a, cx + fx, 1.37, cz);
       for (let fz = -d / 2 + 1.2; fz < d / 2 - 0.8; fz += 2.4) det(BX(w - 1.8, 0.03, 0.09), 0x3b322a, cx, 1.37, cz + fz);
       // 【fix368】露明梁架：密排椽条 + 三根檩（照片里大堂梁架是全露的）
@@ -27344,7 +27345,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
     // 【fix382】台面改几何砖铺地：InstancedMesh 一次性画完，每块砖独立实体 + 缝隙
     (function podiumBrickGeo() {
-      const S = 2.2, X0p = 1878, X1p = 2186, Z0p = -846, Z1p = -134;
+      const S = 3.0, X0p = 1878, X1p = 2186, Z0p = -846, Z1p = -134;
       const nx = Math.floor((X1p - X0p) / S), nz = Math.floor((Z1p - Z0p) / S);
       const geo = new THREE.BoxGeometry(S - 0.07, 0.12, S - 0.07);
       const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
