@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix385-zfight';
+const BUILD = '20261107-fix386-lift';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28656,6 +28656,8 @@ m4a.position.set(AX, BASE + 0.18, -141);
           const p = person.position;
           const inX = p.x > 1772 && p.x < 2278, inZ = p.z < -52 && p.z > -868;
           const inH = p.y > 2.2;
+          // 【fix386】钩爪落点把人压到台面以下时，直接托回台面（这是"到地底下"的最后一环）
+          if (inX && inZ && p.y < 2.25) { p.y = 2.78; }
           if (inX && inZ && inH) { _lx = p.x; _ly = p.y; _lz = p.z; _lv = true; }
           else if (_lv && (!inX || !inZ) && Math.abs(p.x - _lx) + Math.abs(p.z - _lz) > 3) {
             // 从院内被拽到院外：放回最后合法点（大门方向不拦，z > -150 时不处理）
