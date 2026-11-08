@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix382-geobrick';
+const BUILD = '20261107-fix383-courtdeco';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27904,6 +27904,27 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         }
       }
       pavilion(AX, -812, 9, 6.0);
+      // 【fix383】院内增景：六房前花坛 + 石凳 + 石灯笼
+      for (const sd of [[1924, 1], [2126, -1]]) {
+        const fx = sd[0], dir = sd[1];
+        for (let zb = -330; zb > -470; zb -= 20) {
+          det(BX(2.6, 0.55, 2.6), 0x9a948a, fx + dir * 8.0, BASE + 0.28, zb);
+          det(BX(2.2, 0.10, 2.2), 0x4a3a26, fx + dir * 8.0, BASE + 0.56, zb);
+          det(new THREE.SphereGeometry(0.78, 7, 5), 0x3f7a44, fx + dir * 8.0, BASE + 1.15, zb);
+          det(new THREE.SphereGeometry(0.44, 6, 5), 0x4d8f52, fx + dir * 7.4, BASE + 1.75, zb + 0.5);
+          det(new THREE.SphereGeometry(0.22, 6, 4), 0xd8657a, fx + dir * 7.2, BASE + 2.05, zb - 0.4);
+        }
+      }
+      for (const sp2 of [[AX - 30, -300], [AX + 30, -300], [AX - 30, -620], [AX + 30, -620]]) {
+        det(new THREE.CylinderGeometry(0.34, 0.40, 1.05, 8), 0xa8a294, sp2[0], BASE + 0.52, sp2[1]);
+        det(new THREE.CylinderGeometry(0.52, 0.46, 0.35, 10), 0xb0aa9e, sp2[0], BASE + 1.20, sp2[1]);
+      }
+      for (const lp2 of [[AX - 14, -168], [AX + 14, -168], [AX - 14, -704], [AX + 14, -704]]) {
+        det(new THREE.CylinderGeometry(0.42, 0.46, 0.55, 8), 0x9a948a, lp2[0], BASE + 0.27, lp2[1]);
+        det(new THREE.CylinderGeometry(0.26, 0.30, 1.9, 8), 0xa8a294, lp2[0], BASE + 1.45, lp2[1]);
+        det(BX(0.86, 0.86, 0.86), 0xf3d9a4, lp2[0], BASE + 2.75, lp2[1]);
+        det(BX(1.10, 0.16, 1.10), 0x4a3020, lp2[0], BASE + 3.28, lp2[1]);
+      }
       // 【fix377】园子东、北两侧石栏：钩爪到边沿不会再跨出去掉下落差
       {
         const ny = BASE;
