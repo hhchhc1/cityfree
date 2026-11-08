@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix376-tf';
+const BUILD = '20261107-fix377-railing';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27867,6 +27867,22 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         }
       }
       pavilion(AX, -812, 9, 6.0);
+      // 【fix377】园子东、北两侧石栏：钩爪到边沿不会再跨出去掉下落差
+      {
+        const ny = BASE;
+        for (let zl = -716; zl > -834; zl -= 3.0) {
+          det(BX(0.34, 1.15, 0.34), 0xc0bab0, 2158, ny + 0.58, zl);
+          det(new THREE.SphereGeometry(0.20, 6, 5), 0xbdb6a6, 2158, ny + 1.24, zl);
+          det(BX(0.16, 0.20, 2.8), 0xb6b0a6, 2158, ny + 1.05, zl - 1.5);
+          det(BX(0.14, 0.38, 2.6), 0xa8a294, 2158, ny + 0.66, zl - 1.5);
+        }
+        for (let xl = AX - 28; xl < 2156; xl += 3.0) {
+          det(BX(0.34, 1.15, 0.34), 0xc0bab0, xl, ny + 0.58, -834);
+          det(new THREE.SphereGeometry(0.20, 6, 5), 0xbdb6a6, xl, ny + 1.24, -834);
+          det(BX(2.8, 0.20, 0.16), 0xb6b0a6, xl + 1.5, ny + 1.05, -834);
+          det(BX(2.6, 0.38, 0.14), 0xa8a294, xl + 1.5, ny + 0.66, -834);
+        }
+      }
       // 【fix372】给衙署内部登记几处可钩目标：水榭顶 / 东西六房檐口 / 穿堂顶（原来园里、院里钩爪没目标）
       (window.__WALL_TOPS = window.__WALL_TOPS || []).push(
         { x0: AX + 12, x1: AX + 28, z0: -810, z1: -794, top: BASE + 7.2 },
@@ -28527,7 +28543,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
     const _YB = 2.6, _WTOP = 2.6 + 9.2;
     linhaiHeight = function (x, z) {
       let h = _lh0(x, z);
-      if ((x > 1880 && x < 2170 && z < -84 && z > -838) || (x > 1786 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2264 && z > -288 && z < -156)) {
+      if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
         let bb = _YB;
         if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
         if (bb > h) h = bb;
@@ -28564,7 +28580,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
       const _th0 = terrainHeight;
       terrainHeight = function (x, z) {
         let h = _th0(x, z);
-        if ((x > 1880 && x < 2170 && z < -84 && z > -838) || (x > 1786 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2264 && z > -288 && z < -156)) {
+        if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
           let bb = 2.6;
           if (z > -136) { bb = 2.6 * (-124 - z) / 12; if (bb < 0) bb = 0; }
           if (bb > h) h = bb;
