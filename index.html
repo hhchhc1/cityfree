@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix380-widerguard';
+const BUILD = '20261107-fix381-floortex';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27349,13 +27349,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const bw = 64, bh = 32;
       for (let ry = 0; ry < 8; ry++) for (let rx = -1; rx < 6; rx++) {
         const ox = (ry % 2) * (bw / 2);
-        const g = 118 + ((rx * 7 + ry * 13) % 5) * 7;
+        const g = 122 + ((rx * 7 + ry * 13) % 3) * 4;
         c2.fillStyle = 'rgb(' + g + ',' + (g - 4) + ',' + (g - 14) + ')';
         c2.fillRect(rx * bw + ox + 1, ry * bh + 1, bw - 2, bh - 2);
       }
       const tx = new THREE.CanvasTexture(cv);
       tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
-      tx.repeat.set(48, 60); tx.anisotropy = 4;
+      // fix381 - mipmap off: far tiles averaged into grey blotches
+      tx.minFilter = THREE.LinearFilter; tx.generateMipmaps = false;
+      tx.repeat.set(140, 175); tx.anisotropy = 8;
       const mb = new THREE.Mesh(new THREE.BoxGeometry(286, 0.14, 700), new THREE.MeshLambertMaterial({ map: tx }));
       mb.position.set(AX, 2.53 + BASE, -485); g.add(mb);
     })();
