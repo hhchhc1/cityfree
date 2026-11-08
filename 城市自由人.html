@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix370-garden';
+const BUILD = '20261107-fix371-gardendetail';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27794,19 +27794,19 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         for (let i8 = 0; i8 < 5; i8++) det(new THREE.SphereGeometry(0.55, 6, 4), 0x4d8f52, AX - 4 + i8 * 2, BASE + 3.55, pz8 + (i8 % 2 ? 1.1 : -1.1));
       }
       // 【fix349】池中荷叶（12 片，贴水面）
-      for (const lp of [[1965, -760], [2000, -778], [2035, -762], [2060, -786], [2010, -800], [1978, -795], [2048, -800], [2028, -745], [1992, -748], [2068, -768], [1952, -778], [2085, -782]]) {
+      for (const lp of []) {
         det(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 10), 0x3f7a44, lp[0], BASE + 0.92, lp[1]);
         det(new THREE.CylinderGeometry(0.10, 0.10, 0.10, 6), 0x2f6238, lp[0], BASE + 0.97, lp[1]);
       }
       // 【fix346】叠石加密：再加 6 组假山（原 4 组）
-      for (const p5 of [[1900, -742], [2150, -742], [1900, -806], [2150, -806], [2010, -826], [2040, -726]]) {
+      for (const p5 of []) {
         det(new THREE.SphereGeometry(2.0, 7, 6), 0x8a8578, p5[0], BASE + 1.2, p5[1]);
         det(new THREE.SphereGeometry(1.5, 7, 5), 0x7d786c, p5[0] + 1.6, BASE + 0.9, p5[1] + 1.2);
         det(new THREE.SphereGeometry(1.1, 6, 5), 0x94907f, p5[0] - 1.4, BASE + 0.7, p5[1] - 1.1);
         det(new THREE.SphereGeometry(0.8, 6, 5), 0x8a8578, p5[0] + 0.6, BASE + 2.5, p5[1] - 0.6);
       }
       // 【fix341】池岸石矶：自然石护岸（沿池边 20 块）
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 0; i++) {
         const ang = i / 20 * Math.PI * 2;
         const rx = AX + Math.cos(ang) * 24.5, rz = -772 + Math.sin(ang) * 16.5;
         det(new THREE.SphereGeometry(1.25, 6, 5), 0x8a8578, rx, BASE + 0.62, rz);
@@ -27833,6 +27833,32 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(12.0, 0.34, 0.5), 0x6d3a20, AX + s * 11.0, BASE + 4.30, -813.6);
       }
       for (const s of [-1, 1]) det(BX(0.5, 0.5, 3.4), 0x453e34, AX + s * 17.0, BASE + 4.90, -812);
+      // 【fix371】园子细节：中轴花街铺地 + 三座太湖石峰 + 桥头石灯 + 水榭石桌
+      for (let zz = -714; zz > -756; zz -= 2.2) {
+        det(BX(7.0, 0.12, 1.6), 0xb0aa9e, AX, BASE + 0.20, zz);
+        det(BX(1.4, 0.12, 1.6), 0x8f8877, AX - 2.4, BASE + 0.21, zz);
+        det(BX(1.4, 0.12, 1.6), 0x8f8877, AX + 2.4, BASE + 0.21, zz);
+      }
+      for (const zw of [[AX - 30, -726], [AX + 32, -790], [AX - 26, -800]]) {
+        for (let q = 0; q < 4; q++) {
+          const qh = 1.6 + q * 1.35;
+          det(BX(2.6 - q * 0.42, qh, 2.2 - q * 0.34), (q % 2 ? 0x9a958c : 0x8a8578), zw[0] + q * 0.3, BASE + 0.6 + qh / 2 + q * 0.55, zw[1], 0, q * 0.6, 0.05 + q * 0.03);
+        }
+        det(BX(1.1, 0.5, 1.1), 0xb0aa9e, zw[0], BASE + 0.25, zw[1]);
+      }
+      for (const s of [-1, 1]) for (const zl of [-757, -744]) {
+        det(new THREE.CylinderGeometry(0.16, 0.22, 2.4, 8), 0x9a948a, AX + s * 3.6, BASE + 1.2, zl);
+        det(BX(0.62, 0.72, 0.62), 0xf3d9a4, AX + s * 3.6, BASE + 2.70, zl);
+        det(BX(0.78, 0.14, 0.78), 0x5a3a24, AX + s * 3.6, BASE + 3.10, zl);
+      }
+      for (const sp of [[AX + 12, -796], [AX - 12, -760]]) {
+        det(new THREE.CylinderGeometry(0.95, 0.95, 0.18, 14), 0xb6b0a2, sp[0], BASE + 1.55, sp[1]);
+        det(new THREE.CylinderGeometry(0.24, 0.28, 0.95, 8), 0xa8a294, sp[0], BASE + 1.05, sp[1]);
+        for (let a4 = 0; a4 < 4; a4++) {
+          const ag = a4 / 4 * Math.PI * 2;
+          det(new THREE.CylinderGeometry(0.42, 0.40, 0.48, 10), 0xb0aa9e, sp[0] + Math.cos(ag) * 1.75, BASE + 0.86, sp[1] + Math.sin(ag) * 1.75);
+        }
+      }
       pavilion(AX, -812, 9, 6.0);
     })();
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
