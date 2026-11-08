@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix379-brickfloor';
+const BUILD = '20261107-fix380-widerguard';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15073,10 +15073,10 @@ function fireGrapple() {
   // 【fix379】人在衙署里、钩爪落点却在院墙外时，直接拦下，不让它穿墙
   if (tgt) {
     const _px = person.position.x, _pz = person.position.z;
-    if (_px > 1868 && _px < 2182 && _pz < -68 && _pz > -852) {
+    if (_px > 1772 && _px < 2278 && _pz < -52 && _pz > -868) {
       const _gx = (tgt.x !== undefined) ? tgt.x : (tgt.o ? tgt.o.x : _px);
       const _gz = (tgt.z !== undefined) ? tgt.z : (tgt.o ? tgt.o.z : _pz);
-      if (_gx < 1862 || _gx > 2188 || _gz > -62 || _gz < -858) { setHint('衙署里勾不到院墙外'); return; }
+      if (_gx < 1776 || _gx > 2274 || _gz > -56 || _gz < -864) { setHint('衙署里勾不到院墙外'); return; }
     }
   }
   if (!tgt) { setHint('准心没有可勾的目标'); return; }
