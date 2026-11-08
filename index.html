@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix381-floortex';
+const BUILD = '20261107-fix382-geobrick';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27342,24 +27342,27 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 【fix374】台基恢复碰撞：上一版做成纯视觉后，钩爪落点没有实体地板，人会掉到台面底下
     det(BX(286, 3.46, 700), 0x9d968a, AX, 0.77, -485);
     // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
-    (function podiumBrick() {
-      const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
-      const c2 = cv.getContext('2d');
-      c2.fillStyle = '#8b8778'; c2.fillRect(0, 0, 256, 256);
-      const bw = 64, bh = 32;
-      for (let ry = 0; ry < 8; ry++) for (let rx = -1; rx < 6; rx++) {
-        const ox = (ry % 2) * (bw / 2);
-        const g = 122 + ((rx * 7 + ry * 13) % 3) * 4;
-        c2.fillStyle = 'rgb(' + g + ',' + (g - 4) + ',' + (g - 14) + ')';
-        c2.fillRect(rx * bw + ox + 1, ry * bh + 1, bw - 2, bh - 2);
+    // 【fix382】台面改几何砖铺地：InstancedMesh 一次性画完，每块砖独立实体 + 缝隙
+    (function podiumBrickGeo() {
+      const S = 2.2, X0p = 1878, X1p = 2186, Z0p = -846, Z1p = -134;
+      const nx = Math.floor((X1p - X0p) / S), nz = Math.floor((Z1p - Z0p) / S);
+      const geo = new THREE.BoxGeometry(S - 0.07, 0.12, S - 0.07);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const im = new THREE.InstancedMesh(geo, mat, nx * nz);
+      const m4 = new THREE.Matrix4(), cc = new THREE.Color();
+      let k = 0;
+      for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz++) {
+        m4.makeTranslation(X0p + ix * S + S / 2, 2.53 + BASE, Z0p + iz * S + S / 2);
+        im.setMatrixAt(k, m4);
+        const gv = 0.56 + ((ix * 7 + iz * 13) % 5) * 0.022;
+        cc.setRGB(gv * 1.00, gv * 0.97, gv * 0.90);
+        im.setColorAt(k, cc);
+        k++;
       }
-      const tx = new THREE.CanvasTexture(cv);
-      tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
-      // fix381 - mipmap off: far tiles averaged into grey blotches
-      tx.minFilter = THREE.LinearFilter; tx.generateMipmaps = false;
-      tx.repeat.set(140, 175); tx.anisotropy = 8;
-      const mb = new THREE.Mesh(new THREE.BoxGeometry(286, 0.14, 700), new THREE.MeshLambertMaterial({ map: tx }));
-      mb.position.set(AX, 2.53 + BASE, -485); g.add(mb);
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.frustumCulled = false;
+      g.add(im);
     })();
     // 台面四周压顶石 + 收边
     for (const s of [-1, 1]) {
@@ -28623,6 +28626,26 @@ m4a.position.set(AX, BASE + 0.18, -141);
       };
       window.__yamenTerrainFix = 1;
     } catch (eT4) { window.__yamenTerrainFixErr = String(eT4); }
+    // 【fix382】钩爪保险：人在衙署院内时持续记录合法落脚点，被钩到院墙外就拉回来
+    try {
+      let _lx = 0, _lz = 0, _ly = 0, _lv = false;
+      setInterval(function () {
+        try {
+          const p = person.position;
+          const inX = p.x > 1772 && p.x < 2278, inZ = p.z < -52 && p.z > -868;
+          const inH = p.y > 2.2;
+          if (inX && inZ && inH) { _lx = p.x; _ly = p.y; _lz = p.z; _lv = true; }
+          else if (_lv && (!inX || !inZ) && Math.abs(p.x - _lx) + Math.abs(p.z - _lz) > 3) {
+            // 从院内被拽到院外：放回最后合法点（大门方向不拦，z > -150 时不处理）
+            if (!(p.z > -150 && Math.abs(p.x - AX) < 16)) {
+              person.position.x = _lx; person.position.z = _lz;
+              if (p.y < _ly) person.position.y = _ly;
+              if (window.__cfHint) window.__cfHint('衙署院墙挡住了钩爪');
+            }
+          }
+        } catch (eG) {}
+      }, 60);
+    } catch (eG2) {}
     window.__yamenPlateau = 1;
   } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
