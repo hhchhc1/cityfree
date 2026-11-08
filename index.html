@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix377-railing';
+const BUILD = '20261107-fix378-hookclip';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15055,7 +15055,13 @@ function grappleTarget() {
       }
     }
   }
-  const tx = px + fx * 45, tz = pz + fz * 45;   // 【fix131】空钩前飞距离 30m → 45m
+  let tx = px + fx * 45, tz = pz + fz * 45;   // 【fix131】空钩前飞距离 30m → 45m
+  // 【fix378】空钩（准星没勾到东西）会往前飞 45 米，等于直接穿出院墙飞到外面。
+  // 玩家在衙署范围内时，把落点夹回院内。
+  if (px > 1868 && px < 2182 && pz < -68 && pz > -852) {
+    tx = Math.min(2172, Math.max(1878, tx));
+    tz = Math.min(-72, Math.max(-842, tz));
+  }
   return { type: 'zip', x: tx, y: Math.max(terrainHeight(tx, tz), person.position.y) + 1.5, z: tz };
 }
 function fireGrapple() {
