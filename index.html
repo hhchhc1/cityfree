@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix378-hookclip';
+const BUILD = '20261107-fix379-brickfloor';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15070,6 +15070,15 @@ function fireGrapple() {
   if (player.stamina < HOOK_COST) { setHint('体力不足，无法使用钩爪'); return; }
   player.stamina = Math.max(0, player.stamina - HOOK_COST);
   const tgt = grappleTarget();
+  // 【fix379】人在衙署里、钩爪落点却在院墙外时，直接拦下，不让它穿墙
+  if (tgt) {
+    const _px = person.position.x, _pz = person.position.z;
+    if (_px > 1868 && _px < 2182 && _pz < -68 && _pz > -852) {
+      const _gx = (tgt.x !== undefined) ? tgt.x : (tgt.o ? tgt.o.x : _px);
+      const _gz = (tgt.z !== undefined) ? tgt.z : (tgt.o ? tgt.o.z : _pz);
+      if (_gx < 1862 || _gx > 2188 || _gz > -62 || _gz < -858) { setHint('衙署里勾不到院墙外'); return; }
+    }
+  }
   if (!tgt) { setHint('准心没有可勾的目标'); return; }
   const px = person.position.x, py = person.position.y, pz = person.position.z;
   if (tgt.type === 'entity') {
@@ -27332,7 +27341,24 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 这里铺一整块 2.6 米高的石台（台面与高度场一致），所有殿宇都实打实站在石台上
     // 【fix374】台基恢复碰撞：上一版做成纯视觉后，钩爪落点没有实体地板，人会掉到台面底下
     det(BX(286, 3.46, 700), 0x9d968a, AX, 0.77, -485);
-    det(BX(286, 0.14, 700), 0xb6b0a2, AX, 2.53, -485);
+    // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
+    (function podiumBrick() {
+      const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+      const c2 = cv.getContext('2d');
+      c2.fillStyle = '#8b8778'; c2.fillRect(0, 0, 256, 256);
+      const bw = 64, bh = 32;
+      for (let ry = 0; ry < 8; ry++) for (let rx = -1; rx < 6; rx++) {
+        const ox = (ry % 2) * (bw / 2);
+        const g = 118 + ((rx * 7 + ry * 13) % 5) * 7;
+        c2.fillStyle = 'rgb(' + g + ',' + (g - 4) + ',' + (g - 14) + ')';
+        c2.fillRect(rx * bw + ox + 1, ry * bh + 1, bw - 2, bh - 2);
+      }
+      const tx = new THREE.CanvasTexture(cv);
+      tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+      tx.repeat.set(48, 60); tx.anisotropy = 4;
+      const mb = new THREE.Mesh(new THREE.BoxGeometry(286, 0.14, 700), new THREE.MeshLambertMaterial({ map: tx }));
+      mb.position.set(AX, 2.53 + BASE, -485); g.add(mb);
+    })();
     // 台面四周压顶石 + 收边
     for (const s of [-1, 1]) {
       det(BX(288, 0.30, 1.6), 0xc0bab0, AX, 2.44, -485 + s * 349);
