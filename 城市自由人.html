@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix369-neizhai';
+const BUILD = '20261107-fix370-garden';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27680,24 +27680,79 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         det(BX(3.2, 4.2, 1.5), CY_BRICK, AX + s * (GW + 1.6), 2.1, GZ2);
         det(BX(3.6, 0.5, 1.9), 0x3b4148, AX + s * (GW + 1.6), 4.35, GZ2);
       }
-      det(BX(46, 0.75, 30), 0xb0aa9e, AX, BASE + 0.37, -772);
-      det(BX(43, 0.25, 27), 0x3c6f8a, AX, BASE + 0.86, -772);
-      det(BX(46.6, 0.30, 30.6), 0x9a948a, AX, BASE + 1.00, -772);
-      det(BX(5.0, 0.30, 32), 0x8d867a, AX, BASE + 1.22, -772);
-      // 【fix358】曲桥栏杆：两侧望柱 + 扶手（原来桥面是光板）
+      // 【fix370】后花园放大重做：64×40 大池 + 驳岸叠石 + 折曲桥 + 水榭 + 荷叶荷花
+      const PZ = -778, PW = 64, PD = 40;
+      det(BX(PW + 5, 0.80, PD + 5), 0x8a8578, AX, BASE + 0.40, PZ);          // 池底石
+      det(BX(PW, 0.22, PD), 0x2f6a86, AX, BASE + 0.86, PZ);                  // 水面
+      det(BX(PW - 3, 0.10, PD - 3), 0x3a7c99, AX, BASE + 0.95, PZ);          // 浅水
+      // 驳岸：一圈湖石（高低错落、带朝向）
+      for (let e = 0; e < 34; e++) {
+        const tt = e / 34 * Math.PI * 2;
+        const ex = AX + Math.cos(tt) * (PW / 2 + 1.3), ez = PZ + Math.sin(tt) * (PD / 2 + 1.3);
+        const hh = 0.7 + ((e * 7) % 5) * 0.22;
+        det(BX(1.7 + (e % 3) * 0.5, hh, 1.5), (e % 2 ? 0x9a958c : 0x8a8578), ex, BASE + 0.60 + hh / 2, ez, 0, e * 0.7, 0.06 * (e % 3));
+      }
+      // 池岸压顶石
       for (const s of [-1, 1]) {
-        for (let i13 = -3; i13 <= 3; i13++) {
-          const pz13 = -772 + i13 * 5.0;
-          det(BX(0.26, 1.0, 0.26), 0xb6b0a2, AX + s * 2.3, BASE + 1.87, pz13);
-          det(new THREE.SphereGeometry(0.20, 6, 5), 0xa8a294, AX + s * 2.3, BASE + 2.47, pz13);
-          if (i13 < 3) det(BX(0.16, 0.14, 4.6), 0xb0aa9e, AX + s * 2.3, BASE + 2.20, pz13 + 2.5);
-          if (i13 < 3) det(BX(0.12, 0.34, 4.4), 0xa8a294, AX + s * 2.3, BASE + 1.60, pz13 + 2.5);
+        det(BX(PW + 7, 0.16, 2.2), 0xb0aa9e, AX, BASE + 1.02, PZ + s * (PD / 2 + 3.2));
+        det(BX(2.2, 0.16, PD + 7), 0xb0aa9e, AX + s * (PW / 2 + 3.2), BASE + 1.02, PZ);
+      }
+      // 曲桥：三段折桥（南 → 北西 → 北东 → 北），桥面高 1.5 米
+      const BY = BASE + 1.50;
+      det(BX(4.6, 0.34, 20), 0xb6b0a2, AX, BY, PZ + 22);      // 第一段
+      det(BX(20, 0.34, 4.6), 0xb6b0a2, AX - 7.7, BY, PZ + 2.6);   // 第二段（向西折）
+      det(BX(4.6, 0.34, 20), 0xb6b0a2, AX - 15.4, BY, PZ - 7.4);  // 第三段（再向北）
+      // 桥栏杆（三段都做：望柱 + 扶手 + 栏板）
+      for (let s2 = 0; s2 < 3; s2++) {
+        const seg = [[AX, PZ + 22, 4.6, 20], [AX - 7.7, PZ + 2.6, 20, 4.6], [AX - 15.4, PZ - 7.4, 4.6, 20]][s2];
+        const cx2 = seg[0], cz2 = seg[1], w2 = seg[2], d2 = seg[3];
+        const alongZ = d2 > w2;
+        for (const sg of [-1, 1]) {
+          const off = (alongZ ? w2 : d2) / 2 + 0.05;
+          const px2 = cx2 + (alongZ ? sg * off : 0), pz2 = cz2 + (alongZ ? 0 : sg * off);
+          for (let k2 = -4; k2 <= 4; k2++) {
+            const qx = px2 + (alongZ ? 0 : k2 * (w2 - 1) / 8), qz = pz2 + (alongZ ? k2 * (d2 - 1) / 8 : 0);
+            det(BX(0.24, 1.05, 0.24), 0xc0bab0, qx, BY + 0.70, qz);
+            det(new THREE.SphereGeometry(0.17, 6, 5), 0xb6b0a6, qx, BY + 1.30, qz);
+            if (k2 < 4) {
+              det(BX(alongZ ? 0.16 : (w2 - 1) / 8, 0.14, alongZ ? (d2 - 1) / 8 : 0.16), 0xb0aa9e, px2 + (alongZ ? 0 : (w2 - 1) / 16), BY + 1.10, pz2 + (alongZ ? (d2 - 1) / 16 : 0));
+              det(BX(alongZ ? 0.12 : (w2 - 1) / 8 - 0.2, 0.36, alongZ ? (d2 - 1) / 8 - 0.2 : 0.12), 0xa8a294, px2 + (alongZ ? 0 : (w2 - 1) / 16), BY + 0.55, pz2 + (alongZ ? (d2 - 1) / 16 : 0));
+            }
+          }
+        }
+        for (let k3 = -2; k3 <= 2; k3++) {
+          det(new THREE.CylinderGeometry(0.34, 0.38, 1.5, 8), 0x9a948a, cx2 + (alongZ ? 0 : k3 * 4.0), BY - 0.85, cz2 + (alongZ ? k3 * 4.6 : 0));
         }
       }
-      for (const s of [-1, 1]) for (let i = 0; i < 6; i++) det(BX(0.26, 0.95, 0.26), 0xa8a294, AX + s * 2.3, BASE + 1.72, -788 + i * 6);
-      for (const p of [[1958, -796, 7.2], [2094, -796, 6.4], [1988, -746, 5.0], [2064, -746, 4.6]]) {
-        det(BX(5.2, p[2], 5.2), 0x8a8578, p[0], BASE + p[2] / 2, p[1]);
-        det(BX(3.2, p[2] * 0.6, 3.2), 0x7d786c, p[0] + 1.6, BASE + p[2] * 0.3, p[1] + 1.4);
+      // 水榭（池北岸，三面环水）：台 + 六柱 + 卷棚顶 + 坐凳
+      {
+        const SX = AX + 20, SZ = PZ - 24;
+        det(BX(14, 0.55, 11), 0xb6b0a2, SX, BASE + 1.30, SZ);
+        for (const s of [-1, 1]) for (let i = 0; i < 3; i++)
+          det(new THREE.CylinderGeometry(0.30, 0.33, 4.2, 8), 0x7d2f26, SX + s * 5.4, BASE + 3.65, SZ - 3.6 + i * 3.6);
+        det(BX(12.4, 0.26, 9.4), 0x5c3a26, SX, BASE + 5.85, SZ);
+        for (let k = -3; k <= 3; k++) det(BX(13.6, 0.24, 1.70), (k % 2 ? CY_TILE : 0x49505a), SX, BASE + 6.35 + Math.cos(k * 0.16) * 0.45, SZ + k * 1.55, k * 0.16, 0, 0);
+        det(BX(13.8, 0.30, 0.8), 0x453e34, SX, BASE + 6.95, SZ);
+        for (const s of [-1, 1]) det(BX(12.4, 0.16, 0.22), 0x6d3a20, SX, BASE + 2.45, SZ + s * 4.6);
+        plaque3d('荷風水榭', SX, BASE + 5.35, SZ + 4.75, 4.4, 1.5, '#241608', '#e8c86a');
+      }
+      // 荷叶 + 荷花（浮在水面）
+      for (let lp = 0; lp < 14; lp++) {
+        const lx3 = AX - 26 + (lp * 37) % 52, lz3 = PZ - 14 + (lp * 23) % 28;
+        det(new THREE.CylinderGeometry(1.15 + (lp % 3) * 0.25, 1.15 + (lp % 3) * 0.25, 0.06, 12), 0x2f6b3a, lx3, BASE + 0.98, lz3);
+      }
+      for (const hp of [[AX - 18, PZ - 6], [AX + 8, PZ + 8], [AX - 4, PZ - 12]]) {
+        det(new THREE.CylinderGeometry(0.12, 0.12, 1.1, 6), 0x3a7c4a, hp[0], BASE + 1.45, hp[1]);
+        det(new THREE.SphereGeometry(0.42, 8, 6), 0xd8657a, hp[0], BASE + 2.05, hp[1]);
+        det(new THREE.SphereGeometry(0.24, 6, 5), 0xe8a0b0, hp[0] + 0.3, BASE + 2.30, hp[1] + 0.2);
+      }
+      // 叠石假山（三组，每组 5 块湖石，高低错落）
+      for (const gp of [[AX - 30, PZ - 16], [AX + 30, PZ + 4], [AX - 34, PZ + 12]]) {
+        for (let r2 = 0; r2 < 5; r2++) {
+          const rx2 = gp[0] + (r2 % 3) * 2.4 - 2.0, rz2 = gp[1] + Math.floor(r2 / 3) * 2.6 - 1.0;
+          const rh = 2.2 + (r2 % 3) * 1.5;
+          det(BX(3.4 - r2 * 0.35, rh, 3.0 - r2 * 0.3), (r2 % 2 ? 0x9a958c : 0x8a8578), rx2, BASE + rh / 2 + r2 * 1.4, rz2, 0, r2 * 0.55, 0.07 * (r2 % 3));
+        }
       }
       // 【fix327】园路：小块石板铺成环池小径（分块，不用整片大网格）
       for (let i = 0; i < 9; i++) {
