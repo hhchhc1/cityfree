@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix371-gardendetail';
+const BUILD = '20261107-fix373-hookinside';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27324,8 +27324,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // 【fix362】整座衙署的石台基：衙署以前只有一份'隐形地面'，视觉上房子是浮在街面上的
     // 这里铺一整块 2.6 米高的石台（台面与高度场一致），所有殿宇都实打实站在石台上
-    det(BX(286, 3.6, 700), 0x9d968a, AX, 0.80, -485);
-    det(BX(286, 0.14, 700), 0xb6b0a2, AX, 2.67, -485);
+    // 【fix372】台基改成纯视觉（无碰撞）：原来这块 286×700 的实心碰撞体会让钩爪误判、把人往台外甩
+    (function podiumVis() {
+      const mSide = new THREE.MeshLambertMaterial({ color: 0x9d968a });
+      const mTop = new THREE.MeshLambertMaterial({ color: 0xb6b0a2 });
+      const b1 = new THREE.Mesh(new THREE.BoxGeometry(286, 3.6, 700), mSide);
+      b1.position.set(AX, 0.80 + BASE, -485); g.add(b1);
+      const b2 = new THREE.Mesh(new THREE.BoxGeometry(286, 0.14, 700), mTop);
+      b2.position.set(AX, 2.67 + BASE, -485); g.add(b2);
+    })();
     // 台面四周压顶石 + 收边
     for (const s of [-1, 1]) {
       det(BX(288, 0.34, 1.6), 0xc0bab0, AX, 2.62, -485 + s * 349);
@@ -27635,7 +27642,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // 【fix321】后花园：花墙月洞门 / 水池 / 曲桥 / 叠石 / 凉亭（铺装用原有青砖，不再加整片石材，避免卡死）
     (function backGarden() {
-      const GZ2 = -712, GW = 11;
+      const GZ2 = -712, GW = 19;
       wallSeg(X0, GZ2, AX - GW, GZ2, 4.2);
       wallSeg(AX + GW, GZ2, X1, GZ2, 4.2);
       // 【fix356】六房后墙与院墙之间的窄巷：铺地 + 排水沟 + 石墩
@@ -27665,7 +27672,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // 【fix347】花墙月洞门：圆洞 + 白灰圈 + 上方补墙（原来是个 22 米的缺口）
       {
-        const r7 = 1.70, cx7 = AX, cy7 = 1.90;
+        const r7 = 2.30, cx7 = AX, cy7 = 2.30;
         det(BX(GW - r7 - 0.3, 4.2, 1.5), CY_BRICK, cx7 - (r7 + 0.3 + (GW - r7 - 0.3) / 2), 2.1, GZ2);
         det(BX(GW - r7 - 0.3, 4.2, 1.5), CY_BRICK, cx7 + (r7 + 0.3 + (GW - r7 - 0.3) / 2), 2.1, GZ2);
         det(BX(r7 * 2 + 1.2, 0.55, 1.5), CY_BRICK, cx7, 4.2 - 0.27, GZ2);
@@ -27673,8 +27680,14 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
           const a7 = Math.PI * i / 13;
           det(BX(0.62, 0.62, 1.6), 0xb8b4a8, cx7 + Math.cos(a7) * (r7 + 0.3), cy7 + Math.sin(a7) * (r7 + 0.3), GZ2);
         }
-        det(BX(1.0, 2.6, 1.7), CY_BRICK, cx7 - (r7 + 0.85), 1.30, GZ2);
-        det(BX(1.0, 2.6, 1.7), CY_BRICK, cx7 + (r7 + 0.85), 1.30, GZ2);
+        // 【fix372】两侧漏窗：门口就能透看到池子，不再是实墙挡视线
+        for (const s3 of [-1, 1]) for (let w3 = 0; w3 < 2; w3++) {
+          const wx3 = cx7 + s3 * (r7 + 3.1 + w3 * 4.6);
+          det(BX(2.6, 1.9, 1.7), 0xc8c2b4, wx3, 2.55, GZ2);
+          det(BX(2.2, 1.5, 0.35), 0xb8b4a8, wx3, 2.55, GZ2 - 0.30);
+          det(BX(0.12, 1.5, 0.30), 0x9a948a, wx3, 2.55, GZ2 - 0.52);
+          det(BX(2.2, 0.12, 0.30), 0x9a948a, wx3, 2.55, GZ2 - 0.52);
+        }
       }
       for (const s of [-1, 1]) {
         det(BX(3.2, 4.2, 1.5), CY_BRICK, AX + s * (GW + 1.6), 2.1, GZ2);
@@ -27860,6 +27873,13 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         }
       }
       pavilion(AX, -812, 9, 6.0);
+      // 【fix372】给衙署内部登记几处可钩目标：水榭顶 / 东西六房檐口 / 穿堂顶（原来园里、院里钩爪没目标）
+      (window.__WALL_TOPS = window.__WALL_TOPS || []).push(
+        { x0: AX + 12, x1: AX + 28, z0: -810, z1: -794, top: BASE + 7.2 },
+        { x0: 1912, x1: 1924, z0: -476, z1: -324, top: BASE + 7.1 },
+        { x0: 2126, x1: 2138, z0: -476, z1: -324, top: BASE + 7.1 },
+        { x0: AX - 5, x1: AX + 5, z0: -558, z1: -502, top: BASE + 4.8 }
+      );
     })();
     // 【fix312】按舆图补建：东西三房 / 申明亭 / 乐亭 / 马王庙 / 库楼
     wing(1905, -186, 10, 48, 4.8); plaque3d('西三房', 1905, 4.5, -161.2, 5.2, 1.8, '#1b2a4a', '#e8c86a');
