@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix384-underfloor';
+const BUILD = '20261107-fix385-zfight';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27353,7 +27353,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const m4 = new THREE.Matrix4(), cc = new THREE.Color();
       let k = 0;
       for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz++) {
-        m4.makeTranslation(X0p + ix * S + S / 2, 2.53 + BASE, Z0p + iz * S + S / 2);
+        m4.makeTranslation(X0p + ix * S + S / 2, 2.78 + BASE, Z0p + iz * S + S / 2);
         im.setMatrixAt(k, m4);
         const gv = 0.56 + ((ix * 7 + iz * 13) % 5) * 0.022;
         cc.setRGB(gv * 1.00, gv * 0.97, gv * 0.90);
