@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix365-hallbig';
+const BUILD = '20261107-fix366-zhai';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -26863,7 +26863,9 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       // 【fix317】殿身空心化：四面墙 + 门洞，可以走进去看内景
       const tW = 0.9, dw2 = Math.min(9.0, w * 0.30), dh2 = Math.min(7.2, h * 0.72);
       const segW = Math.max(1.2, (w - dw2) / 2);
-      det(BX(w, 0.16, d), 0x8a8578, cx, 1.28, cz);
+      det(BX(w, 0.16, d), 0x54483c, cx, 1.28, cz);
+      for (let fx = -w / 2 + 2; fx < w / 2 - 1; fx += 4) det(BX(0.10, 0.03, d - 1.8), 0x3b322a, cx + fx, 1.37, cz);
+      for (let fz = -d / 2 + 2; fz < d / 2 - 1; fz += 4) det(BX(w - 1.8, 0.03, 0.10), 0x3b322a, cx, 1.37, cz + fz);
       det(BX(w, h, tW), CY_BRICK, cx, 1.2 + h / 2, cz - d / 2 + tW / 2);
       for (const s of [-1, 1]) det(BX(tW, h, d - tW), CY_BRICK, cx + s * (w / 2 - tW / 2), 1.2 + h / 2, cz);
       for (const s of [-1, 1]) det(BX(segW, h, tW), CY_BRICK, cx + s * (dw2 / 2 + segW / 2), 1.2 + h / 2, cz + d / 2 - tW / 2);
@@ -27891,9 +27893,9 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         // 【fix363】大堂内景增补：金柱网 + 藻井 + 西山墙卷宗架 + 师爷案 + 香炉 + 六盏灯
         for (let r = 0; r < 3; r++) for (let c2 = 0; c2 < 6; c2++) {
           const cxp = AX - 30 + c2 * 12, czp = IZ - 10 + r * 10.0;
-          det(new THREE.CylinderGeometry(0.52, 0.56, 14.0, 10), 0x7d2f26, cxp, BASE + 7.0, czp);
-          det(new THREE.CylinderGeometry(0.78, 0.78, 0.30, 10), 0x9a9078, cxp, BASE + 0.15, czp);
-          det(BX(1.3, 0.5, 1.3), 0x6d3a20, cxp, BASE + 13.9, czp);
+          det(new THREE.CylinderGeometry(0.52, 0.56, 14.0, 10), 0x7d2f26, cxp, BASE + 1.36 + 7.0, czp);
+          det(new THREE.CylinderGeometry(0.78, 0.78, 0.30, 10), 0x9a9078, cxp, BASE + 1.50, czp);
+          det(BX(1.3, 0.5, 1.3), 0x6d3a20, cxp, BASE + 1.36 + 13.9, czp);
         }
         // 藻井：3×4 方格，绿底金心
         for (let cx2 = 0; cx2 < 4; cx2++) for (let cz2 = 0; cz2 < 3; cz2++) {
@@ -28028,34 +28030,89 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     hall(AX, -644, 40, 21, 11.8, { plaque: '知州宅', stepN: 4 });
     // 【fix332】知州宅内景：暖阁床榻 + 屏风 + 桌椅 + 灯架
     (function zhaiInner() {
-      const BZ = -654.4;
+      // 【fix366】知州宅内景重做：地坪基准统一（室内地面 = BASE + 1.36），家具全部落地，不再悬空
+      const BZ = -654.4, F = BASE + 1.36;
       det(BX(14.0, 6.6, 0.30), 0x6d3a20, AX, BASE + 4.8, BZ + 0.55);
       plaque3d('知州宅', AX, 8.7, BZ + 0.75, 7.0, 2.2, '#1b2a4a', '#e8c86a');
-      // 暖阁床榻
-      det(BX(7.2, 0.9, 4.6), 0x5a2f18, AX, BASE + 1.45, BZ + 4.6);
-      det(BX(6.8, 0.40, 4.2), 0x8a2f2a, AX, BASE + 2.05, BZ + 4.6);
-      det(BX(7.4, 0.22, 4.8), 0x4a2416, AX, BASE + 2.35, BZ + 4.6);
-      det(BX(7.0, 2.4, 0.24), 0x5a2f18, AX, BASE + 3.2, BZ + 6.9);
-      // 圆桌 + 两个鼓凳
-      det(new THREE.CylinderGeometry(1.5, 1.5, 0.20, 14), 0x6d3a20, AX - 11, BASE + 2.6, BZ + 8.0);
-      det(new THREE.CylinderGeometry(0.30, 0.34, 2.4, 8), 0x4a2416, AX - 11, BASE + 1.3, BZ + 8.0);
-      for (const s of [-1, 1]) det(new THREE.CylinderGeometry(0.62, 0.55, 0.75, 10), 0x8a2f2a, AX - 11 + s * 2.6, BASE + 0.95, BZ + 8.0);
-      // 【fix355】知州宅：梳妆台（铜镜 + 妆奁）+ 两只衣箱
-      det(BX(2.6, 0.14, 1.3), 0x6d3a20, AX + 15.0, BASE + 2.10, BZ + 6.4);
-      for (const sx10 of [-1.05, 1.05]) for (const sz10 of [-0.45, 0.45]) det(BX(0.13, 1.9, 0.13), 0x4a2416, AX + 15.0 + sx10, BASE + 1.12, BZ + 6.4 + sz10);
-      det(new THREE.CylinderGeometry(0.62, 0.62, 0.07, 14), 0xc8b48a, AX + 15.0, BASE + 2.90, BZ + 6.55);
-      det(BX(0.10, 0.70, 0.10), 0x5a3a24, AX + 15.0, BASE + 2.45, BZ + 6.62);
-      det(BX(0.8, 0.42, 0.6), 0x8a2f2a, AX + 15.9, BASE + 2.38, BZ + 6.4);
-      for (const s11 of [-1, 1]) {
-        det(BX(1.8, 1.0, 1.0), 0x6d3a20, AX + 13.5, BASE + 0.70, BZ + 2.0 + s11 * 1.6);
-        det(BX(1.9, 0.16, 1.1), 0x4a2416, AX + 13.5, BASE + 1.28, BZ + 2.0 + s11 * 1.6);
-        det(BX(0.16, 0.5, 1.1), 0xc8a24a, AX + 13.5, BASE + 0.70, BZ + 2.0 + s11 * 1.6);
+      // ---------- 拔步床（架子床）：床台 + 四柱 + 顶架 + 帐 + 枕被 + 脚踏 ----------
+      {
+        const bx0 = AX + 6.5, bz0 = BZ + 7.0;
+        det(BX(6.6, 0.42, 4.8), 0x4a2416, bx0, F + 0.21, bz0);
+        det(BX(6.2, 0.26, 4.4), 0x8a2f2a, bx0, F + 0.55, bz0);
+        det(BX(5.9, 0.34, 4.1), 0x24506e, bx0, F + 0.80, bz0);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          det(new THREE.CylinderGeometry(0.13, 0.13, 3.0, 8), 0x6d3a20, bx0 + sx * 3.0, F + 1.9, bz0 + sz * 2.2);
+        }
+        det(BX(6.6, 0.22, 4.8), 0x5a3a24, bx0, F + 3.45, bz0);
+        det(BX(6.9, 0.30, 5.1), 0x4a2416, bx0, F + 3.68, bz0);
+        for (const sx of [-1, 1]) {
+          det(BX(0.10, 2.0, 4.3), 0x27456e, bx0 + sx * 3.05, F + 2.3, bz0);
+          det(BX(5.8, 1.9, 0.10), 0x27456e, bx0, F + 2.35, bz0 - 2.25);
+        }
+        det(BX(1.8, 0.22, 0.9), 0xc8b48a, bx0 - 1.6, F + 1.02, bz0 + 1.2);
+        det(BX(3.4, 0.20, 1.2), 0xc0392b, bx0 + 0.8, F + 1.02, bz0 - 0.9);
+        det(BX(6.2, 0.38, 1.0), 0x5a2f18, bx0, F + 0.19, bz0 + 2.9);
       }
-      // 灯架
+      // ---------- 顶箱立柜两对 ----------
       for (const s of [-1, 1]) {
-        det(new THREE.CylinderGeometry(0.10, 0.12, 3.2, 6), 0x4a2416, AX + s * 13, BASE + 1.6, BZ + 5.0);
-        det(BX(0.55, 0.7, 0.55), 0xf3d9a4, AX + s * 13, BASE + 3.5, BZ + 5.0);
+        const cx2 = AX + s * 15.5;
+        det(BX(1.6, 3.4, 0.9), 0x5a3a24, cx2, F + 1.7, BZ + 4.2);
+        det(BX(1.75, 2.2, 1.0), 0x4a2416, cx2, F + 4.4, BZ + 4.2);
+        det(BX(0.10, 3.0, 0.14), 0xc8a24a, cx2 - 0.5, F + 1.7, BZ + 4.66);
+        det(BX(0.10, 3.0, 0.14), 0xc8a24a, cx2 + 0.5, F + 1.7, BZ + 4.66);
+        det(BX(1.5, 0.16, 0.16), 0xc8a24a, cx2, F + 2.9, BZ + 4.66);
       }
+      // ---------- 八仙桌 + 四只圈椅 ----------
+      {
+        const tx2 = AX - 9.0, tz2 = BZ + 8.0;
+        det(BX(3.0, 0.22, 3.0), 0x6d3a20, tx2, F + 1.75, tz2);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) det(BX(0.22, 1.7, 0.22), 0x4a2416, tx2 + sx * 1.3, F + 0.85, tz2 + sz * 1.3);
+        det(BX(2.4, 0.10, 2.4), 0x5a3a24, tx2, F + 0.55, tz2);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          const qx = tx2 + sx * 2.5, qz = tz2 + sz * 2.5;
+          det(BX(1.15, 0.16, 1.15), 0x5a2f18, qx, F + 1.02, qz);
+          for (const a of [-1, 1]) for (const b of [-1, 1]) det(BX(0.14, 1.0, 0.14), 0x4a2416, qx + a * 0.45, F + 0.5, qz + b * 0.45);
+          det(BX(1.15, 1.5, 0.16), 0x5a2f18, qx, F + 1.85, qz + sz * 0.5);
+        }
+        det(BX(0.8, 0.30, 0.8), 0xb0aa9e, tx2, F + 2.0, tz2);
+      }
+      // ---------- 梳妆台 + 铜镜 + 妆奁 + 绣墩 ----------
+      {
+        const dx2 = AX + 15.0, dz2 = BZ + 10.0;
+        det(BX(2.8, 0.16, 1.4), 0x6d3a20, dx2, F + 1.95, dz2);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) det(BX(0.16, 1.9, 0.16), 0x4a2416, dx2 + sx * 1.2, F + 0.95, dz2 + sz * 0.55);
+        det(BX(2.9, 0.12, 1.5), 0x5a3a24, dx2, F + 0.72, dz2);
+        det(new THREE.CylinderGeometry(0.66, 0.66, 0.08, 16), 0xc8b48a, dx2, F + 2.72, dz2 + 0.18);
+        det(BX(0.12, 0.75, 0.12), 0x5a3a24, dx2, F + 2.40, dz2 + 0.28);
+        det(BX(0.9, 0.45, 0.7), 0x8a2f2a, dx2 - 0.9, F + 2.26, dz2);
+        det(new THREE.CylinderGeometry(0.55, 0.50, 0.70, 12), 0x5a3a24, dx2, F + 0.35, dz2 + 1.8);
+      }
+      // ---------- 书架 + 书案 + 太师椅 ----------
+      {
+        const gx2 = AX - 15.5;
+        det(BX(0.7, 4.4, 6.0), 0x5a3a24, gx2, F + 2.2, BZ + 4.4);
+        for (let f2 = 0; f2 < 4; f2++) det(BX(0.6, 0.12, 5.6), 0x4a2416, gx2 + 0.15, F + 0.8 + f2 * 1.15, BZ + 4.4);
+        for (let b2 = 0; b2 < 16; b2++) det(BX(0.6, 0.34, 0.42), [0xc8b48a, 0x8a5a34, 0x2b3a5c][b2 % 3], gx2 + 0.45, F + 1.05 + Math.floor(b2 / 5) * 1.15, BZ + 2.2 + (b2 % 5) * 1.05);
+        det(BX(3.4, 0.16, 1.5), 0x6d3a20, gx2 + 3.2, F + 1.85, BZ + 8.6);
+        for (const b of [-1, 1]) for (const c3 of [-1, 1]) det(BX(0.16, 1.8, 0.16), 0x4a2416, gx2 + 3.2 + b * 1.5, F + 0.9, BZ + 8.6 + c3 * 0.6);
+        det(BX(0.9, 0.10, 0.7), 0xc8b48a, gx2 + 2.4, F + 1.96, BZ + 8.6);
+        det(BX(1.2, 0.16, 1.2), 0x5a2f18, gx2 + 3.2, F + 1.05, BZ + 10.2);
+        det(BX(1.2, 1.5, 0.16), 0x5a2f18, gx2 + 3.2, F + 1.9, BZ + 10.8);
+      }
+      // ---------- 屏风（四扇）+ 香炉 + 灯 ----------
+      for (let p2 = 0; p2 < 4; p2++) {
+        det(BX(1.5, 3.4, 0.14), 0x24506e, AX - 2.4 + p2 * 1.6, F + 2.3, BZ + 1.4, 0, (p2 % 2 ? 0.28 : -0.28), 0);
+        det(BX(1.6, 0.24, 0.20), 0xc8a24a, AX - 2.4 + p2 * 1.6, F + 4.05, BZ + 1.4, 0, (p2 % 2 ? 0.28 : -0.28), 0);
+      }
+      for (const s of [-1, 1]) {
+        det(new THREE.CylinderGeometry(0.42, 0.55, 1.0, 10), 0x6f6a52, AX + s * 8.5, F + 0.5, BZ + 12.5);
+        det(new THREE.CylinderGeometry(0.22, 0.22, 0.45, 8), 0x837c5e, AX + s * 8.5, F + 1.2, BZ + 12.5);
+        det(new THREE.CylinderGeometry(0.10, 0.12, 3.4, 6), 0x4a2416, AX + s * 12.5, F + 1.7, BZ + 12.0);
+        det(BX(0.55, 0.75, 0.55), 0xf3d9a4, AX + s * 12.5, F + 3.6, BZ + 12.0);
+      }
+      // 地毯
+      det(BX(10.0, 0.05, 8.0), 0x8a2f2a, AX, F + 0.10, BZ + 7.0);
+      det(BX(9.2, 0.06, 7.2), 0xa8402f, AX, F + 0.13, BZ + 7.0);
     })();
     for (const s of [-1, 1]) {
       wing(AX + s * 26, -650, 12, 30, 5.6);
