@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix387-floorreg';
+const BUILD = '20261107-fix388-climbland';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15198,7 +15198,9 @@ function updateGrapple(dt) {
       setHint('爬上楼顶！');
     } else if (py <= bottom + 0.5) {
       // 爬回地面
+      // 【fix388】爬回地面的落点：原来直接写 bottom+0.05（可能是 0），在衙署里就等于钻到台面下
       person.position.y = bottom + 0.05;
+      if (person.position.x > 1876 && person.position.x < 2174 && person.position.z < -82 && person.position.z > -846 && person.position.y < 2.95) person.position.y = 2.95;
       releaseGrapple(); onGround = true;
     }
     return;
