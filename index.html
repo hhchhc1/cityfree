@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix388-climbland';
+const BUILD = '20261107-fix390-bricky';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27355,7 +27355,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const m4 = new THREE.Matrix4(), cc = new THREE.Color();
       let k = 0;
       for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz++) {
-        m4.makeTranslation(X0p + ix * S + S / 2, 2.78 + BASE, Z0p + iz * S + S / 2);
+        m4.makeTranslation(X0p + ix * S + S / 2, 2.72, Z0p + iz * S + S / 2);   // 【fix389】砖面高度之前多加了 BASE，整层砖浮在头顶 2.8 米，所以压低视角看到的是砖底面
         im.setMatrixAt(k, m4);
         const gv = 0.56 + ((ix * 7 + iz * 13) % 5) * 0.022;
         cc.setRGB(gv * 1.00, gv * 0.97, gv * 0.90);
@@ -28655,7 +28655,10 @@ m4a.position.set(AX, BASE + 0.18, -141);
       let _lx = 0, _lz = 0, _ly = 0, _lv = false;
       setInterval(function () {
         try {
-          const p = person.position;
+          window.__guardTicks = (window.__guardTicks || 0) + 1;
+          const _pp = (typeof person !== 'undefined' && person && person.position) ? person.position : null;
+          if (!_pp) return;
+          const p = _pp;
           const inX = p.x > 1772 && p.x < 2278, inZ = p.z < -52 && p.z > -868;
           const inH = p.y > 2.2;
           // 【fix386】钩爪落点把人压到台面以下时，直接托回台面（这是"到地底下"的最后一环）
