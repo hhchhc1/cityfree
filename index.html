@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix402-noguard';
+const BUILD = '20261107-fix406-nohook';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15070,6 +15070,8 @@ function fireGrapple() {
   if (player.stamina < HOOK_COST) { setHint('体力不足，无法使用钩爪'); return; }
   player.stamina = Math.max(0, player.stamina - HOOK_COST);
   const tgt = grappleTarget();
+  // 【fix406】衙署里禁用钩爪：这里不再造假盒子、不再传送，只拦截动作
+  if (person.position.x > 1876 && person.position.x < 2174 && person.position.z < -80 && person.position.z > -844) { setHint('衙署里不能用钩爪'); return; }
   // 【fix379】人在衙署里、钩爪落点却在院墙外时，直接拦下，不让它穿墙
   if (tgt) {
     const _px = person.position.x, _pz = person.position.z;
@@ -29688,12 +29690,16 @@ window.__bindTap = __bindTap;
     }
     // 假山（湖石：几块多面体，深浅错落）
     const rockC = [0x8d938f, 0x7b817d, 0x9aa09b];
+    // 假山碰撞：每块石头按它自己的实际半径生成碰撞盒（看得见的才挡人，石头之间能走过去）
+    const _rockBoxes = [];
     for (let i = 0; i < 16; i++) {
       const rx2 = 1792 + Math.random() * 62, rz2 = 198 + Math.random() * 52;
       const r = 1.8 + Math.random() * 3.0;
       det(new THREE.IcosahedronGeometry(r, 0), rockC[i % 3], rx2, r * 0.72, rz2, Math.random(), Math.random(), Math.random());
+      const rr = r * 0.72;
+      _rockBoxes.push({ minX: rx2 - rr, maxX: rx2 + rr, minZ: rz2 - rr, maxZ: rz2 + rr, minY: 0, top: r * 1.30 });
     }
-    LH_BLD.push({ minX: 1788, maxX: 1858, minZ: 194, maxZ: 254, minY: 0, top: 4.6 });
+    for (const rb of _rockBoxes) LH_BLD.push(rb);
     // 长廊（贴东墙：柱 + 坡顶 + 坐凳栏杆）
     for (let z = 62; z <= 244; z += 6) {
       det(new THREE.CylinderGeometry(0.16, 0.18, 3.2, 6), WOOD, 2016, 1.6, z);
