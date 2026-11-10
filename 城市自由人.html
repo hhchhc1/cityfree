@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix407-camfloor';
+const BUILD = '20261107-fix409-camfeet';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24337,6 +24337,9 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 于是"往上看能看见地板背面"。这里把台面高度也算进来，相机永远在砖地之上。
     const _cp = camera.position;
     if (_cp.x > 1876 && _cp.x < 2174 && _cp.z < -80 && _cp.z > -846) _gyBase = Math.max(_gyBase, 2.78);
+    // 【fix409】通用规则：相机永远不低于"人物脚下"的高度。
+    // 殿内地坪(约3.96m)、台阶、屋顶都自动生效，不用一栋一栋去写高度。
+    if (typeof person !== 'undefined' && person && person.position) _gyBase = Math.max(_gyBase, person.position.y);
     const _gy = _gyBase + CAM_GROUND_CLEAR;
     if (camera.position.y < _gy) camera.position.y = _gy;
     _camLookA.set(camTarget.position.x + tfx * 4, camTarget.position.y + 1 - sp * 3, camTarget.position.z + tfz * 4);
