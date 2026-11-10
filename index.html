@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix432-zzpolish';
+const BUILD = '20261112-fix433-solid';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28134,6 +28134,8 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         // 公案（红漆大案，架在台上）
         // 【fix431】加落地台座：原来台体底面离地 0.63 米，看着悬空
         det(BX(6.4, 0.62, 2.4), 0x5a1f1c, AX, BASE + 1.36 + 0.31, IZ - 4.6);
+        // 【fix433】公案实体：整张案子（含台座）不能穿过
+        try { buildings.push({ minX: AX - 3.8, maxX: AX + 3.8, minZ: IZ - 6.2, maxZ: IZ - 3.0, minY: BASE + 1.36, top: BASE + 3.4 }); } catch (eB2) {}
         det(BX(7.0, 1.15, 2.8), 0x8a2f2a, AX, BASE + 2.56, IZ - 4.6);
         det(BX(7.6, 0.22, 3.2), 0x6d3a20, AX, BASE + 3.23, IZ - 4.6);
         for (const sx of [-1, 1]) for (const sz of [-1, 1])
@@ -28159,6 +28161,8 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
           det(new THREE.CylinderGeometry(0.52, 0.56, 14.0, 10), 0x7d2f26, cxp, BASE + 1.36 + 7.0, czp);
           det(new THREE.CylinderGeometry(0.78, 0.78, 0.30, 10), 0x9a9078, cxp, BASE + 1.50, czp);
           det(BX(1.3, 0.5, 1.3), 0x6d3a20, cxp, BASE + 1.36 + 13.9, czp);
+          // 【fix433】金柱实体：看得见的柱子才碰（半径 0.52 → 盒 1.24）
+          try { buildings.push({ minX: cxp - 0.62, maxX: cxp + 0.62, minZ: czp - 0.62, maxZ: czp + 0.62, minY: BASE + 1.36, top: BASE + 15.4 }); } catch (eB1) {}
         }
         // 藻井：3×4 方格，绿底金心
         for (let cx2 = 0; cx2 < 4; cx2++) for (let cz2 = 0; cz2 < 3; cz2++) {
