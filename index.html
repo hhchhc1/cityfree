@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix431-qinmin';
+const BUILD = '20261112-fix432-zzpolish';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -33881,6 +33881,55 @@ window.focus();
 
 
 
+
+// 【fix432】中镇山三期：山道石灯 + 观景点石桌石凳（全部贴地由 terrainHeight 求高度，不加碰撞）
+(function zzPolish() {
+  try {
+    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
+    if (!_th) return;
+    var stone = new THREE.MeshLambertMaterial({ color: 0x8d8a80 });
+    var stone2 = new THREE.MeshLambertMaterial({ color: 0x9a968b });
+    var flame = new THREE.MeshBasicMaterial({ color: 0xffb45a, fog: false });
+    var postGeo = new THREE.BoxGeometry(0.34, 1.9, 0.34);
+    var capGeo = new THREE.BoxGeometry(0.72, 0.16, 0.72);
+    var lampGeo = new THREE.BoxGeometry(0.46, 0.52, 0.46);
+    var wps = [[810,-84],[799,76],[658,111],[591,0],[666,-85],[756,-45],[745,37],[679,47]];
+    var CX = 661, CZ = -7;
+    var posts = new THREE.InstancedMesh(postGeo, stone, wps.length);
+    var caps = new THREE.InstancedMesh(capGeo, stone2, wps.length);
+    var lamps = new THREE.InstancedMesh(lampGeo, flame, wps.length);
+    var m4 = new THREE.Matrix4();
+    for (var i = 0; i < wps.length; i++) {
+      var px = wps[i][0], pz = wps[i][1];
+      var dx = px - CX, dz = pz - CZ, d = Math.sqrt(dx * dx + dz * dz) || 1;
+      var lx = px + (dx / d) * 3.4, lz = pz + (dz / d) * 3.4;
+      var gy = _th(lx, lz);
+      m4.makeTranslation(lx, gy + 0.95, lz); posts.setMatrixAt(i, m4);
+      m4.makeTranslation(lx, gy + 1.98, lz); caps.setMatrixAt(i, m4);
+      m4.makeTranslation(lx, gy + 2.32, lz); lamps.setMatrixAt(i, m4);
+    }
+    posts.instanceMatrix.needsUpdate = true;
+    caps.instanceMatrix.needsUpdate = true;
+    lamps.instanceMatrix.needsUpdate = true;
+    scene.add(posts); scene.add(caps); scene.add(lamps);
+    // 三处观景点：石桌 + 两个石凳，同样按地形落地
+    var spots = [[700, -128], [862, 34], [612, 118]];
+    for (var s = 0; s < spots.length; s++) {
+      var sx = spots[s][0], sz = spots[s][1], sy = _th(sx, sz);
+      var g = new THREE.Group();
+      var top = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.14, 14), stone2);
+      top.position.set(0, 0.92, 0); g.add(top);
+      var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.36, 0.86, 10), stone);
+      leg.position.set(0, 0.43, 0); g.add(leg);
+      for (var b = 0; b < 2; b++) {
+        var ang = b * Math.PI + 0.5;
+        var bs = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.46, 12), stone);
+        bs.position.set(Math.cos(ang) * 1.55, 0.23, Math.sin(ang) * 1.55); g.add(bs);
+      }
+      g.position.set(sx, sy, sz); scene.add(g);
+    }
+  } catch (eZZ) { /* 装饰失败不影响游戏 */ }
+})();
 </script>
 </body>
 </html>
