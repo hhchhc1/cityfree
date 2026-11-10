@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix425-spread';
+const BUILD = '20261112-fix426-gllost';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -1176,6 +1176,18 @@ const isMobile = coarsePointer || /Android|iPhone|iPad|iPod|Mobile/i.test(naviga
 // 于是上限 1.3→1.25（像素量再省 ~8%），并把下限 0.85→0.8（多一档自救空间），
 // 真正的提速主力是同一批改动里的 draw call 优化（红绿灯 InstancedMesh）和 CPU 减负。
 const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: 'high-performance' });
+// 【fix426】手机上偶尔"整屏发白、UI 还在"：那是 WebGL 上下文被系统回收（内存吃紧时常见），
+// 画布被清空后再也不会自己恢复。这里拦截 contextlost，提示一次并自动重载页面恢复画面。
+try {
+  renderer.domElement.addEventListener("webglcontextlost", function (e) {
+    e.preventDefault();
+    try { setHint("画面丢失，正在自动恢复…"); } catch (e2) {}
+    if (!window.__glLostAt) {
+      window.__glLostAt = Date.now();
+      setTimeout(function () { try { location.reload(); } catch (e3) {} }, 2000);
+    }
+  }, false);
+} catch (eGl) {}
 renderer.setSize(innerWidth, innerHeight);
 // 像素比上下限：手机 0.8~1.25 可动态调整；桌面保持设备原始值（不降质）
 const PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
