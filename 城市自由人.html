@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix426-gllost';
+const BUILD = '20261112-fix427-gap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28225,7 +28225,8 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
 
     // 【fix357】穿堂：大堂后门到退思堂前檐的连廊（原来两进之间是空院子）
     (function chuantang() {
-      const z0 = -505, z1 = -557, W = 9.0, cz9 = (z0 + z1) / 2, L9 = Math.abs(z1 - z0);
+      // 【fix427】南端 -557 → -553：原来顶进退思堂北墙和台阶，柱子/格栅重叠
+      const z0 = -505, z1 = -553, W = 9.0, cz9 = (z0 + z1) / 2, L9 = Math.abs(z1 - z0);
       det(BX(W + 3, 0.55, L9 + 2), 0xb6b0a2, AX, 0.28, cz9);
       det(BX(W, 0.14, L9), 0x8a8578, AX, 0.60, cz9);
       for (let z9 = z0 - 1.5; z9 > z1; z9 -= 5.4) {
