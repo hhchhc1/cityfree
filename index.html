@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix391-camclamp';
+const BUILD = '20261107-fix393-loophook';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32574,7 +32574,16 @@ try {
     musicEl.load();                       // 预解码第一首，把媒体管线建起来
   }
 } catch (e) { console.warn('[prewarm-music]', e); }
-renderer.setAnimationLoop(frameLoop);
+renderer.setAnimationLoop(function (__tm, __fr) {
+  frameLoop(__tm, __fr);
+  try {
+    const cp = camera.position;
+    let gy = 0.5;
+    try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
+    if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
+    if (cp.y < gy + 0.85) cp.y = gy + 0.85;
+  } catch (e2) {}
+});
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
   gameActive = false;
@@ -32584,7 +32593,16 @@ function pauseGameAudio() {
 function resumeGameAudio() {
   gameActive = true;
   if (audioCtx) { try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }
-  try { renderer.setAnimationLoop(frameLoop); } catch (e) {}
+  try { renderer.setAnimationLoop(function (__tm, __fr) {
+  frameLoop(__tm, __fr);
+  try {
+    const cp = camera.position;
+    let gy = 0.5;
+    try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
+    if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
+    if (cp.y < gy + 0.85) cp.y = gy + 0.85;
+  } catch (e2) {}
+}); } catch (e) {}
   if (state === 'drive' && !musicMuted && (!currentMusic || currentMusic.paused)) playNextMusic();
 }
 function shutdownGame() {
