@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix400-nofloorreg';
+const BUILD = '20261107-fix390-bricky';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27347,7 +27347,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
     // 【fix382】台面改几何砖铺地：InstancedMesh 一次性画完，每块砖独立实体 + 缝隙
     (function podiumBrickGeo() {
-      const S = 3.0, X0p = 1762, X1p = 2200, Z0p = -872, Z1p = -120;
+      const S = 3.0, X0p = 1878, X1p = 2186, Z0p = -846, Z1p = -134;
       const nx = Math.floor((X1p - X0p) / S), nz = Math.floor((Z1p - Z0p) / S);
       const geo = new THREE.BoxGeometry(S - 0.07, 0.12, S - 0.07);
       const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -28607,7 +28607,6 @@ m4a.position.set(AX, BASE + 0.18, -141);
       if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
         let bb = _YB;
         if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
-
         if (bb > h) h = bb;
       }
       let py = 0;
@@ -28645,7 +28644,6 @@ m4a.position.set(AX, BASE + 0.18, -141);
         if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
           let bb = 2.6;
           if (z > -136) { bb = 2.6 * (-124 - z) / 12; if (bb < 0) bb = 0; }
-
           if (bb > h) h = bb;
         }
         return h;
@@ -28676,17 +28674,13 @@ m4a.position.set(AX, BASE + 0.18, -141);
           }
         } catch (eG) {}
       }, 60);
-      // 【fix391】视角拉低时相机会钻到地面以下，看到地面背面。每帧把相机托到地面之上 0.55 米
-      try {
-        setInterval(function () {
-          try {
-            const cp = camera.position;
-            const gy = linhaiHeight(cp.x, cp.z);
-            if (cp.y < gy + 0.55) cp.y = gy + 0.55;
-          } catch (eC) {}
-        }, 16);
-      } catch (eC2) {}
     } catch (eG2) {}
+    // 【fix387】把整块衙署台面登记成"室内地坪"（__FLOORS）：钩爪下落时按这个高度落地
+    try {
+      window.__FLOORS = window.__FLOORS || [];
+      window.__FLOORS.push({ x0: 1876, x1: 2174, z0: -846, z1: -82, top: 2.95 });
+      window.__yamenFloorReg = window.__FLOORS.length;
+    } catch (eF) { window.__yamenFloorRegErr = String(eF); }
     window.__yamenPlateau = 1;
   } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
@@ -32570,31 +32564,7 @@ try {
     musicEl.load();                       // 预解码第一首，把媒体管线建起来
   }
 } catch (e) { console.warn('[prewarm-music]', e); }
-// 【fix394】相机穿地真正的修法：渲染前 renderer 会调用 camera.updateMatrixWorld()，
-// 在那个时刻把相机抬到地面之上，画出来的这一帧就已经抬好了（之前的写法在渲染之后才改，无效）
-(function cameraGroundHook() {
-  const _umw = camera.updateMatrixWorld.bind(camera);
-  camera.updateMatrixWorld = function (force) {
-    try {
-      const cp = camera.position;
-      let gy = 0.5;
-      try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
-      if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
-      if (cp.y < gy + 1.10) cp.y = gy + 1.10;
-    } catch (e2) {}
-    _umw(force);
-  };
-})();
-renderer.setAnimationLoop(function (__tm, __fr) {
-  frameLoop(__tm, __fr);
-  try {
-    const cp = camera.position;
-    let gy = 0.5;
-    try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
-    if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
-    if (cp.y < gy + 0.85) cp.y = gy + 0.85;
-  } catch (e2) {}
-});
+renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
   gameActive = false;
@@ -32604,16 +32574,7 @@ function pauseGameAudio() {
 function resumeGameAudio() {
   gameActive = true;
   if (audioCtx) { try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }
-  try { renderer.setAnimationLoop(function (__tm, __fr) {
-  frameLoop(__tm, __fr);
-  try {
-    const cp = camera.position;
-    let gy = 0.5;
-    try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
-    if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
-    if (cp.y < gy + 0.85) cp.y = gy + 0.85;
-  } catch (e2) {}
-}); } catch (e) {}
+  try { renderer.setAnimationLoop(frameLoop); } catch (e) {}
   if (state === 'drive' && !musicMuted && (!currentMusic || currentMusic.paused)) playNextMusic();
 }
 function shutdownGame() {
