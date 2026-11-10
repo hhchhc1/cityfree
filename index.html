@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix434-summit';
+const BUILD = '20261112-fix435-deck';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -33991,6 +33991,54 @@ window.focus();
     ring.instanceMatrix.needsUpdate = true;
     scene.add(ring);
   } catch (eZZ2) { /* 装饰失败不影响游戏 */ }
+})();
+
+// 【fix435】中镇山五期：东肩观景台（木构）+ 石凳，正对老城与海面
+(function zzDeck() {
+  try {
+    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
+    if (!_th) return;
+    var DX = 812, DZ = -66, S = 9.0;
+    var gy = _th(DX, DZ);
+    var wood = new THREE.MeshLambertMaterial({ color: 0x7a5232 });
+    var woodDark = new THREE.MeshLambertMaterial({ color: 0x5d3d24 });
+    var g = new THREE.Group();
+    // 台面（木板条）
+    for (var i = 0; i < 12; i++) {
+      var plank = new THREE.Mesh(new THREE.BoxGeometry(S, 0.14, S / 12 * 0.92), wood);
+      plank.position.set(0, 0, -S / 2 + S / 12 * (i + 0.5));
+      g.add(plank);
+    }
+    // 四角支撑柱（往下扎 7 米，避免悬空）
+    for (var sx = -1; sx <= 1; sx += 2) for (var sz = -1; sz <= 1; sz += 2) {
+      var post = new THREE.Mesh(new THREE.BoxGeometry(0.42, 8.0, 0.42), woodDark);
+      post.position.set(sx * (S / 2 - 0.5), -4.0, sz * (S / 2 - 0.5));
+      g.add(post);
+    }
+    // 三面栏杆（西面留口当入口）
+    var railMat = woodDark;
+    var sides = [[0, -1, 0], [S / 2, 0, 1], [-S / 2, 0, 1]];
+    for (var s2 = 0; s2 < sides.length; s2++) {
+      var rr = new THREE.Mesh(new THREE.BoxGeometry(sides[s2][2] ? 0.16 : S, 0.12, sides[s2][2] ? S : 0.16), railMat);
+      rr.position.set(sides[s2][0] * (sides[s2][2] ? 1 : 0), 1.05, sides[s2][1] * (sides[s2][2] ? 1 : 0) - (sides[s2][1] < 0 ? S / 2 : 0));
+      if (sides[s2][2]) rr.position.z = 0;
+      g.add(rr);
+    }
+    for (var p2 = 0; p2 < 10; p2++) {
+      var ang = Math.PI * (0.15 + p2 / 9 * 0.7);
+      var rp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.05, 0.16), wood);
+      rp.position.set(Math.cos(ang) * (S / 2 - 0.2), 0.55, -Math.abs(Math.sin(ang)) * (S / 2 - 0.2) - 0);
+      g.add(rp);
+    }
+    g.position.set(DX, gy, DZ);
+    scene.add(g);
+    // 台上石凳两条
+    for (var b2 = -1; b2 <= 1; b2 += 2) {
+      var bench = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.44, 0.5), new THREE.MeshLambertMaterial({ color: 0x9a968b }));
+      bench.position.set(DX + b2 * 2.2, gy + 0.29, DZ + 2.6);
+      scene.add(bench);
+    }
+  } catch (eZZ3) {}
 })();
 </script>
 </body>
