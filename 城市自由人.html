@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix406-nohook';
+const BUILD = '20261107-fix407-camfloor';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24332,7 +24332,12 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // camPitch 下限 -0.7 会把相机压到和脚踝齐平，身后 6 米处的地形只要稍微高一点就埋了相机。
     // 这里只在最后渲染位置上做钳制（不改 camPos），所以不会污染下一帧的插值状态。
     // 放在抖动之后，抖动也不能把相机甩到地下。
-    const _gy = terrainHeight(camera.position.x, camera.position.z) + CAM_GROUND_CLEAR;
+    let _gyBase = terrainHeight(camera.position.x, camera.position.z);
+    // 【fix407】衙署台面（砖地顶约 2.78 米）不在 terrainHeight 里，相机贴地时就会钻到砖地下面，
+    // 于是"往上看能看见地板背面"。这里把台面高度也算进来，相机永远在砖地之上。
+    const _cp = camera.position;
+    if (_cp.x > 1876 && _cp.x < 2174 && _cp.z < -80 && _cp.z > -846) _gyBase = Math.max(_gyBase, 2.78);
+    const _gy = _gyBase + CAM_GROUND_CLEAR;
     if (camera.position.y < _gy) camera.position.y = _gy;
     _camLookA.set(camTarget.position.x + tfx * 4, camTarget.position.y + 1 - sp * 3, camTarget.position.z + tfz * 4);
     camLook.lerp(_camLookA, 1 - Math.pow(0.001, dt));
