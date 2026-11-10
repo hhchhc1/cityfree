@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix413-interior';
+const BUILD = '20261112-fix414-hookout';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15072,15 +15072,6 @@ function fireGrapple() {
   const tgt = grappleTarget();
   // 【fix406】衙署里禁用钩爪：这里不再造假盒子、不再传送，只拦截动作
   if (person.position.x > 1876 && person.position.x < 2174 && person.position.z < -80 && person.position.z > -844) { setHint('衙署里不能用钩爪'); return; }
-  // 【fix379】人在衙署里、钩爪落点却在院墙外时，直接拦下，不让它穿墙
-  if (tgt) {
-    const _px = person.position.x, _pz = person.position.z;
-    if (_px > 1772 && _px < 2278 && _pz < -52 && _pz > -868) {
-      const _gx = (tgt.x !== undefined) ? tgt.x : (tgt.o ? tgt.o.x : _px);
-      const _gz = (tgt.z !== undefined) ? tgt.z : (tgt.o ? tgt.o.z : _pz);
-      if (_gx < 1776 || _gx > 2274 || _gz > -56 || _gz < -864) { setHint('衙署里勾不到院墙外'); return; }
-    }
-  }
   if (!tgt) { setHint('准心没有可勾的目标'); return; }
   const px = person.position.x, py = person.position.y, pz = person.position.z;
   if (tgt.type === 'entity') {
