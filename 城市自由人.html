@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix437-pool';
+const BUILD = '20261112-fix438-wish';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34082,6 +34082,109 @@ window.focus();
       scene.add(g);
     }
   } catch (eZZ5) {}
+})();
+
+// 【fix438】许愿牌：玩家自己写祝福语，挂在中镇祠的碑旁绳子上，刷新后还在（localStorage）
+(function zzWish() {
+  try {
+    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
+    if (!_th || typeof scene === "undefined") return;
+    var SX = 683.6, SZ = 0, SY = 105;
+    var KEY = "zzWishes_v1";
+    var wishes = [];
+    try { wishes = JSON.parse(localStorage.getItem(KEY) || "[]") || []; } catch (e0) { wishes = []; }
+    var boards = [];
+    function makeTex(text) {
+      var cv = document.createElement("canvas");
+      cv.width = 256; cv.height = 128;
+      var c = cv.getContext("2d");
+      c.fillStyle = "#8e2a22"; c.fillRect(0, 0, 256, 128);
+      c.strokeStyle = "#d8b45a"; c.lineWidth = 8; c.strokeRect(6, 6, 244, 116);
+      c.fillStyle = "#f7e2a8";
+      c.font = "bold 34px system-ui,sans-serif";
+      c.textAlign = "center"; c.textBaseline = "middle";
+      var s = String(text || "").slice(0, 8);
+      if (s.length > 4) {
+        c.fillText(s.slice(0, 4), 128, 42);
+        c.fillText(s.slice(4), 128, 88);
+      } else {
+        c.fillText(s, 128, 64);
+      }
+      var tex = new THREE.CanvasTexture(cv);
+      tex.needsUpdate = true;
+      return tex;
+    }
+    function addBoard(text, idx) {
+      var mat = new THREE.MeshLambertMaterial({ map: makeTex(text) });
+      var m = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.36, 0.05), mat);
+      var k = idx % 9;
+      m.position.set(689.2, SY + 2.35 - k * 0.42, -2.0 + (idx % 3) * 2.0);
+      m.rotation.y = -Math.PI / 2;
+      scene.add(m);
+      boards.push(m);
+    }
+    for (var i = 0; i < wishes.length && i < 9; i++) addBoard(wishes[i], i);
+    // 挂绳
+    var rope = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 6.2), new THREE.MeshLambertMaterial({ color: 0x6b4a2a }));
+    rope.position.set(689.2, SY + 2.62, 0);
+    scene.add(rope);
+    // 按钮
+    var btn = document.createElement("div");
+    btn.textContent = "写祝福";
+    btn.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:170px;padding:10px 18px;border-radius:20px;" +
+      "background:rgba(160,40,30,.92);color:#ffe9b0;font:600 15px system-ui;z-index:9000;display:none;pointer-events:auto;" +
+      "box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;user-select:none;";
+    document.body.appendChild(btn);
+    var panel = document.createElement("div");
+    panel.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:280px;padding:16px;" +
+      "background:rgba(28,22,18,.96);border:1px solid #8e6a3a;border-radius:14px;z-index:9001;display:none;" +
+      "color:#f7e2a8;font:14px system-ui;box-shadow:0 10px 30px rgba(0,0,0,.5);";
+    panel.innerHTML = "<div style=\"margin-bottom:10px;font-size:15px\">写下你的祈福语（最多 8 字）</div>" +
+      "<input id=\"zzWishIn\" maxlength=\"8\" style=\"width:100%;box-sizing:border-box;padding:8px;border-radius:8px;" +
+      "border:1px solid #8e6a3a;background:#1a1512;color:#ffe9b0;font-size:15px;\" placeholder=\"平安顺遂\">" +
+      "<div style=\"display:flex;gap:10px;margin-top:12px;\">" +
+      "<div id=\"zzWishOk\" style=\"flex:1;text-align:center;padding:8px;border-radius:8px;background:#a02818;cursor:pointer;\">挂上去</div>" +
+      "<div id=\"zzWishNo\" style=\"flex:1;text-align:center;padding:8px;border-radius:8px;background:#3a322c;cursor:pointer;\">取消</div>" +
+      "</div>";
+    document.body.appendChild(panel);
+    var inRange = false;
+    function close() { panel.style.display = "none"; }
+    function open() {
+      if (wishes.length >= 9) { try { setHint("碑上已经挂满 9 块许愿牌了"); } catch (e1) {} return; }
+      panel.style.display = "block";
+      var ip = document.getElementById("zzWishIn");
+      if (ip) { ip.value = ""; ip.focus(); }
+    }
+    btn.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); open(); });
+    panel.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+    var okEl = document.getElementById("zzWishOk"), noEl = document.getElementById("zzWishNo");
+    if (okEl) okEl.addEventListener("pointerdown", function () {
+      var ip = document.getElementById("zzWishIn");
+      var v = (ip && ip.value || "").trim().slice(0, 8) || "平安顺遂";
+      wishes.push(v);
+      if (wishes.length > 9) wishes = wishes.slice(-9);
+      try { localStorage.setItem(KEY, JSON.stringify(wishes)); } catch (e2) {}
+      addBoard(v, wishes.length - 1);
+      close();
+      try { setHint("许愿牌已挂上：「" + v + "」"); } catch (e3) {}
+    });
+    if (noEl) noEl.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", function (e) {
+      if (!inRange) return;
+      var tag = (e.target && e.target.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.code === "KeyP") { open(); }
+    });
+    setInterval(function () {
+      try {
+        if (typeof person === "undefined" || !person) return;
+        var dx = person.position.x - SX, dz = person.position.z - SZ;
+        inRange = (dx * dx + dz * dz) < 4.6 * 4.6 && Math.abs(person.position.y - SY) < 9;
+        btn.style.display = inRange ? "block" : "none";
+        if (!inRange && panel.style.display === "block") close();
+      } catch (e4) {}
+    }, 300);
+  } catch (eZZ6) {}
 })();
 </script>
 </body>
