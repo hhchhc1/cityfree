@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix411-zflash';
+const BUILD = '20261107-fix412-offset';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25954,6 +25954,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
     stex.repeat.set(pvW / 11, pvD / 11);
     stex.anisotropy = 4;
     const pvMat = new THREE.MeshLambertMaterial({ map: stex, color: 0xaeb2ab });   // 青石板：偏冷灰，不是沙黄
+    // 【fix412】这块地坪和别的铺装叠在同一高度会闪。用 polygonOffset 让它稳定压在最上层，
+    // 不删任何一层，也不会再出现深灰小方块跳来跳去。
+    pvMat.polygonOffset = true; pvMat.polygonOffsetFactor = -4; pvMat.polygonOffsetUnits = -8;
     const pv = new THREE.Mesh(new THREE.PlaneGeometry(pvW, pvD), pvMat);
     pv.rotation.x = -Math.PI / 2;
     pv.position.set((LH.ancX0 + LH.ancX1) / 2 + 9, 0.055, ZC);
