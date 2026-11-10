@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix429-zhongzhen';
+const BUILD = '20261112-fix430-zhongzhen2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32728,6 +32728,9 @@ window.focus();
     // trailhead terrace: flat landing where the causeway meets the first stair tread
     var pdx = x - 524, pdd = Math.sqrt(pdx * pdx + z * z);
     if (pdd < 12) { var pz = 1 - zzSS(7, 12, pdd); h = h * (1 - pz) + 2.6 * pz; }
+    // 北肩凉亭平台：把肩峰顶压成一块 74m 的小平场
+    var qvx = x - 660, qvz = z + 300, qvd = Math.sqrt(qvx * qvx + qvz * qvz);
+    if (qvd < 9.5) { var qvw = 1 - zzSS(5.0, 9.5, qvd); h = h * (1 - qvw) + 73.4 * qvw; }
     return h > 0 ? h : 0;
   }
 
@@ -32847,20 +32850,24 @@ window.focus();
       return Math.sqrt(gx * gx + gz * gz);
     }
 
-    /* --- 3.2 树木（InstancedMesh，两种共享几何 + 共享材质） --- */
-    var treeGeoTrunk = new THREE.CylinderGeometry(0.16, 0.30, 1.7, 5, 1, true);
-    treeGeoTrunk.translate(0, 0.85, 0);
-    var treeGeoCrown = new THREE.ConeGeometry(1.6, 4.6, 7);
-    treeGeoCrown.translate(0, 3.6, 0);
-    var treeMatTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
-    var treeMatCrown = new THREE.MeshLambertMaterial({ color: 0xffffff }); // 颜色交给 instanceColor
-    var TREE_MAX = 260;
-    var imTrunk = new THREE.InstancedMesh(treeGeoTrunk, treeMatTrunk, TREE_MAX);
-    var imCrown = new THREE.InstancedMesh(treeGeoCrown, treeMatCrown, TREE_MAX);
-    imTrunk.frustumCulled = false; imCrown.frustumCulled = false;
+    /* --- 3.2 树木：3 种轮廓（高松 / 阔叶 / 灌木）· 4 个 InstancedMesh · 5 绿 + 秋色 --- */
+    var trunkGeo = new THREE.CylinderGeometry(0.16, 0.30, 1.7, 5, 1, true);
+    trunkGeo.translate(0, 0.85, 0);
+    var pineGeo = new THREE.ConeGeometry(1.55, 4.8, 7); pineGeo.translate(0, 3.5, 0);
+    var broadGeo = new THREE.IcosahedronGeometry(1.7, 0); broadGeo.translate(0, 3.15, 0);
+    var shrubGeo = new THREE.IcosahedronGeometry(0.95, 0); shrubGeo.translate(0, 0.8, 0);
+    var mTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
+    var mLeaf = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    var TREE_MAX = 760;
+    var imTrunk = new THREE.InstancedMesh(trunkGeo, mTrunk, TREE_MAX);
+    var imPine = new THREE.InstancedMesh(pineGeo, mLeaf, TREE_MAX);
+    var imBroad = new THREE.InstancedMesh(broadGeo, mLeaf, TREE_MAX);
+    var imShrub = new THREE.InstancedMesh(shrubGeo, mLeaf, TREE_MAX);
+    imTrunk.frustumCulled = imPine.frustumCulled = imBroad.frustumCulled = imShrub.frustumCulled = false;
     var dummy = new THREE.Object3D(), tcol = new THREE.Color();
-    var made = 0, tries = 0;
-    while (made < TREE_MAX && tries < 9000) {
+    var nPine = 0, nBroad = 0, nShrub = 0, nTrunk = 0, tries = 0;
+    var WANT_P = 288, WANT_B = 262, WANT_S = 150;
+    while ((nPine < WANT_P || nBroad < WANT_B || nShrub < WANT_S) && tries < 22000) {
       tries++;
       var tx = 512 + Math.random() * 364;
       var tz = -780 + Math.random() * 1250;
@@ -32868,37 +32875,64 @@ window.focus();
       if (th < 2.5 || th > 84) continue;
       if (slopeAt(tx, tz) > 0.95) continue;
       if (stairLat(tx, tz) < 8.5) continue;
-      if (Math.hypot(tx - 700, tz - 0) < 40) continue;
+      if (Math.hypot(tx - 700, tz) < 40) continue;
       if (Math.hypot(tx - 849, tz - 12) < 15) continue;
-      if (Math.hypot(tx - 524, tz - 0) < 13) continue;
-      var sc = 0.75 + Math.random() * 0.85;
+      if (Math.hypot(tx - 524, tz) < 13) continue;
+      if (Math.hypot(tx - 660, tz + 300) < 15) continue;   // 凉亭
+      if (Math.hypot(tx - 686, tz) < 17) continue;         // 祈福台
+      var pick = Math.random(), typ;
+      if (pick < 0.42 && nPine < WANT_P) typ = 0;
+      else if (pick < 0.80 && nBroad < WANT_B) typ = 1;
+      else if (nShrub < WANT_S) typ = 2;
+      else if (nBroad < WANT_B) typ = 1;
+      else if (nPine < WANT_P) typ = 0;
+      else continue;
+      var sc = typ === 2 ? (0.8 + Math.random() * 0.7) : (0.75 + Math.random() * 0.85);
       dummy.position.set(tx, th - 0.15, tz);
       dummy.rotation.set(0, Math.random() * 6.283, 0);
-      dummy.scale.set(sc, sc * (0.85 + Math.random() * 0.35), sc);
+      dummy.scale.set(sc * (typ === 1 ? 1.15 : 1), sc * (typ === 0 ? 1.18 : (0.8 + Math.random() * 0.35)), sc * (typ === 1 ? 1.15 : 1));
+      if (typ === 2) { dummy.position.y = th + 0.3; dummy.scale.set(sc, sc * 0.85, sc); }
       dummy.updateMatrix();
-      imTrunk.setMatrixAt(made, dummy.matrix);
-      imCrown.setMatrixAt(made, dummy.matrix);
-      tcol.setHSL(0.255 + Math.random() * 0.05, 0.34 + Math.random() * 0.22, 0.20 + Math.random() * 0.13);
-      imCrown.setColorAt(made, tcol);
-      tcol.setHSL(0.08, 0.32, 0.20 + Math.random() * 0.08);
-      imTrunk.setColorAt(made, tcol);
-      made++;
+      if (typ === 2) {
+        imShrub.setMatrixAt(nShrub, dummy.matrix);
+        if (Math.random() < 0.16) tcol.setHSL(0.09 + Math.random() * 0.04, 0.55 + Math.random() * 0.2, 0.33 + Math.random() * 0.1);
+        else tcol.setHSL(0.26 + Math.random() * 0.05, 0.32 + Math.random() * 0.2, 0.19 + Math.random() * 0.10);
+        imShrub.setColorAt(nShrub, tcol);
+        nShrub++;
+      } else {
+        imTrunk.setMatrixAt(nTrunk, dummy.matrix);
+        tcol.setHSL(0.075, 0.30, 0.19 + Math.random() * 0.07);
+        imTrunk.setColorAt(nTrunk, tcol);
+        nTrunk++;
+        if (typ === 0) {
+          tcol.setHSL(0.27 + Math.random() * 0.04, 0.30 + Math.random() * 0.22, 0.16 + Math.random() * 0.10);
+          imPine.setMatrixAt(nPine, dummy.matrix); imPine.setColorAt(nPine, tcol); nPine++;
+        } else {
+          if (Math.random() < 0.14) tcol.setHSL(0.08 + Math.random() * 0.05, 0.62 + Math.random() * 0.18, 0.35 + Math.random() * 0.12);
+          else tcol.setHSL(0.23 + Math.random() * 0.07, 0.34 + Math.random() * 0.24, 0.19 + Math.random() * 0.12);
+          imBroad.setMatrixAt(nBroad, dummy.matrix); imBroad.setColorAt(nBroad, tcol); nBroad++;
+        }
+      }
     }
-    imTrunk.count = made; imCrown.count = made;
-    imTrunk.instanceMatrix.needsUpdate = true; imCrown.instanceMatrix.needsUpdate = true;
-    if (imCrown.instanceColor) imCrown.instanceColor.needsUpdate = true;
+    imTrunk.count = nTrunk; imPine.count = nPine; imBroad.count = nBroad; imShrub.count = nShrub;
+    imTrunk.instanceMatrix.needsUpdate = imPine.instanceMatrix.needsUpdate = true;
+    imBroad.instanceMatrix.needsUpdate = imShrub.instanceMatrix.needsUpdate = true;
     if (imTrunk.instanceColor) imTrunk.instanceColor.needsUpdate = true;
-    scene.add(imTrunk); scene.add(imCrown);
+    if (imPine.instanceColor) imPine.instanceColor.needsUpdate = true;
+    if (imBroad.instanceColor) imBroad.instanceColor.needsUpdate = true;
+    if (imShrub.instanceColor) imShrub.instanceColor.needsUpdate = true;
+    scene.add(imTrunk); scene.add(imPine); scene.add(imBroad); scene.add(imShrub);
+    var made = nPine + nBroad + nShrub;
     STATS.trees = made;
-    STATS.tris += made * (10 + 14);
+    STATS.tris += nPine * 24 + nBroad * 30 + nShrub * 20;
 
     /* --- 3.3 岩层（上层 60% 的层叠崖带 + 少量滚石） --- */
     var rockGeo = new THREE.BoxGeometry(1, 1, 1);
     var rockMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    var ROCK_MAX = 130;
+    var ROCK_MAX = 265;
     var imRock = new THREE.InstancedMesh(rockGeo, rockMat, ROCK_MAX);
     imRock.frustumCulled = false;
-    var rMade = 0, layers = [48, 68, 88], li, ai;
+    var rMade = 0, li, ai;
     // 返回"从山顶往外走的第一个等高线"（外轮廓），不会被远处更高的肩峰带偏
     function contourR(angle, target) {
       var last = -1, rr, hh;
@@ -32909,40 +32943,48 @@ window.focus();
       }
       return last;
     }
-    for (li = 0; li < layers.length; li++) {
-      var target = layers[li];
-      for (ai = 0; ai < 34; ai++) {
+    // 三条崖带：每段的高度 / 外挑 / 体量都不同，破掉"同心环"的机械重复
+    var bandBase = [46, 66, 86];
+    for (li = 0; li < 3; li++) {
+      for (ai = 0; ai < 40; ai++) {
         if (rMade >= ROCK_MAX) break;
-        var ang = (ai / 34) * Math.PI * 2 + li * 0.045;
+        var ang = (ai / 40) * Math.PI * 2;
+        var target = bandBase[li] + Math.sin(ang * 3 + li * 2.1) * 4.5 + Math.sin(ang * 7 + li) * 1.8;
+        if (target < 26 || target > 97) continue;
         var cr = contourR(ang, target);
         if (cr < 0) continue;
-        var cxx = CX + Math.cos(ang) * (cr + 0.9);
-        var czz = CZ + Math.sin(ang) * (cr + 0.9);
-        dummy.position.set(cxx, target + 0.15, czz);
-        dummy.rotation.set(0, -ang + (Math.random() - 0.5) * 0.06, 0);
-        dummy.scale.set(7.5 + Math.random() * 4.0, 2.6 + Math.random() * 1.6, 2.5 + Math.random() * 0.8);
+        var out = 0.7 + Math.abs(Math.sin(ang * 5 + li)) * 1.1;
+        var cxx = CX + Math.cos(ang) * (cr + out);
+        var czz = CZ + Math.sin(ang) * (cr + out);
+        dummy.position.set(cxx, target + 0.1, czz);
+        dummy.rotation.set((Math.random() - 0.5) * 0.14, -ang + (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.12);
+        dummy.scale.set(6.0 + Math.random() * 5.5, 2.0 + Math.random() * 2.2, 2.0 + Math.random() * 1.2);
         dummy.updateMatrix();
         imRock.setMatrixAt(rMade, dummy.matrix);
-        tcol.setHex([COL.rockA, COL.rockB, COL.rockC][(ai + li) % 3]);
+        tcol.setHex([COL.rockA, COL.rockB, COL.rockC][(ai + li * 2) % 3]);
+        tcol.offsetHSL(0, 0, (Math.random() - 0.5) * 0.05);
         imRock.setColorAt(rMade, tcol);
         rMade++;
       }
     }
-    // 散落滚石（不挡路，纯装饰）
+    // 坡面滚石 + 道旁碎石（更小、更灰）
     var bTry = 0;
-    while (rMade < ROCK_MAX - 1 && bTry < 600) {
+    while (rMade < ROCK_MAX && bTry < 5000) {
       bTry++;
-      var bx = 520 + Math.random() * 350, bz = -760 + Math.random() * 1220;
+      var bx = 512 + Math.random() * 358, bz = -760 + Math.random() * 1220;
       var bh = zzMassif(bx, bz);
-      if (bh < 6 || bh > 70 || slopeAt(bx, bz) > 1.4) continue;
-      if (stairLat(bx, bz) < 6) continue;
-      var bs = 1.2 + Math.random() * 1.8;
-      dummy.position.set(bx, bh + bs * 0.25, bz);
-      dummy.rotation.set(Math.random() * 0.4, Math.random() * 6.28, Math.random() * 0.4);
-      dummy.scale.set(bs, bs * 0.8, bs);
+      if (bh < 2 || bh > 90) continue;
+      var latB = stairLat(bx, bz);
+      if (latB < 3.4) continue;
+      if (slopeAt(bx, bz) > 1.6) continue;
+      var bs = latB < 14 ? (0.45 + Math.random() * 0.85) : (1.0 + Math.random() * 2.3);
+      dummy.position.set(bx, bh + bs * 0.18, bz);
+      dummy.rotation.set(Math.random() * 0.5, Math.random() * 6.28, Math.random() * 0.5);
+      dummy.scale.set(bs, bs * (0.6 + Math.random() * 0.35), bs * (0.8 + Math.random() * 0.4));
       dummy.updateMatrix();
       imRock.setMatrixAt(rMade, dummy.matrix);
       tcol.setHex([COL.rockA, COL.rockB, COL.rockC][rMade % 3]);
+      tcol.offsetHSL(0, 0, (Math.random() - 0.5) * 0.07);
       imRock.setColorAt(rMade, tcol);
       rMade++;
     }
@@ -33119,15 +33161,18 @@ window.focus();
     scene.add(fallW2);
     // 水下的湿岩台阶（叠在坡面上，给水带一点落差感）
     var wetMat = new THREE.MeshLambertMaterial({ color: COL.wetRock });
+    var imWet = new THREE.InstancedMesh(new THREE.BoxGeometry(8.0, 1.1, 9.0), wetMat, 3);
     for (i = 1; i <= 3; i++) {
       var fr = i / 4;
       var lx3 = pA.x + (pB.x - pA.x) * fr, lz3 = pA.z + (pB.z - pA.z) * fr;
       var ly3 = pA.y + (pB.y - pA.y) * fr;
-      var wet = new THREE.Mesh(new THREE.BoxGeometry(8.0, 1.1, 9.0), wetMat);
-      wet.position.set(lx3 - 0.9, ly3 - 0.2, lz3);
-      wet.rotation.y = -fallAng;
-      scene.add(wet);
+      dummy.position.set(lx3 - 0.9, ly3 - 0.2, lz3);
+      dummy.rotation.set(0, -fallAng, 0); dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix(); imWet.setMatrixAt(i - 1, dummy.matrix);
     }
+    imWet.count = 3; imWet.instanceMatrix.needsUpdate = true;
+    imWet.frustumCulled = false;
+    scene.add(imWet);
     var pool = new THREE.Mesh(new THREE.CircleGeometry(5.6, 24), new THREE.MeshBasicMaterial({ color: 0x8fd0e6, transparent: true, opacity: 0.85 }));
     pool.rotation.x = -Math.PI / 2;
     pool.position.set(poolX, poolY + 0.14, poolZ);
@@ -33141,11 +33186,57 @@ window.focus();
     mg.fillStyle = grd; mg.fillRect(0, 0, 64, 64);
     var mistTex = new THREE.CanvasTexture(mcv);
     var mistMat = new THREE.MeshBasicMaterial({ map: mistTex, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+    var imMist = new THREE.InstancedMesh(new THREE.PlaneGeometry(4.5, 3.4), mistMat, 6);
+    imMist.frustumCulled = false;
     for (i = 0; i < 6; i++) {
-      var mq = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.4), mistMat);
-      mq.position.set(poolX + 1.5 + Math.random() * 3, poolY + 1.0 + Math.random() * 2.2, poolZ - 4 + Math.random() * 8);
-      mq.rotation.y = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
-      scene.add(mq);
+      dummy.position.set(poolX + 1.5 + Math.random() * 3, poolY + 1.0 + Math.random() * 2.2, poolZ - 4 + Math.random() * 8);
+      dummy.rotation.set(0, -Math.PI / 2 + (Math.random() - 0.5) * 0.6, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix(); imMist.setMatrixAt(i, dummy.matrix);
+    }
+    imMist.count = 6; imMist.instanceMatrix.needsUpdate = true;
+    scene.add(imMist);
+
+    /* --- 合批工具：把大量小方块合成「每材质 1 个 mesh」，压 draw call --- */
+    function pushBoxVerts(out, e) {
+      var hw = e.w / 2, hh = e.h / 2, hd = e.d / 2;
+      var cx = Math.cos(e.rx || 0), sx = Math.sin(e.rx || 0);
+      var cy = Math.cos(e.ry || 0), sy = Math.sin(e.ry || 0);
+      var cz = Math.cos(e.rz || 0), sz = Math.sin(e.rz || 0);
+      var corners = [
+        [-hw, -hh, -hd], [hw, -hh, -hd], [hw, hh, -hd], [-hw, hh, -hd],
+        [-hw, -hh, hd], [hw, -hh, hd], [hw, hh, hd], [-hw, hh, hd]
+      ];
+      var faces = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+      var tp = [], c, v, x0, y0, z0, t;
+      for (c = 0; c < 8; c++) {
+        v = corners[c]; x0 = v[0]; y0 = v[1]; z0 = v[2];
+        if (sx) { t = y0 * cx - z0 * sx; z0 = y0 * sx + z0 * cx; y0 = t; }
+        if (sy) { t = x0 * cy + z0 * sy; z0 = -x0 * sy + z0 * cy; x0 = t; }
+        if (sz) { t = x0 * cz - y0 * sz; y0 = x0 * sz + y0 * cz; x0 = t; }
+        tp.push([x0 + e.x, y0 + e.y, z0 + e.z]);
+      }
+      for (var f = 0; f < faces.length; f++) {
+        var q = faces[f], a1 = tp[q[0]], b1 = tp[q[1]], c1 = tp[q[2]], d1 = tp[q[3]];
+        out.push(a1[0], a1[1], a1[2], b1[0], b1[1], b1[2], c1[0], c1[1], c1[2]);
+        out.push(a1[0], a1[1], a1[2], c1[0], c1[1], c1[2], d1[0], d1[1], d1[2]);
+      }
+    }
+    function mergeBoxes(parent, list) {
+      if (!list || !list.length) return;
+      var groups = [], n, m;
+      for (n = 0; n < list.length; n++) {
+        var e = list[n], G = null;
+        for (m = 0; m < groups.length; m++) if (groups[m].mat === e.mat) { G = groups[m]; break; }
+        if (!G) { G = { mat: e.mat, pos: [] }; groups.push(G); }
+        pushBoxVerts(G.pos, e);
+      }
+      for (n = 0; n < groups.length; n++) {
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(groups[n].pos, 3));
+        g.computeVertexNormals();
+        parent.add(new THREE.Mesh(g, groups[n].mat));
+      }
     }
 
     /* --- 3.8 山顶：中镇祠 + 石碑 --- */
@@ -33153,11 +33244,10 @@ window.focus();
     temple.position.set(702, 105, 0);
     temple.rotation.y = -Math.PI / 2;      // 正面朝西，正对登山道来向
     function TB(mat, w, hh, d, x, y, z, rx, ry, rz) {
-      var m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), mat);
-      m.position.set(x, y, z);
-      if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz;
-      temple.add(m); return m;
+      templeParts.push({ mat: mat, w: w, h: hh, d: d, x: x, y: y, z: z, rx: rx || 0, ry: ry || 0, rz: rz || 0 });
+      return null;
     }
+    var templeParts = [];
     var mRed = new THREE.MeshLambertMaterial({ color: COL.red });
     var mRedD = new THREE.MeshLambertMaterial({ color: COL.redD });
     var mRoof = new THREE.MeshLambertMaterial({ color: COL.roof });
@@ -33197,12 +33287,15 @@ window.focus();
     TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, 3.05, 0, 0, -0.42);
     TB(mRoofD, 2.5, 0.22, 0.6, -5.0, 4.10, -3.05, 0, 0, 0.42);
     TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, -3.05, 0, 0, -0.42);
-    // 红灯笼
+    // 红灯笼（材质存起来，祈福时脉冲增亮）
+    var zzLampMats = [];
     for (side = 0; side < 2; side++) {
       var lx2 = side === 0 ? -3.3 : 3.3;
       var lp = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.3, 6), mRedD);
       lp.position.set(lx2, 1.15, 5.15); temple.add(lp);
-      var lb = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), new THREE.MeshLambertMaterial({ color: 0xd93b2b, emissive: 0x5a0f08 }));
+      var lm = new THREE.MeshLambertMaterial({ color: 0xd93b2b, emissive: 0x5a0f08 });
+      zzLampMats.push(lm);
+      var lb = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), lm);
       lb.scale.y = 1.25; lb.position.set(lx2, 2.45, 5.15); temple.add(lb);
       var lcap = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 8), mGold);
       lcap.position.set(lx2, 2.78, 5.15); temple.add(lcap);
@@ -33228,23 +33321,526 @@ window.focus();
     TB(mStone, 1.4, 3.2, 0.55, 4.2, 2.05, -4.6);
     var sp2 = plaqueMesh('中镇山', 1.2, 0.6, '#8f1d16', '#f4e6c8');
     sp2.position.set(4.2, 2.7, -4.30); sp2.rotation.y = Math.PI; temple.add(sp2);
+    mergeBoxes(temple, templeParts);
     scene.add(temple);
     STATS.temple = temple.children.length;
-    STATS.tris += temple.children.length * 12;
+    STATS.tris += templeParts.length * 12 + 400;
 
-    /* --- 3.9 汇总 --- */
+    /* --- 3.7b 瀑布加料：二级细瀑 · 湿岩色带 · 潭面溅水 --- */
+    (function cascade2() {
+      var a2 = 0.30, r50 = contourR(a2, 50), r38 = contourR(a2, 38);
+      if (r50 > 0 && r38 > r50) {
+        var c1x = CX + Math.cos(a2) * r50, c1z = CZ + Math.sin(a2) * r50;
+        var c2x = CX + Math.cos(a2) * r38, c2z = CZ + Math.sin(a2) * r38;
+        var q1 = new THREE.Vector3(c1x, 50, c1z), q2 = new THREE.Vector3(c2x, 38, c2z);
+        var qm = q1.clone().add(q2).multiplyScalar(0.5);
+        var qd = q2.clone().sub(q1), ql = qd.length(); qd.normalize();
+        var qs = new THREE.Vector3().crossVectors(qd, new THREE.Vector3(0, 1, 0)).normalize();
+        var qn = new THREE.Vector3().crossVectors(qs, qd).normalize();
+        var cw3 = new THREE.Mesh(new THREE.PlaneGeometry(2.2, ql, 1, 2), fallMatB);
+        cw3.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(qs, qd, qn));
+        cw3.position.copy(qm).addScaledVector(qn, 0.3);
+        scene.add(cw3);
+        var cp = new THREE.Mesh(new THREE.CircleGeometry(2.0, 18),
+          new THREE.MeshBasicMaterial({ color: 0x9fd6e8, transparent: true, opacity: 0.5, depthWrite: false }));
+        cp.rotation.x = -Math.PI / 2; cp.position.set(c2x, 37.85, c2z);
+        scene.add(cp);
+      }
+      // 湿岩色带（瀑布主体的深色水痕）
+      var wetBand = new THREE.Mesh(new THREE.PlaneGeometry(11.0, fallLen * 1.02, 1, 1),
+        new THREE.MeshBasicMaterial({ color: 0x241f1a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide }));
+      wetBand.quaternion.setFromRotationMatrix(basisF);
+      wetBand.position.copy(midF).addScaledVector(nrmF, 0.16);
+      scene.add(wetBand);
+      // 潭面溅水（Points）
+      var SPN = 46, spPos = new Float32Array(SPN * 3), spCol = new Float32Array(SPN * 3);
+      for (var s = 0; s < SPN; s++) {
+        var aa2 = Math.random() * 6.283, rr2 = Math.random() * 4.6;
+        spPos[s * 3] = poolX + Math.cos(aa2) * rr2;
+        spPos[s * 3 + 1] = poolY + 0.35 + Math.random() * 2.4;
+        spPos[s * 3 + 2] = poolZ + Math.sin(aa2) * rr2;
+        var f2 = 0.55 + Math.random() * 0.45;
+        spCol[s * 3] = f2; spCol[s * 3 + 1] = f2; spCol[s * 3 + 2] = f2;
+      }
+      var spGeo = new THREE.BufferGeometry();
+      spGeo.setAttribute('position', new THREE.BufferAttribute(spPos, 3));
+      spGeo.setAttribute('color', new THREE.BufferAttribute(spCol, 3));
+      var spl = new THREE.Points(spGeo, new THREE.PointsMaterial({
+        size: 0.55, map: mistTex, transparent: true, opacity: 0.55, depthWrite: false,
+        vertexColors: true, blending: THREE.AdditiveBlending, sizeAttenuation: true
+      }));
+      spl.frustumCulled = false;
+      scene.add(spl);
+      STATS.tris += 400;
+    })();
+
+    /* --- 3.9 山道设施：山门牌坊 · 凉亭 · 石凳 · 山涧小桥 --- */
+    function pbox(parent, mat, w, hh, d, x, y, z, ry) {
+      if (!parent._parts) parent._parts = [];
+      parent._parts.push({ mat: mat, w: w, h: hh, d: d, x: x, y: y, z: z, rx: 0, ry: ry || 0, rz: 0 });
+      return null;
+    }
+    function finishBoxes(parent) {
+      if (parent._parts) { mergeBoxes(parent, parent._parts); parent._parts = null; }
+    }
+    var mGateWood = new THREE.MeshLambertMaterial({ color: 0x6d3b1e });
+    var mGateWoodD = new THREE.MeshLambertMaterial({ color: 0x4e2a14 });
+    var mGateRoof = new THREE.MeshLambertMaterial({ color: COL.roofD });
+    var mGateStone = new THREE.MeshLambertMaterial({ color: COL.stoneD });
+
+    // 山门（牌坊）：架在登山道起点，两根木柱 + 横枋 + 小瓦顶 + 匾
+    (function gate() {
+      var gA = samples[2], gB = samples[4];
+      var gdx = gB.x - gA.x, gdz = gB.z - gA.z, gl = Math.sqrt(gdx * gdx + gdz * gdz) || 1;
+      var gx = (gA.x + gB.x) / 2, gz = (gA.z + gB.z) / 2;
+      var gy = zzHeight(gx, gz);
+      var gRot = -Math.atan2(gdz, gdx);
+      var grp = new THREE.Group();
+      grp.position.set(gx, gy, gz);
+      grp.rotation.y = gRot;
+      var p1 = pbox(grp, mGateWood, 0.46, 4.5, 0.46, 0, 2.0, -3.0);
+      var p2 = pbox(grp, mGateWood, 0.46, 4.5, 0.46, 0, 2.0, 3.0);
+      pbox(grp, mGateStone, 0.9, 0.5, 0.9, 0, 0.05, -3.0);
+      pbox(grp, mGateStone, 0.9, 0.5, 0.9, 0, 0.05, 3.0);
+      pbox(grp, mGateWoodD, 0.5, 0.42, 6.9, 0, 4.28, 0);
+      pbox(grp, mGateWoodD, 0.36, 0.3, 5.2, 0, 3.55, 0);
+      pbox(grp, mGateRoof, 1.5, 0.2, 7.8, 0, 4.62, 0);
+      pbox(grp, mGateRoof, 1.15, 0.28, 7.9, 0, 4.85, 0);
+      var gp = plaqueMesh('中镇山', 2.3, 0.62, '#5a2318', '#f0dfb8');
+      gp.position.set(-0.28, 4.28, 0); gp.rotation.y = -Math.PI / 2;
+      grp.add(gp);
+      finishBoxes(grp);
+      scene.add(grp);
+      STATS.props = (STATS.props || 0) + 1;
+    })();
+
+    // 凉亭：北肩 74m 的小平台上（平台已在高度场里压平）
+    (function pavilion() {
+      var px = 660, pz = -300, py = zzHeight(px, pz);
+      var P = new THREE.Group();
+      P.position.set(px, py, pz);
+      P.rotation.y = 0.45;
+      pbox(P, mGateStone, 5.6, 0.24, 5.6, 0, 0.1, 0);
+      var postM = new THREE.MeshLambertMaterial({ color: 0x6d3b1e });
+      pbox(P, postM, 0.24, 2.9, 0.24, -2.25, 1.55, -2.25);
+      pbox(P, postM, 0.24, 2.9, 0.24, 2.25, 1.55, -2.25);
+      pbox(P, postM, 0.24, 2.9, 0.24, -2.25, 1.55, 2.25);
+      pbox(P, postM, 0.24, 2.9, 0.24, 2.25, 1.55, 2.25);
+      pbox(P, mGateWoodD, 4.9, 0.18, 4.9, 0, 3.02, 0);
+      var roof = new THREE.Mesh(new THREE.ConeGeometry(4.0, 1.85, 4), mGateRoof);
+      roof.rotation.y = Math.PI / 4; roof.position.y = 3.95; P.add(roof);
+      var fin = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshLambertMaterial({ color: COL.gold, emissive: 0x33240a }));
+      fin.position.y = 5.0; P.add(fin);
+      pbox(P, mGateWood, 3.1, 0.14, 0.44, 0, 0.62, 1.75);       // 长凳
+      pbox(P, mGateStone, 3.1, 0.46, 0.36, 0, 0.3, 1.75);
+      finishBoxes(P);
+      scene.add(P);
+      STATS.props = (STATS.props || 0) + 1;
+    })();
+
+    // 山顶石凳（三张，围着观景面向西）
+    (function benches() {
+      for (var b = 0; b < 3; b++) {
+        var bz = -6 + b * 6, bx = 673.5;
+        var g = new THREE.Group(); g.position.set(bx, 105, bz);
+        pbox(g, mGateStone, 1.9, 0.16, 0.52, 0, 0.46, 0);
+        pbox(g, mGateStone, 0.34, 0.44, 0.44, -0.7, 0.22, 0);
+        pbox(g, mGateStone, 0.34, 0.44, 0.44, 0.7, 0.22, 0);
+        finishBoxes(g);
+        scene.add(g);
+      }
+      STATS.props = (STATS.props || 0) + 3;
+    })();
+
+    // 山涧小桥：瀑布潭下游
+    (function bridge() {
+      var bx = 846, bz1 = 13.5, bz2 = 24.5;
+      var h1 = zzHeight(bx, bz1), h2 = zzHeight(bx, bz2);
+      var deckY = Math.max(h1, h2) + 0.22;
+      var g = new THREE.Group(); g.position.set(bx, 0, (bz1 + bz2) / 2); g.rotation.y = Math.PI / 2;
+      pbox(g, mGateStone, 11.6, 0.32, 2.5, 0, deckY, 0);
+      pbox(g, mGateStone, 11.8, 0.5, 0.24, 0, deckY + 0.42, 1.15);
+      pbox(g, mGateStone, 11.8, 0.5, 0.24, 0, deckY + 0.42, -1.15);
+      pbox(g, mGateStone, 1.5, 3.4, 2.9, -5.0, deckY - 1.6, 0);
+      pbox(g, mGateStone, 1.5, 3.4, 2.9, 5.0, deckY - 1.6, 0);
+      finishBoxes(g);
+      scene.add(g);
+      STATS.props = (STATS.props || 0) + 5;
+    })();
+
+    /* --- 3.10 云雾：贴坡雾带（合批 1 个 mesh）+ 山脚霾环 --- */
+    (function mist() {
+      var cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
+      var c = cv.getContext('2d');
+      var gv = c.createLinearGradient(0, 0, 0, 64);
+      gv.addColorStop(0, 'rgba(255,255,255,0)');
+      gv.addColorStop(0.42, 'rgba(255,255,255,0.9)');
+      gv.addColorStop(0.62, 'rgba(255,255,255,0.9)');
+      gv.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gv; c.fillRect(0, 0, 128, 64);
+      var gh = c.createLinearGradient(0, 0, 128, 0);
+      gh.addColorStop(0, 'rgba(0,0,0,1)');
+      gh.addColorStop(0.28, 'rgba(0,0,0,0)');
+      gh.addColorStop(0.72, 'rgba(0,0,0,0)');
+      gh.addColorStop(1, 'rgba(0,0,0,1)');
+      c.globalCompositeOperation = 'destination-out';
+      c.fillStyle = gh; c.fillRect(0, 0, 128, 64);
+      c.globalCompositeOperation = 'source-over';
+      var ftex = new THREE.CanvasTexture(cv);
+
+      var fp = [], fu = [], fi = [], vi = 0;
+      function quad(cx, cy, cz, w, h, ry) {
+        var dx = Math.cos(ry) * w * 0.5, dz = -Math.sin(ry) * w * 0.5;
+        fp.push(cx - dx, cy - h * 0.5, cz - dz, cx + dx, cy - h * 0.5, cz + dz,
+          cx + dx, cy + h * 0.5, cz + dz, cx - dx, cy + h * 0.5, cz - dz);
+        fu.push(0, 0, 1, 0, 1, 1, 0, 1);
+        fi.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+        vi += 4;
+      }
+      var k;
+      for (k = 0; k < 11; k++) {
+        var a = k * 0.5712 + 0.35;
+        var rr = 146 + Math.sin(k * 2.3) * 15;
+        quad(694 + Math.cos(a) * rr, 34 + Math.sin(k * 1.7) * 5.5, Math.sin(a) * rr, 82, 17, -a - Math.PI / 2);
+      }
+      for (k = 0; k < 9; k++) {
+        var a2 = k * 0.6981 + 0.95;
+        var rr2 = 192 + Math.cos(k * 1.9) * 20;
+        quad(694 + Math.cos(a2) * rr2, 20 + Math.cos(k * 2.1) * 4, Math.sin(a2) * rr2, 96, 13, -a2 - Math.PI / 2);
+      }
+      var fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+      fg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2));
+      fg.setIndex(fi);
+      var fogMesh = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({
+        map: ftex, transparent: true, opacity: 0.17, depthWrite: false, side: THREE.DoubleSide
+      }));
+      fogMesh.renderOrder = 2;
+      scene.add(fogMesh);
+      STATS.fogQuads = vi / 4;
+      // 说明：不另加大范围贴地云环 —— 山体离两座城太近，任何 y≈1.5 的大环都会
+      // 横穿旧城街道。雾带只用上面 20 片贴坡雾 + 场景自带 Fog 来表达层次。
+    })();
+
+    /* --- 3.11 祈福台：香炉 · 功德箱 · 祈福碑 · 丝带 · 香火 --- */
+    var PRAY = {
+      x: 683.6, z: 0, y: 105.12,
+      steleX: 687.8, steleZ: 0,
+      last: -99999, ribbons: 0, near: false, t: -1, prayers: 0
+    };
+    var prayMatStone = new THREE.MeshLambertMaterial({ color: 0x9a9488 });
+    var prayMatDark = new THREE.MeshLambertMaterial({ color: 0x5d564c });
+    var prayMatBronze = new THREE.MeshLambertMaterial({ color: 0x7a5f35, emissive: 0x1a1206 });
+    var prayMatWood = new THREE.MeshLambertMaterial({ color: 0x6d3b1e });
+
+    var pave = new THREE.Mesh(new THREE.BoxGeometry(8, 0.12, 7), new THREE.MeshLambertMaterial({ color: 0x8a8377 }));
+    pave.position.set(686, 105.06, 0);
+    scene.add(pave);
+
+    var burner = new THREE.Group();
+    burner.position.set(PRAY.x, PRAY.y, PRAY.z);
+    var bBody = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.44, 0.72, 10), prayMatBronze);
+    bBody.position.y = 0.36; burner.add(bBody);
+    var bRim = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.1, 10), prayMatBronze);
+    bRim.position.y = 0.77; burner.add(bRim);
+    var imLeg = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 0.44, 6), prayMatBronze, 3);
+    for (i = 0; i < 3; i++) {
+      var la = i * 2.094;
+      dummy.position.set(Math.cos(la) * 0.38, -0.02, Math.sin(la) * 0.38);
+      dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix(); imLeg.setMatrixAt(i, dummy.matrix);
+    }
+    imLeg.count = 3; imLeg.instanceMatrix.needsUpdate = true; burner.add(imLeg);
+
+    var stickGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.62, 4);
+    stickGeo.translate(0, 0.31, 0);
+    var imStick = new THREE.InstancedMesh(stickGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3a }), 3);
+    var TIPS_W = [];
+    for (i = 0; i < 3; i++) {
+      var sa = i * 2.094 + 0.4, sr = 0.15;
+      var lx = Math.cos(sa) * sr, lz = Math.sin(sa) * sr;
+      dummy.position.set(lx, 0.79, lz);
+      dummy.rotation.set(Math.cos(sa) * 0.14, 0, -Math.sin(sa) * 0.14);
+      dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      imStick.setMatrixAt(i, dummy.matrix);
+      TIPS_W.push(new THREE.Vector3(PRAY.x + lx, PRAY.y + 0.79 + 0.6, PRAY.z + lz));
+    }
+    imStick.count = 3; imStick.instanceMatrix.needsUpdate = true; burner.add(imStick);
+
+    var tipMat = new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0 });
+    var imTip = new THREE.InstancedMesh(new THREE.SphereGeometry(0.036, 6, 4), tipMat, 3);
+    for (i = 0; i < 3; i++) {
+      dummy.position.set(Math.cos(i * 2.094 + 0.4) * 0.15, 0.79 + 0.6, Math.sin(i * 2.094 + 0.4) * 0.15);
+      dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix(); imTip.setMatrixAt(i, dummy.matrix);
+    }
+    imTip.count = 3; imTip.instanceMatrix.needsUpdate = true; burner.add(imTip);
+    scene.add(burner);
+
+    // 功德箱
+    var merit = new THREE.Group();
+    merit.position.set(683.9, PRAY.y, -2.7);
+    merit.rotation.y = 0.28;
+    pbox(merit, prayMatWood, 1.05, 0.82, 0.64, 0, 0.41, 0);
+    pbox(merit, new THREE.MeshLambertMaterial({ color: 0x2e2114 }), 0.98, 0.06, 0.12, 0, 0.84, 0);
+    pbox(merit, new THREE.MeshLambertMaterial({ color: 0x8a5a3a }), 1.16, 0.07, 0.74, 0, 0.87, 0);
+    finishBoxes(merit);
+    scene.add(merit);
+
+    // 祈福碑（正对来路，朝西）
+    var pstele = new THREE.Group();
+    pstele.position.set(PRAY.steleX, PRAY.y, PRAY.steleZ);
+    pbox(pstele, prayMatDark, 1.9, 0.28, 1.5, 0, 0.14, 0);
+    pbox(pstele, prayMatStone, 0.42, 3.0, 1.15, 0, 1.78, 0);
+    pbox(pstele, prayMatDark, 0.5, 0.2, 1.3, 0, 3.36, 0);
+    var pp1 = plaqueMesh('祈福', 0.95, 0.6, '#8f1d16', '#f4e6c8');
+    pp1.position.set(-0.23, 2.45, 0); pp1.rotation.y = -Math.PI / 2; pstele.add(pp1);
+    var pp2 = plaqueMesh('中镇山', 0.92, 0.52, '#8f1d16', '#f4e6c8');
+    pp2.position.set(-0.23, 3.0, 0); pp2.rotation.y = -Math.PI / 2; pstele.add(pp2);
+    finishBoxes(pstele);
+    scene.add(pstele);
+
+    // 祈福丝带（最多 9 条，永久保留）
+    var imRib = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.17, 0.42),
+      new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }), 9);
+    imRib.frustumCulled = false; imRib.count = 0;
+    scene.add(imRib);
+    function updateRibbons() {
+      for (var r = 0; r < PRAY.ribbons; r++) {
+        var rz = -0.46 + (r % 5) * 0.23;
+        var ry = 2.95 - Math.floor(r / 5) * 0.52;
+        dummy.position.set(PRAY.steleX - 0.25, PRAY.y + ry, PRAY.steleZ + rz);
+        dummy.rotation.set(0, -Math.PI / 2, (r % 2 ? 1 : -1) * 0.12);
+        dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+        imRib.setMatrixAt(r, dummy.matrix);
+        tcol.setHex([0xc0392b, 0xd94f3d, 0xa8322a][r % 3]);
+        imRib.setColorAt(r, tcol);
+      }
+      imRib.count = PRAY.ribbons;
+      imRib.instanceMatrix.needsUpdate = true;
+      if (imRib.instanceColor) imRib.instanceColor.needsUpdate = true;
+    }
+
+    // 香火粒子
+    var SMOKE_N = 180, MOTE_N = 140;
+    var smokePos = new Float32Array(SMOKE_N * 3), smokeCol = new Float32Array(SMOKE_N * 3);
+    var motePos = new Float32Array(MOTE_N * 3), moteCol = new Float32Array(MOTE_N * 3);
+    for (i = 0; i < SMOKE_N; i++) smokePos[i * 3 + 1] = -9999;
+    for (i = 0; i < MOTE_N; i++) motePos[i * 3 + 1] = -9999;
+    var smokeGeo = new THREE.BufferGeometry();
+    smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePos, 3));
+    smokeGeo.setAttribute('color', new THREE.BufferAttribute(smokeCol, 3));
+    var smokeMat = new THREE.PointsMaterial({
+      size: 0.42, map: mistTex, transparent: true, opacity: 0.6, depthWrite: false,
+      vertexColors: true, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    var smokePts = new THREE.Points(smokeGeo, smokeMat);
+    smokePts.frustumCulled = false; scene.add(smokePts);
+
+    var moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    moteGeo.setAttribute('color', new THREE.BufferAttribute(moteCol, 3));
+    var moteMat = new THREE.PointsMaterial({
+      size: 0.3, map: mistTex, transparent: true, opacity: 0.9, depthWrite: false,
+      vertexColors: true, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    var motePts = new THREE.Points(moteGeo, moteMat);
+    motePts.frustumCulled = false; scene.add(motePts);
+
+    // 暖光（常驻，强度 0，祈福时脉冲）
+    var prayLight = new THREE.PointLight(0xffb066, 0, 36, 2);
+    prayLight.position.set(PRAY.x, PRAY.y + 1.7, PRAY.z);
+    scene.add(prayLight);
+
+    function updateSmoke(t) {
+      var p = smokeGeo.attributes.position.array, c = smokeGeo.attributes.color.array;
+      for (var s = 0; s < SMOKE_N; s++) {
+        var st = s % 3, kk = (s - st) / 3;
+        var age = t - kk * 0.045;
+        if (age < 0 || age > 3.8) { p[s * 3 + 1] = -9999; continue; }
+        var tip = TIPS_W[st], f = 1 - age / 3.8;
+        p[s * 3] = tip.x + 0.26 * Math.sin(age * 2.1 + kk * 0.63) + age * 0.15;
+        p[s * 3 + 1] = tip.y + age * 1.3;
+        p[s * 3 + 2] = tip.z + 0.22 * Math.sin(age * 1.7 + kk * 0.91);
+        c[s * 3] = 0.95 * f; c[s * 3 + 1] = 0.8 * f; c[s * 3 + 2] = 0.6 * f;
+      }
+      smokeGeo.attributes.position.needsUpdate = true;
+      smokeGeo.attributes.color.needsUpdate = true;
+    }
+    function updateMotes(t) {
+      var p = moteGeo.attributes.position.array, c = moteGeo.attributes.color.array;
+      var on = t > 0.7 && t < 6.4;
+      var fade = Math.min(1, (t - 0.7) * 2) * Math.min(1, Math.max(0, (6.4 - t) * 1.3));
+      for (var m = 0; m < MOTE_N; m++) {
+        if (!on) { p[m * 3 + 1] = -9999; continue; }
+        var ph = m / MOTE_N;
+        var ang = ph * 6.2832 + t * 1.35;
+        var rad = 1.25 + 0.5 * Math.sin(t * 0.9 + ph * 6.2832);
+        p[m * 3] = PRAY.steleX + Math.cos(ang) * rad;
+        p[m * 3 + 1] = PRAY.y + 0.25 + (t - 0.7) * 0.62 + 0.35 * Math.sin(ph * 12.5 + t * 2.2);
+        p[m * 3 + 2] = PRAY.steleZ + Math.sin(ang) * rad;
+        c[m * 3] = fade; c[m * 3 + 1] = 0.78 * fade; c[m * 3 + 2] = 0.34 * fade;
+      }
+      moteGeo.attributes.position.needsUpdate = true;
+      moteGeo.attributes.color.needsUpdate = true;
+    }
+    function updateLamp(t) {
+      var k = Math.max(0, 1 - Math.abs(t - 1.15) / 1.7);
+      for (var l = 0; l < zzLampMats.length; l++) {
+        zzLampMats[l].emissive.setRGB(0.35 * (0.35 + 0.65 * k), 0.055 + 0.30 * k, 0.03 + 0.05 * k);
+      }
+      prayLight.intensity = 1.9 * k;
+      tipMat.opacity = Math.min(0.92, 0.35 + t * 1.2);
+    }
+    function hideFx() {
+      for (var s = 0; s < SMOKE_N; s++) smokePos[s * 3 + 1] = -9999;
+      for (var m = 0; m < MOTE_N; m++) motePos[m * 3 + 1] = -9999;
+      smokeGeo.attributes.position.needsUpdate = true;
+      moteGeo.attributes.position.needsUpdate = true;
+      for (var l = 0; l < zzLampMats.length; l++) zzLampMats[l].emissive.setRGB(0.35, 0.055, 0.03);
+      prayLight.intensity = 0;
+      tipMat.opacity = 0.9;
+    }
+
+    /* --- 3.12 祈福交互：按 E / 点按钮 --- */
+    function prayInRange() {
+      try {
+        if (typeof person === 'undefined' || !person || !person.position) return false;
+        if (typeof currentCar !== 'undefined' && currentCar) return false;
+        if (typeof playerInCar !== 'undefined' && playerInCar) return false;
+        var dx = person.position.x - PRAY.x, dz = person.position.z - PRAY.z;
+        if (dx * dx + dz * dz > 17.6) return false;                     // 4.2 m
+        return Math.abs(person.position.y - 105) < 9;
+      } catch (e) { return false; }
+    }
+
+    var uiBtn = null, uiTxt = null;
+    try {
+      uiBtn = document.createElement('div');
+      uiBtn.id = 'zz-pray-btn';
+      var isMob = false;
+      try { isMob = (typeof isMobile !== 'undefined' && !!isMobile); } catch (eM) { }
+      uiBtn.textContent = isMob ? '点此祈福' : '按 E 祈福';
+      PRAY.label = uiBtn.textContent;
+      uiBtn.style.cssText = 'position:fixed;left:50%;bottom:27%;transform:translateX(-50%);' +
+        'padding:10px 24px;border-radius:24px;background:rgba(122,22,16,0.9);color:#ffe9b8;' +
+        'font:600 17px/1.2 "Microsoft YaHei",sans-serif;letter-spacing:3px;' +
+        'border:1px solid rgba(255,214,140,0.6);box-shadow:0 0 22px rgba(255,150,60,0.35),0 4px 16px rgba(0,0,0,0.5);' +
+        'z-index:99999;display:none;cursor:pointer;user-select:none;-webkit-user-select:none;' +
+        'touch-action:manipulation;white-space:nowrap;';
+      document.body.appendChild(uiBtn);
+      uiTxt = document.createElement('div');
+      uiTxt.style.cssText = 'position:fixed;left:50%;top:33%;transform:translateX(-50%);' +
+        'color:#ffe6a8;font:600 27px/1.4 "Microsoft YaHei","Songti SC",serif;letter-spacing:7px;' +
+        'text-shadow:0 0 20px rgba(255,170,80,0.9),0 2px 8px rgba(0,0,0,0.75);' +
+        'z-index:99999;opacity:0;transition:opacity 0.9s ease;pointer-events:none;white-space:nowrap;';
+      uiTxt.textContent = '祈福 · 願望已上達';
+      document.body.appendChild(uiTxt);
+    } catch (eUI) { }
+
+    var fxRAF = 0, fxPrev = 0;
+    function fxStep(ts) {
+      fxRAF = 0;
+      var dt = Math.min(0.12, Math.max(0, (ts - fxPrev) / 1000));
+      fxPrev = ts;
+      PRAY.t += dt;
+      var t = PRAY.t;
+      try {
+        updateSmoke(t); updateMotes(t); updateLamp(t);
+        if (uiTxt) uiTxt.style.opacity = (t > 1.9 && t < 5.8) ? '1' : '0';
+      } catch (eF) { }
+      if (t < 7.2) fxRAF = requestAnimationFrame(fxStep);
+      else { PRAY.t = -1; hideFx(); }
+    }
+    function startFx() {
+      if (fxRAF) return;
+      fxPrev = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      fxRAF = requestAnimationFrame(fxStep);
+    }
+    function bellStrikes() {
+      try {
+        if (typeof beep !== 'function') return;
+        var at = [0, 850, 1700];
+        for (var s = 0; s < at.length; s++) {
+          (function (d) {
+            setTimeout(function () {
+              try {
+                beep(220, 2.7, 'sine', 0.15);
+                beep(440, 2.0, 'sine', 0.08);
+                beep(660, 1.5, 'sine', 0.045);
+                beep(110, 3.0, 'sine', 0.06);
+              } catch (eB) { }
+            }, d);
+          })(at[s]);
+        }
+      } catch (eA) { }
+    }
+    function prayNow() {
+      if (!prayInRange()) return false;
+      var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (now - PRAY.last < 3000) return false;
+      PRAY.last = now;
+      PRAY.prayers++;
+      PRAY.ribbons = Math.min(9, PRAY.ribbons + 1);
+      updateRibbons();
+      PRAY.t = 0;
+      startFx();
+      bellStrikes();
+      if (uiTxt) uiTxt.style.opacity = '0';
+      if (uiBtn) {
+        uiBtn.textContent = '祈福中…';
+        setTimeout(function () {
+          try { if (uiBtn) uiBtn.textContent = PRAY.label; } catch (eR) { }
+        }, 1200);
+      }
+      STATS.prayers = PRAY.prayers;
+      return true;
+    }
+    window.__zzPray = prayNow;
+    window.__zzPrayState = PRAY;
+
+    try {
+      if (uiBtn) {
+        uiBtn.addEventListener('pointerdown', function (ev) {
+          try { ev.preventDefault(); ev.stopPropagation(); } catch (e0) { }
+          prayNow();
+        }, { passive: false });
+      }
+      document.addEventListener('keydown', function (ev) {
+        try {
+          if (!ev || ev.repeat) return;
+          var ae = document.activeElement;
+          if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+          var k = ev.key || '';
+          if (k === 'e' || k === 'E' || ev.code === 'KeyE') {
+            if (prayInRange()) prayNow();
+          }
+        } catch (eK) { }
+      });
+      setInterval(function () {
+        try {
+          var on = prayInRange();
+          if (on === PRAY.near) return;
+          PRAY.near = on;
+          if (uiBtn) uiBtn.style.display = on ? 'block' : 'none';
+          if (on) { try { if (typeof setHint === 'function') setHint('按 E 祈福 · 中镇山'); } catch (eH) { } }
+        } catch (eP) { }
+      }, 260);
+    } catch (eEv) { }
+
+    /* --- 3.15 汇总 --- */
     window.__ZZ_STATS = STATS;
     try {
-      console.log('[中镇山] 主峰 105m · 山峰 ' + PEAKS.length + ' 座 · 树 ' + made +
+      console.log('[中镇山] 主峰 105m · 树 ' + made + '（松' + nPine + '/阔' + nBroad + '/灌' + nShrub + '）' +
         ' · 岩 ' + rMade + ' · 踏步 ' + treadN + ' · 栏杆柱 ' + pn +
-        ' · 祠堂构件 ' + STATS.temple + ' · 新增三角面 ≈ ' + Math.round(STATS.tris) +
-        ' · 已挂钩 ' + hooked.join('/'));
+        ' · 祠堂 ' + STATS.temple + ' · 雾片 ' + (STATS.fogQuads || 0) +
+        ' · 祈福点 (' + PRAY.x + ',' + PRAY.z + ') · 三角面≈' + Math.round(STATS.tris) +
+        ' · 挂钩 ' + hooked.join('/'));
     } catch (eL) { }
   } catch (eBuild) {
     try { console.warn('[中镇山] 几何构建失败（地形高度仍已生效）：', eBuild && eBuild.message); } catch (e2) { }
   }
 })();
-
 </script>
 <!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
      再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
