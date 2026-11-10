@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix396-deckbig';
+const BUILD = '20261107-fix398-rampdeck';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27347,7 +27347,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
     // 【fix382】台面改几何砖铺地：InstancedMesh 一次性画完，每块砖独立实体 + 缝隙
     (function podiumBrickGeo() {
-      const S = 3.0, X0p = 1762, X1p = 2200, Z0p = -872, Z1p = -120;
+      const S = 3.0, X0p = 1876, X1p = 2174, Z0p = -844, Z1p = -80;   // 砖地只铺平台本体（平台外是坡道，铺砖会悬空）
       const nx = Math.floor((X1p - X0p) / S), nz = Math.floor((Z1p - Z0p) / S);
       const geo = new THREE.BoxGeometry(S - 0.07, 0.12, S - 0.07);
       const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -28604,9 +28604,10 @@ m4a.position.set(AX, BASE + 0.18, -141);
     const _YB = 2.6, _WTOP = 2.6 + 9.2;
     linhaiHeight = function (x, z) {
       let h = _lh0(x, z);
-      if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
+      if ((x > 1846 && x < 2204 && z < -50 && z > -874) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
         let bb = _YB;
         if (z > -136) { bb = _YB * (-124 - z) / 12; if (bb < 0) bb = 0; }
+        { const kx = Math.min((x - 1846) / 30, (2204 - x) / 30), kz = Math.min((-50 - z) / 30, (z + 874) / 30); const kk = Math.max(0, Math.min(1, Math.min(kx, kz))); bb = bb * kk; }
 
         if (bb > h) h = bb;
       }
@@ -28642,9 +28643,10 @@ m4a.position.set(AX, BASE + 0.18, -141);
       const _th0 = terrainHeight;
       terrainHeight = function (x, z) {
         let h = _th0(x, z);
-        if ((x > 1876 && x < 2174 && z < -80 && z > -844) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
+        if ((x > 1846 && x < 2204 && z < -50 && z > -874) || (x > 1782 && x < 1886 && z > -288 && z < -156) || (x > 2164 && x < 2268 && z > -288 && z < -156)) {
           let bb = 2.6;
           if (z > -136) { bb = 2.6 * (-124 - z) / 12; if (bb < 0) bb = 0; }
+          { const kx = Math.min((x - 1846) / 30, (2204 - x) / 30), kz = Math.min((-50 - z) / 30, (z + 874) / 30); const kk = Math.max(0, Math.min(1, Math.min(kx, kz))); bb = bb * kk; }
 
           if (bb > h) h = bb;
         }
