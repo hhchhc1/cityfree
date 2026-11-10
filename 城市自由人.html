@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix409-camfeet';
+const BUILD = '20261107-fix410-wallout';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -25923,7 +25923,9 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
   // 【fix166】用户："城墙到这里就戛然而止了，要绕到苏州园林那边"。
   // 原来主墙只有 ZLEN-60 长、到 z≈-115 就断掉，断口悬在半空。现在往南延伸到 z=150，
   // 把苏州园林那一整片也围进来。
-  const _WZ0 = ZC - ZLEN / 2 + 30, _WZ1 = 300;   // 【fix210】用户：城墙原来在 z=150 把园林切在外面，延到 300 把园林围进来
+  // 【fix410】北墙原来正好横穿衙署（z≈-730），把整座衙署切成两半。
+  // 把城墙北端整体外移到 z=-886，衙署(北至-844)就完整落在城墙之内、不再被墙切开。
+  const _WZ0 = Math.min(ZC - ZLEN / 2 + 30, -886), _WZ1 = 300;   // 【fix210】用户：城墙原来在 z=150 把园林切在外面，延到 300 把园林围进来
   const cw = new THREE.Mesh(new THREE.BoxGeometry(7, 8.5, _WZ1 - _WZ0), wallM);
   cw.position.set(wallX, 4.25, (_WZ0 + _WZ1) / 2); add(cw);
   // 【fix94】城墙碰撞盒必须**在城门处留门洞**！原来是一整条连续碰撞（minZ→maxZ），
