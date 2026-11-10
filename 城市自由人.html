@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix436-deck2';
+const BUILD = '20261112-fix437-pool';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34040,6 +34040,48 @@ window.focus();
       scene.add(bench);
     }
   } catch (eZZ4) {}
+})();
+
+// 【fix437】中镇山六期：瀑布水潭水面 + 山顶两位跪拜香客
+(function zzPoolAndPilgrims() {
+  try {
+    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
+    if (!_th) return;
+    // 1) 水潭水面：半透明蓝盘，比潭底高 25 厘米，不写深度以免和石头打架
+    var PX = 846, PZ = 19;
+    var py = _th(PX, PZ);
+    var waterMat = new THREE.MeshLambertMaterial({ color: 0x4d86a8, transparent: true, opacity: 0.72, depthWrite: false });
+    var water = new THREE.Mesh(new THREE.CircleGeometry(6.2, 26), waterMat);
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(PX, py + 0.25, PZ);
+    scene.add(water);
+    // 潭边一层浅水反光边（稍大一圈，更透）
+    var rim = new THREE.Mesh(new THREE.RingGeometry(6.2, 7.1, 26), new THREE.MeshLambertMaterial({ color: 0x9fc6d8, transparent: true, opacity: 0.35, depthWrite: false }));
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(PX, py + 0.22, PZ);
+    scene.add(rim);
+    // 2) 两位跪拜香客：朝向祠堂（东），上身微前倾，双手合十
+    var robe = new THREE.MeshLambertMaterial({ color: 0x2f3d52 });
+    var robe2 = new THREE.MeshLambertMaterial({ color: 0x4a3b52 });
+    var skin = new THREE.MeshLambertMaterial({ color: 0xd9b596 });
+    var spots = [[-3.6, -1.2, robe], [-3.6, 1.2, robe2]];
+    for (var i = 0; i < spots.length; i++) {
+      var gx = 683.6 + spots[i][0], gz = 0 + spots[i][1];
+      var gy2 = _th(gx, gz);
+      var g = new THREE.Group();
+      var low = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), spots[i][2]);
+      low.position.set(0, 0.21, 0); g.add(low);
+      var up = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.72, 0.5), spots[i][2]);
+      up.position.set(0.10, 0.62, 0); up.rotation.z = -0.42; g.add(up);
+      var head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skin);
+      head.position.set(0.28, 1.00, 0); g.add(head);
+      var hands = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.30, 0.16), skin);
+      hands.position.set(0.40, 0.78, 0); hands.rotation.z = -0.42; g.add(hands);
+      g.position.set(gx, gy2, gz);
+      g.rotation.y = -Math.PI / 2;   // 面朝东（祠堂）
+      scene.add(g);
+    }
+  } catch (eZZ5) {}
 })();
 </script>
 </body>
