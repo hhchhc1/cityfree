@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix398-rampdeck';
+const BUILD = '20261107-fix399-groundy';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28695,6 +28695,23 @@ m4a.position.set(AX, BASE + 0.18, -141);
       window.__FLOORS.push({ x0: 1876, x1: 2174, z0: -846, z1: -82, top: 2.95 });
       window.__yamenFloorReg = window.__FLOORS.length;
     } catch (eF) { window.__yamenFloorRegErr = String(eF); }
+    // 【fix399】人物行走真正查的是 personGroundY（不是 terrainHeight / linhaiHeight），
+    // 之前几版都没包到它，所以坡道和台地高度对走路完全无效 —— 这次直接包 personGroundY。
+    try {
+      const _pg0 = personGroundY;
+      personGroundY = function (x, z) {
+        let h = _pg0(x, z);
+        if (x > 1846 && x < 2204 && z < -50 && z > -874) {
+          const kx = Math.min((x - 1846) / 30, (2204 - x) / 30);
+          const kz = Math.min((-50 - z) / 30, (z + 874) / 30);
+          const kk = Math.max(0, Math.min(1, Math.min(kx, kz)));
+          const bb = 2.6 * kk;
+          if (bb > h) h = bb;
+        }
+        return h;
+      };
+      window.__yamenGroundY = 1;
+    } catch (ePG) { window.__yamenGroundYErr = String(ePG); }
     window.__yamenPlateau = 1;
   } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
