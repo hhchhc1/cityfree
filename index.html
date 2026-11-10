@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix439-salvo';
+const BUILD = '20261112-fix440-bigmountain';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32686,13 +32686,13 @@ window.focus();
   var H = 108;                 // 主峰基准高
   var CX = 694, CZ = 0;        // 主峰中心
   var PEAKS = [
-    { x: 694, z: 0,    h: 108, rx: 186, rz: 205 }, // 主峰 中镇峰
-    { x: 660, z: -300, h: 74,  rx: 152, rz: 200 }, // 北肩
-    { x: 708, z: 285,  h: 82,  rx: 170, rz: 185 }, // 南肩
-    { x: 700, z: -570, h: 60,  rx: 160, rz: 190 }, // 远北（航道上，接荷芷市方向）
-    { x: 700, z: 390,  h: 56,  rx: 150, rz: 100 }, // 远南
-    { x: 775, z: -60,  h: 66,  rx: 100, rz: 130 }, // 东侧岩肩
-    { x: 566, z: 60,   h: 58,  rx: 58,  rz: 110 }  // 西侧孤峰（山脚地标）
+    { x: 694, z: 0,    h: 108, rx: 275, rz: 330 }, // 主峰 中镇峰（fix440 放大 1.5 倍）
+    { x: 664, z: -320, h: 84,  rx: 235, rz: 315 }, // 北肩
+    { x: 706, z: 330,  h: 92,  rx: 255, rz: 290 }, // 南肩
+    { x: 700, z: -670, h: 68,  rx: 245, rz: 300 }, // 远北
+    { x: 702, z: 505,  h: 62,  rx: 225, rz: 160 }, // 远南
+    { x: 800, z: -60,  h: 74,  rx: 150, rz: 205 }, // 东侧岩肩
+    { x: 566, z: 60,   h: 60,  rx: 95,  rz: 175 }  // 西侧孤峰（山脚地标）
   ];
 
   function zzClamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
@@ -32710,17 +32710,17 @@ window.focus();
     }
     var h = H * (1 - inv);
     // 外缘强制归零（16m 平滑带）：保证四面八方都以 0 高度并入既有地面，不出断崖
-    h *= zzSS(506, 522, x) * zzSS(882, 866, x) * zzSS(-810, -790, z) * zzSS(500, 480, z);
+    h *= zzSS(506, 522, x) * zzSS(958, 936, x) * zzSS(-1002, -978, z) * zzSS(752, 726, z);
 
     // 主峰上盘旋而上的登山道：把高度场直接切成一条 2 圈、坡度 8% 的螺旋梯级坡道
     var sdx = x - CX, sdz = z - CZ, r = Math.sqrt(sdx * sdx + sdz * sdz);
-    if (r < 180 && r > 0.5) {
+    if (r < 300 && r > 0.5) {
       var a = Math.atan2(sdz, sdx), span = 2 * Math.PI * 2, best = null, k;
       for (k = 0; k < 2; k++) {
         var aa = a - Math.PI + k * 2 * Math.PI;
         aa = ((aa % span) + span) % span;
         var s = aa / span;
-        var rt = 170 + (36 - 170) * s;
+        var rt = 300 + (70 - 300) * s;
         var lat = Math.abs(r - rt);
         if (!best || lat < best.lat) best = { s: s, lat: lat };
       }
@@ -32728,7 +32728,7 @@ window.focus();
       if (w > 0) h = h * (1 - w) + (2.6 + (105 - 2.6) * best.s) * w;
     }
     // 山顶平台（祠堂/石碑的地基）
-    if (r < 48) { var pw = 1 - zzSS(34, 48, r); h = h * (1 - pw) + 105 * pw; }
+    if (r < 96) { var pw = 1 - zzSS(70, 96, r); h = h * (1 - pw) + 105 * pw; }  // fix440 山顶平台放大
     // 东崖瀑布下的水潭（把坡面压成一个小圆盆）
     var bdx = x - 849, bdz = z - 12, bd = Math.sqrt(bdx * bdx + bdz * bdz);
     if (bd < 6.5) { var bw = 1 - zzSS(5.0, 6.5, bd); h = h * (1 - bw) + 10.8 * bw; }
@@ -32787,7 +32787,7 @@ window.focus();
     };
 
     /* --- 3.1 地形网格（顶点色 + 裙边） --- */
-    var STEP = 6.5, X0 = 500, X1 = 884, Z0 = -812, Z1 = 492;
+    var STEP = 9.0, X0 = 500, X1 = 960, Z0 = -1010, Z1 = 760;   // fix440 山体大幅放大
     var nx = Math.round((X1 - X0) / STEP), nz = Math.round((Z1 - Z0) / STEP);
     var vc = (nx + 1) * (nz + 1);
     var pos = new Float32Array(vc * 3), colArr = new Float32Array(vc * 3);
@@ -32810,8 +32810,9 @@ window.focus();
           var gz2 = (zzMassif(vx, vz + 2.5) - zzMassif(vx, vz - 2.5)) / 5;
           var slope = Math.sqrt(gx2 * gx2 + gz2 * gz2);
           if (h < 1.1) tmpC.setHex(COL.sand);
+          else if (h > 100) tmpC.setHex(0x9aa0a4).lerp(tmpC2.setHex(0x6d7758), 0.30);   // fix440 山顶改成青灰石色
           else if (slope > 1.15 || h > 88) tmpC.setHex(COL.rockA).lerp(tmpC2.setHex(COL.rockC), 0.35);
-          else tmpC.copy(tmpC2.setHex(COL.grassLo)).lerp(new THREE.Color(COL.grassHi), Math.min(1, h / 82));
+          else tmpC.copy(tmpC2.setHex(COL.grassLo)).lerp(new THREE.Color(COL.grassHi), Math.min(1, h / 105));
           var jit = (Math.sin(vx * 0.21 + vz * 0.17) * 0.5 + 0.5) * 0.10 - 0.05;
           tmpC.offsetHSL(0, 0, jit);
         }
@@ -32840,12 +32841,12 @@ window.focus();
     /* --- 辅助：点到登山道中心线的横向距离（避免树压在路上） --- */
     function stairLat(x, z) {
       var dx = x - CX, dz = z - CZ, r = Math.sqrt(dx * dx + dz * dz);
-      if (r > 180) return 999;
+      if (r > 300) return 999;
       var a = Math.atan2(dz, dx), span = 2 * Math.PI * 2, best = null, k;
       for (k = 0; k < 2; k++) {
         var aa = a - Math.PI + k * 2 * Math.PI;
         aa = ((aa % span) + span) % span;
-        var rt = 170 + (36 - 170) * (aa / span);
+        var rt = 300 + (70 - 300) * (aa / span);
         var lat = Math.abs(r - rt);
         if (!best || lat < best.lat) best = lat;
       }
@@ -32865,7 +32866,7 @@ window.focus();
     var shrubGeo = new THREE.IcosahedronGeometry(0.95, 0); shrubGeo.translate(0, 0.8, 0);
     var mTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
     var mLeaf = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    var TREE_MAX = 760;
+    var TREE_MAX = 1200;
     var imTrunk = new THREE.InstancedMesh(trunkGeo, mTrunk, TREE_MAX);
     var imPine = new THREE.InstancedMesh(pineGeo, mLeaf, TREE_MAX);
     var imBroad = new THREE.InstancedMesh(broadGeo, mLeaf, TREE_MAX);
@@ -32873,20 +32874,20 @@ window.focus();
     imTrunk.frustumCulled = imPine.frustumCulled = imBroad.frustumCulled = imShrub.frustumCulled = false;
     var dummy = new THREE.Object3D(), tcol = new THREE.Color();
     var nPine = 0, nBroad = 0, nShrub = 0, nTrunk = 0, tries = 0;
-    var WANT_P = 288, WANT_B = 262, WANT_S = 150;
+    var WANT_P = 430, WANT_B = 390, WANT_S = 250;   // fix440 树更多
     while ((nPine < WANT_P || nBroad < WANT_B || nShrub < WANT_S) && tries < 22000) {
       tries++;
-      var tx = 512 + Math.random() * 364;
-      var tz = -780 + Math.random() * 1250;
+      var tx = 512 + Math.random() * 440;
+      var tz = -980 + Math.random() * 1740;
       var th = zzMassif(tx, tz);
-      if (th < 2.5 || th > 84) continue;
+      if (th < 2.5 || th > 100) continue;
       if (slopeAt(tx, tz) > 0.95) continue;
       if (stairLat(tx, tz) < 8.5) continue;
-      if (Math.hypot(tx - 700, tz) < 40) continue;
+      if (Math.hypot(tx - 700, tz) < 95) continue;
       if (Math.hypot(tx - 849, tz - 12) < 15) continue;
       if (Math.hypot(tx - 524, tz) < 13) continue;
       if (Math.hypot(tx - 660, tz + 300) < 15) continue;   // 凉亭
-      if (Math.hypot(tx - 686, tz) < 17) continue;         // 祈福台
+      if (Math.hypot(tx - 686, tz) < 34) continue;         // 祈福台
       var pick = Math.random(), typ;
       if (pick < 0.42 && nPine < WANT_P) typ = 0;
       else if (pick < 0.80 && nBroad < WANT_B) typ = 1;
