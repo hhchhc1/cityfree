@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix427-gap';
+const BUILD = '20261112-fix428-pathbrick';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28251,6 +28251,31 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         }
       }
       for (const s of [-1, 1]) det(BX(W + 1.6, 0.5, 2.2), 0xb0aa9e, AX, 0.25, s < 0 ? z1 + 1.0 : z0 - 1.0);
+    })();
+    // 【fix428】衙署中轴青砖路：从大门一直铺到大堂前，青灰砖逐块微差色。
+    // 只铺在空地/甬道上，止于大堂前檐（-435），不进入任何建筑内部。
+    (function yamenPath() {
+      const S = 1.25, W = 7.5, X0 = 2021.5, Z0 = -104, Z1 = -435, Y = 2.76;
+      const cols = Math.round(W / S), rows = Math.round((Z0 - Z1) / S);
+      const geo = new THREE.BoxGeometry(S * 0.94, 0.05, S * 0.94);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x808b98 });
+      const n = cols * rows;
+      const mesh = new THREE.InstancedMesh(geo, mat, n);
+      const m4 = new THREE.Matrix4(), cc = new THREE.Color();
+      let idx = 0;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const x = X0 + c * S + S / 2, z = Z0 - r * S - S / 2;
+        m4.makeTranslation(x, Y, z);
+        mesh.setMatrixAt(idx, m4);
+        const t = ((r * 7 + c * 3) % 6) / 6;
+        cc.setHex(0x808b98).offsetHSL(0, 0, (t - 0.5) * 0.10);
+        mesh.setColorAt(idx, cc);
+        idx++;
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.userData.lodShared = true;
+      scene.add(mesh);
     })();
 
     // ==================== 8) 退思堂（二堂） ====================
