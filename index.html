@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix422-parallel';
+const BUILD = '20261112-fix423-flightsnd';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -31192,6 +31192,15 @@ function flightAudioStart() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
+    // 【fix423】手机上新建的 AudioContext 默认是 suspended，必须 resume 才会出声。
+    // 雨声走的是 <audio> 元素（点一下就解锁），引擎声走 AudioContext —— 所以表现为"只有雨声，没有飞机声"。
+    try { if (ctx.state !== "running") ctx.resume(); } catch (e0) {}
+    setTimeout(() => { try { if (ctx.state !== "running") ctx.resume(); } catch (e1) {} }, 120);
+    if (ctx.state !== "running") {
+      const _resumeOnce = () => { try { ctx.resume(); } catch (e2) {} };
+      window.addEventListener("pointerdown", _resumeOnce, { once: true });
+      window.addEventListener("touchstart", _resumeOnce, { once: true });
+    }
     const sr = ctx.sampleRate, len = Math.floor(sr * 2.0);
     const buf = ctx.createBuffer(1, len, sr);
     const d = buf.getChannelData(0);
