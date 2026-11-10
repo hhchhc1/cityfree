@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix428-pathbrick';
+const BUILD = '20261112-fix429-zhongzhen';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32664,6 +32664,587 @@ setHint(isMobile
   ? '左侧摇杆移动　·　右侧空白处滑动转视角　·　走到车旁点「上车」　·　点「攻击」键攻击'
   : 'WASD/方向键 移动　·　鼠标左键 攻击（准心跟随鼠标）　·　空格 跳跃　·　E 上车　·　B 商店');
 window.focus();
+
+
+/* =====================================================================
+   中镇山 / Zhongzhen Range  ·  fix429  ·  纯追加模块（不改动任何既有代码）
+   —— 主城（|x|,|z|<=500）与荷芷市（x>=1010 有建筑）之间的航道里，
+      用一条连续高度场堆起 7 座山峰的绵延山岭；玩家靠 terrainHeight 直接走上去。
+   ===================================================================== */
+(function zhongzhenRange() {
+  'use strict';
+  if (typeof THREE === 'undefined' || !THREE) return;
+
+  /* ---------------- 1. 高度场 ---------------- */
+  var H = 108;                 // 主峰基准高
+  var CX = 694, CZ = 0;        // 主峰中心
+  var PEAKS = [
+    { x: 694, z: 0,    h: 108, rx: 186, rz: 205 }, // 主峰 中镇峰
+    { x: 660, z: -300, h: 74,  rx: 152, rz: 200 }, // 北肩
+    { x: 708, z: 285,  h: 82,  rx: 170, rz: 185 }, // 南肩
+    { x: 700, z: -570, h: 60,  rx: 160, rz: 190 }, // 远北（航道上，接荷芷市方向）
+    { x: 700, z: 390,  h: 56,  rx: 150, rz: 100 }, // 远南
+    { x: 775, z: -60,  h: 66,  rx: 100, rz: 130 }, // 东侧岩肩
+    { x: 566, z: 60,   h: 58,  rx: 58,  rz: 110 }  // 西侧孤峰（山脚地标）
+  ];
+
+  function zzClamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+  function zzSS(a, b, x) { var t = zzClamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
+  function zzBump(t) { return t >= 1 ? 0 : 1 - t * t * (3 - 2 * t); }
+
+  // 各峰用 (1-t)^2 平滑鼓包做"概率并集"：重叠处平滑融合，不会出现接缝/硬棱
+  function zzMassif(x, z) {
+    var inv = 1, i, p, dx, dz, t;
+    for (i = 0; i < PEAKS.length; i++) {
+      p = PEAKS[i];
+      dx = (x - p.x) / p.rx; dz = (z - p.z) / p.rz;
+      t = Math.sqrt(dx * dx + dz * dz);
+      if (t < 1) inv *= 1 - (p.h / H) * zzBump(t);
+    }
+    var h = H * (1 - inv);
+    // 外缘强制归零（16m 平滑带）：保证四面八方都以 0 高度并入既有地面，不出断崖
+    h *= zzSS(506, 522, x) * zzSS(882, 866, x) * zzSS(-810, -790, z) * zzSS(500, 480, z);
+
+    // 主峰上盘旋而上的登山道：把高度场直接切成一条 2 圈、坡度 8% 的螺旋梯级坡道
+    var sdx = x - CX, sdz = z - CZ, r = Math.sqrt(sdx * sdx + sdz * sdz);
+    if (r < 180 && r > 0.5) {
+      var a = Math.atan2(sdz, sdx), span = 2 * Math.PI * 2, best = null, k;
+      for (k = 0; k < 2; k++) {
+        var aa = a - Math.PI + k * 2 * Math.PI;
+        aa = ((aa % span) + span) % span;
+        var s = aa / span;
+        var rt = 170 + (36 - 170) * s;
+        var lat = Math.abs(r - rt);
+        if (!best || lat < best.lat) best = { s: s, lat: lat };
+      }
+      var w = (1 - zzSS(2.2, 7.0, best.lat)) * zzSS(0, 0.02, best.s);
+      if (w > 0) h = h * (1 - w) + (2.6 + (105 - 2.6) * best.s) * w;
+    }
+    // 山顶平台（祠堂/石碑的地基）
+    if (r < 48) { var pw = 1 - zzSS(34, 48, r); h = h * (1 - pw) + 105 * pw; }
+    // 东崖瀑布下的水潭（把坡面压成一个小圆盆）
+    var bdx = x - 849, bdz = z - 12, bd = Math.sqrt(bdx * bdx + bdz * bdz);
+    if (bd < 6.5) { var bw = 1 - zzSS(5.0, 6.5, bd); h = h * (1 - bw) + 10.8 * bw; }
+    // trailhead terrace: flat landing where the causeway meets the first stair tread
+    var pdx = x - 524, pdd = Math.sqrt(pdx * pdx + z * z);
+    if (pdd < 12) { var pz = 1 - zzSS(7, 12, pdd); h = h * (1 - pz) + 2.6 * pz; }
+    return h > 0 ? h : 0;
+  }
+
+  // 石堤：从主城东岸 (x~496) 平铺到山脚 (x~556)，玩家由此上岸
+  function zzCauseway(x, z) {
+    return 2.5 * zzSS(501, 507, x) * zzSS(562, 548, x) * zzSS(5.2, 3.8, Math.abs(z));
+  }
+  function zzHeight(x, z) {
+    var m = zzMassif(x, z), c = zzCauseway(x, z);
+    return c > m ? c : m;
+  }
+  window.__zzHeight = zzHeight;
+
+  /* ---------------- 2. 挂到地形高度函数 ---------------- */
+  var _thBefore = terrainHeight;
+  terrainHeight = function (x, z) {
+    var b = _thBefore(x, z), m = zzHeight(x, z);
+    return m > 0 ? Math.max(b, m) : b;
+  };
+  var hooked = ['terrainHeight'];
+  // 玩家实际读 personGroundY；它对 x<=900 只是转调 terrainHeight，但这里也套一层，
+  // 防止以后有人再绕过 terrainHeight。两次 Math.max 幂等，无副作用。
+  if (typeof personGroundY === 'function') {
+    var _pgBefore = personGroundY;
+    personGroundY = function (x, z) {
+      var b = _pgBefore(x, z), m = zzHeight(x, z);
+      return m > 0 ? Math.max(b, m) : b;
+    };
+    hooked.push('personGroundY');
+  }
+  // linhaiHeight 只服务 x>900 的荷芷市，本山全在 x<=882，不挂。
+
+  var STATS = { hooked: hooked, trees: 0, rocks: 0, treads: 0, posts: 0, temple: 0, tris: 0 };
+
+  /* ---------------- 3. 可见几何 ---------------- */
+  try {
+    if (typeof scene === 'undefined' || !scene) return;
+
+    var COL = {
+      rockA: 0x8a7355, rockB: 0x75604a, rockC: 0x9c8a72,
+      grassLo: 0x3f5b2c, grassHi: 0x2b3f22,
+      sand: 0xa8946c, wetRock: 0x413a33,
+      stone: 0x968f82, stoneD: 0x6e685d,
+      wood: 0x7a4a24, woodD: 0x5a3518,
+      red: 0xa8342a, redD: 0x86261f, roof: 0x3a3f44, roofD: 0x2c3034,
+      gold: 0xd9b25a, dark: 0x2a2320, water: 0xbfe4f2
+    };
+
+    /* --- 3.1 地形网格（顶点色 + 裙边） --- */
+    var STEP = 6.5, X0 = 500, X1 = 884, Z0 = -812, Z1 = 492;
+    var nx = Math.round((X1 - X0) / STEP), nz = Math.round((Z1 - Z0) / STEP);
+    var vc = (nx + 1) * (nz + 1);
+    var pos = new Float32Array(vc * 3), colArr = new Float32Array(vc * 3);
+    var hgt = new Float32Array(vc);
+    var i, j, idx = [];
+    var tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
+    for (j = 0; j <= nz; j++) {
+      for (i = 0; i <= nx; i++) {
+        var vx = X0 + i * STEP, vz = Z0 + j * STEP;
+        var h = zzMassif(vx, vz);
+        var id = j * (nx + 1) + i;
+        hgt[id] = h;
+        pos[id * 3] = vx;
+        pos[id * 3 + 1] = h > 0.001 ? h : -9.4;   // 山体边上补一圈裙边，压到海床以下
+        pos[id * 3 + 2] = vz;
+        if (h <= 0.001) {
+          tmpC.setHex(COL.wetRock);
+        } else {
+          var gx2 = (zzMassif(vx + 2.5, vz) - zzMassif(vx - 2.5, vz)) / 5;
+          var gz2 = (zzMassif(vx, vz + 2.5) - zzMassif(vx, vz - 2.5)) / 5;
+          var slope = Math.sqrt(gx2 * gx2 + gz2 * gz2);
+          if (h < 1.1) tmpC.setHex(COL.sand);
+          else if (slope > 1.15 || h > 88) tmpC.setHex(COL.rockA).lerp(tmpC2.setHex(COL.rockC), 0.35);
+          else tmpC.copy(tmpC2.setHex(COL.grassLo)).lerp(new THREE.Color(COL.grassHi), Math.min(1, h / 82));
+          var jit = (Math.sin(vx * 0.21 + vz * 0.17) * 0.5 + 0.5) * 0.10 - 0.05;
+          tmpC.offsetHSL(0, 0, jit);
+        }
+        colArr[id * 3] = tmpC.r; colArr[id * 3 + 1] = tmpC.g; colArr[id * 3 + 2] = tmpC.b;
+      }
+    }
+    for (j = 0; j < nz; j++) {
+      for (i = 0; i < nx; i++) {
+        var a0 = j * (nx + 1) + i, b0 = a0 + 1, c0 = a0 + nx + 1, d0 = c0 + 1;
+        if (hgt[a0] > 0.02 || hgt[b0] > 0.02 || hgt[c0] > 0.02 || hgt[d0] > 0.02) {
+          idx.push(a0, c0, b0, b0, c0, d0);
+        }
+      }
+    }
+    var terGeo = new THREE.BufferGeometry();
+    terGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    terGeo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    terGeo.setIndex(idx);
+    terGeo.computeVertexNormals();
+    var terrain = new THREE.Mesh(terGeo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    terrain.name = 'zhongzhen-terrain';
+    terrain.matrixAutoUpdate = false; terrain.updateMatrix();
+    scene.add(terrain);
+    STATS.tris += idx.length / 3;
+
+    /* --- 辅助：点到登山道中心线的横向距离（避免树压在路上） --- */
+    function stairLat(x, z) {
+      var dx = x - CX, dz = z - CZ, r = Math.sqrt(dx * dx + dz * dz);
+      if (r > 180) return 999;
+      var a = Math.atan2(dz, dx), span = 2 * Math.PI * 2, best = null, k;
+      for (k = 0; k < 2; k++) {
+        var aa = a - Math.PI + k * 2 * Math.PI;
+        aa = ((aa % span) + span) % span;
+        var rt = 170 + (36 - 170) * (aa / span);
+        var lat = Math.abs(r - rt);
+        if (!best || lat < best.lat) best = lat;
+      }
+      return best;
+    }
+    function slopeAt(x, z) {
+      var gx = (zzMassif(x + 2, z) - zzMassif(x - 2, z)) / 4;
+      var gz = (zzMassif(x, z + 2) - zzMassif(x, z - 2)) / 4;
+      return Math.sqrt(gx * gx + gz * gz);
+    }
+
+    /* --- 3.2 树木（InstancedMesh，两种共享几何 + 共享材质） --- */
+    var treeGeoTrunk = new THREE.CylinderGeometry(0.16, 0.30, 1.7, 5, 1, true);
+    treeGeoTrunk.translate(0, 0.85, 0);
+    var treeGeoCrown = new THREE.ConeGeometry(1.6, 4.6, 7);
+    treeGeoCrown.translate(0, 3.6, 0);
+    var treeMatTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
+    var treeMatCrown = new THREE.MeshLambertMaterial({ color: 0xffffff }); // 颜色交给 instanceColor
+    var TREE_MAX = 260;
+    var imTrunk = new THREE.InstancedMesh(treeGeoTrunk, treeMatTrunk, TREE_MAX);
+    var imCrown = new THREE.InstancedMesh(treeGeoCrown, treeMatCrown, TREE_MAX);
+    imTrunk.frustumCulled = false; imCrown.frustumCulled = false;
+    var dummy = new THREE.Object3D(), tcol = new THREE.Color();
+    var made = 0, tries = 0;
+    while (made < TREE_MAX && tries < 9000) {
+      tries++;
+      var tx = 512 + Math.random() * 364;
+      var tz = -780 + Math.random() * 1250;
+      var th = zzMassif(tx, tz);
+      if (th < 2.5 || th > 84) continue;
+      if (slopeAt(tx, tz) > 0.95) continue;
+      if (stairLat(tx, tz) < 8.5) continue;
+      if (Math.hypot(tx - 700, tz - 0) < 40) continue;
+      if (Math.hypot(tx - 849, tz - 12) < 15) continue;
+      if (Math.hypot(tx - 524, tz - 0) < 13) continue;
+      var sc = 0.75 + Math.random() * 0.85;
+      dummy.position.set(tx, th - 0.15, tz);
+      dummy.rotation.set(0, Math.random() * 6.283, 0);
+      dummy.scale.set(sc, sc * (0.85 + Math.random() * 0.35), sc);
+      dummy.updateMatrix();
+      imTrunk.setMatrixAt(made, dummy.matrix);
+      imCrown.setMatrixAt(made, dummy.matrix);
+      tcol.setHSL(0.255 + Math.random() * 0.05, 0.34 + Math.random() * 0.22, 0.20 + Math.random() * 0.13);
+      imCrown.setColorAt(made, tcol);
+      tcol.setHSL(0.08, 0.32, 0.20 + Math.random() * 0.08);
+      imTrunk.setColorAt(made, tcol);
+      made++;
+    }
+    imTrunk.count = made; imCrown.count = made;
+    imTrunk.instanceMatrix.needsUpdate = true; imCrown.instanceMatrix.needsUpdate = true;
+    if (imCrown.instanceColor) imCrown.instanceColor.needsUpdate = true;
+    if (imTrunk.instanceColor) imTrunk.instanceColor.needsUpdate = true;
+    scene.add(imTrunk); scene.add(imCrown);
+    STATS.trees = made;
+    STATS.tris += made * (10 + 14);
+
+    /* --- 3.3 岩层（上层 60% 的层叠崖带 + 少量滚石） --- */
+    var rockGeo = new THREE.BoxGeometry(1, 1, 1);
+    var rockMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    var ROCK_MAX = 130;
+    var imRock = new THREE.InstancedMesh(rockGeo, rockMat, ROCK_MAX);
+    imRock.frustumCulled = false;
+    var rMade = 0, layers = [48, 68, 88], li, ai;
+    // 返回"从山顶往外走的第一个等高线"（外轮廓），不会被远处更高的肩峰带偏
+    function contourR(angle, target) {
+      var last = -1, rr, hh;
+      for (rr = 20; rr <= 178; rr += 1) {
+        hh = zzMassif(CX + Math.cos(angle) * rr, CZ + Math.sin(angle) * rr);
+        if (hh >= target) last = rr;
+        else if (last > 0) return last;
+      }
+      return last;
+    }
+    for (li = 0; li < layers.length; li++) {
+      var target = layers[li];
+      for (ai = 0; ai < 34; ai++) {
+        if (rMade >= ROCK_MAX) break;
+        var ang = (ai / 34) * Math.PI * 2 + li * 0.045;
+        var cr = contourR(ang, target);
+        if (cr < 0) continue;
+        var cxx = CX + Math.cos(ang) * (cr + 0.9);
+        var czz = CZ + Math.sin(ang) * (cr + 0.9);
+        dummy.position.set(cxx, target + 0.15, czz);
+        dummy.rotation.set(0, -ang + (Math.random() - 0.5) * 0.06, 0);
+        dummy.scale.set(7.5 + Math.random() * 4.0, 2.6 + Math.random() * 1.6, 2.5 + Math.random() * 0.8);
+        dummy.updateMatrix();
+        imRock.setMatrixAt(rMade, dummy.matrix);
+        tcol.setHex([COL.rockA, COL.rockB, COL.rockC][(ai + li) % 3]);
+        imRock.setColorAt(rMade, tcol);
+        rMade++;
+      }
+    }
+    // 散落滚石（不挡路，纯装饰）
+    var bTry = 0;
+    while (rMade < ROCK_MAX - 1 && bTry < 600) {
+      bTry++;
+      var bx = 520 + Math.random() * 350, bz = -760 + Math.random() * 1220;
+      var bh = zzMassif(bx, bz);
+      if (bh < 6 || bh > 70 || slopeAt(bx, bz) > 1.4) continue;
+      if (stairLat(bx, bz) < 6) continue;
+      var bs = 1.2 + Math.random() * 1.8;
+      dummy.position.set(bx, bh + bs * 0.25, bz);
+      dummy.rotation.set(Math.random() * 0.4, Math.random() * 6.28, Math.random() * 0.4);
+      dummy.scale.set(bs, bs * 0.8, bs);
+      dummy.updateMatrix();
+      imRock.setMatrixAt(rMade, dummy.matrix);
+      tcol.setHex([COL.rockA, COL.rockB, COL.rockC][rMade % 3]);
+      imRock.setColorAt(rMade, tcol);
+      rMade++;
+    }
+    imRock.count = rMade;
+    imRock.instanceMatrix.needsUpdate = true;
+    if (imRock.instanceColor) imRock.instanceColor.needsUpdate = true;
+    scene.add(imRock);
+    STATS.rocks = rMade;
+    STATS.tris += rMade * 12;
+
+    /* --- 3.4 登山道装饰：木/石踏步 + 木栏杆 --- */
+    var SN = 240, samples = [], si;
+    for (si = 0; si <= SN; si++) {
+      var ss0 = si / SN;
+      var aa0 = Math.PI + 2 * Math.PI * 2 * ss0;
+      var rr0 = 170 + (36 - 170) * ss0;
+      var sx0 = CX + Math.cos(aa0) * rr0, sz0 = CZ + Math.sin(aa0) * rr0;
+      samples.push({ x: sx0, z: sz0, y: zzHeight(sx0, sz0), s: ss0 });
+    }
+    var treadGeo = new THREE.BoxGeometry(1.9, 0.16, 3.8);
+    var treadMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    var imTread = new THREE.InstancedMesh(treadGeo, treadMat, SN + 1);
+    imTread.frustumCulled = false;
+    var treadN = 0;
+    for (si = 1; si <= SN; si++) {
+      var p0 = samples[si - 1], p1 = samples[si];
+      var dxt = p1.x - p0.x, dzt = p1.z - p0.z;
+      var rotY = -Math.atan2(dzt, dxt);
+      dummy.position.set(p1.x, p1.y + 0.09, p1.z);
+      dummy.rotation.set(0, rotY, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      imTread.setMatrixAt(treadN, dummy.matrix);
+      tcol.setHex(p1.s < 0.5 ? COL.wood : COL.stone);
+      tcol.offsetHSL(0, 0, (Math.random() - 0.5) * 0.06);
+      imTread.setColorAt(treadN, tcol);
+      treadN++;
+    }
+    imTread.count = treadN;
+    imTread.instanceMatrix.needsUpdate = true;
+    if (imTread.instanceColor) imTread.instanceColor.needsUpdate = true;
+    scene.add(imTread);
+    STATS.treads = treadN;
+
+    // railing posts every 2 samples (~10 m) + one continuous handrail ribbon per side
+    var postGeo = new THREE.BoxGeometry(0.18, 1.2, 0.18); postGeo.translate(0, 0.6, 0);
+    var postMat = new THREE.MeshLambertMaterial({ color: COL.woodD });
+    var postList = [[], []];
+    for (si = 0; si <= SN; si += 2) {
+      var sp = samples[si], sp2 = samples[si < SN ? si + 1 : si - 1];
+      var tx2 = sp2.x - sp.x, tz2 = sp2.z - sp.z, tl = Math.sqrt(tx2 * tx2 + tz2 * tz2) || 1;
+      var lx = -tz2 / tl, lz = tx2 / tl;
+      for (var side = 0; side < 2; side++) {
+        var sgn = side === 0 ? 1 : -1;
+        postList[side].push({ x: sp.x + lx * 2.05 * sgn, z: sp.z + lz * 2.05 * sgn, y: sp.y });
+      }
+    }
+    var imPost = new THREE.InstancedMesh(postGeo, postMat, postList[0].length + postList[1].length);
+    imPost.frustumCulled = false;
+    var pn = 0;
+    for (side = 0; side < 2; side++) {
+      for (si = 0; si < postList[side].length; si++) {
+        var pp = postList[side][si];
+        dummy.position.set(pp.x, pp.y, pp.z);
+        dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        imPost.setMatrixAt(pn++, dummy.matrix);
+      }
+    }
+    imPost.count = pn; imPost.instanceMatrix.needsUpdate = true;
+    scene.add(imPost);
+    STATS.posts = pn;
+
+    var railPos = [], railIdx = [];
+    for (side = 0; side < 2; side++) {
+      var sgn2 = side === 0 ? 1 : -1;
+      var rbase = side * (SN + 1) * 2;
+      for (si = 0; si <= SN; si++) {
+        var sp3 = samples[si], sp4 = samples[si < SN ? si + 1 : si - 1];
+        var t3x = sp4.x - sp3.x, t3z = sp4.z - sp3.z, tl3 = Math.sqrt(t3x * t3x + t3z * t3z) || 1;
+        var lx3 = -t3z / tl3, lz3 = t3x / tl3;
+        var rx3 = sp3.x + lx3 * 2.05 * sgn2, rz3 = sp3.z + lz3 * 2.05 * sgn2;
+        railPos.push(rx3, sp3.y + 0.95, rz3, rx3, sp3.y + 1.06, rz3);
+        if (si < SN) {
+          var q0 = rbase + si * 2;
+          railIdx.push(q0, q0 + 1, q0 + 2, q0 + 1, q0 + 3, q0 + 2);
+        }
+      }
+    }
+    var railGeo = new THREE.BufferGeometry();
+    railGeo.setAttribute('position', new THREE.Float32BufferAttribute(railPos, 3));
+    railGeo.setIndex(railIdx);
+    railGeo.computeVertexNormals();
+    var railMesh = new THREE.Mesh(railGeo, new THREE.MeshLambertMaterial({ color: COL.wood, side: THREE.DoubleSide }));
+    scene.add(railMesh);
+    STATS.tris += treadN * 12 + pn * 12 + railIdx.length / 3;
+
+    /* --- 3.5 石堤（上岸的堤道） --- */
+    var jetty = new THREE.Mesh(new THREE.BoxGeometry(51, 12.2, 9), new THREE.MeshLambertMaterial({ color: COL.stoneD }));
+    jetty.position.set(530.5, 2.5 - 6.1, 0);
+    scene.add(jetty);
+    var parMat = new THREE.MeshLambertMaterial({ color: COL.stone });
+    for (side = 0; side < 2; side++) {
+      var pz2 = side === 0 ? 4.35 : -4.35;
+      var par = new THREE.Mesh(new THREE.BoxGeometry(51, 0.75, 0.55), parMat);
+      par.position.set(530.5, 2.88, pz2);
+      scene.add(par);
+    }
+    // 山脚地面本身就是山体高度场，不再铺平板（否则会和坡面穿模）
+
+    /* --- 3.6 山脚石碑 / 指示牌 --- */
+    function plaqueMesh(text, w, hh, bg, fg) {
+      if (typeof makeSignPlane === 'function') {
+        try { return makeSignPlane(text, w, hh, bg, fg, '#ffffff'); } catch (eP) { }
+      }
+      var cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+      var c2 = cv.getContext('2d');
+      c2.fillStyle = bg; c2.fillRect(0, 0, 512, 128);
+      c2.fillStyle = fg; c2.font = 'bold 84px "Microsoft YaHei", Arial, sans-serif';
+      c2.textAlign = 'center'; c2.textBaseline = 'middle';
+      c2.fillText(text, 256, 68);
+      var tex = new THREE.CanvasTexture(cv);
+      return new THREE.Mesh(new THREE.PlaneGeometry(w, hh), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+    }
+
+    var sgx = 524, sgz = -7.6, sgy = zzHeight(sgx, sgz);
+    var steleBase = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 1.5), new THREE.MeshLambertMaterial({ color: COL.stoneD }));
+    steleBase.position.set(sgx, sgy + 0.18, sgz); scene.add(steleBase);
+    var stele = new THREE.Mesh(new THREE.BoxGeometry(1.25, 2.5, 0.45), new THREE.MeshLambertMaterial({ color: 0x9a9488 }));
+    stele.position.set(sgx, sgy + 1.6, sgz); scene.add(stele);
+    var stelePlaque = plaqueMesh('中镇山', 1.1, 0.55, '#8f1d16', '#f4e6c8');
+    stelePlaque.position.set(sgx, sgy + 2.05, sgz + 0.24);
+    scene.add(stelePlaque);
+    // 木指示牌：登山道 →
+    var sgnX = 532, sgnZ = 6.2, sgnY = zzHeight(sgnX, sgnZ);
+    for (side = 0; side < 2; side++) {
+      var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.2, 6), new THREE.MeshLambertMaterial({ color: COL.woodD }));
+      pole.position.set(sgnX + (side === 0 ? -1.1 : 1.1), sgnY + 1.1, sgnZ);
+      scene.add(pole);
+    }
+    var board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 0.12), new THREE.MeshLambertMaterial({ color: COL.wood }));
+    board.position.set(sgnX, sgnY + 1.85, sgnZ);
+    scene.add(board);
+    var boardTxt = plaqueMesh('登山道 →', 2.4, 0.62, '#5a3518', '#f0dfb8');
+    boardTxt.position.set(sgnX, sgnY + 1.85, sgnZ + 0.08);
+    scene.add(boardTxt);
+
+    /* --- 3.7 东崖瀑布 + 水潭 + 水雾 --- */
+    var fallAng = 0.10;
+    var rLedge = contourR(fallAng, 34);
+    if (rLedge < 0) rLedge = 150;
+    var ledgeX = CX + Math.cos(fallAng) * rLedge, ledgeZ = CZ + Math.sin(fallAng) * rLedge;
+    var poolX = 849, poolZ = 12, poolY = zzHeight(poolX, poolZ);
+    // 瀑布：沿坡面从 34m 高的岩台挂下来（不是凭空竖一片，而是贴着山体的一条水带）
+    var fallTop = 34, fallBot = poolY + 0.35;
+    var pA = new THREE.Vector3(ledgeX, fallTop, ledgeZ);
+    var pB = new THREE.Vector3(poolX, fallBot, poolZ);
+    var midF = pA.clone().add(pB).multiplyScalar(0.5);
+    var dirF = pB.clone().sub(pA);
+    var fallLen = dirF.length();
+    dirF.normalize();
+    var sideF = new THREE.Vector3().crossVectors(dirF, new THREE.Vector3(0, 1, 0)).normalize();
+    var nrmF = new THREE.Vector3().crossVectors(sideF, dirF).normalize();
+    var basisF = new THREE.Matrix4().makeBasis(sideF, dirF, nrmF);
+    var fallMatA = new THREE.MeshBasicMaterial({ color: 0xeaf7ff, transparent: true, opacity: 0.52, depthWrite: false, side: THREE.DoubleSide });
+    var fallMatB = new THREE.MeshBasicMaterial({ color: 0xbfe4f2, transparent: true, opacity: 0.30, depthWrite: false, side: THREE.DoubleSide });
+    var fallW = new THREE.Mesh(new THREE.PlaneGeometry(5.6, fallLen, 1, 3), fallMatA);
+    fallW.quaternion.setFromRotationMatrix(basisF);
+    fallW.position.copy(midF).addScaledVector(nrmF, 0.35);
+    scene.add(fallW);
+    var fallW2 = new THREE.Mesh(new THREE.PlaneGeometry(7.4, fallLen * 0.98, 1, 3), fallMatB);
+    fallW2.quaternion.setFromRotationMatrix(basisF);
+    fallW2.position.copy(midF).addScaledVector(nrmF, 0.12);
+    scene.add(fallW2);
+    // 水下的湿岩台阶（叠在坡面上，给水带一点落差感）
+    var wetMat = new THREE.MeshLambertMaterial({ color: COL.wetRock });
+    for (i = 1; i <= 3; i++) {
+      var fr = i / 4;
+      var lx3 = pA.x + (pB.x - pA.x) * fr, lz3 = pA.z + (pB.z - pA.z) * fr;
+      var ly3 = pA.y + (pB.y - pA.y) * fr;
+      var wet = new THREE.Mesh(new THREE.BoxGeometry(8.0, 1.1, 9.0), wetMat);
+      wet.position.set(lx3 - 0.9, ly3 - 0.2, lz3);
+      wet.rotation.y = -fallAng;
+      scene.add(wet);
+    }
+    var pool = new THREE.Mesh(new THREE.CircleGeometry(5.6, 24), new THREE.MeshBasicMaterial({ color: 0x8fd0e6, transparent: true, opacity: 0.85 }));
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(poolX, poolY + 0.14, poolZ);
+    scene.add(pool);
+    // 水雾
+    var mcv = document.createElement('canvas'); mcv.width = mcv.height = 64;
+    var mg = mcv.getContext('2d');
+    var grd = mg.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grd.addColorStop(0, 'rgba(255,255,255,0.85)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    mg.fillStyle = grd; mg.fillRect(0, 0, 64, 64);
+    var mistTex = new THREE.CanvasTexture(mcv);
+    var mistMat = new THREE.MeshBasicMaterial({ map: mistTex, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+    for (i = 0; i < 6; i++) {
+      var mq = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.4), mistMat);
+      mq.position.set(poolX + 1.5 + Math.random() * 3, poolY + 1.0 + Math.random() * 2.2, poolZ - 4 + Math.random() * 8);
+      mq.rotation.y = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+      scene.add(mq);
+    }
+
+    /* --- 3.8 山顶：中镇祠 + 石碑 --- */
+    var temple = new THREE.Group();
+    temple.position.set(702, 105, 0);
+    temple.rotation.y = -Math.PI / 2;      // 正面朝西，正对登山道来向
+    function TB(mat, w, hh, d, x, y, z, rx, ry, rz) {
+      var m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx; if (ry) m.rotation.y = ry; if (rz) m.rotation.z = rz;
+      temple.add(m); return m;
+    }
+    var mRed = new THREE.MeshLambertMaterial({ color: COL.red });
+    var mRedD = new THREE.MeshLambertMaterial({ color: COL.redD });
+    var mRoof = new THREE.MeshLambertMaterial({ color: COL.roof });
+    var mRoofD = new THREE.MeshLambertMaterial({ color: COL.roofD });
+    var mStone = new THREE.MeshLambertMaterial({ color: COL.stone });
+    var mStoneD = new THREE.MeshLambertMaterial({ color: COL.stoneD });
+    var mDark = new THREE.MeshLambertMaterial({ color: COL.dark });
+    var mGold = new THREE.MeshLambertMaterial({ color: COL.gold, emissive: 0x3a2a08 });
+    // 台基
+    TB(mStone, 15, 0.45, 11, 0, 0.22, 0);
+    TB(mStoneD, 12.6, 0.32, 9, 0, 0.60, 0);
+    // 台阶（朝 +Z）
+    TB(mStone, 4.4, 0.18, 0.9, 0, 0.10, 5.9);
+    TB(mStone, 4.4, 0.18, 0.9, 0, 0.28, 5.4);
+    TB(mStone, 4.4, 0.18, 0.9, 0, 0.46, 4.9);
+    // 墙身 + 角柱
+    TB(mRed, 9.0, 3.1, 6.4, 0, 2.30, 0);
+    TB(mRedD, 0.55, 3.5, 0.55, -4.35, 2.50, 3.05);
+    TB(mRedD, 0.55, 3.5, 0.55, 4.35, 2.50, 3.05);
+    TB(mRedD, 0.55, 3.5, 0.55, -4.35, 2.50, -3.05);
+    TB(mRedD, 0.55, 3.5, 0.55, 4.35, 2.50, -3.05);
+    // 门 + 窗
+    TB(mDark, 2.2, 2.5, 0.14, 0, 2.05, 3.24);
+    TB(mDark, 1.1, 1.2, 0.12, -3.0, 2.6, 3.22);
+    TB(mDark, 1.1, 1.2, 0.12, 3.0, 2.6, 3.22);
+    // 匾额
+    TB(mGold, 1.95, 0.66, 0.12, 0, 3.78, 3.30);
+    var tp = plaqueMesh('中镇祠', 1.8, 0.6, '#7d1a13', '#f3d98a');
+    tp.position.set(0, 3.78, 3.38); temple.add(tp);
+    // 屋顶（两坡 + 正脊 + 翘角）
+    TB(mRoof, 11.0, 0.32, 5.4, 0, 4.32, -1.55, 0.44, 0, 0);
+    TB(mRoof, 11.0, 0.32, 5.4, 0, 4.32, 1.55, -0.44, 0, 0);
+    TB(mRoofD, 11.4, 0.42, 0.75, 0, 5.32, 0);
+    TB(mRoofD, 0.75, 1.0, 0.75, -5.55, 5.55, 0, 0, 0, 0.30);
+    TB(mRoofD, 0.75, 1.0, 0.75, 5.55, 5.55, 0, 0, 0, -0.30);
+    TB(mRoofD, 2.5, 0.22, 0.6, -5.0, 4.10, 3.05, 0, 0, 0.42);
+    TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, 3.05, 0, 0, -0.42);
+    TB(mRoofD, 2.5, 0.22, 0.6, -5.0, 4.10, -3.05, 0, 0, 0.42);
+    TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, -3.05, 0, 0, -0.42);
+    // 红灯笼
+    for (side = 0; side < 2; side++) {
+      var lx2 = side === 0 ? -3.3 : 3.3;
+      var lp = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.3, 6), mRedD);
+      lp.position.set(lx2, 1.15, 5.15); temple.add(lp);
+      var lb = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), new THREE.MeshLambertMaterial({ color: 0xd93b2b, emissive: 0x5a0f08 }));
+      lb.scale.y = 1.25; lb.position.set(lx2, 2.45, 5.15); temple.add(lb);
+      var lcap = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 8), mGold);
+      lcap.position.set(lx2, 2.78, 5.15); temple.add(lcap);
+    }
+    // 庭院石栏（正面中间留口）
+    var railY = 0.45;
+    for (var rx2 = -9; rx2 <= 9.01; rx2 += 1.8) {
+      if (Math.abs(rx2) > 2.2) {
+        TB(mStone, 0.32, 0.95, 0.32, rx2, railY + 0.48, 6.5);
+        TB(mStone, 0.32, 0.95, 0.32, rx2, railY + 0.48, -6.5);
+      }
+    }
+    for (var rz2 = -6.5; rz2 <= 6.51; rz2 += 1.8) {
+      TB(mStone, 0.32, 0.95, 0.32, -9, railY + 0.48, rz2);
+      TB(mStone, 0.32, 0.95, 0.32, 9, railY + 0.48, rz2);
+    }
+    TB(mStoneD, 18, 0.14, 0.22, 0, railY + 0.98, 6.5);
+    TB(mStoneD, 18, 0.14, 0.22, 0, railY + 0.98, -6.5);
+    TB(mStoneD, 0.22, 0.14, 13, -9, railY + 0.98, 0);
+    TB(mStoneD, 0.22, 0.14, 13, 9, railY + 0.98, 0);
+    // 山顶石碑（在主祠南侧）
+    TB(mStoneD, 2.8, 0.45, 1.7, 4.2, 0.22, -4.6);
+    TB(mStone, 1.4, 3.2, 0.55, 4.2, 2.05, -4.6);
+    var sp2 = plaqueMesh('中镇山', 1.2, 0.6, '#8f1d16', '#f4e6c8');
+    sp2.position.set(4.2, 2.7, -4.30); sp2.rotation.y = Math.PI; temple.add(sp2);
+    scene.add(temple);
+    STATS.temple = temple.children.length;
+    STATS.tris += temple.children.length * 12;
+
+    /* --- 3.9 汇总 --- */
+    window.__ZZ_STATS = STATS;
+    try {
+      console.log('[中镇山] 主峰 105m · 山峰 ' + PEAKS.length + ' 座 · 树 ' + made +
+        ' · 岩 ' + rMade + ' · 踏步 ' + treadN + ' · 栏杆柱 ' + pn +
+        ' · 祠堂构件 ' + STATS.temple + ' · 新增三角面 ≈ ' + Math.round(STATS.tris) +
+        ' · 已挂钩 ' + hooked.join('/'));
+    } catch (eL) { }
+  } catch (eBuild) {
+    try { console.warn('[中镇山] 几何构建失败（地形高度仍已生效）：', eBuild && eBuild.message); } catch (e2) { }
+  }
+})();
+
 </script>
 <!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
      再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
