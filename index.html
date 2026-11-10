@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix416-bridge';
+const BUILD = '20261112-fix417-aimyaw';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14803,7 +14803,9 @@ addEventListener('touchmove', e => {
     else if (t.identifier === lookId) {
       if (canVehicleAim()) {
         // 坦克/直升机：滑动 = 转动炮塔/机头去瞄准（上下左右都能动），相机本身不动
-        vehAimYaw -= (t.clientX - lookLX) * LOOK_SENS;
+        // 【fix417】载具（直升机机枪）按住开火拖动时，准星左右是反的：符号反过来。
+        // 手指右拖 → 准星右移（原来这里用了减号，正好反相）。
+        vehAimYaw += (t.clientX - lookLX) * LOOK_SENS;
         vehAimYaw = Math.max(-VEH_AIM_YAW_MAX, Math.min(VEH_AIM_YAW_MAX, vehAimYaw));
         vehAimPitch = Math.max(VEH_AIM_PITCH_MIN, Math.min(VEH_AIM_PITCH_MAX,
           vehAimPitch - (t.clientY - lookLY) * LOOK_SENS));   // 上滑 = 往上瞄
