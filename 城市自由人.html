@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix408-deckfull';
+const BUILD = '20261107-fix407-camfloor';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27350,11 +27350,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     // 【fix362】整座衙署的石台基：衙署以前只有一份'隐形地面'，视觉上房子是浮在街面上的
     // 这里铺一整块 2.6 米高的石台（台面与高度场一致），所有殿宇都实打实站在石台上
     // 【fix374】台基恢复碰撞：上一版做成纯视觉后，钩爪落点没有实体地板，人会掉到台面底下
-    det(BX(286, 3.46, 700), 0x8f8b83, AX, 0.77, -485);
+    det(BX(286, 3.46, 700), 0x9d968a, AX, 0.77, -485);
     // 【fix379】台面青砖铺地：canvas 砖纹贴图平铺，替掉一整片土黄
     // 【fix382】台面改几何砖铺地：InstancedMesh 一次性画完，每块砖独立实体 + 缝隙
     (function podiumBrickGeo() {
-      const S = 3.0, X0p = 1876, X1p = 2174, Z0p = -846, Z1p = -80;   // 铺满整个台面（原来只到 z -134 / x 2186，南侧和东侧各缺一条）
+      const S = 3.0, X0p = 1878, X1p = 2186, Z0p = -846, Z1p = -134;
       const nx = Math.floor((X1p - X0p) / S), nz = Math.floor((Z1p - Z0p) / S);
       const geo = new THREE.BoxGeometry(S - 0.07, 0.12, S - 0.07);
       const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
