@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix390-bricky';
+const BUILD = '20261107-fix402-noguard';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -28650,37 +28650,6 @@ m4a.position.set(AX, BASE + 0.18, -141);
       };
       window.__yamenTerrainFix = 1;
     } catch (eT4) { window.__yamenTerrainFixErr = String(eT4); }
-    // 【fix382】钩爪保险：人在衙署院内时持续记录合法落脚点，被钩到院墙外就拉回来
-    try {
-      let _lx = 0, _lz = 0, _ly = 0, _lv = false;
-      setInterval(function () {
-        try {
-          window.__guardTicks = (window.__guardTicks || 0) + 1;
-          const _pp = (typeof person !== 'undefined' && person && person.position) ? person.position : null;
-          if (!_pp) return;
-          const p = _pp;
-          const inX = p.x > 1772 && p.x < 2278, inZ = p.z < -52 && p.z > -868;
-          const inH = p.y > 2.2;
-          // 【fix386】钩爪落点把人压到台面以下时，直接托回台面（这是"到地底下"的最后一环）
-          if (inX && inZ && p.y < 2.25) { p.y = 2.78; }
-          if (inX && inZ && inH) { _lx = p.x; _ly = p.y; _lz = p.z; _lv = true; }
-          else if (_lv && (!inX || !inZ) && Math.abs(p.x - _lx) + Math.abs(p.z - _lz) > 3) {
-            // 从院内被拽到院外：放回最后合法点（大门方向不拦，z > -150 时不处理）
-            if (!(p.z > -150 && Math.abs(p.x - AX) < 16)) {
-              person.position.x = _lx; person.position.z = _lz;
-              if (p.y < _ly) person.position.y = _ly;
-              if (window.__cfHint) window.__cfHint('衙署院墙挡住了钩爪');
-            }
-          }
-        } catch (eG) {}
-      }, 60);
-    } catch (eG2) {}
-    // 【fix387】把整块衙署台面登记成"室内地坪"（__FLOORS）：钩爪下落时按这个高度落地
-    try {
-      window.__FLOORS = window.__FLOORS || [];
-      window.__FLOORS.push({ x0: 1876, x1: 2174, z0: -846, z1: -82, top: 2.95 });
-      window.__yamenFloorReg = window.__FLOORS.length;
-    } catch (eF) { window.__yamenFloorRegErr = String(eF); }
     window.__yamenPlateau = 1;
   } catch (eY2) { window.__yamenPlateauErr = String(eY2); }
   // ---- 布置：在新扩出的东侧台地（x 1950~2160）----
