@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix421-hit3d';
+const BUILD = '20261112-fix422-parallel';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -20002,9 +20002,11 @@ function shoot(w, count) {
       const rpgY = shotY(hx, hz, rpgDist);
       // 起点按 2×2 错开（右上/右下/左上/左下），终点都是同一个落点 → 集中一点
       const _rx = -fz / baseLen, _rz = fx / baseLen;
-      spawnTracer(px + ax * 0.5 + _rx * col * 0.45, muzzleY + row * 0.45, pz + az * 0.5 + _rz * col * 0.45, hx, rpgY, hz, currentWeapon, rpgTt || undefined);
-      if (rpgTt > 0) queueBullet(hx, rpgY, hz, rpgTt + s * 0.04, () => rocketImpact(w, shot.best, hx, hz, rpgY));
-      else rocketImpact(w, shot.best, hx, hz, rpgY);
+      // 【fix422】终点也加同样的偏移 → 四条弹道真正平行飞出，各自炸在自己前方 0.45 米处
+      const _hx = hx + _rx * col * 0.45, _hz = hz + _rz * col * 0.45, _hy = rpgY + row * 0.45;
+      spawnTracer(px + ax * 0.5 + _rx * col * 0.45, muzzleY + row * 0.45, pz + az * 0.5 + _rz * col * 0.45, _hx, _hy, _hz, currentWeapon, rpgTt || undefined);
+      if (rpgTt > 0) queueBullet(_hx, _hy, _hz, rpgTt + s * 0.04, () => rocketImpact(w, shot.best, _hx, _hz, _hy));
+      else rocketImpact(w, shot.best, _hx, _hz, _hy);
     }
     return;
   }
