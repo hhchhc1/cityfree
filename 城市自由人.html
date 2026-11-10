@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix420-converge';
+const BUILD = '20261112-fix421-hit3d';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -19883,6 +19883,11 @@ function shoot(w, count) {
       const t = ox * dx + oz * dz;
       if (t < 0 || t > w.range) return;
       const perp = Math.abs(ox * dz - oz * dx);
+      // 【fix421】原来只算水平距离，所以从头顶上方打过去也会命中。
+      // 现在算弹道在该距离上的高度，落在（地面-0.3 ～ 地面+2.1）之外就不算命中。
+      const _ty = muzzleY + t * slope;
+      const _gy = terrainHeight(o.x, o.z);
+      if (_ty < _gy - 0.3 || _ty > _gy + 2.1) return;
       if (perp < 0.8 && t < bd) { bd = t; best = { k, o }; hs = perp < 0.3; }
     };
     for (const r of residents) if (r.alive) test(r, 'r');
@@ -19901,6 +19906,10 @@ function shoot(w, count) {
       const t = ox * dx + oz * dz;
       if (t < 0 || t > w.range) return;
       const perp = Math.abs(ox * dz - oz * dx);
+      // 【fix421】车也一样：弹道高度超过车顶（地面+2.6 米）就不算命中
+      const _ty2 = muzzleY + t * slope;
+      const _gy2 = terrainHeight(o.x, o.z);
+      if (_ty2 < _gy2 - 0.3 || _ty2 > _gy2 + 2.6) return;
       if (perp < ((o.radius || 1.6) + 0.4) && t < bd) { bd = t; best = { k: 'car', o }; hs = false; }
     };
     for (const v of cars) if (!v.exploded) testV(v);
