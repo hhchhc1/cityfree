@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix433-solid';
+const BUILD = '20261112-fix434-summit';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -33933,6 +33933,64 @@ window.focus();
       g.position.set(sx, sy, sz); scene.add(g);
     }
   } catch (eZZ) { /* 装饰失败不影响游戏 */ }
+})();
+
+// 【fix434】中镇山四期：山顶环形石栏 + 香炉砖台 + 瀑布潭边湿石
+(function zzPolish2() {
+  try {
+    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
+    if (!_th) return;
+    var CX = 661, CZ = -7;
+    var stone = new THREE.MeshLambertMaterial({ color: 0x8d8a80 });
+    var stone2 = new THREE.MeshLambertMaterial({ color: 0x9d9a90 });
+    var brick = new THREE.MeshLambertMaterial({ color: 0x7f848c });
+    var wet = new THREE.MeshLambertMaterial({ color: 0x4f5a5e });
+    // 1) 山顶环形石栏：32 根望柱 + 两圈横栏，半径 31 米，只留西侧 24 度缺口当入口
+    var N = 32, R = 31;
+    var postGeo = new THREE.BoxGeometry(0.30, 1.05, 0.30);
+    var railGeo = new THREE.BoxGeometry(1.9, 0.14, 0.16);
+    var posts = new THREE.InstancedMesh(postGeo, stone, N);
+    var railsHi = new THREE.InstancedMesh(railGeo, stone2, N);
+    var railsLo = new THREE.InstancedMesh(railGeo, stone, N);
+    var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(0, 0, 0);
+    var pi = 0;
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * Math.PI * 2;
+      var deg = (a * 180 / Math.PI + 360) % 360;
+      // 只在 120°~340° 之间立栏：0° 是祠堂院子，71° 是上山道入口，这两段必须留空。
+      if (!(deg > 120 && deg < 340)) continue;
+      var px = CX + Math.cos(a) * R, pz = CZ + Math.sin(a) * R;
+      var gy = _th(px, pz);
+      m4.makeTranslation(px, gy + 0.52, pz); posts.setMatrixAt(pi, m4);
+      var mx = CX + Math.cos(a + Math.PI / N) * R, mz = CZ + Math.sin(a + Math.PI / N) * R;
+      var my = _th(mx, mz);
+      eu.set(0, -a - Math.PI / N + Math.PI / 2, 0); q.setFromEuler(eu);
+      m4.compose(new THREE.Vector3(mx, my + 0.96, mz), q, new THREE.Vector3(1, 1, 1)); railsHi.setMatrixAt(pi, m4);
+      m4.compose(new THREE.Vector3(mx, my + 0.50, mz), q, new THREE.Vector3(1, 1, 1)); railsLo.setMatrixAt(pi, m4);
+      pi++;
+    }
+    posts.count = pi; railsHi.count = pi; railsLo.count = pi;
+    posts.instanceMatrix.needsUpdate = true;
+    railsHi.instanceMatrix.needsUpdate = true;
+    railsLo.instanceMatrix.needsUpdate = true;
+    scene.add(posts); scene.add(railsHi); scene.add(railsLo);
+    // 2) 香炉砖台：铺在香炉下方，比平台高 18 厘米
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.18, 20), brick);
+    base.position.set(683.6, _th(683.6, 0) + 0.09, 0);
+    scene.add(base);
+    // 3) 瀑布潭边湿石：在潭口两侧铺一圈深色湿岩
+    var ring = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.4, 1.1), wet, 14);
+    for (var k = 0; k < 14; k++) {
+      var ang = -0.9 + (k / 13) * 1.8;
+      var rx = 846 + Math.cos(ang) * 7.5, rz = 19 + Math.sin(ang) * 7.5;
+      m4.makeRotationY(ang);
+      var v = new THREE.Vector3(rx, _th(rx, rz) + 0.18, rz);
+      var m5 = new THREE.Matrix4().compose(v, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ang, 0)), new THREE.Vector3(1, 1, 1));
+      ring.setMatrixAt(k, m5);
+    }
+    ring.instanceMatrix.needsUpdate = true;
+    scene.add(ring);
+  } catch (eZZ2) { /* 装饰失败不影响游戏 */ }
 })();
 </script>
 </body>
