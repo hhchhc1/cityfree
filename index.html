@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix415-norescue';
+const BUILD = '20261112-fix416-bridge';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7492,6 +7492,20 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   // 桥面主体
   const deck = new THREE.Mesh(new THREE.BoxGeometry(10, 0.4, bridgeLen), bridgeMat);
   deck.position.set(0, bridgeY - 0.2, (bridgeStartZ + bridgeEndZ) / 2); scene.add(deck);
+  // 【fix416】桥面下方原来只有 0.4 米薄板，从低处往下看能透过板缝看到"缺口/黑洞"。
+  // 补一条连续的箱梁（实心），桥底从任何角度看都是实的。
+  const girder = new THREE.Mesh(new THREE.BoxGeometry(9.6, 1.5, bridgeLen), bridgeMat);
+  girder.position.set(0, bridgeY - 1.05, (bridgeStartZ + bridgeEndZ) / 2); scene.add(girder);
+  // 城市端引桥下面的路堤（填满地面到桥面之间的空隙，消除侧向洞口）
+  {
+    const embMat = new THREE.MeshLambertMaterial({ color: 0x6f6a60 });
+    const e1 = new THREE.Mesh(new THREE.BoxGeometry(13, 3.0, 30), embMat);
+    e1.position.set(0, 1.4, BRIDGE_START_Z + 16); scene.add(e1);
+    const e2 = new THREE.Mesh(new THREE.BoxGeometry(12.4, 2.6, 26), embMat);
+    e2.position.set(0, 3.5, BRIDGE_DECK_START_Z - 16); scene.add(e2);
+    const e3 = new THREE.Mesh(new THREE.BoxGeometry(13, 3.4, 34), embMat);
+    e3.position.set(0, 1.6, BRIDGE_END_Z + 18); scene.add(e3);
+  }
   // 桥面中线（黄色虚线）
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xddaa00 });
   for (let i = -bridgeLen / 2 + 5; i < bridgeLen / 2 - 5; i += 6) {
