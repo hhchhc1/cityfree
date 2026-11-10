@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261107-fix393-loophook';
+const BUILD = '20261107-fix394-camhook';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32574,6 +32574,21 @@ try {
     musicEl.load();                       // 预解码第一首，把媒体管线建起来
   }
 } catch (e) { console.warn('[prewarm-music]', e); }
+// 【fix394】相机穿地真正的修法：渲染前 renderer 会调用 camera.updateMatrixWorld()，
+// 在那个时刻把相机抬到地面之上，画出来的这一帧就已经抬好了（之前的写法在渲染之后才改，无效）
+(function cameraGroundHook() {
+  const _umw = camera.updateMatrixWorld.bind(camera);
+  camera.updateMatrixWorld = function (force) {
+    try {
+      const cp = camera.position;
+      let gy = 0.5;
+      try { gy = linhaiHeight(cp.x, cp.z); } catch (e1) {}
+      if (cp.x > 1870 && cp.x < 2180 && cp.z < -76 && cp.z > -852) gy = Math.max(gy, 2.6);
+      if (cp.y < gy + 1.10) cp.y = gy + 1.10;
+    } catch (e2) {}
+    _umw(force);
+  };
+})();
 renderer.setAnimationLoop(function (__tm, __fr) {
   frameLoop(__tm, __fr);
   try {
