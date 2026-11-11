@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix464-brick';
+const BUILD = '20261112-fix466-cranebtn';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18372,6 +18372,8 @@ const CONSTRUCTION_SITE = { x: 120, z: -120, r: 34, dropX: 150, dropZ: -140 };
 const CONSTRUCTION_SITE_RING = { min: 11, max: 25 };   // 相对工地中心的半径范围（米）
 // 吊车后半部吊钩的位置（货物挂在这里；原来挂在前伸吊臂末端的车头前面）
 const CRANE_HOOK_Z = -2.5, CRANE_HOOK_Y = 0.55;
+// 【fix465】车尾吊臂下沿 / 运输吊绳长 / 货物顶端离钩距离 / 货物最低点到挂点距离
+const CRANE_BOOM_Y = 4.62, CRANE_HANG = 1.40, CRANE_HOLD = 0.35, CARGO_HALF = 2.05;
 function rollCraneDropPoint() {
   const a = Math.random() * Math.PI * 2;
   const rr = CONSTRUCTION_SITE_RING.min + Math.random() * (CONSTRUCTION_SITE_RING.max - CONSTRUCTION_SITE_RING.min);
@@ -18464,14 +18466,17 @@ function decorateCrane(g) {
   // 现在改成车尾平板上方：货物由车后半部的吊钩吊起。
   const rear = new THREE.Group();
   rear.position.set(0, 1.55, CRANE_HOOK_Z);
-  const rearMast = new THREE.Mesh(new THREE.BoxGeometry(0.36, 1.0, 0.36), yellow);
-  rearMast.position.y = 0.3; rear.add(rearMast);
-  const rearBoom = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.26, 0.9), yellow);
-  rearBoom.position.y = CRANE_HOOK_Y + 0.28; rear.add(rearBoom);
-  const rearRope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 5), dark);
-  rearRope.position.y = CRANE_HOOK_Y - 0.5; rear.add(rearRope);
-  const rearHook = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
-  rearHook.position.y = CRANE_HOOK_Y - 1.0; rear.add(rearHook);
+  // 【fix465】车尾吊臂加高到 4.6 米：原来 1 米高的桅杆根本抬不起 2 米高的货物
+  const rearMast = new THREE.Mesh(new THREE.BoxGeometry(0.46, 4.6, 0.46), yellow);
+  rearMast.position.y = 2.3; rear.add(rearMast);
+  const rearBrace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.3, 0.22), yellow);
+  rearBrace.position.set(0, 1.05, 0.52); rearBrace.rotation.x = -0.40; rear.add(rearBrace);
+  const rearBoom = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.30, 0.9), yellow);
+  rearBoom.position.y = CRANE_BOOM_Y; rear.add(rearBoom);
+  const rearRope = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1, 5), dark);
+  rearRope.position.y = CRANE_BOOM_Y - CRANE_HANG / 2; rearRope.scale.y = CRANE_HANG; rear.add(rearRope);
+  const rearHook = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.34, 0.30), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
+  rearHook.position.y = CRANE_BOOM_Y - CRANE_HANG; rear.add(rearHook);
   g.add(rear);
   g.userData.craneRear = rear;
   // 覆盖回车头那套：updateCrane 驱动的是「吊货的」绳和钩
@@ -18825,40 +18830,33 @@ function updateTaxi(dt) {
 }
 
 // ---------- 吊车 / 工地 ----------
-function initCraneLoad(v) {
-  const hook = v.group.userData.craneHook;
+// 【fix465】吊车作业三段动画：
+//   ① 吊起：工地上的材料被钩住，从地面沿吊绳升到车尾吊钩上，升到顶原地就不再显示；
+//   ② 运输：货物挂在吊钩下面跟着车走；
+//   ③ 卸货：到绿色交付区后从吊钩上缓缓落到地面，落地才结算，留在卸货点；5 秒后材料回到原处。
+function craneCargoGroup() {
   const cargo = new THREE.Group();
   const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 1.5), new THREE.MeshLambertMaterial({ color: 0xb08040 }));
   b1.position.y = -0.9; cargo.add(b1);
   const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 1.1), new THREE.MeshLambertMaterial({ color: 0x8e6a33 }));
   b2.position.y = -1.7; cargo.add(b2);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.10, 1.56), new THREE.MeshLambertMaterial({ color: 0x6b4a20 }));
+  band.position.y = -1.32; cargo.add(band);
+  return cargo;
+}
+function initCraneLoad(v) {
+  if (v._cargo) { try { scene.remove(v._cargo); } catch (e0a) {} }
+  const cargo = craneCargoGroup();
   cargo.visible = false;
-  v.group.add(cargo);
+  scene.add(cargo);            // 世界坐标：要能在「原地 → 吊钩 → 卸货点」之间移动
   v._cargo = cargo;
-  v._cargoState = 'empty';    // empty | lifting | carried | dropping
+  v._cargoState = 'empty';
   v._cargoT = 0;
   v._cargoTarget = null;
+  v._liftFrom = null; v._dropFrom = null; v._dropTo = null;
 }
-function craneAction(v) {
-  // 一次只吊一件：吊起/放下动画期间按 E 无效，也不能再抓第二箱（原来这两种状态会漏到取货分支）
-  if (!v || !v.isCrane) return false;
-  // 送货
-  if (v._cargoState === 'lifting' || v._cargoState === 'dropping') {
-    setHint(v._cargoState === 'lifting' ? '正在吊起材料…（作业期间不能移动）' : '正在放下材料…（作业期间不能移动）');
-    return false;
-  }
-  if (v._cargoState === 'carried') {
-    const d = Math.hypot(v.x - CONSTRUCTION_SITE.dropX, v.z - CONSTRUCTION_SITE.dropZ);
-    if (d < 9) {
-      // 到达卸货点：不瞬间完成，转入放下动画，放完才结算（放的过程中车不能动）
-      v._cargoState = 'dropping'; v._cargoT = 0;
-      setHint('正在放下材料…（作业期间不能移动）');
-      return true;
-    }
-    setHint('把材料运到绿色交付区（还差 ' + Math.round(d) + 'm）');
-    return false;
-  }
-  // 取货
+// 取货（E 键 / 吊起按钮共用）
+function cranePickup(v) {
   let best = null, bd = 1e9;
   for (const c of siteCrates) {
     if (c.taken) continue;
@@ -18866,55 +18864,114 @@ function craneAction(v) {
     if (d < bd) { bd = d; best = c; }
   }
   if (!best) { setHint('工地材料已全部吊走，等一会儿补货'); return false; }
-  if (bd > 12) { setHint('靠近材料堆（' + Math.round(bd) + 'm）再按 E 吊起'); return false; }
-  best.taken = true;
-  best.mesh.visible = false;
+  if (bd > 12) { setHint('靠近材料堆（' + Math.round(bd) + 'm）再吊起'); return false; }
+  best.taken = true;            // 先记成已取，但模型先留着 —— 要看着它自己升上去
   v._cargoTarget = best;
+  v._liftFrom = { x: best.mesh.position.x, y: best.mesh.position.y + CARGO_HALF, z: best.mesh.position.z };
   v._cargoState = 'lifting';
   v._cargoT = 0;
   if (v._cargo) v._cargo.visible = true;
   setHint('吊起材料！送到绿色交付区按 E 卸货');
   sfx('coin');
-  // 【fix40 修复】这一行原来写在 return true 之后，属于不可达代码 —— 注释承诺的
-  // "每次装货都换一个随机卸货点"实际上从来没生效，卸货点从开局随机一次后就永久固定。
-  // 现在移到 return 之前，恢复注释所声明的行为（工地四周 11~25m 环带内重新随机）。
   rollCraneDropPoint();
   return true;
 }
+// 放下（E 键 / 放下按钮共用）：到绿色交付区才放得下
+function craneStartDrop(v) {
+  const d = Math.hypot(v.x - CONSTRUCTION_SITE.dropX, v.z - CONSTRUCTION_SITE.dropZ);
+  if (d >= 9) { setHint('把材料运到绿色交付区（还差 ' + Math.round(d) + 'm）'); return false; }
+  const gx = CONSTRUCTION_SITE.dropX, gz = CONSTRUCTION_SITE.dropZ;
+  v._dropTo = { x: gx, y: terrainHeight(gx, gz) + CARGO_HALF, z: gz };
+  v._dropFrom = null;
+  v._cargoState = 'dropping'; v._cargoT = 0;
+  setHint('正在放下材料…（作业期间不能移动）');
+  return true;
+}
+function craneAction(v) {
+  if (!v || !v.isCrane) return false;
+  if (v._cargoState === 'lifting' || v._cargoState === 'dropping') {
+    setHint(v._cargoState === 'lifting' ? '正在吊起材料…（作业期间不能移动）' : '正在放下材料…（作业期间不能移动）');
+    return false;
+  }
+  if (v._cargoState === 'carried') return craneStartDrop(v) === true;
+  return cranePickup(v);
+}
 function updateCrane(v, dt) {
   if (!v || !v.isCrane || !v._cargo) return;
-  const hook = v.group.userData.craneHook;
-  const rope = v.group.userData.craneRope;
+  const ud = v.group.userData;
+  const hook = ud.craneHook, rope = ud.craneRope;
+  const boomY = (ud.craneBoomY || CRANE_BOOM_Y);
   const st = v._cargoState;
-  if (st === 'empty') {
-    v._cargoT = Math.min(1, v._cargoT + dt * 2);
+  v._sway = (v._sway || 0) + dt * (st === 'carried' ? 1.7 : 0.6);
+  const sway = Math.sin(v._sway) * (st === 'carried' ? 0.10 : 0.04);
+  let len = CRANE_HANG;
+  if (st === 'dropping') {
+    v._cargoT = Math.min(1, v._cargoT + dt * 0.55);
+    const dropLen = Math.max(CRANE_HANG, boomY - (CARGO_HALF + CRANE_HOLD));
+    len = CRANE_HANG + (dropLen - CRANE_HANG) * v._cargoT;
   } else if (st === 'lifting') {
-    v._cargoT += dt * 0.8;
-    if (v._cargoT >= 1) { v._cargoState = 'carried'; v._cargoT = 0; }
-  } else if (st === 'carried') {
-    v._cargoT += dt * 1.4;
-  } else if (st === 'dropping') {
-    v._cargoT = Math.min(1, v._cargoT + dt * 0.7);
-    if (v._cargoT >= 1) craneFinishDrop(v);
+    v._cargoT = Math.min(1, v._cargoT + dt * 0.75);
   }
-  let hang;
-  if (st === 'carried') hang = 1.0;
-  else if (st === 'dropping') hang = 1.0 - 0.95 * Math.min(1, v._cargoT);   // 缓缓放到地面
-  else if (st === 'lifting') {
-    const t = Math.min(1, v._cargoT);
-    hang = t < 0.35 ? 0.2 - (t / 0.35) * 0.15 : 0.05 + ((t - 0.35) / 0.65) * 0.95;
-  } else hang = 0.35 - 0.15 * Math.min(1, v._cargoT);
-  const len = 1.0 + hang * 3.0;
-  v._sway = (v._sway || 0) + dt * (st === 'carried' ? 2.2 : 0.8);
-  const sway = Math.sin(v._sway) * (st === 'carried' ? 0.14 : 0.05);
-  if (rope) { rope.scale.y = len; rope.position.y = CRANE_HOOK_Y - len / 2; rope.rotation.z = sway; }
-  if (hook) hook.position.y = CRANE_HOOK_Y - len; hook.rotation.z = sway;
-  // 货物挂在后半部吊钩正下方（货物是车组的子节点，所以用车组坐标 CRANE_HOOK_Z）
-  if (v._cargo) { v._cargo.position.set(0, CRANE_HOOK_Y - len - 0.9, CRANE_HOOK_Z); v._cargo.rotation.z = sway; v._cargo.rotation.y = Math.sin(v._sway * 0.7) * 0.1; }
+  if (rope) { rope.scale.y = Math.max(0.05, len); rope.position.y = boomY - len / 2; rope.rotation.z = sway; }
+  if (hook) { hook.position.y = boomY - len; hook.rotation.z = sway; }
+  const hw = new THREE.Vector3();
+  if (hook) { hook.updateWorldMatrix(true, false); hook.getWorldPosition(hw); }
+  const cargo = v._cargo;
+  if (st === 'lifting') {
+    const u = v._cargoT, e = u * u * (3 - 2 * u);
+    const f = v._liftFrom || { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    cargo.visible = true;
+    cargo.position.set(f.x + (hw.x - f.x) * e, f.y + (hw.y - CRANE_HOLD - f.y) * e, f.z + (hw.z - f.z) * e);
+    const m = v._cargoTarget && v._cargoTarget.mesh;
+    if (m) {
+      m.visible = u < 0.90;
+      m.position.set(cargo.position.x, cargo.position.y - CARGO_HALF, cargo.position.z);
+    }
+    if (u >= 1) {
+      if (m) m.visible = false;
+      v._cargoState = 'carried'; v._cargoT = 0;
+    }
+  } else if (st === 'carried') {
+    cargo.visible = true;
+    cargo.position.set(hw.x, hw.y - CRANE_HOLD, hw.z);
+    cargo.rotation.y = Math.sin(v._sway * 0.7) * 0.08;
+  } else if (st === 'dropping') {
+    if (!v._dropFrom) v._dropFrom = { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    const to = v._dropTo || { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    const u = v._cargoT, e = u * u * (3 - 2 * u);
+    cargo.visible = true;
+    cargo.position.set(v._dropFrom.x + (to.x - v._dropFrom.x) * e, v._dropFrom.y + (to.y - v._dropFrom.y) * e, v._dropFrom.z + (to.z - v._dropFrom.z) * e);
+    if (u >= 1) craneFinishDrop(v);
+  } else {
+    cargo.visible = false;
+  }
+  cargo.rotation.z = sway * 0.5;
 }
-// 吊车吊起/放下货物时锁住车辆：一次只吊一件，作业期间不能开车走位
 function craneBusy(v) {
   return !!(v && v.isCrane && (v._cargoState === 'lifting' || v._cargoState === 'dropping'));
+}
+// 卸下的货物：先在卸货点显示，5 秒后消失，材料回到原来被吊起的位置
+const craneDelivered = [];
+function spawnCraneDelivered(pos, src) {
+  const m = craneCargoGroup();
+  m.position.set(pos.x, pos.y, pos.z);
+  m.rotation.y = Math.random() * 0.6 - 0.3;
+  scene.add(m);
+  craneDelivered.push({ mesh: m, t: 0, src: src || null });
+}
+function updateCraneDelivered(dt) {
+  for (let i = craneDelivered.length - 1; i >= 0; i--) {
+    const d = craneDelivered[i];
+    d.t += dt;
+    if (d.t > 5) {
+      try { scene.remove(d.mesh); } catch (e1) {}
+      if (d.src) {
+        d.src.taken = false; d.src.respawn = 0;
+        try { d.src.mesh.position.set(d.src.x, terrainHeight(d.src.x, d.src.z), d.src.z); d.src.mesh.visible = true; } catch (e2) {}
+      }
+      craneDelivered.splice(i, 1);
+    }
+  }
 }
 function craneFinishDrop(v) {
   const pay = 260, xp = 90;
@@ -18923,13 +18980,15 @@ function craneFinishDrop(v) {
   floatText('+' + xp + ' 经验', '#9b59b6');
   spawnBurst(CONSTRUCTION_SITE.dropX, CONSTRUCTION_SITE.dropZ, 0x66ff99, 16);
   sfx('coin');
-  if (v._cargoTarget) { v._cargoTarget.taken = false; v._cargoTarget.respawn = 0; v._cargoTarget.mesh.visible = true; }
-  v._cargoState = 'empty'; v._cargoTarget = null; v._cargoT = 0;
+  if (v._dropTo) spawnCraneDelivered(v._dropTo, v._cargoTarget);
   if (v._cargo) v._cargo.visible = false;
-  setHint('卸货完成！按 E 再吊一箱');
+  v._cargoState = 'empty'; v._cargoT = 0;
+  v._cargoTarget = null; v._liftFrom = null; v._dropFrom = null; v._dropTo = null;
+  setHint('卸货完成！材料 5 秒后回到原处，按 E 再吊一箱');
 }
-
 function updateSite(dt) {
+  try { updateCraneDelivered(dt); } catch (eD) {}
+  try { updateCraneBtns(); } catch (eB) {}
   for (const c of siteCrates) {
     if (!c.taken) continue;
     c.respawn += dt;
@@ -19006,6 +19065,11 @@ function updateJobs(dt) {
   } catch (e) {}
   try { updateSite(dt); } catch (e) { console.error('[site]', e); }
   try { if (currentCar && currentCar.isCrane) updateCrane(currentCar, dt); } catch (e) { console.error('[crane]', e); }
+  try {
+    for (const c of cars) {
+      if (c && c.isCrane && c !== currentCar && c._cargo && c._cargo.visible) updateCrane(c, dt);
+    }
+  } catch (e2) {}
   // HUD 提示
   if (state === 'drive' && currentCar) {
     const v = currentCar;
@@ -19181,6 +19245,59 @@ function updateJobGuide(dt) {
 }
 
 // ---------- 车库旁的「召回爱车」按钮 ----------
+// 【fix466】驾驶吊车到工地时，屏幕中下方出现「吊起货物 / 放下货物」两个按钮
+let craneBtnsEl = null, craneLiftBtnEl = null, craneDropBtnEl = null;
+function ensureCraneBtns() {
+  if (craneBtnsEl) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'craneBtns';
+  wrap.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:104px;z-index:9000;display:none;' +
+    'gap:14px;align-items:center;pointer-events:none;';
+  const mk = function (txt, bg) {
+    const b = document.createElement('div');
+    b.textContent = txt;
+    b.style.cssText = 'pointer-events:auto;cursor:pointer;user-select:none;min-width:132px;text-align:center;' +
+      'padding:13px 18px;border-radius:14px;font-weight:bold;font-size:16px;color:#1b1b1b;' +
+      'box-shadow:0 6px 18px rgba(0,0,0,.5);background:' + bg + ';';
+    wrap.appendChild(b);
+    return b;
+  };
+  craneLiftBtnEl = mk('吊起货物', 'linear-gradient(#ffe07a,#f0b429)');
+  craneDropBtnEl = mk('放下货物', 'linear-gradient(#9cf2bb,#33c46a)');
+  const stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); };
+  craneLiftBtnEl.addEventListener('pointerdown', stop);
+  craneDropBtnEl.addEventListener('pointerdown', stop);
+  craneLiftBtnEl.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    const v = currentCar;
+    if (!v || !v.isCrane) return;
+    if (v._cargoState !== 'empty') { setHint('车上已经有一件材料了'); return; }
+    cranePickup(v);
+  });
+  craneDropBtnEl.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    const v = currentCar;
+    if (!v || !v.isCrane) return;
+    if (v._cargoState !== 'carried') {
+      setHint(v._cargoState === 'empty' ? '车上没有货物，先按「吊起货物」' : '正在作业，稍等');
+      return;
+    }
+    craneStartDrop(v);
+  });
+  document.body.appendChild(wrap);
+  craneBtnsEl = wrap;
+}
+function updateCraneBtns() {
+  ensureCraneBtns();
+  const v = (state === 'drive') ? currentCar : null;
+  const near = v && v.isCrane && Math.hypot(v.x - CONSTRUCTION_SITE.x, v.z - CONSTRUCTION_SITE.z) < 70;
+  if (!craneBtnsEl) return;
+  craneBtnsEl.style.display = near ? 'flex' : 'none';
+  if (!near) return;
+  const st = v._cargoState;
+  if (craneLiftBtnEl) craneLiftBtnEl.style.opacity = (st === 'empty') ? '1' : '0.45';
+  if (craneDropBtnEl) craneDropBtnEl.style.opacity = (st === 'carried') ? '1' : '0.45';
+}
 let garageBtnEl = null;
 function ensureGarageBtn() {
   if (garageBtnEl) return;
