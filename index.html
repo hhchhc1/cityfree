@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix442-tight';
+const BUILD = '20261112-fix443-hintlow';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -29922,7 +29922,7 @@ const byName = {};
     if (btn) return;
     btn = document.createElement('div');
     btn.id = 'folkViewBtn';
-    btn.style.cssText = 'display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:9990;padding:13px 24px;border-radius:28px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)';
+    btn.style.cssText = 'display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:98px;z-index:9990;padding:13px 24px;border-radius:28px;background:linear-gradient(180deg,#ffe9a3,#f5c542);color:#3a2a08;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)';
     document.body.appendChild(btn);
     window.__bindTap(btn, function () { if (cur) show(cur); });
   }
