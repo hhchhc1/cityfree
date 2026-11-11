@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix458-coords';
+const BUILD = '20261112-fix460-polish';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24563,7 +24563,7 @@ hudStyle(stFillEl, 'stWidth', 'width', (isDevOn() ? 100 : (player.stamina / play
         if (_flying && typeof AIRLINER !== 'undefined' && AIRLINER && AIRLINER.position) { _px = AIRLINER.position.x; _py = AIRLINER.position.y; _pz = AIRLINER.position.z; }
       } catch (eCoord) {}
       window.__mmCoordEl.style.display = 'block';
-      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   高度 ' + _py.toFixed(1) + '   Z ' + _pz.toFixed(0);
+      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   Y ' + _pz.toFixed(0) + '   高度 Z ' + _py.toFixed(1);
     } else window.__mmCoordEl.style.display = 'none';
   }
     // 装甲载具（直升机/坦克）顶部顺带显示剩余耐久：
@@ -33697,7 +33697,7 @@ window.focus();
 
         // ⑪ 写祝福：站进殿里才出现按钮，牌子挂到许愿绳上并永久保留
         var btn = document.createElement('div');
-        btn.textContent = '写祝福';
+        btn.textContent = '庙内许愿';
         btn.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:98px;padding:10px 18px;border-radius:20px;' +
           'background:rgba(160,40,30,.92);color:#ffe9b0;font:600 15px system-ui;z-index:9000;display:none;pointer-events:auto;cursor:pointer;user-select:none;' +
           'box-shadow:0 4px 14px rgba(0,0,0,.35);';
@@ -34370,128 +34370,6 @@ window.focus();
   } catch (eTop) {}
 })();
 
-﻿    /* --- 【fix458】世界坐标轴 ---
-       原点就在中央公园十字路口：terrainHeight 在城市内(|x|,|z|<205)恒为 0，
-       所以 (0,0,0) 正好落在地面上。这里画一套看得见的参考轴：
-         X 红 = 东(+) / 西(-)      Z 蓝 = 南(+) / 北(-)      Y 绿 = 高度(+上/-下)
-       注意：z 是"南北"水平轴，不是高度；高度是 y。 */
-    (function zzCoordFrame() {
-      try {
-        var G = new THREE.Group();
-        G.position.set(0, 0, 0);
-        var mX = new THREE.MeshBasicMaterial({ color: 0xd23b2e });
-        var mX2 = new THREE.MeshBasicMaterial({ color: 0x7a2620 });
-        var mZ = new THREE.MeshBasicMaterial({ color: 0x2f7fe0 });
-        var mZ2 = new THREE.MeshBasicMaterial({ color: 0x1d4b86 });
-        var mY = new THREE.MeshBasicMaterial({ color: 0x2fbf58 });
-        function bar(mat, w, h, d, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); G.add(m); return m; }
-        function head(mat, x, y, z, dir) {
-          var m = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 10), mat);
-          m.position.set(x, y, z);
-          if (dir === 'x') m.rotation.z = -Math.PI / 2;
-          if (dir === 'z') m.rotation.x = Math.PI / 2;
-          G.add(m); return m;
-        }
-        // 地面原点盘
-        var cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
-        var c = cv.getContext('2d');
-        c.beginPath(); c.arc(128, 128, 120, 0, 7); c.fillStyle = 'rgba(18,22,28,0.92)'; c.fill();
-        c.lineWidth = 12; c.strokeStyle = '#d9b25a'; c.stroke();
-        c.fillStyle = '#f4e2ae'; c.textAlign = 'center';
-        c.font = 'bold 52px system-ui,sans-serif'; c.fillText('原点', 128, 118);
-        c.font = 'bold 30px system-ui,sans-serif'; c.fillText('0, 0, 0', 128, 168);
-        var tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
-        var disc = new THREE.Mesh(new THREE.CircleGeometry(2.2, 36), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-        disc.rotation.x = -Math.PI / 2; disc.position.y = 0.265; G.add(disc);
-
-        // X 轴（红）：+x 东 20 米，-x 西 6 米
-        bar(mX, 20, 0.03, 0.42, 10, 0.26, 0);
-        head(mX, 20.6, 0.26, 0, 'x');
-        bar(mX2, 6, 0.03, 0.26, -3, 0.26, 0);
-        head(mX2, -6.3, 0.26, 0, 'x');
-
-        // Z 轴（蓝）：+z 南 20 米，-z 北 6 米
-        bar(mZ, 0.42, 0.03, 20, 0, 0.26, 10);
-        head(mZ, 0, 0.26, 20.6, 'z');
-        bar(mZ2, 0.26, 0.03, 6, 0, 0.26, -3);
-        head(mZ2, 0, 0.26, -6.3, 'z');
-
-        // Y 轴（绿，高度）：从原点向上 10 米
-        bar(mY, 0.16, 10, 0.16, 0, 5, 0);
-        var yh = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 10), mY); yh.position.set(0, 10.5, 0); G.add(yh);
-
-        // 文字标牌（永远朝向相机）
-        function label(text, x, y, z, w) {
-          var cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 128;
-          var c2 = cv2.getContext('2d');
-          c2.font = 'bold 60px system-ui,sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
-          c2.lineWidth = 12; c2.strokeStyle = 'rgba(0,0,0,0.8)'; c2.strokeText(text, 128, 64);
-          c2.fillStyle = '#ffffff'; c2.fillText(text, 128, 64);
-          var t2 = new THREE.CanvasTexture(cv2); t2.needsUpdate = true;
-          var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t2, transparent: true, depthWrite: false }));
-          sp.position.set(x, y, z); sp.scale.set(w, w / 2, 1); G.add(sp); return sp;
-        }
-        label('X＋ 东', 20.6, 3.0, 0, 5.2);
-        label('X－ 西', -6.8, 2.6, 0, 4.4);
-        label('Z＋ 南', 0, 3.0, 20.6, 5.2);
-        label('Z－ 北', 0, 2.6, -6.8, 4.4);
-        label('Y 高度', 0, 11.8, 0, 4.8);
-
-        // 每 5 米一个刻度 + 数字，方便目测距离
-        var mTick = new THREE.MeshBasicMaterial({ color: 0xf2e6c8 });
-        for (var d = 5; d <= 20; d += 5) {
-          bar(mTick, 0.5, 0.02, 0.14, d, 0.26, 0);
-          bar(mTick, 0.14, 0.02, 0.5, 0, 0.26, d);
-          label(String(d), d, 1.2, 0, 1.8);
-          label(String(d), 0, 1.2, d, 1.8);
-        }
-
-        scene.add(G);
-        window.__zzAxes = { x: 0, y: 0, z: 0, kids: G.children.length };
-      } catch (eAx) { try { console.error('[zzCoordFrame]', eAx); } catch (e9) { } }
-    })();
-
-
-
-</script>
-<!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
-     再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
-     会挂到全局，因此内联 onclick 依赖的 toggleCarMusic / skipMusic 等仍是全局可用；
-     （⚠️ 千万别写成直接 eval 又包在函数里——那样 var/function 只会进那个函数作用域，音乐按钮会失灵。）
-     主脚本跑完（场景建好、主循环已启动）后再等两帧确保渲染出画面，随后淡出并移除加载画面。 -->
-<script>
-(function __bootGame() {
-  var loader = document.getElementById('__bootLoader');
-  var tipEl = document.getElementById('__bootTip');
-  var tips = ['正在加载城市…', '正在铺设南岛沙滩…', '正在点亮路灯和球场泛光灯…', '正在召唤球员…', '马上就好…'];
-  var ti = 0;
-  var tipTimer = setInterval(function () { ti = (ti + 1) % tips.length; if (tipEl) tipEl.textContent = tips[ti]; }, 1300);
-  function fail(msg) { try { clearInterval(tipTimer); } catch (e) {} if (tipEl) { tipEl.textContent = '⚠ ' + msg; tipEl.style.color = '#ff9a9a'; } console.error('[boot]', msg); }
-  function start() {
-    var boot = document.getElementById('__gameboot');
-    if (!boot) { fail('找不到游戏脚本'); return; }
-    try {
-      (0, eval)(boot.textContent);           // 间接 eval → 在**全局作用域**执行，var/function 正确挂到全局
-    } catch (e) {
-      // 【fix78】把堆栈前几行也显示出来：这类加载期 ReferenceError 只看 message 完全
-      // 不知道出在哪一行（这次的 px is not defined 就排查了很久）。
-      fail('加载失败：' + ((e && e.message) || String(e)) + (e && e.stack ? ' @ ' + String(e.stack).split('\n').slice(1, 4).join(' | ') : '')); return;
-    }
-    // 主循环已在 eval 里启动；再等两帧，确保至少渲染出一帧真实画面，再淡出加载层
-    requestAnimationFrame(function () { requestAnimationFrame(function () {
-      try { clearInterval(tipTimer); } catch (e) {}
-      if (!loader) return;
-      loader.style.opacity = '0';
-      setTimeout(function () { if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 520);
-    }); });
-  }
-  // 双 rAF：第一帧先把加载画面绘制出来，第二帧再开始重活
-  requestAnimationFrame(function () { requestAnimationFrame(start); });
-})();
-
-
-
-
 // 【fix432】中镇山三期：山道石灯 + 观景点石桌石凳（全部贴地由 terrainHeight 求高度，不加碰撞）
 (function zzPolish() {
   try {
@@ -34604,96 +34482,127 @@ window.focus();
   } catch (eZZ2) { /* 装饰失败不影响游戏 */ }
 })();
 
-// 【fix436】东肩观景台重写：上一版栏杆是按坐标硬算的，歪了。这里用"边"循环生成，四面清楚。
-(function zzDeck2() {
-  try {
-    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
-    if (!_th) return;
-    var DX = 812, DZ = -66, S = 9.0, H = S / 2;
-    var gy = _th(DX, DZ);
-    var wood = new THREE.MeshLambertMaterial({ color: 0x7a5232 });
-    var woodDark = new THREE.MeshLambertMaterial({ color: 0x5d3d24 });
-    var g = new THREE.Group();
-    var i;
-    for (i = 0; i < 12; i++) {
-      var plank = new THREE.Mesh(new THREE.BoxGeometry(S, 0.14, S / 12 * 0.92), wood);
-      plank.position.set(0, 0, -H + S / 12 * (i + 0.5));
-      g.add(plank);
-    }
-    for (var sx = -1; sx <= 1; sx += 2) for (var sz = -1; sz <= 1; sz += 2) {
-      var post = new THREE.Mesh(new THREE.BoxGeometry(0.42, 8.0, 0.42), woodDark);
-      post.position.set(sx * (H - 0.5), -4.0, sz * (H - 0.5));
-      g.add(post);
-    }
-    // 三面栏杆：北(-Z)、东(+X)、南(+Z)；西(-X)留口当入口
-    function railSide(cx, cz, lenX, lenZ, nx, nz, rotY) {
-      var top = new THREE.Mesh(new THREE.BoxGeometry(lenX, 0.13, lenZ), woodDark);
-      top.position.set(cx, 1.08, cz);
-      g.add(top);
-      var mid = new THREE.Mesh(new THREE.BoxGeometry(lenX, 0.10, lenZ), wood);
-      mid.position.set(cx, 0.60, cz);
-      g.add(mid);
-      for (var k = -2; k <= 2; k++) {
-        var p = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.06, 0.15), wood);
-        var ox = nx ? k * (H / 2.4) : 0, oz = nz ? k * (H / 2.4) : 0;
-        p.position.set(cx + ox, 0.53, cz + oz);
-        g.add(p);
-      }
-    }
-    railSide(0, -H, S, 0.18, 0, 1);      // 北侧
-    railSide(0, H, S, 0.18, 0, 1);       // 南侧
-    railSide(H, 0, 0.18, S, 1, 0);       // 东侧
-    g.position.set(DX, gy, DZ);
-    scene.add(g);
-    for (var b2 = -1; b2 <= 1; b2 += 2) {
-      var bench = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.44, 0.5), new THREE.MeshLambertMaterial({ color: 0x9a968b }));
-      bench.position.set(DX + 0, gy + 0.36, DZ + b2 * 2.6);
-      scene.add(bench);
-    }
-  } catch (eZZ4) {}
-})();
+    // 【fix460】东肩观景台（重写 fix436）：原版把南北两侧的栏杆立柱按纵轴摆，
+    // 立柱跑到台面外半空里。这里按"边长"逐根生成，并让 4 根柱脚各自落到地面。
+    (function zzDeck2() {
+      try {
+        var _th = terrainHeight;
+        var DX = 812, DZ = -66, W = 10, D = 8, HW = W / 2, HD = D / 2;
+        var cs = [[-HW, -HD], [HW, -HD], [-HW, HD], [HW, HD]];
+        var top = _th(DX, DZ);
+        for (var ci = 0; ci < 4; ci++) top = Math.max(top, _th(DX + cs[ci][0], DZ + cs[ci][1]));
+        var dy = top + 0.55;                       // 台面高度：比最高一角再高半米
+        var g = new THREE.Group();
+        var wood = new THREE.MeshLambertMaterial({ color: 0x7a5232 });
+        var woodDark = new THREE.MeshLambertMaterial({ color: 0x5d3d24 });
+        // 台面：12 块板
+        for (var i = 0; i < 12; i++) {
+          var plank = new THREE.Mesh(new THREE.BoxGeometry(W, 0.16, D / 12 * 0.9), wood);
+          plank.position.set(0, 0, -HD + D / 12 * (i + 0.5));
+          g.add(plank);
+        }
+        // 4 根柱脚：各自落到本角地面（坡地上不会悬空）
+        for (var k2 = 0; k2 < 4; k2++) {
+          var cxx = cs[k2][0], czz = cs[k2][1];
+          var groundY = _th(DX + cxx, DZ + czz);
+          var hgt = Math.max(0.6, dy - groundY + 0.4);
+          var post = new THREE.Mesh(new THREE.BoxGeometry(0.4, hgt, 0.4), woodDark);
+          post.position.set(cxx * 0.94, -hgt / 2, czz * 0.94);
+          g.add(post);
+        }
+        // 三面栏杆（北 -z / 南 +z / 东 +x），西侧朝上山方向留口
+        function railNorthSouth(sz) {
+          var top2 = new THREE.Mesh(new THREE.BoxGeometry(W, 0.12, 0.16), woodDark);
+          top2.position.set(0, 1.05, sz); g.add(top2);
+          var mid = new THREE.Mesh(new THREE.BoxGeometry(W, 0.09, 0.12), wood);
+          mid.position.set(0, 0.56, sz); g.add(mid);
+          for (var k = 0; k <= 6; k++) {
+            var p = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.05, 0.13), wood);
+            p.position.set(-HW + 0.25 + k * ((W - 0.5) / 6), 0.53, sz);
+            g.add(p);
+          }
+        }
+        railNorthSouth(-HD); railNorthSouth(HD);
+        var topE = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, D), woodDark);
+        topE.position.set(HW, 1.05, 0); g.add(topE);
+        var midE = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, D), wood);
+        midE.position.set(HW, 0.56, 0); g.add(midE);
+        for (var k3 = 0; k3 <= 5; k3++) {
+          var pe = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.05, 0.13), wood);
+          pe.position.set(HW, 0.53, -HD + 0.25 + k3 * ((D - 0.5) / 5));
+          g.add(pe);
+        }
+        g.position.set(DX, dy, DZ);
+        scene.add(g);
+        // 台面下的两条斜撑
+        for (var b2 = -1; b2 <= 1; b2 += 2) {
+          var brace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, D * 0.9), woodDark);
+          brace.position.set(DX + b2 * (HW - 1.0), dy - 0.9, DZ);
+          scene.add(brace);
+        }
+        window.__zzDeck = { x: DX, z: DZ, deckY: +dy.toFixed(2) };
+      } catch (eZZ4) { }
+    })();
 
-// 【fix437】中镇山六期：瀑布水潭水面 + 山顶两位跪拜香客
-(function zzPoolAndPilgrims() {
-  try {
-    var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
-    if (!_th) return;
-    // 1) 水潭水面：半透明蓝盘，比潭底高 25 厘米，不写深度以免和石头打架
-    var PX = 846, PZ = 19;
-    var py = _th(PX, PZ);
-    var waterMat = new THREE.MeshLambertMaterial({ color: 0x4d86a8, transparent: true, opacity: 0.72, depthWrite: false });
-    var water = new THREE.Mesh(new THREE.CircleGeometry(6.2, 26), waterMat);
-    water.rotation.x = -Math.PI / 2;
-    water.position.set(PX, py + 0.25, PZ);
-    scene.add(water);
-    // 潭边一层浅水反光边（稍大一圈，更透）
-    var rim = new THREE.Mesh(new THREE.RingGeometry(6.2, 7.1, 26), new THREE.MeshLambertMaterial({ color: 0x9fc6d8, transparent: true, opacity: 0.35, depthWrite: false }));
-    rim.rotation.x = -Math.PI / 2;
-    rim.position.set(PX, py + 0.22, PZ);
-    scene.add(rim);
-    // 2) 两位跪拜香客：朝向祠堂（东），上身微前倾，双手合十
-    var robe = new THREE.MeshLambertMaterial({ color: 0x2f3d52 });
-    var robe2 = new THREE.MeshLambertMaterial({ color: 0x4a3b52 });
-    var skin = new THREE.MeshLambertMaterial({ color: 0xd9b596 });
-    var spots = [[-3.6, -1.2, robe], [-3.6, 1.2, robe2]];
-    for (var i = 0; i < spots.length; i++) {
-      var gx = 683.6 + spots[i][0], gz = -32 + spots[i][1];   // 【fix444】跟着祈福台挪到 z=-32
-      var gy2 = _th(gx, gz);
-      var g = new THREE.Group();
-      var low = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), spots[i][2]);
-      low.position.set(0, 0.21, 0); g.add(low);
-      var up = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.72, 0.5), spots[i][2]);
-      up.position.set(0.10, 0.62, 0); up.rotation.z = -0.42; g.add(up);
-      var head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skin);
-      head.position.set(0.28, 1.00, 0); g.add(head);
-      var hands = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.30, 0.16), skin);
-      hands.position.set(0.40, 0.78, 0); hands.rotation.z = -0.42; g.add(hands);
-      g.position.set(gx, gy2, gz);
-      g.rotation.y = -Math.PI / 2;   // 面朝东（祠堂）
-      scene.add(g);
-    }
-  } catch (eZZ5) {}
-})();
+
+    // 【fix460】瀑布水潭（重写 fix437）：原来只是一块悬空的蓝色圆盘。
+    // 现在补了石砌池壁（下沉 4 米）+ 池沿石圈，水面才像真的盛在潭里。
+    (function zzPoolAndPilgrims() {
+      try {
+        var _th = terrainHeight;
+        var PX = 846, PZ = 19;
+        var py = _th(PX, PZ);
+        var waterMat = new THREE.MeshLambertMaterial({ color: 0x4d86a8, transparent: true, opacity: 0.78, depthWrite: false });
+        var water = new THREE.Mesh(new THREE.CircleGeometry(5.6, 30), waterMat);
+        water.rotation.x = -Math.PI / 2;
+        water.position.set(PX, py + 0.22, PZ);
+        scene.add(water);
+        // 池壁：上宽下窄的开口圆筒，埋进山坡里，水面就有了"盆"
+        var wall = new THREE.Mesh(
+          new THREE.CylinderGeometry(6.0, 4.6, 4.2, 30, 1, true),
+          new THREE.MeshLambertMaterial({ color: 0x4a5560, side: THREE.DoubleSide })
+        );
+        wall.position.set(PX, py - 1.85, PZ);
+        scene.add(wall);
+        // 池沿石圈
+        var rim = new THREE.Mesh(
+          new THREE.TorusGeometry(5.9, 0.38, 8, 34),
+          new THREE.MeshLambertMaterial({ color: 0x9a958a })
+        );
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.set(PX, py + 0.16, PZ);
+        scene.add(rim);
+        // 浅水反光边
+        var shine = new THREE.Mesh(new THREE.RingGeometry(5.6, 6.0, 30),
+          new THREE.MeshLambertMaterial({ color: 0x9fc6d8, transparent: true, opacity: 0.35, depthWrite: false }));
+        shine.rotation.x = -Math.PI / 2;
+        shine.position.set(PX, py + 0.20, PZ);
+        scene.add(shine);
+        // 两位跪拜香客：朝向祠堂（东），上身微前倾，双手合十
+        var robe = new THREE.MeshLambertMaterial({ color: 0x2f3d52 });
+        var robe2 = new THREE.MeshLambertMaterial({ color: 0x4a3b52 });
+        var skin = new THREE.MeshLambertMaterial({ color: 0xd9b596 });
+        var spots = [[-3.6, -1.2, robe], [-3.6, 1.2, robe2]];
+        for (var i = 0; i < spots.length; i++) {
+          var gx = 683.6 + spots[i][0], gz = -32 + spots[i][1];
+          var gy2 = _th(gx, gz) + 0.10;
+          var g = new THREE.Group();
+          var low = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), spots[i][2]);
+          low.position.set(0, 0.21, 0); g.add(low);
+          var up = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.72, 0.5), spots[i][2]);
+          up.position.set(0.10, 0.62, 0); up.rotation.z = -0.42; g.add(up);
+          var head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skin);
+          head.position.set(0.28, 1.00, 0); g.add(head);
+          var hands = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.30, 0.16), skin);
+          hands.position.set(0.40, 0.78, 0); hands.rotation.z = -0.42; g.add(hands);
+          g.position.set(gx, gy2, gz);
+          g.rotation.y = -Math.PI / 2;
+          scene.add(g);
+        }
+        window.__zzPool = { x: PX, z: PZ, y: +py.toFixed(2) };
+      } catch (eZZ5) { }
+    })();
+
 
 // 【fix438】许愿牌：玩家自己写祝福语，挂在中镇祠的碑旁绳子上，刷新后还在（localStorage）
 (function zzWish() {
@@ -34883,6 +34792,7 @@ window.focus();
   var TX = -237, TZ = -182, R = 16;
   function sweep() {
     try {
+      window.__zzPurgeRuns = (window.__zzPurgeRuns || 0) + 1;
       if (typeof scene === 'undefined' || !scene) return 0;
       var gone = 0, box = new THREE.Box3(), c = new THREE.Vector3(), sz = new THREE.Vector3();
       var list = [];
@@ -34917,6 +34827,7 @@ window.focus();
           console.log('[fix445] 已隐藏黑色破面', sz.x.toFixed(1) + 'x' + sz.y.toFixed(2) + 'x' + sz.z.toFixed(1), 'at', c.x.toFixed(0), c.y.toFixed(1), c.z.toFixed(0));
         } catch (eOne) {}
       }
+      window.__zzPurgeGone = (window.__zzPurgeGone || 0) + gone;
       if (gone) console.log('[fix445] 共隐藏 ' + gone + ' 个');
       return gone;
     } catch (eSweep) { return 0; }
@@ -34999,6 +34910,130 @@ window.focus();
     }, 1000);
   } catch (eTop) {}
 })();
+
+
+
+    /* --- 【fix459】世界坐标轴（对外约定：Z = 高度）---
+       原点就在中央公园正中 (0,0,0)：城市内 |x|,|z|<205 时 terrainHeight 恒为 0。
+       对外展示的坐标系（玩家看到的）：
+         X 红 = 东西（+ 东 / - 西）
+         Y 绿 = 南北（+ 南 / - 北）
+         Z 蓝 = 高度（+ 上 / - 下）
+       引擎内部仍是 three.js 的 y-up（world.x / world.z / world.y），
+       显示层做了映射：显示 X = world.x，显示 Y = world.z，显示 Z = world.y。 */
+    (function zzCoordFrameZUp() {
+      try {
+        var G = new THREE.Group();
+        G.position.set(0, 0, 0);
+        var mX = new THREE.MeshBasicMaterial({ color: 0xd23b2e });
+        var mX2 = new THREE.MeshBasicMaterial({ color: 0x7a2620 });
+        var mY = new THREE.MeshBasicMaterial({ color: 0x2fbf58 });
+        var mY2 = new THREE.MeshBasicMaterial({ color: 0x1c7a37 });
+        var mZ = new THREE.MeshBasicMaterial({ color: 0x2f7fe0 });
+        function bar(mat, w, h, d, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); G.add(m); return m; }
+        function head(mat, x, y, z, dir) {
+          var m = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 10), mat);
+          m.position.set(x, y, z);
+          if (dir === 'x') m.rotation.z = -Math.PI / 2;
+          if (dir === 'z') m.rotation.x = Math.PI / 2;
+          G.add(m); return m;
+        }
+        // 地面原点盘
+        var cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+        var c = cv.getContext('2d');
+        c.beginPath(); c.arc(128, 128, 120, 0, 7); c.fillStyle = 'rgba(18,22,28,0.92)'; c.fill();
+        c.lineWidth = 12; c.strokeStyle = '#d9b25a'; c.stroke();
+        c.fillStyle = '#f4e2ae'; c.textAlign = 'center';
+        c.font = 'bold 52px system-ui,sans-serif'; c.fillText('原点', 128, 118);
+        c.font = 'bold 30px system-ui,sans-serif'; c.fillText('0, 0, 0', 128, 168);
+        var tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
+        var disc = new THREE.Mesh(new THREE.CircleGeometry(2.2, 36), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+        disc.rotation.x = -Math.PI / 2; disc.position.y = 0.265; G.add(disc);
+
+        // X 轴（红）= 东西：+x 东 20 米，-x 西 6 米
+        bar(mX, 20, 0.03, 0.42, 10, 0.26, 0);
+        head(mX, 20.6, 0.26, 0, 'x');
+        bar(mX2, 6, 0.03, 0.26, -3, 0.26, 0);
+        head(mX2, -6.3, 0.26, 0, 'x');
+
+        // Y 轴（绿）= 南北：+z 南 20 米，-z 北 6 米
+        bar(mY, 0.42, 0.03, 20, 0, 0.26, 10);
+        head(mY, 0, 0.26, 20.6, 'z');
+        bar(mY2, 0.26, 0.03, 6, 0, 0.26, -3);
+        head(mY2, 0, 0.26, -6.3, 'z');
+
+        // Z 轴（蓝）= 高度：从原点向上 10 米
+        bar(mZ, 0.16, 10, 0.16, 0, 5, 0);
+        var zh = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 10), mZ); zh.position.set(0, 10.5, 0); G.add(zh);
+
+        // 文字标牌（永远朝向相机）
+        function label(text, x, y, z, w) {
+          var cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 128;
+          var c2 = cv2.getContext('2d');
+          c2.font = 'bold 60px system-ui,sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+          c2.lineWidth = 12; c2.strokeStyle = 'rgba(0,0,0,0.8)'; c2.strokeText(text, 128, 64);
+          c2.fillStyle = '#ffffff'; c2.fillText(text, 128, 64);
+          var t2 = new THREE.CanvasTexture(cv2); t2.needsUpdate = true;
+          var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t2, transparent: true, depthWrite: false }));
+          sp.position.set(x, y, z); sp.scale.set(w, w / 2, 1); G.add(sp); return sp;
+        }
+        label('X＋ 东', 20.6, 3.0, 0, 5.2);
+        label('X－ 西', -6.8, 2.6, 0, 4.4);
+        label('Y＋ 南', 0, 3.0, 20.6, 5.2);
+        label('Y－ 北', 0, 2.6, -6.8, 4.4);
+        label('Z 高度', 0, 11.8, 0, 5.2);
+
+        // 每 5 米一个刻度 + 数字
+        var mTick = new THREE.MeshBasicMaterial({ color: 0xf2e6c8 });
+        for (var d = 5; d <= 20; d += 5) {
+          bar(mTick, 0.5, 0.02, 0.14, d, 0.26, 0);
+          bar(mTick, 0.14, 0.02, 0.5, 0, 0.26, d);
+          label(String(d), d, 1.2, 0, 1.8);
+          label(String(d), 0, 1.2, d, 1.8);
+        }
+
+        scene.add(G);
+        window.__zzAxes = { x: 0, y: 0, z: 0, kids: G.children.length, mode: 'z-up' };
+      } catch (eAx) { try { console.error('[zzCoordFrameZUp]', eAx); } catch (e9) { } }
+    })();
+
+</script>
+<!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
+     再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
+     会挂到全局，因此内联 onclick 依赖的 toggleCarMusic / skipMusic 等仍是全局可用；
+     （⚠️ 千万别写成直接 eval 又包在函数里——那样 var/function 只会进那个函数作用域，音乐按钮会失灵。）
+     主脚本跑完（场景建好、主循环已启动）后再等两帧确保渲染出画面，随后淡出并移除加载画面。 -->
+<script>
+(function __bootGame() {
+  var loader = document.getElementById('__bootLoader');
+  var tipEl = document.getElementById('__bootTip');
+  var tips = ['正在加载城市…', '正在铺设南岛沙滩…', '正在点亮路灯和球场泛光灯…', '正在召唤球员…', '马上就好…'];
+  var ti = 0;
+  var tipTimer = setInterval(function () { ti = (ti + 1) % tips.length; if (tipEl) tipEl.textContent = tips[ti]; }, 1300);
+  function fail(msg) { try { clearInterval(tipTimer); } catch (e) {} if (tipEl) { tipEl.textContent = '⚠ ' + msg; tipEl.style.color = '#ff9a9a'; } console.error('[boot]', msg); }
+  function start() {
+    var boot = document.getElementById('__gameboot');
+    if (!boot) { fail('找不到游戏脚本'); return; }
+    try {
+      (0, eval)(boot.textContent);           // 间接 eval → 在**全局作用域**执行，var/function 正确挂到全局
+    } catch (e) {
+      // 【fix78】把堆栈前几行也显示出来：这类加载期 ReferenceError 只看 message 完全
+      // 不知道出在哪一行（这次的 px is not defined 就排查了很久）。
+      fail('加载失败：' + ((e && e.message) || String(e)) + (e && e.stack ? ' @ ' + String(e.stack).split('\n').slice(1, 4).join(' | ') : '')); return;
+    }
+    // 主循环已在 eval 里启动；再等两帧，确保至少渲染出一帧真实画面，再淡出加载层
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      try { clearInterval(tipTimer); } catch (e) {}
+      if (!loader) return;
+      loader.style.opacity = '0';
+      setTimeout(function () { if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 520);
+    }); });
+  }
+  // 双 rAF：第一帧先把加载画面绘制出来，第二帧再开始重活
+  requestAnimationFrame(function () { requestAnimationFrame(start); });
+})();
+
+
 
 
 </script>
