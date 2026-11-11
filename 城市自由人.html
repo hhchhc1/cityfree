@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix446-blob';
+const BUILD = '20261112-fix447-hookcar';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -15149,6 +15149,21 @@ function releaseGrapple() {
     if (_o.y !== undefined) _o.y = _gy;
     if (_o.vy !== undefined) _o.vy = 0;
     spawnBurst(_o.x, _o.z, 0xcccccc, 6);
+    // 【fix447】半路放下：这辆车在开钩时就已被从 traffic 里摘掉，若不再登记进 cars，
+    // 就会变成「看得见、开不了、也撞不到」的幽灵车（用户实测）。这里补登记 + 重建车辆网格。
+    try {
+      if (_o.radius !== undefined && _o.hp === undefined) {
+        if (cars.indexOf(_o) < 0) {
+          if (_o.group) _o.angle = _o.group.rotation.y;
+          if (!_o.topSpeed) _o.topSpeed = _o.radius < 1.2 ? 30 : 36;
+          if (!_o.accel) _o.accel = _o.radius < 1.2 ? 20 : 14;
+          _o.wasTraffic = true;
+          cars.push(_o);
+        }
+        _o.speed = 0; if (_o.vy === undefined) _o.vy = 0;
+        if (typeof buildVehicleGrid === 'function') buildVehicleGrid();
+      }
+    } catch (eRePark) {}
   }
   grapple = null; gvx = gvy = gvz = 0; vy = 0; climbPhase = 0;
   const gy = platformTopAt(person.position.x, person.position.z, person.position.y);
