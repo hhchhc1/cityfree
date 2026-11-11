@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix454-hallpos';
+const BUILD = '20261112-fix455-halllazy';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34688,81 +34688,15 @@ window.focus();
 })();
 
 
-// 【fix452】中镇祠内景：神龛 + 神像 + 供桌 + 香炉（冒烟）+ 烛台 + 蒲团 + 许愿牌架，
-// 并且可以在庙里写自己的祝福语（存在 localStorage，重进还在）。
-(function zzHall() {
+// 【fix455】中镇祠内景（懒加载版）：等你真正走进大殿才生成，并且用你**脚下的地面高度**放置，
+// 这样既不会算错 X/Z，也不会被埋在地板下面（前两次就是这么空的）。
+(function zzHall2() {
   try {
     if (typeof scene === 'undefined' || !THREE) return;
-    // 【fix454】位置修正：大殿中心在 x≈706（不是 712），而且殿内地面要用 personGroundY 取，
-    // 否则家具会被埋在地板下面 —— 这就是「里面还是空的」的原因。
-    var HX = 706, HZ = 0;
-    var FY = 150.12;
-    try {
-      if (typeof terrainHeight === 'function') FY = terrainHeight(HX, HZ) + 0.02;
-      if (typeof personGroundY === 'function') { var _pg = personGroundY(HX, HZ); if (isFinite(_pg) && _pg > FY) FY = _pg + 0.02; }
-    } catch (eFY) {}
-    var wood = new THREE.MeshLambertMaterial({ color: 0x4a2b18 });
-    var woodD = new THREE.MeshLambertMaterial({ color: 0x35200f });
-    var red = new THREE.MeshLambertMaterial({ color: 0x8e2a22 });
-    var gold = new THREE.MeshLambertMaterial({ color: 0xd9b25a });
-    var goldD = new THREE.MeshLambertMaterial({ color: 0xb08a3c });
-    var bronze = new THREE.MeshLambertMaterial({ color: 0x6b5330 });
-    var stone = new THREE.MeshLambertMaterial({ color: 0x8d8a80 });
-    var g = new THREE.Group();
-    function box(w, h, d, mat, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; }
-    // ① 神龛台座（贴东墙）
-    box(3.2, 0.95, 9.6, red, 4.6, 0.48, 0);
-    box(2.4, 0.22, 8.6, goldD, 4.5, 1.02, 0);
-    // ② 神像（金身，坐姿）
-    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.05, 2.0, 12), gold); body.position.set(4.6, 2.1, 0); g.add(body);
-    var head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 12), gold); head.position.set(4.6, 3.45, 0); g.add(head);
-    var crown = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.55, 10), goldD); crown.position.set(4.6, 4.0, 0); g.add(crown);
-    var halo = new THREE.Mesh(new THREE.CircleGeometry(1.35, 24), new THREE.MeshBasicMaterial({ color: 0xf6d98a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-    halo.position.set(4.98, 3.3, 0); halo.rotation.y = -Math.PI / 2; g.add(halo);
-    // 神像两侧祥云柱
-    for (var s2 = -1; s2 <= 1; s2 += 2) {
-      var col = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 3.4, 8), goldD); col.position.set(4.4, 2.7, s2 * 2.6); g.add(col);
-    }
-    // ③ 供桌 + 供品
-    box(1.6, 0.18, 5.0, wood, 1.6, 1.32, 0);
-    box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, -2.2); box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, 2.2);
-    box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, -0.75); box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, 0.75);
-    for (var f = -1; f <= 1; f++) { var fr = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshLambertMaterial({ color: f === 0 ? 0xd8532a : 0xc9a227 })); fr.position.set(1.6, 1.55, f * 1.5); g.add(fr); }
-    // ④ 大香炉（供桌前方），三炷香 + 烟
-    var burner = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.48, 0.72, 14), bronze); burner.position.set(-0.6, 0.36, 0); g.add(burner);
-    var rim = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 16), goldD); rim.rotation.x = Math.PI / 2; rim.position.set(-0.6, 0.72, 0); g.add(rim);
-    for (var leg = 0; leg < 3; leg++) {
-      var a2 = leg / 3 * Math.PI * 2;
-      var lg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.42, 6), bronze);
-      lg.position.set(-0.6 + Math.cos(a2) * 0.34, -0.2 + 0.36, Math.sin(a2) * 0.34); g.add(lg);
-    }
-    var smokeMat = new THREE.MeshBasicMaterial({ color: 0xdfe8ee, transparent: true, opacity: 0.22, depthWrite: false });
-    for (var s3 = 0; s3 < 3; s3++) {
-      var st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 5), new THREE.MeshLambertMaterial({ color: 0x8a5a2b }));
-      st.position.set(-0.6 + (s3 - 1) * 0.12, 1.0, (s3 - 1) * 0.1); g.add(st);
-      var sm = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 7, 1, true), smokeMat);
-      sm.position.set(-0.6 + (s3 - 1) * 0.12, 1.9, (s3 - 1) * 0.1); g.add(sm);
-    }
-    // ⑤ 两个烛台
-    for (var c2 = -1; c2 <= 1; c2 += 2) {
-      var st2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 0.9, 8), goldD); st2.position.set(1.1, 0.45, c2 * 3.1); g.add(st2);
-      var cd = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.52, 8), new THREE.MeshLambertMaterial({ color: 0xc0392b })); cd.position.set(1.1, 1.15, c2 * 3.1); g.add(cd);
-      var fl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); fl.position.set(1.1, 1.5, c2 * 3.1); g.add(fl);
-    }
-    // ⑥ 三个蒲团
-    var cush = new THREE.MeshLambertMaterial({ color: 0x7a2c22 });
-    for (var p2 = -1; p2 <= 1; p2++) { var cu = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.16, 12), cush); cu.position.set(-2.6, 0.08, p2 * 1.9); g.add(cu); }
-    // ⑦ 许愿牌架（靠西侧入口内侧）
-    box(0.16, 2.4, 0.16, woodD, -3.0, 1.2, -4.6); box(0.16, 2.4, 0.16, woodD, -3.0, 1.2, 4.6);
-    var rope2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 9.2), new THREE.MeshLambertMaterial({ color: 0x6b4a2a })); rope2.position.set(-3.0, 2.32, 0); g.add(rope2);
-    g.position.set(HX, FY, HZ);
-    scene.add(g);
-
-    // ---------- 可编辑祝福语 ----------
+    var HX = 706, HZ = 0, built = false, G = null;
     var KEY = 'zzWishesHall_v1';
     var wishes = [];
     try { wishes = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e0) { wishes = []; }
-    var boardMatCache = [];
     function texOf(text) {
       var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
       var c = cv.getContext('2d');
@@ -34774,14 +34708,64 @@ window.focus();
       if (s.length > 4) { c.fillText(s.slice(0, 4), 128, 42); c.fillText(s.slice(4), 128, 88); } else c.fillText(s, 128, 64);
       var tx = new THREE.CanvasTexture(cv); tx.needsUpdate = true; return tx;
     }
+    var boardMats = [];
+    function build(fy) {
+      var wood = new THREE.MeshLambertMaterial({ color: 0x4a2b18 });
+      var woodD = new THREE.MeshLambertMaterial({ color: 0x35200f });
+      var red = new THREE.MeshLambertMaterial({ color: 0x8e2a22 });
+      var gold = new THREE.MeshLambertMaterial({ color: 0xd9b25a });
+      var goldD = new THREE.MeshLambertMaterial({ color: 0xb08a3c });
+      var bronze = new THREE.MeshLambertMaterial({ color: 0x6b5330 });
+      var g = new THREE.Group();
+      function box(w, h, d, mat, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; }
+      box(3.2, 0.95, 9.6, red, 4.6, 0.48, 0);
+      box(2.4, 0.22, 8.6, goldD, 4.5, 1.02, 0);
+      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.05, 2.0, 12), gold); body.position.set(4.6, 2.1, 0); g.add(body);
+      var head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 12), gold); head.position.set(4.6, 3.45, 0); g.add(head);
+      var crown = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.55, 10), goldD); crown.position.set(4.6, 4.0, 0); g.add(crown);
+      var halo = new THREE.Mesh(new THREE.CircleGeometry(1.35, 24), new THREE.MeshBasicMaterial({ color: 0xf6d98a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+      halo.position.set(4.98, 3.3, 0); halo.rotation.y = -Math.PI / 2; g.add(halo);
+      box(1.6, 0.18, 5.0, wood, 1.6, 1.32, 0);
+      box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, -2.2); box(0.16, 1.3, 0.16, woodD, 1.6, 0.66, 2.2);
+      for (var f = -1; f <= 1; f++) { var fr = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshLambertMaterial({ color: f === 0 ? 0xd8532a : 0xc9a227 })); fr.position.set(1.6, 1.62, f * 1.5); g.add(fr); }
+      var burner = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.48, 0.72, 14), bronze); burner.position.set(-0.6, 0.36, 0); g.add(burner);
+      var rim = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 16), goldD); rim.rotation.x = Math.PI / 2; rim.position.set(-0.6, 0.72, 0); g.add(rim);
+      var smokeMat = new THREE.MeshBasicMaterial({ color: 0xdfe8ee, transparent: true, opacity: 0.26, depthWrite: false });
+      for (var s3 = 0; s3 < 3; s3++) {
+        var st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 5), new THREE.MeshLambertMaterial({ color: 0x8a5a2b }));
+        st.position.set(-0.6 + (s3 - 1) * 0.12, 1.0, (s3 - 1) * 0.1); g.add(st);
+        var sm = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 7, 1, true), smokeMat);
+        sm.position.set(-0.6 + (s3 - 1) * 0.12, 1.9, (s3 - 1) * 0.1); g.add(sm);
+      }
+      for (var c2 = -1; c2 <= 1; c2 += 2) {
+        var st2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 0.9, 8), goldD); st2.position.set(1.1, 0.45, c2 * 3.1); g.add(st2);
+        var cd = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.52, 8), new THREE.MeshLambertMaterial({ color: 0xc0392b })); cd.position.set(1.1, 1.15, c2 * 3.1); g.add(cd);
+        var fl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); fl.position.set(1.1, 1.5, c2 * 3.1); g.add(fl);
+      }
+      var cush = new THREE.MeshLambertMaterial({ color: 0x7a2c22 });
+      for (var p2 = -1; p2 <= 1; p2++) { var cu = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.16, 12), cush); cu.position.set(-2.6, 0.08, p2 * 1.9); g.add(cu); }
+      box(0.16, 2.4, 0.16, woodD, -3.0, 1.2, -4.6); box(0.16, 2.4, 0.16, woodD, -3.0, 1.2, 4.6);
+      var rope2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 9.2), new THREE.MeshLambertMaterial({ color: 0x6b4a2a })); rope2.position.set(-3.0, 2.32, 0); g.add(rope2);
+      for (var w0 = 0; w0 < wishes.length && w0 < 16; w0++) {
+        var mat = new THREE.MeshBasicMaterial({ map: texOf(wishes[w0]), side: THREE.DoubleSide });
+        var m = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.34, 0.04), mat);
+        m.position.set(-3.0, 2.0 - Math.floor(w0 / 8) * 0.5, -3.9 + (w0 % 8) * 1.1);
+        g.add(m); boardMats.push(m);
+      }
+      g.position.set(HX, fy, HZ);
+      scene.add(g);
+      G = g; built = true;
+      try { window.__zzHall = { x: HX, y: fy, z: HZ, children: g.children.length }; } catch (eW) {}
+      try { setHint('庙内景已就位（香炉/神像/供桌）'); } catch (eH) {}
+      return g;
+    }
     function addBoard(text, idx) {
+      if (!G) return;
       var mat = new THREE.MeshBasicMaterial({ map: texOf(text), side: THREE.DoubleSide });
       var m = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.34, 0.04), mat);
-      m.position.set(HX - 3.0, FY + 2.0 - Math.floor(idx / 8) * 0.5, HZ - 3.9 + (idx % 8) * 1.1);
-      scene.add(m);
-      boardMatCache.push(m);
+      m.position.set(-3.0, 2.0 - Math.floor(idx / 8) * 0.5, -3.9 + (idx % 8) * 1.1);
+      if (G.parent) G.add(m); else scene.add(m);
     }
-    for (var w0 = 0; w0 < wishes.length && w0 < 16; w0++) addBoard(wishes[w0], w0);
     var btn = document.createElement('div');
     btn.textContent = '写祝福';
     btn.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:98px;padding:10px 18px;border-radius:20px;' +
@@ -34805,7 +34789,7 @@ window.focus();
     var okEl = document.getElementById('zzHallOk'), noEl = document.getElementById('zzHallNo');
     if (okEl) okEl.addEventListener('pointerdown', function () {
       var ip = document.getElementById('zzHallIn');
-      var v = (ip && ip.value || '').trim().slice(0, 8) || '平安顺遂';
+      var v = ((ip && ip.value) || '').trim().slice(0, 8) || '平安顺遂';
       wishes.push(v);
       if (wishes.length > 16) wishes = wishes.slice(-16);
       try { localStorage.setItem(KEY, JSON.stringify(wishes)); } catch (e2) {}
@@ -34818,9 +34802,10 @@ window.focus();
       try {
         if (typeof person === 'undefined' || !person) return;
         var dx = person.position.x - HX, dz = person.position.z - HZ;
-        var inHall = (dx * dx + dz * dz) < 11 * 11 && Math.abs(person.position.y - FY) < 8;
-        btn.style.display = inHall ? 'block' : 'none';
-        if (!inHall && panel.style.display === 'block') close();
+        var near = (dx * dx + dz * dz) < 13 * 13;
+        if (near && !built) build(person.position.y);   // 站在殿里才生成，用你脚下的高度
+        btn.style.display = (near && built) ? 'block' : 'none';
+        if (!near && panel.style.display === 'block') close();
       } catch (e4) {}
     }, 400);
   } catch (eHall) {}
