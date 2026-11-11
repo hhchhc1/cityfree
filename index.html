@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix444-summitbig';
+const BUILD = '20261112-fix446-blob';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -31411,6 +31411,8 @@ function startReturnFlight() {
   if (window.__retTest) {}
   if (FLIGHT || RET) return;
   RET = { t: 0, swapped: false, home: null };
+  // 【fix445】记录返程前的视觉参数，结束时恢复，避免白屏/黑屏
+  try { window.__retVis = { near: camera.near, far: camera.far, fogN: scene.fog ? scene.fog.near : null, fogF: scene.fog ? scene.fog.far : null, bg: scene.background }; } catch (eVis) {}
   retOverlayEl().style.opacity = '0';
   setHint('返程航班：准备登机…');
   try { flightAudioStart(); } catch (e) {}
@@ -31418,6 +31420,22 @@ function startReturnFlight() {
 }
 function retFinish() {
   const el = retOverlayEl(); el.style.opacity = '0';
+  // 【fix445】兜底：黑罩彻底隐藏、视觉参数还原、相机不许埋进地面或海里
+  try { el.style.display = 'none'; } catch (eH) {}
+  try {
+    const V = window.__retVis;
+    if (V) {
+      if (typeof V.near === 'number') camera.near = V.near;
+      if (typeof V.far === 'number') camera.far = V.far;
+      if (scene.fog) { if (V.fogN != null) scene.fog.near = V.fogN; if (V.fogF != null) scene.fog.far = V.fogF; }
+      if (V.bg) scene.background = V.bg;
+      camera.updateProjectionMatrix();
+    }
+  } catch (eR) {}
+  try {
+    const gy2 = (typeof terrainHeight === 'function') ? terrainHeight(camera.position.x, camera.position.z) : 0;
+    if (camera.position.y < gy2 + 2.2) camera.position.y = gy2 + 2.2;
+  } catch (eR2) {}
   try { flightAudioStop(); } catch (e) {}
   try { stopRainSnd(); } catch (e) {}
   const R = RET; RET = null;
@@ -31432,6 +31450,15 @@ function retFinish() {
   camera.lookAt(px, person.position.y + 1.5, pz);
   setHint('已回到主城机场 · 欢迎回来');
 }
+// 【fix445】看门狗：没在返程却还留着黑罩 → 强制关掉（防偶发全黑）
+setInterval(function () {
+  try {
+    if (!RET && _retOverlay && _retOverlay.style.display !== 'none' && parseFloat(_retOverlay.style.opacity || '0') > 0.02) {
+      _retOverlay.style.opacity = '0';
+      _retOverlay.style.display = 'none';
+    }
+  } catch (eW) {}
+}, 600);
 window.startReturnFlight = startReturnFlight;   // 调试/兜底出口
 window.__retInfo = function () { return RET ? { t: Math.round(RET.t * 10) / 10, swapped: !!RET.swapped, camY: Math.round(camera.position.y) } : null; };
 function retTick(dt) {
@@ -34468,6 +34495,57 @@ window.focus();
     }
   } catch (eZZ7) {}
 })();
+
+// 【fix445】清掉老城 (-237,-182) 附近那团贴在草上的黑色破面
+// 判据收紧到三条同时满足才删：① 包围盒中心在 16 米内 ② 高度 < 1.6 米（贴地薄片）③ 材质接近纯黑。
+// 尺寸超过 26 米的整体网格不动，避免误删合并几何。
+(function purgeBlackBlob() {
+  var TX = -237, TZ = -182, R = 16;
+  function sweep() {
+    try {
+      if (typeof scene === 'undefined' || !scene) return 0;
+      var gone = 0, box = new THREE.Box3(), c = new THREE.Vector3(), sz = new THREE.Vector3();
+      var list = [];
+      scene.traverse(function (o) {
+        if (o.isMesh) list.push(o);
+      });
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        try {
+          box.setFromObject(m);
+          if (!isFinite(box.min.x) || !isFinite(box.max.x)) continue;
+          box.getCenter(c); box.getSize(sz);
+          var dx = c.x - TX, dz = c.z - TZ;
+          if (dx * dx + dz * dz > R * R) continue;
+          if (sz.y > 1.6) continue;
+          if (sz.x > 26 || sz.z > 26) continue;
+          var mat = m.material;
+          var mats = Array.isArray(mat) ? mat : [mat];
+          var dark = true, any = false;
+          for (var k = 0; k < mats.length; k++) {
+            var mm = mats[k];
+            if (!mm) continue;
+            any = true;
+            if (mm.color) {
+              var col = mm.color;
+              if (col.r + col.g + col.b > 0.42) dark = false;
+            } else { dark = false; }
+          }
+          if (!any || !dark) continue;
+          m.visible = false;
+          gone++;
+          console.log('[fix445] 已隐藏黑色破面', sz.x.toFixed(1) + 'x' + sz.y.toFixed(2) + 'x' + sz.z.toFixed(1), 'at', c.x.toFixed(0), c.y.toFixed(1), c.z.toFixed(0));
+        } catch (eOne) {}
+      }
+      if (gone) console.log('[fix445] 共隐藏 ' + gone + ' 个');
+      return gone;
+    } catch (eSweep) { return 0; }
+  }
+  window.__purgeBlackBlob = sweep;
+  setTimeout(sweep, 3500);
+  setTimeout(sweep, 9000);
+})();
+
 </script>
 </body>
 </html>
