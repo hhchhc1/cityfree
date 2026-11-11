@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix473-courtheli';
+const BUILD = '20261112-fix474-bigbrick';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27900,11 +27900,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     (function steles() {
       const list = [[AX - 46, -196, '荷芷署重修记', '乾隆二十三年'], [AX + 46, -196, '州治题名碑', '道光九年'], [AX - 46, -262, '公生明训碑', '康熙五十年']];
       for (const it of list) {
-        det(BX(2.6, 0.5, 1.6), 0xa8a294, it[0], 0.25, it[1]);
-        det(BX(1.8, 2.6, 0.44), 0xb0aa9e, it[0], 1.85, it[1]);
-        det(BX(2.1, 0.36, 0.62), 0xb8b4a8, it[0], 3.34, it[1]);
-        plaque3d(it[2], it[0], 2.20, it[1] + 0.26, 1.45, 0.95, '#b8b4a8', '#2b2b2b');
-        plaque3d(it[3], it[0], 1.45, it[1] + 0.26, 1.30, 0.42, '#b8b4a8', '#4a3f34');
+        // 【fix474】碑座/碑身/碑帽同样按台基顶面抬起来（原来碑面字被台基埋掉大半）
+        let _sl = 0;
+        { const _floor = 6.25; if (_floor > BASE) _sl = _floor - BASE; }   // 碑座坐在 6.25 米的台基顶面
+        if (!(_sl > 0)) _sl = 0;
+        det(BX(2.6, 0.5, 1.6), 0xa8a294, it[0], 0.25 + _sl, it[1]);
+        det(BX(1.8, 2.6, 0.44), 0xb0aa9e, it[0], 1.85 + _sl, it[1]);
+        det(BX(2.1, 0.36, 0.62), 0xb8b4a8, it[0], 3.34 + _sl, it[1]);
+        plaque3d(it[2], it[0], 2.20 + _sl, it[1] + 0.26, 1.45, 0.95, '#b8b4a8', '#2b2b2b');
+        plaque3d(it[3], it[0], 1.45 + _sl, it[1] + 0.26, 1.30, 0.42, '#b8b4a8', '#4a3f34');
       }
     })();
 
@@ -27944,11 +27948,16 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       let k = 0;
       for (const sx of [-1, 1]) for (const s2 of [0, 1]) {
         const bx = AX + sx * (12.5 + s2 * 5.0), bz = -230;
-        det(BX(1.8, 0.24, 1.1), 0x4a2416, bx, 0.12, bz);
-        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx - 0.55, 1.85, bz);
-        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx + 0.55, 1.85, bz);
-        det(BX(1.5, 0.20, 0.32), 0x6d3a20, bx, 3.62, bz);
-        plaque3d(names[k % 4], bx, 2.35, bz + 0.22, 1.30, 2.70, '#241608', '#e8c86a');
+        // 【fix474】执事牌原来按 y=0 起算，台基顶面比它高一截，牌子下半截（连字）埋进地里。
+        // 按台基顶面 platformTopAt 抬起来；只在"确实更高"时抬，绝不往下砸。
+        let _lift = 0;
+        { const _floor = 6.25; if (_floor > BASE) _lift = _floor - BASE - 0.12; }   // 实测台基顶面 6.32 米，牌座略压进 7 厘米
+        if (!(_lift > 0)) _lift = 0;
+        det(BX(1.8, 0.24, 1.1), 0x4a2416, bx, 0.12 + _lift, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx - 0.55, 1.85 + _lift, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx + 0.55, 1.85 + _lift, bz);
+        det(BX(1.5, 0.20, 0.32), 0x6d3a20, bx, 3.62 + _lift, bz);
+        plaque3d(names[k % 4], bx, 2.35 + _lift, bz + 0.22, 1.30, 2.70, '#241608', '#e8c86a');
         k++;
       }
     })();
@@ -33064,7 +33073,7 @@ try {
         }
         // 主甬道：14 米宽青石板（每块 0.9×0.9 米，四块一循环）
         const tx1 = stoneTex(96, '#39414a');
-        tx1.repeat.set(14 / 1.92, 304 / 1.92);
+        tx1.repeat.set(14 / 3.60, 304 / 3.60);   // 【fix474】砖放大到 0.9×0.45 米
         const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
         const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
         road.position.set(2025, 5.335, -292);
@@ -33072,7 +33081,7 @@ try {
         scene.add(road);
         // 御路石：正中 3.4 米宽，青灰偏亮
         const tx2 = stoneTex(116, '#454e56');
-        tx2.repeat.set(3.4 / 1.92, 304 / 1.92);
+        tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix474】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
         const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
         const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
         royal.position.set(2025, 5.347, -292);
@@ -33087,7 +33096,7 @@ try {
         }
         // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
         const tx3 = stoneTex(112, '#4a525a');
-        tx3.repeat.set(16 / 1.92, 28 / 1.92);
+        tx3.repeat.set(16 / 3.60, 28 / 3.60);     // 【fix474】门前引道同规格
         const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
         const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
         inRoad.position.set(2025, 0.195, -110);
