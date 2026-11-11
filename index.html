@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix456-halllive';
+const BUILD = '20261112-fix457-copclean';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34311,6 +34311,64 @@ window.focus();
     try { console.warn('[中镇山] 几何构建失败（地形高度仍已生效）：', eBuild && eBuild.message); } catch (e2) { }
   }
 })();
+
+
+// 【fix453】警车泛滥治理：没通缉时，远处的警车自动撤走；叠在一起的车只留一辆。
+// 原因：通缉时按星级补车，降星后只是标 retire，被 dispatch 过的车不参与回收 → 越积越多，
+// 最后在城管局门口排成一长串。
+(function zzCopCleanup() {
+  try {
+    if (typeof policeCars === 'undefined') return;
+    function dist2(a, b, c, d) { var dx = a - c, dz = b - d; return dx * dx + dz * dz; }
+    function drop(pc) {
+      try { if (pc.group && pc.group.parent) pc.group.parent.remove(pc.group); } catch (e) {}
+      try { if (pc.body && pc.body.parent) pc.body.parent.remove(pc.body); } catch (e) {}
+    }
+    function cleanup() {
+      window.__zzCopTicks = (window.__zzCopTicks || 0) + 1;
+      try {
+        if (typeof person === 'undefined' || !person) return;
+        var px = person.position.x, pz = person.position.z;
+        var w = (typeof wanted === 'number') ? wanted : 0;
+        // ① 叠在一起（1.6 米内）的警车：只留一辆
+        for (var i = policeCars.length - 1; i >= 0; i--) {
+          var a = policeCars[i];
+          if (!a || a.exploded || a === currentCar) continue;
+          for (var j = i - 1; j >= 0; j--) {
+            var b = policeCars[j];
+            if (!b || b.exploded) continue;
+            if (dist2(a.x, a.z, b.x, b.z) < 2.56) {
+              var far = dist2(a.x, a.z, px, pz) > 900;   // 30 米以外才悄悄删
+              if (far) { drop(a); policeCars.splice(i, 1); }
+              else { drop(b); policeCars.splice(j, 1); }
+              break;
+            }
+          }
+        }
+        // ② 没有通缉时：远处多余的警车撤走（留最多 1 辆在近处）
+        if (w < 0.5) {
+          var near = 0;
+          for (var k = policeCars.length - 1; k >= 0; k--) {
+            var pc = policeCars[k];
+            if (!pc || pc.exploded) continue;
+            if (pc === currentCar) continue;
+            var d2 = dist2(pc.x, pc.z, px, pz);
+            if (d2 > 3600) { drop(pc); policeCars.splice(k, 1); continue; }   // 60 米外直接撤
+            if (d2 > 400) near++;
+          }
+          if (policeCars.length > 6) {
+            for (var m = policeCars.length - 1; m >= 0 && policeCars.length > 3; m--) {
+              var q = policeCars[m];
+              if (!q || q.exploded || q === currentCar) continue;
+              if (dist2(q.x, q.z, px, pz) > 900) { drop(q); policeCars.splice(m, 1); }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    setInterval(cleanup, 2500);
+  } catch (eTop) {}
+})();
 </script>
 <!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
      再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
@@ -34858,62 +34916,6 @@ window.focus();
   } catch (eTop) {}
 })();
 
-
-// 【fix453】警车泛滥治理：没通缉时，远处的警车自动撤走；叠在一起的车只留一辆。
-// 原因：通缉时按星级补车，降星后只是标 retire，被 dispatch 过的车不参与回收 → 越积越多，
-// 最后在城管局门口排成一长串。
-(function zzCopCleanup() {
-  try {
-    if (typeof policeCars === 'undefined') return;
-    function dist2(a, b, c, d) { var dx = a - c, dz = b - d; return dx * dx + dz * dz; }
-    function drop(pc) {
-      try { if (pc.group && pc.group.parent) pc.group.parent.remove(pc.group); } catch (e) {}
-      try { if (pc.body && pc.body.parent) pc.body.parent.remove(pc.body); } catch (e) {}
-    }
-    function cleanup() {
-      try {
-        if (typeof person === 'undefined' || !person) return;
-        var px = person.position.x, pz = person.position.z;
-        var w = (typeof wanted === 'number') ? wanted : 0;
-        // ① 叠在一起（1.6 米内）的警车：只留一辆
-        for (var i = policeCars.length - 1; i >= 0; i--) {
-          var a = policeCars[i];
-          if (!a || a.exploded || a === currentCar) continue;
-          for (var j = i - 1; j >= 0; j--) {
-            var b = policeCars[j];
-            if (!b || b.exploded) continue;
-            if (dist2(a.x, a.z, b.x, b.z) < 2.56) {
-              var far = dist2(a.x, a.z, px, pz) > 900;   // 30 米以外才悄悄删
-              if (far) { drop(a); policeCars.splice(i, 1); }
-              else { drop(b); policeCars.splice(j, 1); }
-              break;
-            }
-          }
-        }
-        // ② 没有通缉时：远处多余的警车撤走（留最多 1 辆在近处）
-        if (w < 0.5) {
-          var near = 0;
-          for (var k = policeCars.length - 1; k >= 0; k--) {
-            var pc = policeCars[k];
-            if (!pc || pc.exploded) continue;
-            if (pc === currentCar) continue;
-            var d2 = dist2(pc.x, pc.z, px, pz);
-            if (d2 > 3600) { drop(pc); policeCars.splice(k, 1); continue; }   // 60 米外直接撤
-            if (d2 > 400) near++;
-          }
-          if (policeCars.length > 6) {
-            for (var m = policeCars.length - 1; m >= 0 && policeCars.length > 3; m--) {
-              var q = policeCars[m];
-              if (!q || q.exploded || q === currentCar) continue;
-              if (dist2(q.x, q.z, px, pz) > 900) { drop(q); policeCars.splice(m, 1); }
-            }
-          }
-        }
-      } catch (e) {}
-    }
-    setInterval(cleanup, 2500);
-  } catch (eTop) {}
-})();
 
 </script>
 </body>
