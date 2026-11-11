@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix450-shrinefix';
+const BUILD = '20261112-fix451-pedwall';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -21044,6 +21044,10 @@ function updateResident(r, dt) {
       cl += (sidewalkLanePref(r) - cl) * Math.min(1, (r._avActive ? 0.5 : 1.6) * dt);
       const na = r.roadC + sgn * cl;
       if (r.axis === 'v') p.x = na; else p.z = na;
+      // 【fix451】上面这条是「把人夹回人行道」。可房子常常就盖在人行道上，
+      // 夹回去等于把人塞进墙里 —— 这就是行人穿房子的真凶（碰撞其实算了，但夹回把人推回墙内）。
+      // 夹完后再做一次建筑碰撞：被推出来的话，这一帧就不强拉回人行道，让他贴着墙走。
+      try { if (typeof collideBuildingsFast === 'function') collideBuildingsFast(p, 0.45); } catch (ePedBld) {}
       // 走到城市边缘：掉头（不然会一直贴着边界原地踏步）
       const along = (r.axis === 'v') ? p.z : p.x;
       const lim = CITY - 8;
