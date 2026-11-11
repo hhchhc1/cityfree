@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix449-coord';
+const BUILD = '20261112-fix450-shrinefix';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -16551,7 +16551,12 @@ function clampCity(p) {
 }
 // ========== 空间网格：加速碰撞/射线检测 ==========
 const GRID_CELL = 40, GRID_MIN_X = -WORLD_LIMIT_X, GRID_MIN_Z = WORLD_LIMIT_Z_MIN;
-const _gridW = Math.ceil((WORLD_LIMIT_X - GRID_MIN_X) / GRID_CELL);
+// 【fix450】网格东边界原来只到 WORLD_LIMIT_X=615（主城），中镇山山顶在 x≈674~724：
+// _gridAround() 对 x>615 会算出 minGx=31 > maxGx=30，循环一次都不进 → 返回空格子数组。
+// 结果山顶的祠堂碰撞盒既没写进网格，玩家也查不到，碰撞整段失效 —— 这才是"直接穿墙进殿"的真因。
+// 扩到 900（和 _gridIdx 的 x>900 空槽判据对齐），只多 7 列。
+const GRID_MAX_X = 900;
+const _gridW = Math.ceil((GRID_MAX_X - GRID_MIN_X) / GRID_CELL);
 const _gridH = Math.ceil((WORLD_LIMIT_Z_MAX - GRID_MIN_Z) / GRID_CELL);
 const _gridBld = new Array(_gridW * _gridH);   // 建筑
 const _gridTree = new Array(_gridW * _gridH);  // 树木
@@ -32907,6 +32912,18 @@ window.focus();
     };
     hooked.push('personGroundY');
   }
+  // 【fix450】platformTopAt 也必须吃到同一块台基高度：它原来只读 terrainHeight（山顶广场 150.00），
+  // 而 personGroundY 在台基/月台/台阶上给出 151.14/150.868/…，两者差 1.14m > FALL_STEP_MAX(0.7)。
+  // 落地时"抬到 151.14 → 判定落差过大 → 自由落体回 150 → 再抬"，人在殿里/台上一直上下弹。
+  // 和上面 personGroundY 完全一样套 zzTerraceY：只叠加台基高度，其它地方（含 x>900）一律不动。
+  if (typeof platformTopAt === 'function') {
+    var _ptBefore = platformTopAt;
+    platformTopAt = function (x, z, y) {
+      var b = _ptBefore(x, z, y), t = zzTerraceY(x, z);
+      return (t > 0 && t > b) ? t : b;
+    };
+    hooked.push('platformTopAt');
+  }
   // linhaiHeight 只服务 x>900 的荷芷市，本山全在 x<=882，不挂。
 
   var STATS = { hooked: hooked, trees: 0, rocks: 0, treads: 0, posts: 0, temple: 0, tris: 0 };
@@ -33496,13 +33513,23 @@ window.focus();
     TB(mStone, 7, 0.12, 0.8, 0, 0.06, 8.0);
     TB(mStone, 7, 0.06, 0.8, 0, 0.03, 8.8);
     // 墙身 + 角柱（墙体 10.0 × 6.6，放大 3.4 倍 = 34 × 22.4 米）
-    TB(mRed, 10.0, 3.1, 6.6, 0, 1.86, 0);
+    // 【fix450】原来是一整块**实心** 10×3.1×6.6 红盒子：玩家从门洞走进去只会钻进实体，
+    // 第三人称相机被红墙糊满屏（用户截图"整屏暗红/黑"）。改成四壁 + 门洞的空心墙壳：
+    // 墙厚 0.5（世界 1.7m），门洞净宽 0.70（世界 2.38m）居中，门楣补到墙顶，再加一层顶板。
+    TB(mRed, 10.0, 3.1, 0.5, 0, 1.86, -3.05);              // 后墙（东）
+    TB(mRed, 0.5, 3.1, 5.6, -4.75, 1.86, 0);               // 山墙（南）
+    TB(mRed, 0.5, 3.1, 5.6, 4.75, 1.86, 0);                // 山墙（北）
+    TB(mRed, 4.65, 3.1, 0.5, -2.675, 1.86, 3.05);          // 前墙（西）· 门南
+    TB(mRed, 4.65, 3.1, 0.5, 2.675, 1.86, 3.05);           // 前墙（西）· 门北
+    TB(mRed, 0.70, 1.755, 0.5, 0, 2.5325, 3.05);           // 门楣（门洞上方）
+    TB(mRed, 10.0, 0.10, 6.6, 0, 2.3175, 0);               // 顶板（压在屋面最低点 158.73 以下，封住殿内仰视）
     TB(mRedD, 0.60, 3.5, 0.60, -5.40, 2.05, 3.10);
     TB(mRedD, 0.60, 3.5, 0.60, 5.40, 2.05, 3.10);
     TB(mRedD, 0.60, 3.5, 0.60, -5.40, 2.05, -3.10);
     TB(mRedD, 0.60, 3.5, 0.60, 5.40, 2.05, -3.10);
     // 门（净宽 0.70×3.4 = 2.38 米，和碰撞留口一致）+ 窗
-    TB(mDark, 0.70, 1.35, 0.14, 0, 0.98, 3.34);
+    // 【fix450】原来的门扇是一块封死门洞的深色板（0.70×1.35），碰撞却留了门洞 → 人"穿过门板"。
+    // 现在门洞真空出来，可以走进去；门扇不再渲染，门楣和匾额保留。
     TB(mDark, 1.30, 1.10, 0.12, -2.70, 1.95, 3.32);
     TB(mDark, 1.30, 1.10, 0.12, 2.70, 1.95, 3.32);
     // 匾额（MeshBasic，不依赖光照，任何角度都不会变成黑板）
@@ -33541,30 +33568,46 @@ window.focus();
     scene.add(temple);
     STATS.temple = temple.children.length;
     STATS.tris += templeParts.length * 12 + 400;
-    // 【fix444】给祠堂加**真碰撞**：6 个 AABB —— 四面墙（正面墙拆成左右两段，中间 2.4 米门口保持可通行）
-    // + 台基整体一块（玩家只能从月台/台阶踩上去，不能从侧面钻进台基里）。
-    // buildings 就是 LH_BLD（见文件里 `var LH_BLD = buildings;`），玩家 x≤900 的碰撞走**空间网格**
-    // _gridBld（update 里 `for (const ci of nearCells) for (const b of _gridBld[ci]) circleVsAABB`），
-    // x>900 才会去扫 LH_BLD。山顶 x≈706 < 900，所以这里 push 完必须 buildStaticSpatialGrid() 重建网格，
-    // 否则本帧 _gridBld 里没有这 6 个盒子（这就是"人能直接走进红墙"的原因）。
+    // 【fix450】祠堂碰撞：从**真实几何**生成，不再手写世界坐标。
+    // 旧 TCOL 的 x 数字其实是对的（正面 x≈694.78、背面 x≈717.22、两侧 z=±17，与旋转 -90° 后的
+    // 10×6.6 墙体世界尺寸完全对得上）；真正坏掉的是空间网格的东边界只有 615（见 16553 的修复）：
+    // _gridAround() 对山顶 x≈706 返回空数组，盒子既没写进网格、玩家也查不到 → 直接穿墙。
+    // 注意：mergeBoxes 把同材质的几十块合成 1 个 mesh，直接 Box3.setFromObject(child) 只能得到
+    // “整个材质组”的外包框（mRed 合并后是 22.4×10.5×34 的实心大盒子，按墙过滤会被整块漏掉），
+    // 所以这里对合并前的 templeParts（每块真实的 w/h/d/位置/旋转）逐块求世界 AABB。
     try {
-      var TCOL = [
-        [693.90, 695.65, 1.20, 17.00, 161.8],     // 正面墙（西）· 门口南侧
-        [693.90, 695.65, -17.00, -1.20, 161.8],   // 正面墙（西）· 门口北侧
-        [716.35, 718.10, -17.00, 17.00, 161.8],   // 后墙（东）
-        [694.75, 717.25, 16.15, 17.85, 161.8],    // 南山墙
-        [694.75, 717.25, -17.85, -16.15, 161.8],  // 北山墙
-        [692.40, 719.60, -18.70, 18.70, TERR.plinth.top]   // 台基（低矮，可从月台踩上去）
-      ];
+      temple.updateWorldMatrix(true, true);
+      var _tmW = new THREE.Matrix4(), _tqW = new THREE.Quaternion(), _teW = new THREE.Euler();
+      var _tvW = new THREE.Vector3(), _tbW = new THREE.Box3();
+      var TCOL = [];
+      for (var tpi = 0; tpi < templeParts.length && TCOL.length < 40; tpi++) {
+        var _pt = templeParts[tpi];
+        _teW.set(_pt.rx || 0, _pt.ry || 0, _pt.rz || 0);
+        _tqW.setFromEuler(_teW);
+        _tmW.compose(new THREE.Vector3(_pt.x, _pt.y, _pt.z), _tqW, new THREE.Vector3(1, 1, 1));
+        _tmW.premultiply(temple.matrixWorld);
+        _tbW.makeEmpty();
+        for (var _cx = -1; _cx <= 1; _cx += 2)
+          for (var _cy = -1; _cy <= 1; _cy += 2)
+            for (var _cz = -1; _cz <= 1; _cz += 2) {
+              _tvW.set(_pt.w * 0.5 * _cx, _pt.h * 0.5 * _cy, _pt.d * 0.5 * _cz).applyMatrix4(_tmW);
+              _tbW.expandByPoint(_tvW);
+            }
+        var _sxW = _tbW.max.x - _tbW.min.x, _syW = _tbW.max.y - _tbW.min.y, _szW = _tbW.max.z - _tbW.min.z;
+        if (_syW <= 3.5) continue;                  // 矮于 3.5m：台基/月台/台阶/屋顶/牌匾
+        if (Math.min(_sxW, _szW) >= 4) continue;    // 厚于 4m：实心体/大平台，不是墙
+        if (Math.min(_sxW, _szW) < 0.5) continue;   // 细杆（灯笼柱）不算墙
+        if (_tbW.min.y > SUMMIT_Y + 3.0) continue;  // 门楣/窗在头顶以上，不能挡住门洞
+        TCOL.push({ minX: _tbW.min.x, maxX: _tbW.max.x, minZ: _tbW.min.z, maxZ: _tbW.max.z, minY: _tbW.min.y, top: _tbW.max.y });
+      }
+      // 台基：单独一块可踩上去的矮台。月台顶 150.868 抬脚就能上（高差 0.272 < 0.3 容差），
+      // 从广场（150.1）侧面则会被挡住 —— 和原设计一致。
+      TCOL.push({ minX: TERR.plinth.x0, maxX: TERR.plinth.x1, minZ: TERR.plinth.z0, maxZ: TERR.plinth.z1, minY: SUMMIT_Y + 0.1, top: TERR.plinth.top });
       for (var tc = 0; tc < TCOL.length; tc++) {
-        try {
-          buildings.push({
-            minX: TCOL[tc][0], maxX: TCOL[tc][1], minZ: TCOL[tc][2], maxZ: TCOL[tc][3],
-            minY: SUMMIT_Y + 0.1, top: TCOL[tc][4]
-          });
-        } catch (eBP) { }
+        try { buildings.push(TCOL[tc]); } catch (eBP) { }
       }
       STATS.templeColliders = TCOL.length;
+      window.__templeCols = TCOL;   // 自检：控制台可查看每块世界 AABB
       try { if (typeof buildStaticSpatialGrid === 'function') buildStaticSpatialGrid(); } catch (eGrid) { }
     } catch (eTC) { }
 
