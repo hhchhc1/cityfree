@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix472-taxidest';
+const BUILD = '20261112-fix473-courtheli';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24115,7 +24115,14 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       heli.flyHeight = THREE.MathUtils.clamp((heli.flyHeight || 0) + (heli.flyVy || 0) * dt, 0, 80);
 
       // 更新位置
-      heli.group.position.set(heli.x, terrainHeight(heli.x, heli.z) + heli.flyHeight + 1.8, heli.z);
+      // 【fix473】直升机飞越中镇山时视角穿山：terrainHeight 在山顶广场一带读不到台基高度（会给出海床高度），
+      // 于是机身在 80 米高度时其实已经钻进山里，镜头跟着机体走就变成"贴着广场地面看"。
+      // 这里给中镇山加一个硬性抬升：只要进入山体范围，机体离地高度必须按山顶 150 米算。
+      let _hg = terrainHeight(heli.x, heli.z);
+      try { const _pg = personGroundY(heli.x, heli.z); if (_pg > _hg) _hg = _pg; } catch (eH1) {}
+      if (heli.x > 596 && heli.x < 792 && heli.z > -92 && heli.z < 92 && _hg < 150) _hg = 150;   // 中镇山山体
+      heli._groundY = _hg;
+      heli.group.position.set(heli.x, _hg + heli.flyHeight + 1.8, heli.z);
       heli.group.rotation.y = heli.angle;
       heli.group.rotation.x = -(heli.pitch || 0) * 0.5;   // 前倾飞行姿态
 
@@ -33086,14 +33093,16 @@ try {
         inRoad.position.set(2025, 0.195, -110);
         inRoad.userData.lodShared = true;
         scene.add(inRoad);
-        // 【fix464】院内地面：整片长方形青砖（0.48×0.24，错缝），压住原来那片土黄台基面
-        const tx4 = stoneTex(104, '#3f4750');
-        tx4.repeat.set(308 / 1.92, 712 / 1.92);
-        const mat4 = new THREE.MeshLambertMaterial({ map: tx4 });
-        const court = new THREE.Mesh(new THREE.BoxGeometry(308, 0.04, 712), mat4);
-        court.position.set(2032, 5.28, -490);
-        court.userData.lodShared = true;
-        scene.add(court);
+        // 【fix473】用户："我只让你铺青石在中间的小路上，你怎么全都铺上了"
+        // 原来这里往整个院子（308×712 米）铺了一整片青砖，把台基的土黄地面全盖住了。
+        // 现在整片撤掉，青石只留在：中间 14 米甬道 + 正中 3.4 米御路 + 门前 16 米引道。
+        // const tx4 = stoneTex(104, '#3f4750');
+        // tx4.repeat.set(308 / 1.92, 712 / 1.92);
+        // const mat4 = new THREE.MeshLambertMaterial({ map: tx4 });
+        // const court = new THREE.Mesh(new THREE.BoxGeometry(308, 0.04, 712), mat4);
+        // court.position.set(2032, 5.28, -490);
+        // court.userData.lodShared = true;
+        // scene.add(court);
         window.__yamenCourt = 1;
         window.__yamenPlaza = 1;
         window.__yamenRoad = { y: 2.988, x0: 2018, x1: 2032, z0: -444, z1: -104 };
