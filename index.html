@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix479-unify5';
+const BUILD = '20261112-fix480-noslab';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27942,6 +27942,25 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s5 of [-1, 1]) det(new THREE.CylinderGeometry(0.52, 0.48, 0.55, 10), 0xb0aa9e, gx + sd * 30 + s5 * 2.0, 0.28, -192);
     }
 
+    // 【fix480】去掉大门前那块悬空的长条地板。
+    // 实测：@2025,-124 有一条 236 米长、6 米深、悬在 0.99~1.05 米的薄板（离地约 1 米）。
+    (function killFloatingSlab() {
+      let n = 0;
+      try {
+        scene.updateMatrixWorld(true);
+        const _all = []; scene.traverse(function (o) { if (o.isMesh) _all.push(o); });
+        for (const m of _all) {
+          if (!m.visible) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const w = b.max.x - b.min.x, d = b.max.z - b.min.z, h = b.max.y - b.min.y;
+          const cz = (b.min.z + b.max.z) / 2;
+          if (w > 90 && h < 0.8 && b.min.y > 0.5 && b.max.y < 3.2 && cz > -175 && cz < -70 && Math.abs((b.min.x + b.max.x) / 2 - 2025) < 90) {
+            m.visible = false; n++;
+          }
+        }
+      } catch (eS) {}
+      try { window.__SLAB_N = n; } catch (eS2) {}
+    })();
     // 【fix479 方案B1】东西跨院整块抬到主台基面 5.10 米。
     // 原来跨院台地顶面只有 2.60 米，比主院子（5.10 米）低 2.5 米，站在主院看就是"后面的小房子全埋在地下"。
     // 这里把主院以外的低矮构件统一 +2.50，和主台基面拉平。
@@ -33184,6 +33203,7 @@ try {
     window.__zzLights = { base: base, lights: 3, lamps: heads.length };
   } catch (e) { try { console.error('[zzLights]', e); } catch (e2) {} }
 })();
+try{setTimeout(function(){try{var _a=[];scene.traverse(function(o){if(o.isMesh)_a.push(o);});var _n=0;for(var _i=0;_i<_a.length;_i++){var _m=_a[_i];if(!_m.visible)continue;var _b=new THREE.Box3().setFromObject(_m);var _w=_b.max.x-_b.min.x,_h=_b.max.y-_b.min.y,_cx=(_b.min.x+_b.max.x)/2,_cz=(_b.min.z+_b.max.z)/2;if(_w>90&&_h<0.8&&_b.min.y>0.5&&_b.max.y<3.2&&_cz>-175&&_cz<-70&&Math.abs(_cx-2025)<90){_m.visible=false;_n++;}}window.__SLAB_N=_n;}catch(eQ){}},300);}catch(eR){}
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
