@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix457-copclean';
+const BUILD = '20261112-fix458-coords';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24563,7 +24563,7 @@ hudStyle(stFillEl, 'stWidth', 'width', (isDevOn() ? 100 : (player.stamina / play
         if (_flying && typeof AIRLINER !== 'undefined' && AIRLINER && AIRLINER.position) { _px = AIRLINER.position.x; _py = AIRLINER.position.y; _pz = AIRLINER.position.z; }
       } catch (eCoord) {}
       window.__mmCoordEl.style.display = 'block';
-      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   Y ' + _py.toFixed(1) + '   Z ' + _pz.toFixed(0);
+      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   高度 ' + _py.toFixed(1) + '   Z ' + _pz.toFixed(0);
     } else window.__mmCoordEl.style.display = 'none';
   }
     // 装甲载具（直升机/坦克）顶部顺带显示剩余耐久：
@@ -34369,6 +34369,90 @@ window.focus();
     setInterval(cleanup, 2500);
   } catch (eTop) {}
 })();
+
+﻿    /* --- 【fix458】世界坐标轴 ---
+       原点就在中央公园十字路口：terrainHeight 在城市内(|x|,|z|<205)恒为 0，
+       所以 (0,0,0) 正好落在地面上。这里画一套看得见的参考轴：
+         X 红 = 东(+) / 西(-)      Z 蓝 = 南(+) / 北(-)      Y 绿 = 高度(+上/-下)
+       注意：z 是"南北"水平轴，不是高度；高度是 y。 */
+    (function zzCoordFrame() {
+      try {
+        var G = new THREE.Group();
+        G.position.set(0, 0, 0);
+        var mX = new THREE.MeshBasicMaterial({ color: 0xd23b2e });
+        var mX2 = new THREE.MeshBasicMaterial({ color: 0x7a2620 });
+        var mZ = new THREE.MeshBasicMaterial({ color: 0x2f7fe0 });
+        var mZ2 = new THREE.MeshBasicMaterial({ color: 0x1d4b86 });
+        var mY = new THREE.MeshBasicMaterial({ color: 0x2fbf58 });
+        function bar(mat, w, h, d, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); G.add(m); return m; }
+        function head(mat, x, y, z, dir) {
+          var m = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 10), mat);
+          m.position.set(x, y, z);
+          if (dir === 'x') m.rotation.z = -Math.PI / 2;
+          if (dir === 'z') m.rotation.x = Math.PI / 2;
+          G.add(m); return m;
+        }
+        // 地面原点盘
+        var cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+        var c = cv.getContext('2d');
+        c.beginPath(); c.arc(128, 128, 120, 0, 7); c.fillStyle = 'rgba(18,22,28,0.92)'; c.fill();
+        c.lineWidth = 12; c.strokeStyle = '#d9b25a'; c.stroke();
+        c.fillStyle = '#f4e2ae'; c.textAlign = 'center';
+        c.font = 'bold 52px system-ui,sans-serif'; c.fillText('原点', 128, 118);
+        c.font = 'bold 30px system-ui,sans-serif'; c.fillText('0, 0, 0', 128, 168);
+        var tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
+        var disc = new THREE.Mesh(new THREE.CircleGeometry(2.2, 36), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+        disc.rotation.x = -Math.PI / 2; disc.position.y = 0.265; G.add(disc);
+
+        // X 轴（红）：+x 东 20 米，-x 西 6 米
+        bar(mX, 20, 0.03, 0.42, 10, 0.26, 0);
+        head(mX, 20.6, 0.26, 0, 'x');
+        bar(mX2, 6, 0.03, 0.26, -3, 0.26, 0);
+        head(mX2, -6.3, 0.26, 0, 'x');
+
+        // Z 轴（蓝）：+z 南 20 米，-z 北 6 米
+        bar(mZ, 0.42, 0.03, 20, 0, 0.26, 10);
+        head(mZ, 0, 0.26, 20.6, 'z');
+        bar(mZ2, 0.26, 0.03, 6, 0, 0.26, -3);
+        head(mZ2, 0, 0.26, -6.3, 'z');
+
+        // Y 轴（绿，高度）：从原点向上 10 米
+        bar(mY, 0.16, 10, 0.16, 0, 5, 0);
+        var yh = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 10), mY); yh.position.set(0, 10.5, 0); G.add(yh);
+
+        // 文字标牌（永远朝向相机）
+        function label(text, x, y, z, w) {
+          var cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 128;
+          var c2 = cv2.getContext('2d');
+          c2.font = 'bold 60px system-ui,sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+          c2.lineWidth = 12; c2.strokeStyle = 'rgba(0,0,0,0.8)'; c2.strokeText(text, 128, 64);
+          c2.fillStyle = '#ffffff'; c2.fillText(text, 128, 64);
+          var t2 = new THREE.CanvasTexture(cv2); t2.needsUpdate = true;
+          var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t2, transparent: true, depthWrite: false }));
+          sp.position.set(x, y, z); sp.scale.set(w, w / 2, 1); G.add(sp); return sp;
+        }
+        label('X＋ 东', 20.6, 3.0, 0, 5.2);
+        label('X－ 西', -6.8, 2.6, 0, 4.4);
+        label('Z＋ 南', 0, 3.0, 20.6, 5.2);
+        label('Z－ 北', 0, 2.6, -6.8, 4.4);
+        label('Y 高度', 0, 11.8, 0, 4.8);
+
+        // 每 5 米一个刻度 + 数字，方便目测距离
+        var mTick = new THREE.MeshBasicMaterial({ color: 0xf2e6c8 });
+        for (var d = 5; d <= 20; d += 5) {
+          bar(mTick, 0.5, 0.02, 0.14, d, 0.26, 0);
+          bar(mTick, 0.14, 0.02, 0.5, 0, 0.26, d);
+          label(String(d), d, 1.2, 0, 1.8);
+          label(String(d), 0, 1.2, d, 1.8);
+        }
+
+        scene.add(G);
+        window.__zzAxes = { x: 0, y: 0, z: 0, kids: G.children.length };
+      } catch (eAx) { try { console.error('[zzCoordFrame]', eAx); } catch (e9) { } }
+    })();
+
+
+
 </script>
 <!-- 【2026-10-19】开场加载引导：先双 rAF 让 #__bootLoader 真正绘制出来（否则直接干活还是会黑屏），
      再用【间接 eval (0,eval)】在全局作用域执行上面的游戏脚本。间接 eval 在 sloppy 模式下 var/function
