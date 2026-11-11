@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix471-taxiF';
+const BUILD = '20261112-fix472-taxidest';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18377,6 +18377,35 @@ const TAXI_DESTS = [
   { x: 180, z: -40 }, { x: -60, z: 190 }, { x: 120, z: 60 },
   { x: -190, z: 100 }, { x: 30, z: 200 }
 ];
+// 【fix472】用户要求：目的地随机刷，但必须离出租车场 200 米以外，位置不限。
+// 做法：在车场周围 200~470 米环形里随机撒点 → 夹进地图边界 → 吸附到最近车道（保证开得过去）
+// → 排除海里/山体（terrainHeight 太低、x>480 的都不要）→ 夹完还不到 200 米就重摇。
+const TAXI_DEST_MIN = 200, TAXI_DEST_MAX = 470;
+function rollTaxiDest() {
+  for (let i = 0; i < 80; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const rr = TAXI_DEST_MIN + Math.random() * (TAXI_DEST_MAX - TAXI_DEST_MIN);
+    let x = TAXI_STAND.x + Math.cos(a) * rr;
+    let z = TAXI_STAND.z + Math.sin(a) * rr;
+    const lim = HALF - 12;
+    x = Math.max(-lim, Math.min(lim, x));
+    z = Math.max(-lim, Math.min(lim, z));
+    const ox = x, oz = z;
+    try { const q = snapToRoadLane(x, z); if (q && isFinite(q[0]) && isFinite(q[1])) { x = q[0]; z = q[1]; } } catch (eS) {}
+    if (Math.hypot(x - ox, z - oz) > 45) continue;   // 离最近车道太远（荒地里/海上），重摇
+    const d = Math.hypot(x - TAXI_STAND.x, z - TAXI_STAND.z);
+    if (d < TAXI_DEST_MIN) continue;                 // 夹边界/吸附之后还不够远，重摇
+    if (d > TAXI_DEST_MAX + 90) continue;            // 吸附跑太远也不要
+    let gy = 0;
+    try { gy = terrainHeight(x, z); } catch (eT) { gy = 0; }
+    if (!(gy > 0.6)) continue;                       // 海里/水边不要
+    if (x > 480) continue;                           // 中镇山山体（车开不上去）不要
+    return { x: x, z: z };
+  }
+  let best = TAXI_DESTS[0], bd = -1;
+  for (const p of TAXI_DESTS) { const d = Math.hypot(p.x - TAXI_STAND.x, p.z - TAXI_STAND.z); if (d > bd) { bd = d; best = p; } }
+  return { x: best.x, z: best.z };
+}
 const CONSTRUCTION_SITE = { x: 120, z: -120, r: 34, dropX: 150, dropZ: -140 };
 // 卸货点：每次装货时在工地四周重新随机一个位置（原来固定在 (150,-140) 一个点）。
 const CONSTRUCTION_SITE_RING = { min: 11, max: 25 };   // 相对工地中心的半径范围（米）
@@ -18699,7 +18728,7 @@ function taxiAction(v) {
   let best = null, bd = 1e9;
   for (const p of waiting) { const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; } }
   if (!best) return false;
-  best.dest = TAXI_DESTS[Math.floor(Math.random() * TAXI_DESTS.length)];
+  best.dest = rollTaxiDest();   // 【fix472】离车场 200 米以外的随机位置
   best.fare = taxiFare(Math.hypot(best.dest.x - TAXI_STAND.x, best.dest.z - TAXI_STAND.z) * 1.6);
   ensurePaxBody(best);
   best.state = 'boarding2';
