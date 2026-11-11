@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix469-nightlamp';
+const BUILD = '20261112-fix470-noviaduct';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7420,12 +7420,13 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 // 炸毁后由 updateMilitaryRespawn() 按倒计时重新生成（不再永久消失）。
 
 // 立交桥（连接各区域的高架路）
+// 【fix470】用户："把这里的灰色立交桥去掉" —— 第三段 (x -150~150, z=150, 高 4 米) 正好横在
+// 出租车场正上方，把整个车场罩在灰色桥面下，接客时看不见天也看不见乘客。
+// 三段全部删除（纯装饰，没有任何碰撞/车流/任务依赖它）。要恢复就把下面的 segments 重新跑一遍。
 (function addOverpass() {
-  const segments = [
-    { x1: -100, z1: -100, x2: 100, z2: -100, y: 5 },
-    { x1: 100, z1: -100, x2: 100, z2: 100, y: 5 },
-    { x1: -150, z1: 150, x2: 150, z2: 150, y: 4 },
-  ];
+  return;   // 【fix470】已停用：整座灰色高架桥不再生成
+  /* eslint-disable no-unreachable */
+  const segments = [];
   const roadMat = new THREE.MeshLambertMaterial({ color: 0x555560 });
   const railMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
   segments.forEach(s => {
