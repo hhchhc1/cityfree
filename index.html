@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix463-stone2';
+const BUILD = '20261112-fix464-brick';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -32799,12 +32799,16 @@ try {
           const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
           const c = cv.getContext('2d');
           c.fillStyle = dark; c.fillRect(0, 0, 256, 256);
-          for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) {
-            const g = light + ((r * 7 + q * 11) % 4) * 5 - 5;
-            c.fillStyle = 'rgb(' + (g - 7) + ',' + g + ',' + (g + 9) + ')';
-            c.fillRect(q * 64 + 2, r * 64 + 2, 60, 60);
-            c.fillStyle = 'rgba(255,255,255,0.07)';
-            c.fillRect(q * 64 + 3, r * 64 + 3, 58, 3);
+          // 【fix464】长方形古砖：4 列 × 8 行、隔行错缝，一块 64×32 像素 = 0.48×0.24 米
+          for (let r = 0; r < 8; r++) {
+            const off = (r % 2) * 32;
+            for (let q = -1; q < 5; q++) {
+              const g = light + ((r * 5 + q * 13 + 9) % 5) * 4 - 8;
+              c.fillStyle = 'rgb(' + (g - 8) + ',' + g + ',' + (g + 10) + ')';
+              c.fillRect(q * 64 + off + 1, r * 32 + 1, 62, 30);
+              c.fillStyle = 'rgba(255,255,255,0.06)';
+              c.fillRect(q * 64 + off + 2, r * 32 + 2, 60, 2);
+            }
           }
           const tx = new THREE.CanvasTexture(cv);
           tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
@@ -32812,7 +32816,7 @@ try {
         }
         // 主甬道：14 米宽青石板（每块 0.9×0.9 米，四块一循环）
         const tx1 = stoneTex(96, '#39414a');
-        tx1.repeat.set(14 / 3.6, 304 / 3.6);
+        tx1.repeat.set(14 / 1.92, 304 / 1.92);
         const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
         const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
         road.position.set(2025, 5.335, -292);
@@ -32820,7 +32824,7 @@ try {
         scene.add(road);
         // 御路石：正中 3.4 米宽，青灰偏亮
         const tx2 = stoneTex(116, '#454e56');
-        tx2.repeat.set(3.4 / 3.6, 304 / 3.6);
+        tx2.repeat.set(3.4 / 1.92, 304 / 1.92);
         const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
         const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
         royal.position.set(2025, 5.347, -292);
@@ -32835,12 +32839,21 @@ try {
         }
         // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
         const tx3 = stoneTex(112, '#4a525a');
-        tx3.repeat.set(16 / 3.6, 28 / 3.6);
+        tx3.repeat.set(16 / 1.92, 28 / 1.92);
         const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
         const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
         inRoad.position.set(2025, 0.195, -110);
         inRoad.userData.lodShared = true;
         scene.add(inRoad);
+        // 【fix464】院内地面：整片长方形青砖（0.48×0.24，错缝），压住原来那片土黄台基面
+        const tx4 = stoneTex(104, '#3f4750');
+        tx4.repeat.set(308 / 1.92, 712 / 1.92);
+        const mat4 = new THREE.MeshLambertMaterial({ map: tx4 });
+        const court = new THREE.Mesh(new THREE.BoxGeometry(308, 0.04, 712), mat4);
+        court.position.set(2032, 5.28, -490);
+        court.userData.lodShared = true;
+        scene.add(court);
+        window.__yamenCourt = 1;
         window.__yamenPlaza = 1;
         window.__yamenRoad = { y: 2.988, x0: 2018, x1: 2032, z0: -444, z1: -104 };
         // 让行走高度认这块新路面（原来站在 5.2 米，砖面 5.34 米，人是陷在砖里的）
