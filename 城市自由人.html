@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix447-hookcar';
+const BUILD = '20261112-fix448-traffic';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34559,6 +34559,80 @@ window.focus();
   window.__purgeBlackBlob = sweep;
   setTimeout(sweep, 3500);
   setTimeout(sweep, 9000);
+})();
+
+
+// 【fix448】车流治理：① 被玩家拽出马路/放下的车，安静一会儿后自己回到原车道继续开；
+// ② 长时间卡死的车（玩家看不见时）沿车道前跳一段，避免越堵越长。
+(function zzTrafficFix() {
+  try {
+    if (typeof traffic === 'undefined' || typeof cars === 'undefined') return;
+    var tick = 0;
+    function playerNear(x, z, r) {
+      try { if (typeof person === 'undefined' || !person) return false; var dx = person.position.x - x, dz = person.position.z - z; return dx * dx + dz * dz < r * r; } catch (e) { return false; }
+    }
+    function laneClear(t, nx, nz) {
+      for (var i = 0; i < traffic.length; i++) {
+        var o = traffic[i];
+        if (o === t) continue;
+        var dx = o.x - nx, dz = o.z - nz;
+        if (dx * dx + dz * dz < 144) return false;
+      }
+      return true;
+    }
+    setInterval(function () {
+      tick++;
+      try {
+        // 1) 记录车流中每辆车的路上位置，供回家使用
+        for (var i = 0; i < traffic.length; i++) {
+          var t = traffic[i];
+          if (!t || t.exploded || t.grappled) continue;
+          if (t.road === 'v' || t.road === 'h') {
+            if (t.speed > 1.5 || !t._zzHome) t._zzHome = { x: t.x, z: t.z };
+          }
+        }
+        // 2) 被拽走/放下的车：安静 8 秒后回马路继续开
+        for (var k = cars.length - 1; k >= 0; k--) {
+          var c = cars[k];
+          if (!c || c.exploded) continue;
+          if (typeof currentCar !== 'undefined' && c === currentCar) continue;
+          if (!c._zzHome) continue;
+          if (traffic.indexOf(c) >= 0) continue;
+          if (playerNear(c.x, c.z, 18)) { c._zzQuiet = 0; continue; }
+          if ((c.speed || 0) > 0.5) { c._zzQuiet = 0; continue; }
+          c._zzQuiet = (c._zzQuiet || 0) + 1;
+          if (c._zzQuiet < 8) continue;
+          c.x = c._zzHome.x; c.z = c._zzHome.z;
+          if (c.group) c.group.position.set(c.x, terrainHeight(c.x, c.z), c.z);
+          c.speed = 0; c.vy = 0; c.air = 0; c.grappled = false; c.fly = false;
+          if (!c.maxSpeed) c.maxSpeed = c.radius < 1.2 ? 14 : 18;
+          cars.splice(k, 1);
+          traffic.push(c);
+          c._zzQuiet = 0;
+        }
+        // 3) 卡死的车：玩家离得远时，沿车道前跳 26 米，跳过堵点
+        if (tick % 3 === 0) {
+          for (var j = 0; j < traffic.length; j++) {
+            var v = traffic[j];
+            if (!v || v.exploded || v.grappled || v.fly) continue;
+            if (v.road !== 'v' && v.road !== 'h') continue;
+            if (typeof currentCar !== 'undefined' && v === currentCar) continue;
+            if ((v.speed || 0) > 0.3) { v._zzStuck = 0; continue; }
+            v._zzStuck = (v._zzStuck || 0) + 1;
+            if (v._zzStuck < 7) continue;
+            if (playerNear(v.x, v.z, 55)) continue;
+            var nx = v.x, nz = v.z;
+            if (v.road === 'v') nz = v.z + (v.dir > 0 ? 26 : -26);
+            else nx = v.x + (v.dir > 0 ? 26 : -26);
+            if (!laneClear(v, nx, nz)) continue;
+            v.x = nx; v.z = nz;
+            if (v.group) v.group.position.set(nx, terrainHeight(nx, nz), nz);
+            v.speed = 0; v._zzStuck = 0;
+          }
+        }
+      } catch (e) {}
+    }, 1000);
+  } catch (eTop) {}
 })();
 
 </script>
