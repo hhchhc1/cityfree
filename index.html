@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix460-polish';
+const BUILD = '20261112-fix463-stone2';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -22721,7 +22721,6 @@ function drawFullMap() {
   const ANC_BLD = [
     ['鼓楼', 1790, -441, 30, 30],
     ['木塔', 1830, -700, 52, 52],
-    ['荷芷署', 2025, -426, 300, 600],
     ['城门楼', 1656, -645, 24, 20],
     ['城门楼', 1656, -425, 24, 20],
     ['城门楼', 1656, -205, 24, 20],
@@ -22799,6 +22798,53 @@ function drawFullMap() {
   // 建筑
   ctx.fillStyle = '#3b4453';
   for (const b of buildings) ctx.fillRect(X(b.minX), Y(b.minZ), (b.maxX - b.minX) * s, (b.maxZ - b.minZ) * s);
+  // 【fix461】州署（荷芷署）平面图：院墙 + 中轴甬道 + 主要殿宇。
+  // 原来整座衙门在图上只是一块 300×600 的灰色实心方块，什么都看不出来。
+  try {
+    const YX0 = 1886, YX1 = 2164, YZ0 = -830, YZ1 = -140;
+    ctx.save();
+    ctx.fillStyle = 'rgba(62,55,45,0.95)';
+    ctx.fillRect(X(YX0), Y(YZ0), (YX1 - YX0) * s, (YZ1 - YZ0) * s);
+    ctx.strokeStyle = 'rgba(201,162,39,0.85)';
+    ctx.lineWidth = Math.max(1.2, 3 * s);
+    ctx.strokeRect(X(YX0), Y(YZ0), (YX1 - YX0) * s, (YZ1 - YZ0) * s);
+    // 中轴甬道（青石路面）
+    ctx.fillStyle = 'rgba(120,134,150,0.95)';
+    ctx.fillRect(X(2018), Y(-444), 14 * s, 340 * s);
+    // 主要殿宇
+    const YB = [
+      ['仪门', 2025, -150, 56, 16],
+      ['亲民堂', 2025, -435, 150, 62],
+      ['退思堂', 2025, -568, 66, 34],
+      ['知州宅', 2025, -644, 78, 40],
+      ['六房', 1938, -330, 34, 120],
+      ['六房', 2112, -330, 34, 120]
+    ];
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    for (const b of YB) {
+      const bx = X(b[1] - b[3] / 2), by = Y(b[2] - b[4] / 2);
+      ctx.fillStyle = 'rgba(150,124,86,0.95)';
+      ctx.fillRect(bx, by, b[3] * s, b[4] * s);
+      ctx.strokeStyle = 'rgba(238,214,160,0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, b[3] * s, b[4] * s);
+      if (s > 0.55) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillText(b[0], X(b[1]) + 1, by + 11);
+        ctx.fillStyle = '#ffe9b0';
+        ctx.fillText(b[0], X(b[1]), by + 10);
+      }
+    }
+    if (s > 0.4) {
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillText('州署', X(2025) + 1, Y(-96) + 1);
+      ctx.fillStyle = '#ffd76a';
+      ctx.fillText('州署', X(2025), Y(-96));
+    }
+    ctx.restore();
+  } catch (eY) {}
   // 重要地点图标
   drawLandmarks(ctx, X, Y, null);
   drawQuestMarkers(ctx, X, Y, null, (state === 'drive' && currentCar ? currentCar.x : person.position.x), (state === 'drive' && currentCar ? currentCar.z : person.position.z));
@@ -27024,7 +27070,52 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(dw2 + 0.5, 0.30, 0.52), 0xc8a24a, cx, 1.2 + dh2 + 0.1, cz + d / 2 + 0.03);
       // 【fix311】檐下斗拱 + 青绿彩画额枋 + 大红灯笼（照片里最抢眼的装饰）
       // 【fix323】真斗拱：坐斗 + 十字拱 + 昂 + 散斗
-      dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
+      // 【fix462】前檐木构彩绘：壁柱 + 裙板 + 隔扇棂条 + 青绿彩画额枋（两山墙也带一条）
+      // 用户："外面墙壁不用这么单调，可以显示用那种木结构彩绘的感觉"
+      if (o.painted) {
+        const FZ = cz + d / 2 + 0.07;
+        const Y0 = 2.80, Y1 = 1.2 + h - 1.15;
+        const woodD = 0x4a2c18, woodM = 0x6b4a30, woodL = 0x8a5a34;
+        const green = 0x2e6b4c, gold = 0xc8a24a, red = 0x8a2f2a;
+        const bays = [];
+        for (const s of [-1, 1]) {
+          const xa = cx + s * (dw2 / 2 + 0.30), xb = cx + s * (w / 2 - 1.15);
+          const span = Math.abs(xb - xa), n = Math.max(2, Math.round(span / 4.2));
+          for (let i = 0; i < n; i++) {
+            const a = xa + s * span * i / n, b = xa + s * span * (i + 1) / n;
+            bays.push([Math.min(a, b), Math.max(a, b)]);
+          }
+        }
+        for (const bb of bays) {
+          const xa = bb[0] + 0.22, xb = bb[1] - 0.22, bw = xb - xa, mx = (xa + xb) / 2;
+          if (bw < 0.8) continue;
+          det(BX(0.44, Y1 - Y0, 0.30), red, xa, (Y0 + Y1) / 2, FZ + 0.02);
+          det(BX(0.44, Y1 - Y0, 0.30), red, xb, (Y0 + Y1) / 2, FZ + 0.02);
+          // 下裙板 + 金线
+          det(BX(bw - 0.44, 2.30, 0.24), woodD, mx, Y0 + 1.15, FZ);
+          det(BX(bw - 0.44, 0.10, 0.30), gold, mx, Y0 + 2.32, FZ + 0.02);
+          // 中段隔扇：深木底 + 竖棂条 + 横抹头
+          const yA = Y0 + 2.45, yB = Y1 - 1.55;
+          det(BX(bw - 0.44, yB - yA, 0.20), 0x2b1a10, mx, (yA + yB) / 2, FZ);
+          const nv = Math.max(4, Math.round(bw / 0.75));
+          for (let i = 0; i <= nv; i++) {
+            det(BX(0.10, yB - yA - 0.10, 0.26), woodL, xa + 0.22 + (bw - 0.44) * i / nv, (yA + yB) / 2, FZ + 0.03);
+          }
+          for (let i = 1; i < 5; i++) {
+            det(BX(bw - 0.44, 0.10, 0.26), woodM, mx, yA + (yB - yA) * i / 5, FZ + 0.03);
+          }
+          // 上额枋：青绿彩画 + 双金线 + 红垫板
+          det(BX(bw - 0.30, 0.95, 0.26), green, mx, Y1 - 0.98, FZ + 0.02);
+          det(BX(bw - 0.30, 0.11, 0.30), gold, mx, Y1 - 0.49, FZ + 0.03);
+          det(BX(bw - 0.30, 0.11, 0.30), gold, mx, Y1 - 1.47, FZ + 0.03);
+          det(BX(bw - 0.30, 0.26, 0.26), red, mx, Y1 - 1.62, FZ + 0.02);
+        }
+        for (const s of [-1, 1]) {
+          det(BX(0.26, 0.95, d - 1.6), green, cx + s * (w / 2 + 0.03), Y1 - 0.98, cz);
+          det(BX(0.30, 0.11, d - 1.6), gold, cx + s * (w / 2 + 0.03), Y1 - 0.49, cz);
+        }
+      }
+            dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
       det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.30, cz + d / 2 + 1.72);
       det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 0.60, cz + d / 2 + 1.72);
       // 【fix327】旋子彩画：额枋上一圈金旋子（外金环 + 内青芯）
@@ -27045,8 +27136,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       roof(cx, cz, w, d, 1.2 + h + 0.44, o.tileA, o.tileB, o.roofStyle || 'xieshan');
       if (o.plaque) {
-        const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.55;
-        plaque3d(o.plaque, cx, py, pz, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
+        // 【fix462】匾额大小/高低可调：亲民堂的匾原来 41×12 米，整面墙都被它压住了
+        const pw2 = w * (o.plaqueW || 0.40);
+        const ph2 = o.plaqueH || pw2 * 0.30;
+        const py = 1.2 + h - (o.plaqueDrop || 1.85), pz = cz + d / 2 + 3.55;
+        plaque3d(o.plaque, cx, py, pz, pw2, ph2, '#1b2a4a', '#e8c86a');
       }
       if (o.steps !== false) stairs(cx, cz + d / 2 + 3.2, Math.min(w * 0.62, 16), o.stepN || 4, 0.36, 1);
     }
@@ -28160,7 +28254,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (let i = 0; i < 3; i++) det(BX(3.8, 0.10, 1.10), 0xa8a294, AX, 0.66 + i * 0.64, YC + 13.0 - i * 1.7, 0.29, 0, 0);
       for (const s of [-1, 1]) det(BX(0.55, 0.44, 6.7), 0xb0aa9e, AX + s * 2.85, 1.00, YC + 10.6, 0.29, 0, 0);
       (window.__FLOORS = window.__FLOORS || []).push({ x0: AX - 20, x1: AX + 20, z0: YC - 10, z1: YC + 10, top: BASE + 1.6 });
-      hall(AX, Z - 8, 104, 50, 20.6, { plaque: '亲民堂', steps: false });
+      hall(AX, Z - 8, 104, 50, 20.6, { plaque: '亲民堂', steps: false, painted: true, plaqueW: 0.17, plaqueH: 5.2, plaqueDrop: 3.2 });
       // 【fix311】大堂内景：屏风 + 公案 + 三块匾 + 楹联 + 宫灯（照片里知州审案的场面）
       (function courtroom() {
         const IZ = Z + 2;
@@ -32692,6 +32786,67 @@ try {
     musicEl.load();                       // 预解码第一首，把媒体管线建起来
   }
 } catch (e) { console.warn('[prewarm-music]', e); }
+
+    /* ===== 【fix461】州署中轴青石甬道 =====
+       用户反馈："中间的这条贯穿的路，地板怎么还不是青石板砖路面"。
+       原因：中轴那层旧铺装铺在 2.76 米，台面上另有一层 2.96 米的石面压在它上面，
+       两层几乎共面，青砖被盖住 / 闪没了，看上去还是一块灰地。
+       这里在 2.963 米（顶面 2.988）重新铺一条 14 米宽的青石板路，从大门(-104)
+       铺到亲民堂前(-444)，正中再压一条 3.4 米宽的御路石（顶面 3.000），不再受旧面影响。 */
+    (function yamenStoneRoad() {
+      try {
+        function stoneTex(light, dark) {
+          const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+          const c = cv.getContext('2d');
+          c.fillStyle = dark; c.fillRect(0, 0, 256, 256);
+          for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) {
+            const g = light + ((r * 7 + q * 11) % 4) * 5 - 5;
+            c.fillStyle = 'rgb(' + (g - 7) + ',' + g + ',' + (g + 9) + ')';
+            c.fillRect(q * 64 + 2, r * 64 + 2, 60, 60);
+            c.fillStyle = 'rgba(255,255,255,0.07)';
+            c.fillRect(q * 64 + 3, r * 64 + 3, 58, 3);
+          }
+          const tx = new THREE.CanvasTexture(cv);
+          tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+          return tx;
+        }
+        // 主甬道：14 米宽青石板（每块 0.9×0.9 米，四块一循环）
+        const tx1 = stoneTex(96, '#39414a');
+        tx1.repeat.set(14 / 3.6, 304 / 3.6);
+        const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
+        const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
+        road.position.set(2025, 5.335, -292);
+        road.userData.lodShared = true;
+        scene.add(road);
+        // 御路石：正中 3.4 米宽，青灰偏亮
+        const tx2 = stoneTex(116, '#454e56');
+        tx2.repeat.set(3.4 / 3.6, 304 / 3.6);
+        const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
+        const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
+        royal.position.set(2025, 5.347, -292);
+        royal.userData.lodShared = true;
+        scene.add(royal);
+        // 两侧路缘石
+        const curbMat = new THREE.MeshLambertMaterial({ color: 0xa9a49a });
+        for (const s of [-1, 1]) {
+          const curb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.10, 304), curbMat);
+          curb.position.set(2025 + s * 7.1, 5.345, -292);
+          scene.add(curb);
+        }
+        // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
+        const tx3 = stoneTex(112, '#4a525a');
+        tx3.repeat.set(16 / 3.6, 28 / 3.6);
+        const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
+        const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
+        inRoad.position.set(2025, 0.195, -110);
+        inRoad.userData.lodShared = true;
+        scene.add(inRoad);
+        window.__yamenPlaza = 1;
+        window.__yamenRoad = { y: 2.988, x0: 2018, x1: 2032, z0: -444, z1: -104 };
+        // 让行走高度认这块新路面（原来站在 5.2 米，砖面 5.34 米，人是陷在砖里的）
+        try { (window.__FLOORS = window.__FLOORS || []).push({ x0: 2018, x1: 2032, z0: -444, z1: -140, top: 5.36 }); } catch (eF) {}
+      } catch (eR) { window.__yamenRoadErr = String(eR); }
+    })();
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
