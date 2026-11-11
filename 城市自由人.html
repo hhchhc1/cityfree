@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix443-hintlow';
+const BUILD = '20261112-fix444-summitbig';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14636,7 +14636,7 @@ let joyId = null;                      // 当前摇杆触摸的 identifier
 let lookActive = false, lookId = null, lookLX = 0, lookLY = 0;
 let camYaw = 0, camPitch = 0;          // 相机方位角/俯仰角（弧度），由右手滑动调整
 // 相机离地最小净空：视角拉到最低时不能低于地形这么多，否则会钻进地里看到清屏蓝
-var CAM_GROUND_CLEAR = 0.9;
+var CAM_GROUND_CLEAR = 1.2;   // 【fix444】0.9 → 1.2：山体又高又陡，相机贴地余量加大，避免近裁剪面切进坡面
 // ---------- 载具瞄准（坦克炮塔 / 直升机机头）----------
 // 手机上没有鼠标，而坦克/直升机开火原来一律走 mouseNDC（默认屏幕正中），
 // 于是"炮塔永远锁死车头、准星焊在中心、打不到别处"。现在手机上用滑动屏幕调这个偏移：
@@ -24370,16 +24370,39 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // camPitch 下限 -0.7 会把相机压到和脚踝齐平，身后 6 米处的地形只要稍微高一点就埋了相机。
     // 这里只在最后渲染位置上做钳制（不改 camPos），所以不会污染下一帧的插值状态。
     // 放在抖动之后，抖动也不能把相机甩到地下。
-    let _gyBase = terrainHeight(camera.position.x, camera.position.z);
+    const _cp = camera.position;
+    // 【fix444】山坡穿模的真根因：玩家站在陡坡上时，人物和相机**之间**的山脊比相机本身还高。
+    // 旧逻辑只在相机脚下采一个点、把相机往上顶，所以完全看不见那道山脊 —— 相机整块埋进坡里，
+    // 近裁剪面把山体切开，整屏都是泥土/山体色（用户第二张截图）。
+    // 正确做法（第三人称游戏标准解）：从人物头部 P 到相机 C 连采样 8 段，第一个"被地形挡住"的采样点
+    // 就把相机沿 P→C 方向**拉近**到它前面。只拉近、不上顶，所以不会变成俯视。
+    const _hasP = (typeof person !== 'undefined' && person && person.position);
+    const _Px = _hasP ? person.position.x : camTarget.position.x;
+    const _Py = _hasP ? person.position.y + 1.5 : camTarget.position.y;
+    const _Pz = _hasP ? person.position.z : camTarget.position.z;
+    let _hitT = 1;
+    for (let _i = 1; _i <= 8; _i++) {
+      const _t = _i / 8;
+      const _sx2 = _Px + (_cp.x - _Px) * _t;
+      const _sy2 = _Py + (_cp.y - _Py) * _t;
+      const _sz2 = _Pz + (_cp.z - _Pz) * _t;
+      if (terrainHeight(_sx2, _sz2) + 0.55 > _sy2) { _hitT = Math.max(0, (_i - 1) / 8 - 0.04); break; }
+    }
+    if (_hitT < 1) {
+      _cp.x = _Px + (_cp.x - _Px) * _hitT;
+      _cp.y = _Py + (_cp.y - _Py) * _hitT;
+      _cp.z = _Pz + (_cp.z - _Pz) * _hitT;
+    }
+    // 拉近之后可能重新贴到地面，再兜一次"相机永远不低于地面 + 人物脚下"
+    let _gyBase = terrainHeight(_cp.x, _cp.z);
     // 【fix407】衙署台面（砖地顶约 2.78 米）不在 terrainHeight 里，相机贴地时就会钻到砖地下面，
     // 于是"往上看能看见地板背面"。这里把台面高度也算进来，相机永远在砖地之上。
-    const _cp = camera.position;
     if (_cp.x > 1876 && _cp.x < 2174 && _cp.z < -80 && _cp.z > -846) _gyBase = Math.max(_gyBase, 2.78);
     // 【fix409】通用规则：相机永远不低于"人物脚下"的高度。
     // 殿内地坪(约3.96m)、台阶、屋顶都自动生效，不用一栋一栋去写高度。
-    if (typeof person !== 'undefined' && person && person.position) _gyBase = Math.max(_gyBase, person.position.y);
+    if (_hasP) _gyBase = Math.max(_gyBase, person.position.y);
     const _gy = _gyBase + CAM_GROUND_CLEAR;
-    if (camera.position.y < _gy) camera.position.y = _gy;
+    if (_cp.y < _gy) _cp.y = _gy;
     _camLookA.set(camTarget.position.x + tfx * 4, camTarget.position.y + 1 - sp * 3, camTarget.position.z + tfz * 4);
     camLook.lerp(_camLookA, 1 - Math.pow(0.001, dt));
     camera.lookAt(camLook);
@@ -32190,14 +32213,14 @@ const frameLoop = () => {
       document.body.appendChild(_rb);
       window.__retBtn = _rb;
     }
-    const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
+    const _retD2 = Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40));   // 【fix231】手机版：走进光柱自动登机，按钮只是提示
     // 【fix232】靠近绿色光柱自动弹「返航」机票面板（和主城登机一样），走远自动收起
     if (!FLIGHT && !RET && person.position.x > 900) {
       if (_retD2 < 6.5 && state === 'walk' && performance.now() > (window.__retPanelCd || 0)) openRetPanel();
       else if (_retD2 > 9.5) closeRetPanel();
     }
     const _nearRet = (!FLIGHT && !RET && person.position.x > 900 && _retD2 < 6.0);   // 【fix231】提示范围放宽到 6 米
-    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：走进绿色光柱就会自动登机返程（也可点下方「登机返程」）'); }
+    if (_nearRet && performance.now() > _retTicketCd) { _retTicketCd = performance.now() + 4000; setHint('返程光柱：走进绿色光柱就会自动登机返程（也可点下方「登机返程」）'); }
     if (window.__retBtn) window.__retBtn.style.display = 'none';   // 【fix232】浮动按钮废弃，改用机票面板
   } catch (e) {}
     if (!FLIGHT && !RET && window.__retOk && person.position.x > 900 && Math.hypot(person.position.x - 1290, person.position.z - (DEST.z + 40)) < 4.5) {
@@ -32699,8 +32722,59 @@ window.focus();
   function zzSS(a, b, x) { var t = zzClamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
   function zzBump(t) { return t >= 1 ? 0 : 1 - t * t * (3 - 2 * t); }
 
-  // 各峰用 (1-t)^2 平滑鼓包做"概率并集"：重叠处平滑融合，不会出现接缝/硬棱
-  function zzMassif(x, z) {
+  /* ---------------- 1. 高度场 ---------------- */
+  var H = 150;                 // 【fix444】主峰基准高：105 → 150
+  var CX = 694, CZ = 0;        // 主峰中心
+  var SUMMIT_Y = 150;          // 【fix444】山顶平台绝对高度（广场/祠堂/祈福台全部按它抬升）
+  var PLAT_IN = 80, PLAT_OUT = 115;   // 【fix444】平台内平半径 80，外缘 115 收坡
+  var STAIR_OUT = 190, STAIR_W = 11;  // 【fix444】登山道：外径 190（=西侧山脚，x≈504 水边）内径 80（平台内半径），半宽 11
+  // ⚠️ 外径不能超过山体脚印半径：山脚 x=500 处离峰心只有 194 米，外径一旦写成 340，
+  //    踏步/牌坊/栏杆就会一路铺到城里 x≈354 的地面上（悬空在市区）。
+  var POOL_Y = 121.5;            // 【fix444】东崖水潭盆底高度（按山体自身高度取值，不再凿 50 米深坑）
+  var QV_Y = 124;              // 【fix444】北肩凉亭平台高度
+  var PEAKS = [
+    { x: 694, z: 0,    h: 150, rx: 371, rz: 446 }, // 主峰 中镇峰【fix444】rx/rz ×1.35、峰高 150
+    { x: 664, z: -320, h: 117, rx: 317, rz: 425 }, // 北肩
+    { x: 706, z: 330,  h: 128, rx: 344, rz: 391 }, // 南肩
+    { x: 700, z: -670, h: 94,  rx: 331, rz: 405 }, // 远北
+    { x: 702, z: 505,  h: 86,  rx: 304, rz: 216 }, // 远南
+    { x: 800, z: -60,  h: 103, rx: 202, rz: 277 }, // 东侧岩肩
+    { x: 590, z: 90,   h: 70,  rx: 105, rz: 190 }  // 西侧孤峰（山脚地标）
+  ];
+
+  // 【fix444】祠堂台基/月台/三级台阶的**世界坐标**范围（祠堂放大 3.4 倍后的真实尺寸）。
+  // 用途：让 personGroundY 挂钩认得这些石台面，玩家是"踩上去"而不是把脚陷进石头里。
+  var TERR = {
+    plinth: { x0: 692.40, x1: 719.60, z0: -18.70, z1: 18.70, top: SUMMIT_Y + 1.14 },   // 台基顶（+0.30×3.4）
+    base2:  { x0: 690.70, x1: 721.30, z0: -20.40, z1: 20.40, top: SUMMIT_Y + 0.664 },  // 台基下枋（+0.16×3.4）
+    yue:    { x0: 682.88, x1: 692.40, z0: -15.30, z1: 15.30, top: SUMMIT_Y + 0.868 },  // 月台顶（+0.22×3.4）
+    s3:     { x0: 680.16, x1: 682.88, z0: -11.90, z1: 11.90, top: SUMMIT_Y + 0.732 },  // 台阶（近月台）
+    s2:     { x0: 677.44, x1: 680.16, z0: -11.90, z1: 11.90, top: SUMMIT_Y + 0.528 },
+    s1:     { x0: 674.72, x1: 677.44, z0: -11.90, z1: 11.90, top: SUMMIT_Y + 0.324 }   // 台阶（最外一级）
+  };
+  function zzTerraceY(x, z) {
+    var T = TERR;
+    if (x > T.plinth.x0 && x < T.plinth.x1 && z > T.plinth.z0 && z < T.plinth.z1) return T.plinth.top;
+    if (x > T.base2.x0 && x < T.base2.x1 && z > T.base2.z0 && z < T.base2.z1) return T.base2.top;
+    if (x > T.yue.x0 && x < T.yue.x1 && z > T.yue.z0 && z < T.yue.z1) return T.yue.top;
+    if (z > -11.9 && z < 11.9) {
+      if (x > T.s3.x0 && x < T.s3.x1) return T.s3.top;
+      if (x > T.s2.x0 && x < T.s2.x1) return T.s2.top;
+      if (x > T.s1.x0 && x < T.s1.x1) return T.s1.top;
+    }
+    return -1;
+  }
+
+  // 【fix444】山体脚印：x 500..1000 / z -1250..900。
+  // 西侧 80 米、东侧 60 米、南北 65 米的平滑归零带 —— 越宽越不容易在脚印边上出现断崖。
+  function zzEdge(x, z) {
+    return zzSS(500, 580, x) * zzSS(1000, 940, x) * zzSS(-1250, -1185, z) * zzSS(900, 835, z);
+  }
+
+
+  // 山体本身（峰群并集 + 边缘归零 + 几块小平地）。fix444：边缘归零提前到所有"局部平台"之前，
+  // 这样刻出来的小平台不会把山体撑出脚印（旧版登山道就是在这里把西坡顶成了 60 米高的假墙）。
+  function zzMassifBase(x, z) {
     var inv = 1, i, p, dx, dz, t;
     for (i = 0; i < PEAKS.length; i++) {
       p = PEAKS[i];
@@ -32709,35 +32783,49 @@ window.focus();
       if (t < 1) inv *= 1 - (p.h / H) * zzBump(t);
     }
     var h = H * (1 - inv);
-    // 外缘强制归零（16m 平滑带）：保证四面八方都以 0 高度并入既有地面，不出断崖
-    h *= zzSS(506, 522, x) * zzSS(958, 936, x) * zzSS(-1002, -978, z) * zzSS(752, 726, z);
+    h *= zzEdge(x, z);
+    // 【fix444】东崖瀑布下的水潭：压成一个小圆盆。盆底 POOL_Y 取的正是该处山体的自然高度
+    // （≈121.5），所以只是掏了个两米深的浅盆，不会像旧版那样在 40 米高的坡上凿出深坑。
+    var bdx = x - 849, bdz = z - 12, bd = Math.sqrt(bdx * bdx + bdz * bdz);
+    if (bd < 9) { var bw = 1 - zzSS(6.0, 9.0, bd); h = h * (1 - bw) + POOL_Y * bw; }
+    // 北肩凉亭平台：把肩峰顶压成一块小平场
+    var qvx = x - 660, qvz = z + 300, qvd = Math.sqrt(qvx * qvx + qvz * qvz);
+    if (qvd < 12) { var qvw = 1 - zzSS(6.5, 12, qvd); h = h * (1 - qvw) + QV_Y * qvw; }
+    return h > 0 ? h : 0;
+  }
 
-    // 主峰上盘旋而上的登山道：把高度场直接切成一条 2 圈、坡度 8% 的螺旋梯级坡道
+  // 【fix444】登山道：旧版是"固定高度螺旋"——在 r=158 处地面只有 42 米、栈道却算到 66 米，
+  // 于是在西坡架出一道 20~60 米高的假堤/断崖（用户说的"相机穿坡"就是它）。
+  // 现在改成"沿等高线削栈道"：横断面高度取栈道中心线处的地形高度，11 米内平滑过渡，
+  // 只削不堆，所以既不会悬空也不会出现断崖。
+  function zzMassif(x, z) {
+    var h = zzMassifBase(x, z);
     var sdx = x - CX, sdz = z - CZ, r = Math.sqrt(sdx * sdx + sdz * sdz);
-    if (r < 300 && r > 0.5) {
+    if (r < STAIR_OUT + 4 && r > 0.5) {
       var a = Math.atan2(sdz, sdx), span = 2 * Math.PI * 2, best = null, k;
       for (k = 0; k < 2; k++) {
         var aa = a - Math.PI + k * 2 * Math.PI;
         aa = ((aa % span) + span) % span;
         var s = aa / span;
-        var rt = 300 + (70 - 300) * s;
+        var rt = STAIR_OUT + (PLAT_IN - STAIR_OUT) * s;
         var lat = Math.abs(r - rt);
-        if (!best || lat < best.lat) best = { s: s, lat: lat };
+        if (!best || lat < best.lat) best = { s: s, lat: lat, rt: rt };
       }
-      var w = (1 - zzSS(2.2, 7.0, best.lat)) * zzSS(0, 0.02, best.s);
-      if (w > 0) h = h * (1 - w) + (2.6 + (105 - 2.6) * best.s) * w;
+      if (best.lat < STAIR_W) {
+        var w = (1 - zzSS(3.0, STAIR_W, best.lat)) * zzSS(0, 0.03, best.s) * zzSS(1, 0.95, best.s);
+        if (w > 0.001) {
+          var bench = zzMassifBase(CX + Math.cos(a) * best.rt, CZ + Math.sin(a) * best.rt);
+          // 只允许 ±3.2 米的削平量：否则 22 米宽的栈道会在下坡侧堆出十几米高的假台
+          var dv = bench - h; if (dv > 3.2) dv = 3.2; else if (dv < -3.2) dv = -3.2;
+          h = h + dv * w;
+        }
+      }
     }
-    // 山顶平台（祠堂/石碑的地基）
-    if (r < 96) { var pw = 1 - zzSS(70, 96, r); h = h * (1 - pw) + 105 * pw; }  // fix440 山顶平台放大
-    // 东崖瀑布下的水潭（把坡面压成一个小圆盆）
-    var bdx = x - 849, bdz = z - 12, bd = Math.sqrt(bdx * bdx + bdz * bdz);
-    if (bd < 6.5) { var bw = 1 - zzSS(5.0, 6.5, bd); h = h * (1 - bw) + 10.8 * bw; }
-    // trailhead terrace: flat landing where the causeway meets the first stair tread
-    var pdx = x - 524, pdd = Math.sqrt(pdx * pdx + z * z);
-    if (pdd < 12) { var pz = 1 - zzSS(7, 12, pdd); h = h * (1 - pz) + 2.6 * pz; }
-    // 北肩凉亭平台：把肩峰顶压成一块 74m 的小平场
-    var qvx = x - 660, qvz = z + 300, qvd = Math.sqrt(qvx * qvx + qvz * qvz);
-    if (qvd < 9.5) { var qvw = 1 - zzSS(5.0, 9.5, qvd); h = h * (1 - qvw) + 73.4 * qvw; }
+    // 山顶平台（祠堂/石碑/青砖广场的地基）
+    if (r < PLAT_OUT) {
+      var pw = 1 - zzSS(PLAT_IN, PLAT_OUT, r);
+      h = h * (1 - pw) + SUMMIT_Y * pw;
+    }
     return h > 0 ? h : 0;
   }
 
@@ -32764,7 +32852,11 @@ window.focus();
     var _pgBefore = personGroundY;
     personGroundY = function (x, z) {
       var b = _pgBefore(x, z), m = zzHeight(x, z);
-      return m > 0 ? Math.max(b, m) : b;
+      var v = m > 0 ? Math.max(b, m) : b;
+      // 【fix444】祠堂台基 / 月台 / 三级台阶：让玩家真的踩在石面上（否则脚会陷进石头 1 米多）
+      var t = zzTerraceY(x, z);
+      if (t > 0 && t > v) v = t;
+      return v;
     };
     hooked.push('personGroundY');
   }
@@ -32787,7 +32879,7 @@ window.focus();
     };
 
     /* --- 3.1 地形网格（顶点色 + 裙边） --- */
-    var STEP = 9.0, X0 = 500, X1 = 960, Z0 = -1010, Z1 = 760;   // fix440 山体大幅放大
+    var STEP = 10.0, X0 = 500, X1 = 1000, Z0 = -1250, Z1 = 900;   // 【fix444】山体再放大：50×215 格 ≈ 21.5k 三角面
     var nx = Math.round((X1 - X0) / STEP), nz = Math.round((Z1 - Z0) / STEP);
     var vc = (nx + 1) * (nz + 1);
     var pos = new Float32Array(vc * 3), colArr = new Float32Array(vc * 3);
@@ -32810,9 +32902,9 @@ window.focus();
           var gz2 = (zzMassif(vx, vz + 2.5) - zzMassif(vx, vz - 2.5)) / 5;
           var slope = Math.sqrt(gx2 * gx2 + gz2 * gz2);
           if (h < 1.1) tmpC.setHex(COL.sand);
-          else if (h > 100) tmpC.setHex(0x9aa0a4).lerp(tmpC2.setHex(0x6d7758), 0.30);   // fix440 山顶改成青灰石色
-          else if (slope > 1.15 || h > 88) tmpC.setHex(COL.rockA).lerp(tmpC2.setHex(COL.rockC), 0.35);
-          else tmpC.copy(tmpC2.setHex(COL.grassLo)).lerp(new THREE.Color(COL.grassHi), Math.min(1, h / 105));
+          else if (h > 138) tmpC.setHex(0x9aa0a4).lerp(tmpC2.setHex(0x6d7758), 0.30);   // 【fix444】山顶青灰石色（随 150 米抬高 100→138）
+          else if (slope > 1.15 || h > 118) tmpC.setHex(COL.rockA).lerp(tmpC2.setHex(COL.rockC), 0.35);   // 【fix444】88→118
+          else tmpC.copy(tmpC2.setHex(COL.grassLo)).lerp(new THREE.Color(COL.grassHi), Math.min(1, h / 150));
           var jit = (Math.sin(vx * 0.21 + vz * 0.17) * 0.5 + 0.5) * 0.10 - 0.05;
           tmpC.offsetHSL(0, 0, jit);
         }
@@ -32839,14 +32931,15 @@ window.focus();
     STATS.tris += idx.length / 3;
 
     /* --- 辅助：点到登山道中心线的横向距离（避免树压在路上） --- */
+    // 【fix444】和 zzMassif 里的栈道用同一组半径（外 190 → 内 80），否则树会长在路中间
     function stairLat(x, z) {
       var dx = x - CX, dz = z - CZ, r = Math.sqrt(dx * dx + dz * dz);
-      if (r > 300) return 999;
+      if (r > 194) return 999;
       var a = Math.atan2(dz, dx), span = 2 * Math.PI * 2, best = null, k;
       for (k = 0; k < 2; k++) {
         var aa = a - Math.PI + k * 2 * Math.PI;
         aa = ((aa % span) + span) % span;
-        var rt = 300 + (70 - 300) * (aa / span);
+        var rt = 190 + (80 - 190) * (aa / span);
         var lat = Math.abs(r - rt);
         if (!best || lat < best.lat) best = lat;
       }
@@ -32858,48 +32951,78 @@ window.focus();
       return Math.sqrt(gx * gx + gz * gz);
     }
 
-    /* --- 3.2 树木：3 种轮廓（高松 / 阔叶 / 灌木）· 4 个 InstancedMesh · 5 绿 + 秋色 --- */
+    /* --- 3.2 树木【fix444】：5 个树种 + 野花丛 · 7 个 InstancedMesh · 松 700 / 阔 600 / 灌 400 /
+       桃 220 / 竹 300 丛(1500 竿) / 野花 400 丛；全部 instanced，没有一棵一个 mesh。 --- */
     var trunkGeo = new THREE.CylinderGeometry(0.16, 0.30, 1.7, 5, 1, true);
     trunkGeo.translate(0, 0.85, 0);
     var pineGeo = new THREE.ConeGeometry(1.55, 4.8, 7); pineGeo.translate(0, 3.5, 0);
     var broadGeo = new THREE.IcosahedronGeometry(1.7, 0); broadGeo.translate(0, 3.15, 0);
     var shrubGeo = new THREE.IcosahedronGeometry(0.95, 0); shrubGeo.translate(0, 0.8, 0);
+    // 【fix444】桃花：矮胖的花冠（比阔叶树矮 0.6 米，方便一眼认出是桃不是樟）
+    var peachGeo = new THREE.IcosahedronGeometry(1.5, 0); peachGeo.scale(1.12, 0.82, 1.12); peachGeo.translate(0, 2.6, 0);
+    // 【fix444】竹子：一根细高的 4 面开口圆柱（8 个三角面）；一"丛"靠 5 个实例扎堆摆出来
+    var bambooGeo = new THREE.CylinderGeometry(0.055, 0.085, 8.2, 4, 1, true); bambooGeo.translate(0, 4.1, 0);
+    // 【fix444】野花丛：两片交叉小方片（4 个三角面），三色靠 instanceColor 给
+    var flowerGeo = (function () {
+      var p = [], w = 0.46, h = 0.42;
+      p.push(-w, 0, 0, w, 0, 0, w, h, 0, -w, 0, 0, w, h, 0, -w, h, 0);
+      p.push(0, 0, -w, 0, 0, w, 0, h, w, 0, 0, -w, 0, h, w, 0, h, -w);
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+      g.computeVertexNormals();
+      return g;
+    })();
     var mTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2f });
     var mLeaf = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    var TREE_MAX = 1200;
-    var imTrunk = new THREE.InstancedMesh(trunkGeo, mTrunk, TREE_MAX);
-    var imPine = new THREE.InstancedMesh(pineGeo, mLeaf, TREE_MAX);
-    var imBroad = new THREE.InstancedMesh(broadGeo, mLeaf, TREE_MAX);
-    var imShrub = new THREE.InstancedMesh(shrubGeo, mLeaf, TREE_MAX);
+    var mBamboo = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    var mFlower = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    var WANT_P = 700, WANT_B = 600, WANT_S = 400, WANT_T = 220, WANT_Z = 300, WANT_F = 400;
+    var BAMBOO_PER = 5, BAMBOO_MAX = WANT_Z * BAMBOO_PER;   // 300 丛 × 5 竿
+    var imTrunk = new THREE.InstancedMesh(trunkGeo, mTrunk, WANT_P + WANT_B + WANT_T);
+    var imPine = new THREE.InstancedMesh(pineGeo, mLeaf, WANT_P);
+    var imBroad = new THREE.InstancedMesh(broadGeo, mLeaf, WANT_B);
+    var imShrub = new THREE.InstancedMesh(shrubGeo, mLeaf, WANT_S);
+    var imPeach = new THREE.InstancedMesh(peachGeo, mLeaf, WANT_T);
+    var imBamboo = new THREE.InstancedMesh(bambooGeo, mBamboo, BAMBOO_MAX);
+    var imFlower = new THREE.InstancedMesh(flowerGeo, mFlower, WANT_F);
     imTrunk.frustumCulled = imPine.frustumCulled = imBroad.frustumCulled = imShrub.frustumCulled = false;
+    imPeach.frustumCulled = imBamboo.frustumCulled = imFlower.frustumCulled = false;
     var dummy = new THREE.Object3D(), tcol = new THREE.Color();
-    var nPine = 0, nBroad = 0, nShrub = 0, nTrunk = 0, tries = 0;
-    var WANT_P = 430, WANT_B = 390, WANT_S = 250;   // fix440 树更多
-    while ((nPine < WANT_P || nBroad < WANT_B || nShrub < WANT_S) && tries < 22000) {
+    var nPine = 0, nBroad = 0, nShrub = 0, nTrunk = 0, nPeach = 0, nBamboo = 0, nFlower = 0, nClump = 0, tries = 0;
+    function zzNearSummit(x, z) {
+      if (Math.hypot(x - 694, z) < 76) return true;          // 青砖广场 + 祠堂院子
+      if (Math.hypot(x - 683.6, z) < 20) return true;        // 祈福台
+      return false;
+    }
+    while ((nPine < WANT_P || nBroad < WANT_B || nShrub < WANT_S || nPeach < WANT_T || nClump < WANT_Z || nFlower < WANT_F) && tries < 46000) {
       tries++;
-      var tx = 512 + Math.random() * 440;
-      var tz = -980 + Math.random() * 1740;
+      var tx = 502 + Math.random() * 494;                     // 【fix444】新脚印 x 500..1000
+      var tz = -1240 + Math.random() * 2120;                  // 【fix444】新脚印 z -1250..900
       var th = zzMassif(tx, tz);
-      if (th < 2.5 || th > 100) continue;
-      if (slopeAt(tx, tz) > 0.95) continue;
-      if (stairLat(tx, tz) < 8.5) continue;
-      if (Math.hypot(tx - 700, tz) < 95) continue;
-      if (Math.hypot(tx - 849, tz - 12) < 15) continue;
-      if (Math.hypot(tx - 524, tz) < 13) continue;
-      if (Math.hypot(tx - 660, tz + 300) < 15) continue;   // 凉亭
-      if (Math.hypot(tx - 686, tz) < 34) continue;         // 祈福台
-      var pick = Math.random(), typ;
-      if (pick < 0.42 && nPine < WANT_P) typ = 0;
-      else if (pick < 0.80 && nBroad < WANT_B) typ = 1;
-      else if (nShrub < WANT_S) typ = 2;
-      else if (nBroad < WANT_B) typ = 1;
-      else if (nPine < WANT_P) typ = 0;
-      else continue;
+      if (th < 2.0 || th > 147) continue;
+      if (slopeAt(tx, tz) > 1.35) continue;                   // 【fix444】山更陡了，放宽到 1.35 否则树太少
+      if (stairLat(tx, tz) < 11) continue;
+      if (zzNearSummit(tx, tz)) continue;
+      if (Math.hypot(tx - 849, tz - 12) < 16) continue;       // 水潭
+      if (Math.hypot(tx - 660, tz + 300) < 15) continue;      // 凉亭
+      if (Math.hypot(tx - 812, tz + 66) < 12) continue;       // 东肩观景台
+      // 按剩余配额随机挑树种（不再用固定 0.42/0.80 的阈值，否则后面的树种永远轮不到）
+      var cand = [];
+      if (nPine < WANT_P) cand.push(0);
+      if (nBroad < WANT_B) cand.push(1);
+      if (nShrub < WANT_S) cand.push(2);
+      if (nPeach < WANT_T) cand.push(3);
+      if (nClump < WANT_Z) cand.push(4);
+      if (nFlower < WANT_F) cand.push(5);
+      if (!cand.length) break;
+      var typ = cand[(Math.random() * cand.length) | 0];
+      if (typ === 5 && th > 120) continue;                    // 山顶只长草皮，野花留在半山
       var sc = typ === 2 ? (0.8 + Math.random() * 0.7) : (0.75 + Math.random() * 0.85);
-      dummy.position.set(tx, th - 0.15, tz);
       dummy.rotation.set(0, Math.random() * 6.283, 0);
+      dummy.position.set(tx, th - 0.15, tz);
       dummy.scale.set(sc * (typ === 1 ? 1.15 : 1), sc * (typ === 0 ? 1.18 : (0.8 + Math.random() * 0.35)), sc * (typ === 1 ? 1.15 : 1));
       if (typ === 2) { dummy.position.y = th + 0.3; dummy.scale.set(sc, sc * 0.85, sc); }
+      if (typ === 1) dummy.scale.multiplyScalar(1.15);
       dummy.updateMatrix();
       if (typ === 2) {
         imShrub.setMatrixAt(nShrub, dummy.matrix);
@@ -32907,6 +33030,42 @@ window.focus();
         else tcol.setHSL(0.26 + Math.random() * 0.05, 0.32 + Math.random() * 0.2, 0.19 + Math.random() * 0.10);
         imShrub.setColorAt(nShrub, tcol);
         nShrub++;
+      } else if (typ === 3) {
+        // 桃花：树干 + 粉红花冠
+        imTrunk.setMatrixAt(nTrunk, dummy.matrix);
+        tcol.setHSL(0.070, 0.28, 0.20 + Math.random() * 0.05);
+        imTrunk.setColorAt(nTrunk, tcol); nTrunk++;
+        tcol.setHSL(0.945 + Math.random() * 0.035, 0.52 + Math.random() * 0.22, 0.66 + Math.random() * 0.09);
+        imPeach.setMatrixAt(nPeach, dummy.matrix); imPeach.setColorAt(nPeach, tcol); nPeach++;
+      } else if (typ === 4) {
+        // 竹林：一丛 = 5 根细高竹竿，随机散开 0.35~0.8 米
+        for (var bk = 0; bk < BAMBOO_PER; bk++) {
+          var ba = bk * 1.2566 + Math.random() * 0.5, br = bk === 0 ? 0 : (0.35 + Math.random() * 0.55);
+          dummy.position.set(tx + Math.cos(ba) * br, th - 0.12, tz + Math.sin(ba) * br);
+          dummy.rotation.set((Math.random() - 0.5) * 0.10, Math.random() * 6.283, (Math.random() - 0.5) * 0.10);
+          var bs = 0.85 + Math.random() * 0.45;
+          dummy.scale.set(bs, 0.80 + Math.random() * 0.55, bs);
+          dummy.updateMatrix();
+          imBamboo.setMatrixAt(nBamboo, dummy.matrix);
+          tcol.setHSL(0.235 + Math.random() * 0.035, 0.46 + Math.random() * 0.22, 0.36 + Math.random() * 0.12);
+          imBamboo.setColorAt(nBamboo, tcol);
+          nBamboo++;
+        }
+        nClump++;
+      } else if (typ === 5) {
+        // 野花丛：三色（黄 / 白 / 紫红）各占三分之一
+        dummy.position.set(tx, th + 0.02, tz);
+        dummy.rotation.set(0, Math.random() * 6.283, 0);
+        var fs = 0.75 + Math.random() * 0.8;
+        dummy.scale.set(fs, fs * (0.8 + Math.random() * 0.6), fs);
+        dummy.updateMatrix();
+        imFlower.setMatrixAt(nFlower, dummy.matrix);
+        var fpick = Math.random();
+        if (fpick < 0.34) tcol.setHSL(0.135, 0.78, 0.60);
+        else if (fpick < 0.67) tcol.setHSL(0.14, 0.22, 0.86);
+        else tcol.setHSL(0.905, 0.52, 0.62);
+        imFlower.setColorAt(nFlower, tcol);
+        nFlower++;
       } else {
         imTrunk.setMatrixAt(nTrunk, dummy.matrix);
         tcol.setHSL(0.075, 0.30, 0.19 + Math.random() * 0.07);
@@ -32923,16 +33082,25 @@ window.focus();
       }
     }
     imTrunk.count = nTrunk; imPine.count = nPine; imBroad.count = nBroad; imShrub.count = nShrub;
+    imPeach.count = nPeach; imBamboo.count = nBamboo; imFlower.count = nFlower;
     imTrunk.instanceMatrix.needsUpdate = imPine.instanceMatrix.needsUpdate = true;
     imBroad.instanceMatrix.needsUpdate = imShrub.instanceMatrix.needsUpdate = true;
+    imPeach.instanceMatrix.needsUpdate = imBamboo.instanceMatrix.needsUpdate = true;
+    imFlower.instanceMatrix.needsUpdate = true;
+    if (imPeach.instanceColor) imPeach.instanceColor.needsUpdate = true;
+    if (imBamboo.instanceColor) imBamboo.instanceColor.needsUpdate = true;
+    if (imFlower.instanceColor) imFlower.instanceColor.needsUpdate = true;
     if (imTrunk.instanceColor) imTrunk.instanceColor.needsUpdate = true;
     if (imPine.instanceColor) imPine.instanceColor.needsUpdate = true;
     if (imBroad.instanceColor) imBroad.instanceColor.needsUpdate = true;
     if (imShrub.instanceColor) imShrub.instanceColor.needsUpdate = true;
     scene.add(imTrunk); scene.add(imPine); scene.add(imBroad); scene.add(imShrub);
-    var made = nPine + nBroad + nShrub;
+    scene.add(imPeach); scene.add(imBamboo); scene.add(imFlower);   // 【fix444】桃花 / 竹林 / 野花
+    var made = nPine + nBroad + nShrub + nPeach + nClump + nFlower;
     STATS.trees = made;
-    STATS.tris += nPine * 24 + nBroad * 30 + nShrub * 20;
+    STATS.peach = nPeach; STATS.bamboo = nBamboo; STATS.flowers = nFlower;
+    // 【fix444】面数：松 14+10 / 阔 20+10 / 灌 20 / 桃 20+10 / 竹 8 / 野花 4
+    STATS.tris += nPine * 24 + nBroad * 30 + nShrub * 20 + nPeach * 30 + nBamboo * 8 + nFlower * 4;
 
     /* --- 3.3 岩层（上层 60% 的层叠崖带 + 少量滚石） --- */
     var rockGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -32944,7 +33112,7 @@ window.focus();
     // 返回"从山顶往外走的第一个等高线"（外轮廓），不会被远处更高的肩峰带偏
     function contourR(angle, target) {
       var last = -1, rr, hh;
-      for (rr = 20; rr <= 178; rr += 1) {
+      for (rr = 20; rr <= 358; rr += 1) {   // 【fix444】山峰长高了，等高线要一路搜到山脚（178 → 358）
         hh = zzMassif(CX + Math.cos(angle) * rr, CZ + Math.sin(angle) * rr);
         if (hh >= target) last = rr;
         else if (last > 0) return last;
@@ -32952,13 +33120,13 @@ window.focus();
       return last;
     }
     // 三条崖带：每段的高度 / 外挑 / 体量都不同，破掉"同心环"的机械重复
-    var bandBase = [46, 66, 86];
+    var bandBase = [64, 92, 118];   // 【fix444】随峰高一起抬：46/66/86 → 64/92/118
     for (li = 0; li < 3; li++) {
       for (ai = 0; ai < 40; ai++) {
         if (rMade >= ROCK_MAX) break;
         var ang = (ai / 40) * Math.PI * 2;
         var target = bandBase[li] + Math.sin(ang * 3 + li * 2.1) * 4.5 + Math.sin(ang * 7 + li) * 1.8;
-        if (target < 26 || target > 97) continue;
+        if (target < 34 || target > 132) continue;
         var cr = contourR(ang, target);
         if (cr < 0) continue;
         var out = 0.7 + Math.abs(Math.sin(ang * 5 + li)) * 1.1;
@@ -32979,9 +33147,9 @@ window.focus();
     var bTry = 0;
     while (rMade < ROCK_MAX && bTry < 5000) {
       bTry++;
-      var bx = 512 + Math.random() * 358, bz = -760 + Math.random() * 1220;
+      var bx = 505 + Math.random() * 470, bz = -1200 + Math.random() * 2070;   // 【fix444】跟着新脚印撒（500..1000 / -1250..900）
       var bh = zzMassif(bx, bz);
-      if (bh < 2 || bh > 90) continue;
+      if (bh < 2 || bh > 132) continue;
       var latB = stairLat(bx, bz);
       if (latB < 3.4) continue;
       if (slopeAt(bx, bz) > 1.6) continue;
@@ -33004,15 +33172,17 @@ window.focus();
     STATS.tris += rMade * 12;
 
     /* --- 3.4 登山道装饰：木/石踏步 + 木栏杆 --- */
-    var SN = 240, samples = [], si;
+    // 【fix444】踏步必须踩在高度场里那条栈道上：半径 190 → 80（旧版 170 → 36 和地形对不上，
+    // 结果石板悬在坡面上、栈道却在旁边空着）。采样点从 240 加到 400，间距约 4.2 米。
+    var SN = 400, samples = [], si;
     for (si = 0; si <= SN; si++) {
       var ss0 = si / SN;
       var aa0 = Math.PI + 2 * Math.PI * 2 * ss0;
-      var rr0 = 170 + (36 - 170) * ss0;
+      var rr0 = 190 + (80 - 190) * ss0;
       var sx0 = CX + Math.cos(aa0) * rr0, sz0 = CZ + Math.sin(aa0) * rr0;
       samples.push({ x: sx0, z: sz0, y: zzHeight(sx0, sz0), s: ss0 });
     }
-    var treadGeo = new THREE.BoxGeometry(1.9, 0.16, 3.8);
+    var treadGeo = new THREE.BoxGeometry(2.6, 0.20, 5.6);
     var treadMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     var imTread = new THREE.InstancedMesh(treadGeo, treadMat, SN + 1);
     imTread.frustumCulled = false;
@@ -33142,12 +33312,15 @@ window.focus();
 
     /* --- 3.7 东崖瀑布 + 水潭 + 水雾 --- */
     var fallAng = 0.10;
-    var rLedge = contourR(fallAng, 34);
-    if (rLedge < 0) rLedge = 150;
-    var ledgeX = CX + Math.cos(fallAng) * rLedge, ledgeZ = CZ + Math.sin(fallAng) * rLedge;
+    // 【fix444】旧版把瀑布顶端写死成 34 米：山一长到 150 米，水片就变成"倒着流的空中黑板"。
+    // 现在潭口高度先算出来，瀑布从潭口上方 12 米的等高线挂下来，长度/朝向全都跟着山体走。
     var poolX = 849, poolZ = 12, poolY = zzHeight(poolX, poolZ);
-    // 瀑布：沿坡面从 34m 高的岩台挂下来（不是凭空竖一片，而是贴着山体的一条水带）
-    var fallTop = 34, fallBot = poolY + 0.35;
+    var fallTop = poolY + 12;
+    var rLedge = contourR(fallAng, fallTop);
+    if (rLedge < 0) rLedge = 105;
+    var ledgeX = CX + Math.cos(fallAng) * rLedge, ledgeZ = CZ + Math.sin(fallAng) * rLedge;
+    // 瀑布：沿坡面从岩台挂下来（不是凭空竖一片，而是贴着山体的一条水带）
+    var fallBot = poolY + 0.35;
     var pA = new THREE.Vector3(ledgeX, fallTop, ledgeZ);
     var pB = new THREE.Vector3(poolX, fallBot, poolZ);
     var midF = pA.clone().add(pB).multiplyScalar(0.5);
@@ -33249,8 +33422,10 @@ window.focus();
 
     /* --- 3.8 山顶：中镇祠 + 石碑 --- */
     var temple = new THREE.Group();
-    temple.position.set(706, 105, 0);
-  temple.scale.set(1.75, 1.75, 1.75);   // fix441 庙放大 1.75 倍，并往东挪 4 米给广场让位
+    temple.position.set(706, SUMMIT_Y + 0.12, 0);
+    // 【fix444】祠堂第三次放大：1.75 → 2.6 → 3.4 倍。放大后主殿墙体 10×6.6 → 世界尺寸 34 × 22.4 米，
+    // 正脊顶到广场面 ≈ 17.4 米（用户要求：主殿 34×22、脊高 ~17 米，前面带月台 + 三级台阶）。
+    temple.scale.set(3.4, 3.4, 3.4);
     temple.rotation.y = -Math.PI / 2;      // 正面朝西，正对登山道来向
     function TB(mat, w, hh, d, x, y, z, rx, ry, rz) {
       templeParts.push({ mat: mat, w: w, h: hh, d: d, x: x, y: y, z: z, rx: rx || 0, ry: ry || 0, rz: rz || 0 });
@@ -33265,75 +33440,86 @@ window.focus();
     var mStoneD = new THREE.MeshLambertMaterial({ color: COL.stoneD });
     var mDark = new THREE.MeshLambertMaterial({ color: COL.dark });
     var mGold = new THREE.MeshLambertMaterial({ color: COL.gold, emissive: 0x3a2a08 });
-    // 台基
-    TB(mStone, 15, 0.45, 11, 0, 0.22, 0);
-    TB(mStoneD, 12.6, 0.32, 9, 0, 0.60, 0);
-    // 台阶（朝 +Z）
-    TB(mStone, 4.4, 0.18, 0.9, 0, 0.10, 5.9);
-    TB(mStone, 4.4, 0.18, 0.9, 0, 0.28, 5.4);
-    TB(mStone, 4.4, 0.18, 0.9, 0, 0.46, 4.9);
-    // 墙身 + 角柱
-    TB(mRed, 9.0, 3.1, 6.4, 0, 2.30, 0);
-    TB(mRedD, 0.55, 3.5, 0.55, -4.35, 2.50, 3.05);
-    TB(mRedD, 0.55, 3.5, 0.55, 4.35, 2.50, 3.05);
-    TB(mRedD, 0.55, 3.5, 0.55, -4.35, 2.50, -3.05);
-    TB(mRedD, 0.55, 3.5, 0.55, 4.35, 2.50, -3.05);
-    // 门 + 窗
-    TB(mDark, 2.2, 2.5, 0.14, 0, 2.05, 3.24);
-    TB(mDark, 1.1, 1.2, 0.12, -3.0, 2.6, 3.22);
-    TB(mDark, 1.1, 1.2, 0.12, 3.0, 2.6, 3.22);
-    // 匾额
-    TB(mGold, 1.95, 0.66, 0.12, 0, 3.78, 3.30);
-    var tp = plaqueMesh('中镇祠', 1.8, 0.6, '#7d1a13', '#f3d98a');
-    tp.position.set(0, 3.78, 3.38); temple.add(tp);
-    // 屋顶（两坡 + 正脊 + 翘角）
-    TB(mRoof, 11.0, 0.32, 5.4, 0, 4.32, -1.55, 0.44, 0, 0);
-    TB(mRoof, 11.0, 0.32, 5.4, 0, 4.32, 1.55, -0.44, 0, 0);
-    TB(mRoofD, 11.4, 0.42, 0.75, 0, 5.32, 0);
-    TB(mRoofD, 0.75, 1.0, 0.75, -5.55, 5.55, 0, 0, 0, 0.30);
-    TB(mRoofD, 0.75, 1.0, 0.75, 5.55, 5.55, 0, 0, 0, -0.30);
-    TB(mRoofD, 2.5, 0.22, 0.6, -5.0, 4.10, 3.05, 0, 0, 0.42);
-    TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, 3.05, 0, 0, -0.42);
-    TB(mRoofD, 2.5, 0.22, 0.6, -5.0, 4.10, -3.05, 0, 0, 0.42);
-    TB(mRoofD, 2.5, 0.22, 0.6, 5.0, 4.10, -3.05, 0, 0, -0.42);
-    // 红灯笼（材质存起来，祈福时脉冲增亮）
+    // 台基（下枋 + 台基面，两级）
+    TB(mStone, 12, 0.16, 9, 0, 0.08, 0);
+    TB(mStoneD, 11, 0.14, 8, 0, 0.23, 0);
+    // 月台（堂前的平台，顶 0.22 → 世界 +0.75 米）+ 三级台阶（朝 +Z = 朝西）
+    TB(mStone, 9, 0.22, 2.8, 0, 0.11, 5.4);
+    TB(mStone, 7, 0.18, 0.8, 0, 0.09, 7.2);
+    TB(mStone, 7, 0.12, 0.8, 0, 0.06, 8.0);
+    TB(mStone, 7, 0.06, 0.8, 0, 0.03, 8.8);
+    // 墙身 + 角柱（墙体 10.0 × 6.6，放大 3.4 倍 = 34 × 22.4 米）
+    TB(mRed, 10.0, 3.1, 6.6, 0, 1.86, 0);
+    TB(mRedD, 0.60, 3.5, 0.60, -5.40, 2.05, 3.10);
+    TB(mRedD, 0.60, 3.5, 0.60, 5.40, 2.05, 3.10);
+    TB(mRedD, 0.60, 3.5, 0.60, -5.40, 2.05, -3.10);
+    TB(mRedD, 0.60, 3.5, 0.60, 5.40, 2.05, -3.10);
+    // 门（净宽 0.70×3.4 = 2.38 米，和碰撞留口一致）+ 窗
+    TB(mDark, 0.70, 1.35, 0.14, 0, 0.98, 3.34);
+    TB(mDark, 1.30, 1.10, 0.12, -2.70, 1.95, 3.32);
+    TB(mDark, 1.30, 1.10, 0.12, 2.70, 1.95, 3.32);
+    // 匾额（MeshBasic，不依赖光照，任何角度都不会变成黑板）
+    TB(mGold, 1.30, 0.42, 0.12, 0, 2.62, 3.40);
+    var tp = plaqueMesh('中镇祠', 1.24, 0.40, '#7d1a13', '#f3d98a');
+    tp.position.set(0, 2.62, 3.48); temple.add(tp);
+    // 屋顶（两坡 + 正脊 + 翘角）：脊顶 5.10 × 3.4 ≈ 17.4 米
+    TB(mRoof, 12.2, 0.34, 5.6, 0, 3.88, -1.60, 0.44, 0, 0);
+    TB(mRoof, 12.2, 0.34, 5.6, 0, 3.88, 1.60, -0.44, 0, 0);
+    TB(mRoofD, 12.6, 0.44, 0.78, 0, 4.88, 0);
+    TB(mRoofD, 0.78, 1.05, 0.78, -6.15, 4.78, 0, 0, 0, 0.30);
+    TB(mRoofD, 0.78, 1.05, 0.78, 6.15, 4.78, 0, 0, 0, -0.30);
+    TB(mRoofD, 2.7, 0.22, 0.62, -5.5, 3.36, 3.25, 0, 0, 0.42);
+    TB(mRoofD, 2.7, 0.22, 0.62, 5.5, 3.36, 3.25, 0, 0, -0.42);
+    TB(mRoofD, 2.7, 0.22, 0.62, -5.5, 3.36, -3.25, 0, 0, 0.42);
+    TB(mRoofD, 2.7, 0.22, 0.62, 5.5, 3.36, -3.25, 0, 0, -0.42);
+    // 红灯笼两只（材质存起来，祈福时脉冲增亮）—— 立在月台上
     var zzLampMats = [];
     for (side = 0; side < 2; side++) {
-      var lx2 = side === 0 ? -3.3 : 3.3;
+      var lx2 = side === 0 ? -3.6 : 3.6;
       var lp = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.3, 6), mRedD);
-      lp.position.set(lx2, 1.15, 5.15); temple.add(lp);
+      lp.position.set(lx2, 1.37, 5.3); temple.add(lp);
       var lm = new THREE.MeshLambertMaterial({ color: 0xd93b2b, emissive: 0x5a0f08 });
       zzLampMats.push(lm);
       var lb = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), lm);
-      lb.scale.y = 1.25; lb.position.set(lx2, 2.45, 5.15); temple.add(lb);
+      lb.scale.y = 1.25; lb.position.set(lx2, 2.67, 5.3); temple.add(lb);
       var lcap = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 8), mGold);
-      lcap.position.set(lx2, 2.78, 5.15); temple.add(lcap);
+      lcap.position.set(lx2, 3.00, 5.3); temple.add(lcap);
     }
-    // 庭院石栏（正面中间留口）
-    var railY = 0.45;
-    for (var rx2 = -9; rx2 <= 9.01; rx2 += 1.8) {
-      if (Math.abs(rx2) > 2.2) {
-        TB(mStone, 0.32, 0.95, 0.32, rx2, railY + 0.48, 6.5);
-        TB(mStone, 0.32, 0.95, 0.32, rx2, railY + 0.48, -6.5);
-      }
-    }
-    for (var rz2 = -6.5; rz2 <= 6.51; rz2 += 1.8) {
-      TB(mStone, 0.32, 0.95, 0.32, -9, railY + 0.48, rz2);
-      TB(mStone, 0.32, 0.95, 0.32, 9, railY + 0.48, rz2);
-    }
-    TB(mStoneD, 18, 0.14, 0.22, 0, railY + 0.98, 6.5);
-    TB(mStoneD, 18, 0.14, 0.22, 0, railY + 0.98, -6.5);
-    TB(mStoneD, 0.22, 0.14, 13, -9, railY + 0.98, 0);
-    TB(mStoneD, 0.22, 0.14, 13, 9, railY + 0.98, 0);
     // 山顶石碑（在主祠南侧）
-    TB(mStoneD, 2.8, 0.45, 1.7, 4.2, 0.22, -4.6);
-    TB(mStone, 1.4, 3.2, 0.55, 4.2, 2.05, -4.6);
+    TB(mStoneD, 2.8, 0.45, 1.7, 4.6, 0.22, -5.0);
+    TB(mStone, 1.4, 3.2, 0.55, 4.6, 2.05, -5.0);
     var sp2 = plaqueMesh('中镇山', 1.2, 0.6, '#8f1d16', '#f4e6c8');
-    sp2.position.set(4.2, 2.7, -4.30); sp2.rotation.y = Math.PI; temple.add(sp2);
-    mergeBoxes(temple, templeParts);
+    sp2.position.set(4.6, 2.7, -4.70); sp2.rotation.y = Math.PI; temple.add(sp2);
+    mergeBoxes(temple, templeParts);          // 内部已 computeVertexNormals()，法线不会翻
     scene.add(temple);
     STATS.temple = temple.children.length;
     STATS.tris += templeParts.length * 12 + 400;
+    // 【fix444】给祠堂加**真碰撞**：6 个 AABB —— 四面墙（正面墙拆成左右两段，中间 2.4 米门口保持可通行）
+    // + 台基整体一块（玩家只能从月台/台阶踩上去，不能从侧面钻进台基里）。
+    // buildings 就是 LH_BLD（见文件里 `var LH_BLD = buildings;`），玩家 x≤900 的碰撞走**空间网格**
+    // _gridBld（update 里 `for (const ci of nearCells) for (const b of _gridBld[ci]) circleVsAABB`），
+    // x>900 才会去扫 LH_BLD。山顶 x≈706 < 900，所以这里 push 完必须 buildStaticSpatialGrid() 重建网格，
+    // 否则本帧 _gridBld 里没有这 6 个盒子（这就是"人能直接走进红墙"的原因）。
+    try {
+      var TCOL = [
+        [693.90, 695.65, 1.20, 17.00, 161.8],     // 正面墙（西）· 门口南侧
+        [693.90, 695.65, -17.00, -1.20, 161.8],   // 正面墙（西）· 门口北侧
+        [716.35, 718.10, -17.00, 17.00, 161.8],   // 后墙（东）
+        [694.75, 717.25, 16.15, 17.85, 161.8],    // 南山墙
+        [694.75, 717.25, -17.85, -16.15, 161.8],  // 北山墙
+        [692.40, 719.60, -18.70, 18.70, TERR.plinth.top]   // 台基（低矮，可从月台踩上去）
+      ];
+      for (var tc = 0; tc < TCOL.length; tc++) {
+        try {
+          buildings.push({
+            minX: TCOL[tc][0], maxX: TCOL[tc][1], minZ: TCOL[tc][2], maxZ: TCOL[tc][3],
+            minY: SUMMIT_Y + 0.1, top: TCOL[tc][4]
+          });
+        } catch (eBP) { }
+      }
+      STATS.templeColliders = TCOL.length;
+      try { if (typeof buildStaticSpatialGrid === 'function') buildStaticSpatialGrid(); } catch (eGrid) { }
+    } catch (eTC) { }
 
     /* --- 3.7b 瀑布加料：二级细瀑 · 湿岩色带 · 潭面溅水 --- */
     (function cascade2() {
@@ -33451,7 +33637,7 @@ window.focus();
     (function benches() {
       for (var b = 0; b < 3; b++) {
         var bz = -6 + b * 6, bx = 673.5;
-        var g = new THREE.Group(); g.position.set(bx, 105, bz);
+        var g = new THREE.Group(); g.position.set(bx, SUMMIT_Y + 0.10, bz);   // 【fix444】105 → 150（跟广场面齐平）
         pbox(g, mGateStone, 1.9, 0.16, 0.52, 0, 0.46, 0);
         pbox(g, mGateStone, 0.34, 0.44, 0.44, -0.7, 0.22, 0);
         pbox(g, mGateStone, 0.34, 0.44, 0.44, 0.7, 0.22, 0);
@@ -33507,24 +33693,31 @@ window.focus();
         vi += 4;
       }
       var k;
+      // 【fix444】雾带原来钉死在 y=34 / y=20：山长到 150 米以后，这 20 片 82×17 米的雾片全部埋进山体，
+      // 露出来的碎块就是用户说的"山顶附近的大黑方块"。现在每片都按脚下地形高度贴坡放置。
       for (k = 0; k < 11; k++) {
         var a = k * 0.5712 + 0.35;
         var rr = 146 + Math.sin(k * 2.3) * 15;
-        quad(694 + Math.cos(a) * rr, 34 + Math.sin(k * 1.7) * 5.5, Math.sin(a) * rr, 82, 17, -a - Math.PI / 2);
+        var mqx = 694 + Math.cos(a) * rr, mqz = Math.sin(a) * rr;
+        quad(mqx, zzHeight(mqx, mqz) + 3.2, mqz, 82, 17, -a - Math.PI / 2);
       }
       for (k = 0; k < 9; k++) {
         var a2 = k * 0.6981 + 0.95;
         var rr2 = 192 + Math.cos(k * 1.9) * 20;
-        quad(694 + Math.cos(a2) * rr2, 20 + Math.cos(k * 2.1) * 4, Math.sin(a2) * rr2, 96, 13, -a2 - Math.PI / 2);
+        var m2x = 694 + Math.cos(a2) * rr2, m2z = Math.sin(a2) * rr2;
+        quad(m2x, zzHeight(m2x, m2z) + 2.0, m2z, 96, 13, -a2 - Math.PI / 2);
       }
       var fg = new THREE.BufferGeometry();
       fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
       fg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2));
       fg.setIndex(fi);
+      ftex.needsUpdate = true;
       var fogMesh = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({
-        map: ftex, transparent: true, opacity: 0.17, depthWrite: false, side: THREE.DoubleSide
+        map: ftex, color: 0xdbe6ef, transparent: true, opacity: 0.15, depthWrite: false,
+        side: THREE.DoubleSide, fog: false
       }));
       fogMesh.renderOrder = 2;
+      fogMesh.frustumCulled = false;
       scene.add(fogMesh);
       STATS.fogQuads = vi / 4;
       // 说明：不另加大范围贴地云环 —— 山体离两座城太近，任何 y≈1.5 的大环都会
@@ -33533,8 +33726,10 @@ window.focus();
 
     /* --- 3.11 祈福台：香炉 · 功德箱 · 祈福碑 · 丝带 · 香火 --- */
     var PRAY = {
-      x: 683.6, z: 0, y: 105.12,
-      steleX: 687.8, steleZ: 0,
+      // 【fix444】祠堂放大到 34×22 米后，堂前月台一直铺到 x≈683，正好压住原来的祈福台
+      // （683.6,0）。把整组祈福设施挪到广场北侧 z=-32：台面干净、也不挡大门。
+      x: 683.6, z: -32, y: SUMMIT_Y + 0.26,  // 105.12 → 150.26（踩在香炉砖台面上，台顶 150.25）
+      steleX: 687.8, steleZ: -32,
       last: -99999, ribbons: 0, near: false, t: -1, prayers: 0
     };
     var prayMatStone = new THREE.MeshLambertMaterial({ color: 0x9a9488 });
@@ -33542,9 +33737,9 @@ window.focus();
     var prayMatBronze = new THREE.MeshLambertMaterial({ color: 0x7a5f35, emissive: 0x1a1206 });
     var prayMatWood = new THREE.MeshLambertMaterial({ color: 0x6d3b1e });
 
-    var pave = new THREE.Mesh(new THREE.BoxGeometry(8, 0.12, 7), new THREE.MeshLambertMaterial({ color: 0x8a8377 }));
-    pave.position.set(686, 105.06, 0);
-    scene.add(pave);
+    // 【fix444】原来这里铺了一块 8×0.12×7 的水泥色平板，顶面 105.06 和青砖广场顶面**完全共面** →
+    // 深度打架（远处看就是一跳一跳的黑方块）。青砖广场已经铺满这一片，这块板直接不要了。
+    var pave = null;
 
     var burner = new THREE.Group();
     burner.position.set(PRAY.x, PRAY.y, PRAY.z);
@@ -33588,7 +33783,7 @@ window.focus();
 
     // 功德箱
     var merit = new THREE.Group();
-    merit.position.set(683.9, PRAY.y, -2.7);
+    merit.position.set(683.9, PRAY.y, PRAY.z - 2.7);
     merit.rotation.y = 0.28;
     pbox(merit, prayMatWood, 1.05, 0.82, 0.64, 0, 0.41, 0);
     pbox(merit, new THREE.MeshLambertMaterial({ color: 0x2e2114 }), 0.98, 0.06, 0.12, 0, 0.84, 0);
@@ -33719,7 +33914,7 @@ window.focus();
         if (typeof playerInCar !== 'undefined' && playerInCar) return false;
         var dx = person.position.x - PRAY.x, dz = person.position.z - PRAY.z;
         if (dx * dx + dz * dz > 17.6) return false;                     // 4.2 m
-        return Math.abs(person.position.y - 105) < 9;
+        return Math.abs(person.position.y - SUMMIT_Y) < 9;   // 【fix444】105 → 150
       } catch (e) { return false; }
     }
 
@@ -33840,10 +34035,11 @@ window.focus();
     /* --- 3.15 汇总 --- */
     window.__ZZ_STATS = STATS;
     try {
-      console.log('[中镇山] 主峰 105m · 树 ' + made + '（松' + nPine + '/阔' + nBroad + '/灌' + nShrub + '）' +
+      console.log('[中镇山] 【fix444】主峰 150m · 山顶平台 r' + PLAT_IN + '→' + PLAT_OUT + ' · 树 ' + made +
+        '（松' + nPine + '/阔' + nBroad + '/灌' + nShrub + '/桃' + nPeach + '/竹丛' + nClump + '(' + nBamboo + '竿)/野花' + nFlower + '）' +
         ' · 岩 ' + rMade + ' · 踏步 ' + treadN + ' · 栏杆柱 ' + pn +
-        ' · 祠堂 ' + STATS.temple + ' · 雾片 ' + (STATS.fogQuads || 0) +
-        ' · 祈福点 (' + PRAY.x + ',' + PRAY.z + ') · 三角面≈' + Math.round(STATS.tris) +
+        ' · 祠堂 ' + STATS.temple + ' · 祠堂碰撞盒 ' + (STATS.templeColliders || 0) + ' · 雾片 ' + (STATS.fogQuads || 0) +
+        ' · 祈福点 (' + PRAY.x + ',' + PRAY.z + ',' + PRAY.y.toFixed(2) + ') · 三角面≈' + Math.round(STATS.tris) +
         ' · 挂钩 ' + hooked.join('/'));
     } catch (eL) { }
   } catch (eBuild) {
@@ -33905,6 +34101,8 @@ window.focus();
     var posts = new THREE.InstancedMesh(postGeo, stone, wps.length);
     var caps = new THREE.InstancedMesh(capGeo, stone2, wps.length);
     var lamps = new THREE.InstancedMesh(lampGeo, flame, wps.length);
+    // 【fix444】同上：InstancedMesh 的视锥剔除只看几何体自身包围球，实例铺开 150 米也照剔不误
+    posts.frustumCulled = caps.frustumCulled = lamps.frustumCulled = false;
     var m4 = new THREE.Matrix4();
     for (var i = 0; i < wps.length; i++) {
       var px = wps[i][0], pz = wps[i][1];
@@ -33943,25 +34141,28 @@ window.focus();
   try {
     var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
     if (!_th) return;
-    var CX = 661, CZ = -7;
+    var CX = 694, CZ = 0;    // 【fix444】石栏改成围青砖广场的外圈（旧值 661,-7/半径 31，整圈套在广场正中间）
     var stone = new THREE.MeshLambertMaterial({ color: 0x8d8a80 });
     var stone2 = new THREE.MeshLambertMaterial({ color: 0x9d9a90 });
     var brick = new THREE.MeshLambertMaterial({ color: 0x7f848c });
     var wet = new THREE.MeshLambertMaterial({ color: 0x4f5a5e });
-    // 1) 山顶环形石栏：32 根望柱 + 两圈横栏，半径 31 米，只留西侧 24 度缺口当入口
-    var N = 32, R = 31;
+    // 1) 山顶环形石栏：80 根望柱 + 两圈连续横栏，半径 74 米（青砖广场外沿 66 米），西侧留 52 度入口
+    var N = 80, R = 74;
     var postGeo = new THREE.BoxGeometry(0.30, 1.05, 0.30);
-    var railGeo = new THREE.BoxGeometry(1.9, 0.14, 0.16);
+    var railGeo = new THREE.BoxGeometry(5.82, 0.14, 0.16);
     var posts = new THREE.InstancedMesh(postGeo, stone, N);
     var railsHi = new THREE.InstancedMesh(railGeo, stone2, N);
     var railsLo = new THREE.InstancedMesh(railGeo, stone, N);
+    // ★ InstancedMesh 在 r128 只用几何体自身的包围球做视锥剔除，实例铺得再开也没用 →
+    //   不关掉的话，玩家一转身整圈石栏就消失（广场青砖当年就是这么没的）。
+    posts.frustumCulled = railsHi.frustumCulled = railsLo.frustumCulled = false;
     var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), eu = new THREE.Euler(0, 0, 0);
     var pi = 0;
     for (var i = 0; i < N; i++) {
       var a = (i / N) * Math.PI * 2;
       var deg = (a * 180 / Math.PI + 360) % 360;
-      // 只在 120°~340° 之间立栏：0° 是祠堂院子，71° 是上山道入口，这两段必须留空。
-      if (!(deg > 120 && deg < 340)) continue;
+      // 西侧（180° 附近，登山道 + 广场踏步入口）留空
+      if (deg > 154 && deg < 206) continue;
       var px = CX + Math.cos(a) * R, pz = CZ + Math.sin(a) * R;
       var gy = _th(px, pz);
       m4.makeTranslation(px, gy + 0.52, pz); posts.setMatrixAt(pi, m4);
@@ -33977,9 +34178,9 @@ window.focus();
     railsHi.instanceMatrix.needsUpdate = true;
     railsLo.instanceMatrix.needsUpdate = true;
     scene.add(posts); scene.add(railsHi); scene.add(railsLo);
-    // 2) 香炉砖台：铺在香炉下方，比平台高 18 厘米
+    // 2) 香炉砖台：铺在香炉下方，比青砖广场面再高 6 厘米（不能和广场共面，否则 z-fighting）
     var base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.18, 20), brick);
-    base.position.set(683.6, _th(683.6, 0) + 0.09, 0);
+    base.position.set(683.6, _th(683.6, -32) + 0.16, -32);   // 【fix444】随祈福台挪到 z=-32
     scene.add(base);
     // 3) 瀑布潭边湿石：在潭口两侧铺一圈深色湿岩
     var ring = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.4, 1.1), wet, 14);
@@ -34069,7 +34270,7 @@ window.focus();
     var skin = new THREE.MeshLambertMaterial({ color: 0xd9b596 });
     var spots = [[-3.6, -1.2, robe], [-3.6, 1.2, robe2]];
     for (var i = 0; i < spots.length; i++) {
-      var gx = 683.6 + spots[i][0], gz = 0 + spots[i][1];
+      var gx = 683.6 + spots[i][0], gz = -32 + spots[i][1];   // 【fix444】跟着祈福台挪到 z=-32
       var gy2 = _th(gx, gz);
       var g = new THREE.Group();
       var low = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), spots[i][2]);
@@ -34092,7 +34293,8 @@ window.focus();
   try {
     var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
     if (!_th || typeof scene === "undefined") return;
-    var SX = 683.6, SZ = 0, SY = 105;
+    var SX = 683.6, SZ = 0, SY = _th(SX, SZ);   // 【fix444】写死的 105 → 跟山顶平台实际高度走（150）
+    if (!isFinite(SY) || SY < 100) SY = 150;
     var KEY = "zzWishes_v1";
     var wishes = [];
     try { wishes = JSON.parse(localStorage.getItem(KEY) || "[]") || []; } catch (e0) { wishes = []; }
@@ -34118,19 +34320,31 @@ window.focus();
       return tex;
     }
     function addBoard(text, idx) {
-      var mat = new THREE.MeshLambertMaterial({ map: makeTex(text) });
-      var m = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.36, 0.05), mat);
-      var k = idx % 9;
-      m.position.set(689.2, SY + 2.35 - k * 0.42, -2.0 + (idx % 3) * 2.0);
+      // 【fix444】★ 黑方块元凶之一：许愿牌原来用 MeshLambertMaterial + CanvasTexture。
+      // Lambert 要吃饱光照才显示贴图颜色，牌面背光 / 背向太阳时漫反射≈0，整块牌子渲染成纯黑方块。
+      // 换成 MeshBasicMaterial（不受光照，永远是画布本色）+ DoubleSide（两面都能看见）。
+      var mat = new THREE.MeshBasicMaterial({ map: makeTex(text), side: THREE.DoubleSide });
+      var m = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.44, 0.05), mat);
+      var k = idx % 9, rk = (k / 3) | 0, ck = k % 3;
+      // 【fix444】原来 9 块牌按 k*0.42 往下排，最低那块落到地面以下 1 米（埋进石头里）。
+      // 改成 3×3 阵列，整体挂在祈福台旁边，也不会挡住祠堂大门。
+      m.position.set(687.0, SY + 3.40 - rk * 0.62, -40.0 + ck * 2.0);
       m.rotation.y = -Math.PI / 2;
       scene.add(m);
       boards.push(m);
     }
     for (var i = 0; i < wishes.length && i < 9; i++) addBoard(wishes[i], i);
     // 挂绳
-    var rope = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 6.2), new THREE.MeshLambertMaterial({ color: 0x6b4a2a }));
-    rope.position.set(689.2, SY + 2.62, 0);
+    var rope = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 7.0), new THREE.MeshLambertMaterial({ color: 0x6b4a2a }));
+    rope.position.set(687.0, SY + 3.72, -38.0);
     scene.add(rope);
+    // 【fix444】两根木柱把挂绳撑起来（否则牌子和绳子是悬在半空的）
+    var postM2 = new THREE.MeshLambertMaterial({ color: 0x6b4a2a });
+    for (var pi2 = 0; pi2 < 2; pi2++) {
+      var pp2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.8, 0.14), postM2);
+      pp2.position.set(687.0, SY + 1.9, pi2 === 0 ? -41.0 : -35.0);
+      scene.add(pp2);
+    }
     // 按钮
     var btn = document.createElement("div");
     btn.textContent = "写祝福";
@@ -34190,42 +34404,66 @@ window.focus();
   } catch (eZZ6) {}
 })();
 
-// 【fix441】山顶青砖广场：半径 46 米的圆形铺装 + 石边 + 西侧三段踏步
+// 【fix444】山顶青砖广场（重做）：半径 46 → 66 米；青砖改成 2.4 米见方的独立砖块，
+// 砖缝 0.19 米直接露出下面的深色砂浆层，远看也是清清楚楚的"青砖格子"（三色交替 0x6f7a86/0x808b98/0x8f99a4）。
+// 关键修复：旧版的 InstancedMesh 没有关掉视锥剔除 —— three r128 只用**几何体自身**的包围球
+//（半径 1 米多、位于世界原点）做剔除，玩家站在山顶时原点在视野外，整片广场就被整块剔掉了，
+// 这就是"山顶没有青砖"的真正原因。所以这里 frustumCulled = false。
+// 高度：砖面 = 地形(y=150) + 0.10 米，砂浆底 +0.04 米 —— 都离开地形 4 厘米以上，不可能 z-fighting，
+// 也不和祠堂台基（+0.12）、祈福台（+0.14）、石凳（+0.10 底面）共面。
 (function zzPlaza() {
   try {
     var _th = (typeof terrainHeight === "function") ? terrainHeight : null;
     if (!_th || typeof scene === "undefined") return;
-    var PX = 694, PZ = 0, R = 46, S = 1.45, Y = 105.03;
-    var n = 0, i, j;
-    for (i = -R; i <= R; i += S) for (j = -R; j <= R; j += S) {
-      if (i * i + j * j > R * R) continue;
-      n++;
-    }
-    var geo = new THREE.BoxGeometry(S * 0.93, 0.06, S * 0.93);
-    var blue = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0x8b93a0 }), n);
+    var PX = 694, PZ = 0, R = 66, S = 2.0, Y = _th(PX, PZ);
+    if (!isFinite(Y) || Y < 100) Y = 150;
+    Y += 0.10;
+    // 1) 砖缝底（深到几乎发黑，比青砖面低 5 厘米，比地形高 5 厘米）：砖缝里露出的是这块暗底，
+    //    而不是下面的泥土 —— 从任何角度看都是一条条清楚的暗缝，整片广场才像"青砖铺地"。
+    var bed = new THREE.Mesh(new THREE.CircleGeometry(R + 1.0, 72),
+      new THREE.MeshLambertMaterial({ color: 0x232a31 }));
+    bed.rotation.x = -Math.PI / 2;
+    bed.position.set(PX, Y - 0.05, PZ);
+    scene.add(bed);
+    // 2) 青砖：一块砖 = 一个方片（2 个三角面），不用盒体，省下 10 倍面数
+    var n = 0, i, j, RR = (R - 0.4) * (R - 0.4);
+    for (i = -R; i <= R; i += S) for (j = -R; j <= R; j += S) { if (i * i + j * j <= RR) n++; }
+    var bgeo = new THREE.PlaneGeometry(S * 0.92, S * 0.92);
+    bgeo.rotateX(-Math.PI / 2);
+    var imBrick = new THREE.InstancedMesh(bgeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), n);
+    imBrick.frustumCulled = false;          // ★ 见上面的注释：不关掉会被整块剔除
     var m4 = new THREE.Matrix4(), cc = new THREE.Color();
-    var k = 0;
-    for (i = -R; i <= R; i += S) for (j = -R; j <= R; j += S) {
-      if (i * i + j * j > R * R) continue;
-      m4.makeTranslation(PX + i, Y, PZ + j);
-      blue.setMatrixAt(k, m4);
-      var tint = (((i / S) | 0) + ((j / S) | 0)) % 4 === 0 ? 0.05 : -0.02;
-      cc.setHex(0x8b93a0).offsetHSL(0, 0, tint);
-      blue.setColorAt(k, cc);
-      k++;
+    // 青砖三色：偏蓝的青灰（比原来的 0x8b93a0 更深更冷），一块深一块浅，砖缝一眼就能看出来
+    var PAL = [0x596b7a, 0x687a89, 0x77899a];   // 【fix444】青灰三色（蓝调，不要发白的水泥灰）
+    var k = 0, row = 0, col;
+    for (i = -R; i <= R; i += S) {
+      col = 0;
+      for (j = -R; j <= R; j += S) {
+        if (i * i + j * j > RR) { col++; continue; }
+        m4.makeTranslation(PX + i, Y, PZ + j);
+        imBrick.setMatrixAt(k, m4);
+        cc.setHex(PAL[(row + col) % 3]);
+        cc.offsetHSL((Math.random() - 0.5) * 0.012, 0.04, (Math.random() - 0.5) * 0.055);
+        imBrick.setColorAt(k, cc);
+        k++; col++;
+      }
+      row++;
     }
-    blue.instanceMatrix.needsUpdate = true;
-    if (blue.instanceColor) blue.instanceColor.needsUpdate = true;
-    scene.add(blue);
-    // 石边一圈
-    var ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.42, 6, 64), new THREE.MeshLambertMaterial({ color: 0x9a958a }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(PX, Y + 0.10, PZ);
+    imBrick.instanceMatrix.needsUpdate = true;
+    if (imBrick.instanceColor) imBrick.instanceColor.needsUpdate = true;
+    scene.add(imBrick);
+    // 3) 石边一圈：西侧（-X，登山道来向）留 40 度缺口当入口
+    var ringGeo = new THREE.TorusGeometry(R + 0.9, 0.42, 6, 90, Math.PI * 2 - 0.70);
+    ringGeo.rotateZ(Math.PI + 0.35);
+    ringGeo.rotateX(-Math.PI / 2);
+    var ring = new THREE.Mesh(ringGeo, new THREE.MeshLambertMaterial({ color: 0x9a958a }));
+    ring.position.set(PX, Y - 0.02, PZ);
     scene.add(ring);
-    // 西侧入口三段踏步（朝登山道来向）
-    for (var s3 = 0; s3 < 3; s3++) {
-      var stp = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 9.0), new THREE.MeshLambertMaterial({ color: 0x9a958a }));
-      stp.position.set(PX - R - 0.8 + s3 * 1.5, Y - 0.08 - s3 * 0.02, PZ);
+    // 4) 入口两级石阶（西侧缺口处，压住砖边）
+    for (var s3 = 0; s3 < 2; s3++) {
+      var stp = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 12.0),
+        new THREE.MeshLambertMaterial({ color: 0x9a958a }));
+      stp.position.set(PX - R - 0.6 - s3 * 1.7, Y - 0.05 - s3 * 0.13, PZ);
       scene.add(stp);
     }
   } catch (eZZ7) {}
