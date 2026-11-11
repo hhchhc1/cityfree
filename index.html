@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix474-bigbrick';
+const BUILD = '20261112-fix477-flushroad';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -33076,7 +33076,7 @@ try {
         tx1.repeat.set(14 / 3.60, 304 / 3.60);   // 【fix474】砖放大到 0.9×0.45 米
         const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
         const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
-        road.position.set(2025, 5.335, -292);
+        road.position.set(2025, 5.080, -292);    // fix477 实测地面 5.10，路面顶 5.105 与地面齐平
         road.userData.lodShared = true;
         scene.add(road);
         // 御路石：正中 3.4 米宽，青灰偏亮
@@ -33084,14 +33084,14 @@ try {
         tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix474】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
         const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
         const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
-        royal.position.set(2025, 5.347, -292);
+        royal.position.set(2025, 5.095, -292);   // fix477 御路比甬道高 1.5 厘米
         royal.userData.lodShared = true;
         scene.add(royal);
         // 两侧路缘石
         const curbMat = new THREE.MeshLambertMaterial({ color: 0xa9a49a });
         for (const s of [-1, 1]) {
           const curb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.10, 304), curbMat);
-          curb.position.set(2025 + s * 7.1, 5.345, -292);
+          curb.position.set(2025 + s * 7.1, 5.150, -292);   // fix477 路缘石保留 10 厘米高
           scene.add(curb);
         }
         // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
@@ -33116,7 +33116,7 @@ try {
         window.__yamenPlaza = 1;
         window.__yamenRoad = { y: 2.988, x0: 2018, x1: 2032, z0: -444, z1: -104 };
         // 让行走高度认这块新路面（原来站在 5.2 米，砖面 5.34 米，人是陷在砖里的）
-        try { (window.__FLOORS = window.__FLOORS || []).push({ x0: 2018, x1: 2032, z0: -444, z1: -140, top: 5.36 }); } catch (eF) {}
+        try { (window.__FLOORS = window.__FLOORS || []).push({ x0: 2018, x1: 2032, z0: -444, z1: -140, top: 5.11 }); } catch (eF) {}
       } catch (eR) { window.__yamenRoadErr = String(eR); }
     })();
 // 【fix469】中镇山山顶（祠堂青砖广场）夜景灯光：夜里四角灯柱 + 祠堂门前暖光，城市里能看到山顶是亮的。
