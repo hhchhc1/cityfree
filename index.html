@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix448-traffic';
+const BUILD = '20261112-fix449-coord';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -24546,10 +24546,15 @@ hudStyle(stFillEl, 'stWidth', 'width', (isDevOn() ? 100 : (player.stamina / play
   // 【fix178】点左上角小地图 → 显示当前实时坐标（再点一次收起）
   if (window.__mmCoordEl) {
     if (window.__mmShowCoords) {
-      const _px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
-      const _pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+      // 【fix449】飞行中坐标要跟着飞机走（原来读的是被冻住的 person，飞机在天上飞坐标却不动），并补上纵坐标 Y
+      let _px = person.position.x, _py = person.position.y, _pz = person.position.z;
+      if (state === 'drive' && currentCar) { _px = currentCar.x; _pz = currentCar.z; if (currentCar.group && currentCar.group.position) _py = currentCar.group.position.y; }
+      try {
+        const _flying = ((typeof FLIGHT !== 'undefined' && FLIGHT) || (typeof RET !== 'undefined' && RET));
+        if (_flying && typeof AIRLINER !== 'undefined' && AIRLINER && AIRLINER.position) { _px = AIRLINER.position.x; _py = AIRLINER.position.y; _pz = AIRLINER.position.z; }
+      } catch (eCoord) {}
       window.__mmCoordEl.style.display = 'block';
-      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   Z ' + _pz.toFixed(0);
+      window.__mmCoordEl.textContent = 'X ' + _px.toFixed(0) + '   Y ' + _py.toFixed(1) + '   Z ' + _pz.toFixed(0);
     } else window.__mmCoordEl.style.display = 'none';
   }
     // 装甲载具（直升机/坦克）顶部顺带显示剩余耐久：
