@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix470-noviaduct';
+const BUILD = '20261112-fix471-taxiF';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -14444,7 +14444,16 @@ addEventListener('keydown', e => {
   if (k === 'e') tryToggle();
   if (k === ' ') { jump(); _carJumpReq = true; }
   if (k === 'r') reloadWeapon();
-  if (k === 'f') { if (grapple) releaseGrapple(); else fireGrapple(); }
+  if (k === 'f') {
+    // 【fix471】用户要求：电脑上开出租车时，接客/下客用 F 键。
+    // E 从此只负责下车 —— 原来 E 兼职接客，站在车场或目的地时一按 E 就被当成"接客/下客"，
+    // 人想下车反而下不来。
+    if (state === 'drive' && currentCar && currentCar.isTaxi) {
+      try { taxiAction(currentCar); } catch (eTx) { console.error('[taxiF]', eTx); }
+      return;
+    }
+    if (grapple) releaseGrapple(); else fireGrapple();
+  }
   if (k === 'q') kickTarget();
   if (k === 'b') toggleShop();
   const n = parseInt(e.key, 10);
@@ -18678,15 +18687,15 @@ function taxiAction(v) {
       setHint('乘客正在下车，下车后会自己走开…');
       return true;
     }
-    setHint('乘客还没到目的地，还差 ' + Math.round(d) + 'm（按 E 让客人下车）');
+    setHint('乘客还没到目的地，还差 ' + Math.round(d) + 'm（按 F 让客人下车）');
     return false;
   }
   // 接客
   const waiting = taxiQueue.filter(p => p.state === 'waiting');
-  if (!waiting.length) { setHint('出租车场没有等待的乘客'); return false; }
+  if (!waiting.length) { setHint('出租车场没有等待的乘客（等有人来）'); return false; }
   // 必须把车开回出租车场才能接客：不然乘客会从远处一路走过来，把车锁死很久
   const standD = Math.hypot(v.x - TAXI_STAND.x, v.z - TAXI_STAND.z);
-  if (standD > 18) { setHint('回出租车场接客（还差 ' + Math.round(standD) + 'm）'); return false; }
+  if (standD > 18) { setHint('回出租车场接客（还差 ' + Math.round(standD) + 'm），按 F 接客'); return false; }
   let best = null, bd = 1e9;
   for (const p of waiting) { const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; } }
   if (!best) return false;
@@ -18769,7 +18778,7 @@ function updateTaxiAnim(v, dt) {
         v.passengers = v.passengers || [];
         v.passengers.push(p);
         v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
-        setHint('乘客上车了！送到 (' + Math.round(p.dest.x) + ', ' + Math.round(p.dest.z) + ')');
+        setHint('乘客上车了！送到 (' + Math.round(p.dest.x) + ', ' + Math.round(p.dest.z) + ')，到点按 F 下客');
         sfx('coin');
       }
     }
@@ -19157,7 +19166,7 @@ function updateJobs(dt) {
       if (v.passengers && v.passengers.length) {
         const p = v.passengers[0];
         const d = Math.hypot(p.dest.x - v.x, p.dest.z - v.z);
-        hudText(hintTextEl, 'hint', '出租车：送乘客到目的地（' + Math.round(d) + 'm），到达后按 E 让客人下车收钱');
+        hudText(hintTextEl, 'hint', '出租车：送乘客到目的地（' + Math.round(d) + 'm），到达后按 F 让客人下车收钱');
       } else {
         hudText(hintTextEl, 'hint', '出租车：开回出租车场按 E 接客（乘客 ' + taxiQueue.filter(p => p.state === 'waiting').length + ' 人等待）');
       }
@@ -19288,7 +19297,7 @@ function jobGuideTarget(v) {
       const p = v.passengers[0];
       return { x: p.dest.x, z: p.dest.z, label: '送乘客到目的地' };
     }
-    return { x: TAXI_STAND.x, z: TAXI_STAND.z, label: '到出租车场接客' };
+    return { x: TAXI_STAND.x, z: TAXI_STAND.z, label: '到出租车场接客', key: 'F' };
   }
   if (v.isCrane) {
     if (v._cargoState === 'lifting') return { x: v.x, z: v.z, label: '吊起材料中' };
@@ -19319,7 +19328,7 @@ function updateJobGuide(dt) {
   const px = playerWorldX(), pz = playerWorldZ();
   const d = Math.hypot(t.x - px, t.z - pz);
   const _bdx = t.x - px, _bdz = t.z - pz;
-  if (hintTextEl) hudText(hintTextEl, 'hint', '黄色指引：' + t.label + ' · ' + bearing8(_bdx, _bdz) + ' ' + Math.round(d) + 'm' + (t.noE ? '' : ' · 到达后按 E'));
+  if (hintTextEl) hudText(hintTextEl, 'hint', '黄色指引：' + t.label + ' · ' + bearing8(_bdx, _bdz) + ' ' + Math.round(d) + 'm' + (t.noE ? '' : (' · 到达后按 ' + (t.key || 'E'))));
 }
 
 // ---------- 车库旁的「召回爱车」按钮 ----------
@@ -19408,7 +19417,7 @@ function updateGarageBtn() {
 function tryJobAction() {
   if (state !== 'drive' || !currentCar) return false;
   // 返回 true 表示"刚才在做任务"，拦住下车；false 时让 E 正常下车
-  if (currentCar.isTaxi) return taxiAction(currentCar) === true;
+  // 【fix471】出租车不再占用 E 键（改到 F），E 在出租车里就是纯下车。
   if (currentCar.isCrane) return craneAction(currentCar) === true;
   return false;
 }
@@ -24018,7 +24027,16 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     } else if (joyActive) { th = joyY; st = -joyX; }
     // 上下客动画锁：只有当前车真的在播动画才锁。
     // 之前是纯标志位，动画播到一半下车/车辆爆炸，锁就永远留着 -> 车再也开不动。
-    if (taxiAnimLock > 0 && !(currentCar && currentCar.isTaxi && currentCar._taxiAnim)) taxiAnimLock = 0;
+    if (taxiAnimLock > 0 && !(currentCar && currentCar.isTaxi && currentCar._taxiAnim)) {
+      // 【fix471】E 现在随时能下车，动画可能被中途打断：把没上/没下完的乘客放回等待状态，
+      // 免得他永远卡在"上车中"（既不排队也不在车上，等于凭空消失一个人）。
+      try {
+        for (const q of taxiQueue) {
+          if (q.state === 'boarding2' || q.state === 'alighting') { q.state = 'waiting'; if (q.group) { q.group.visible = true; q.group.scale.set(1, 1, 1); } }
+        }
+      } catch (eQ) {}
+      taxiAnimLock = 0;
+    }
 
     // ========== 直升机飞行控制 ==========
     if (currentCar.isHelicopter) {
