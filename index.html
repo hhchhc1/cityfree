@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix480-noslab';
+const BUILD = '20261112-fix481-stepgap';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -33124,7 +33124,7 @@ try {
         tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix474】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
         const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
         const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
-        royal.position.set(2025, 5.155, -292);   // fix478 御路再高 1.5 厘米   // fix477 御路比甬道高 1.5 厘米
+        royal.position.set(2025, 5.210, -292);   // fix478 御路再高 1.5 厘米   // fix477 御路比甬道高 1.5 厘米
         // fix478 同上
         scene.add(royal);
         // 两侧路缘石
@@ -33139,7 +33139,7 @@ try {
         tx3.repeat.set(16 / 3.60, 28 / 3.60);     // 【fix474】门前引道同规格
         const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
         const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
-        inRoad.position.set(2025, 0.195, -110);
+        inRoad.position.set(2025, 0.560, -110);
         // fix478 同上（门前引道）
         scene.add(inRoad);
         // 【fix473】用户："我只让你铺青石在中间的小路上，你怎么全都铺上了"
