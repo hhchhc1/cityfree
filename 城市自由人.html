@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix453-copcap';
+const BUILD = '20261112-fix454-hallpos';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -34693,9 +34693,14 @@ window.focus();
 (function zzHall() {
   try {
     if (typeof scene === 'undefined' || !THREE) return;
-    var HX = 712, HZ = 0;                      // 大殿中心（世界坐标）
-    var FY = 150.12;                           // 地面基准，下面会用 terrainHeight 复核
-    try { if (typeof terrainHeight === 'function') FY = terrainHeight(HX - 4, HZ) + 0.02; } catch (eFY) {}
+    // 【fix454】位置修正：大殿中心在 x≈706（不是 712），而且殿内地面要用 personGroundY 取，
+    // 否则家具会被埋在地板下面 —— 这就是「里面还是空的」的原因。
+    var HX = 706, HZ = 0;
+    var FY = 150.12;
+    try {
+      if (typeof terrainHeight === 'function') FY = terrainHeight(HX, HZ) + 0.02;
+      if (typeof personGroundY === 'function') { var _pg = personGroundY(HX, HZ); if (isFinite(_pg) && _pg > FY) FY = _pg + 0.02; }
+    } catch (eFY) {}
     var wood = new THREE.MeshLambertMaterial({ color: 0x4a2b18 });
     var woodD = new THREE.MeshLambertMaterial({ color: 0x35200f });
     var red = new THREE.MeshLambertMaterial({ color: 0x8e2a22 });
