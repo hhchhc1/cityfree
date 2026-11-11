@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix478-roadzfight';
+const BUILD = '20261112-fix479-unify5';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -27942,6 +27942,27 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s5 of [-1, 1]) det(new THREE.CylinderGeometry(0.52, 0.48, 0.55, 10), 0xb0aa9e, gx + sd * 30 + s5 * 2.0, 0.28, -192);
     }
 
+    // 【fix479 方案B1】东西跨院整块抬到主台基面 5.10 米。
+    // 原来跨院台地顶面只有 2.60 米，比主院子（5.10 米）低 2.5 米，站在主院看就是"后面的小房子全埋在地下"。
+    // 这里把主院以外的低矮构件统一 +2.50，和主台基面拉平。
+    (function liftSideWingsB1() {
+      const DY = 2.50;
+      let n = 0;
+      try {
+        YG.updateMatrixWorld(true);
+        for (const m of YG.children.slice()) {
+          if (!m.isMesh) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const cx = (b.min.x + b.max.x) / 2;
+          if (Math.abs(cx - AX) < 30) continue;        // 主甬道/院心/执事牌 不动
+          if (b.max.y > 9.5) continue;                // 高楼阁/大殿屋顶 不动
+          if (b.min.y > 5.0) continue;                // 已经在上面的 不动
+          m.position.y += DY;
+          n++;
+        }
+      } catch (eL) {}
+      try { window.__LIFT_N = n; } catch (eL2) {}
+    })();
     // 【fix333】衙前执事牌：肃静 / 回避 / 荷芷署 / 正堂（成对站在大门前）
     (function zhishiPai() {
       const names = ['肃静', '回避', '荷芷署', '正堂'];
