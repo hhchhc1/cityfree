@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix467-taxiwalk';
+const BUILD = '20261112-fix469-nightlamp';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18571,6 +18571,26 @@ function nearJobSite(x, z) {
   return false;
 }
 function taxiFare(dist) { return Math.max(30, Math.round(dist * 0.55)); }
+// 【fix469】开局那批乘客的模型被静态合并优化吞掉了（组还在、网格 0 个 → 上下车完全看不见人）。
+// 这里做一次体检：一个网格都没有就重建一个完整人形，不管它是被谁吞的。
+function paxMeshCount(p) {
+  let n = 0;
+  if (p && p.group) p.group.traverse(function (o) { if (o.isMesh) n++; });
+  return n;
+}
+function ensurePaxBody(p) {
+  if (!p || !p.group || paxMeshCount(p) > 0) return;
+  try {
+    const clothes = (p.cloth !== undefined) ? p.cloth : 0x2b6cb0;
+    const g = makeHuman(clothes, false, { uniformColor: clothes, clothColor: clothes, pantColor: 0x2c3e50, shoeColor: 0x111111 });
+    try { scene.remove(p.group); } catch (e0) {}
+    p.group = g;
+    g.position.set(p.x, personGroundY(p.x, p.z), p.z);
+    g.rotation.y = p.angle || 0;
+    scene.add(g);
+    window.__paxRebuilt = (window.__paxRebuilt || 0) + 1;
+  } catch (e1) { console.error('[paxBody]', e1); }
+}
 function spawnTaxiPassenger(slot) {
   const idx = taxiQueue.length;
   const px = TAXI_STAND.x - 6 + (idx % 3) * 3, pz = TAXI_STAND.z - 9 - Math.floor(idx / 3) * 2.4;
@@ -18579,6 +18599,7 @@ function spawnTaxiPassenger(slot) {
   const g = makeHuman(clothes, false, { uniformColor: clothes, clothColor: clothes, pantColor: 0x2c3e50, shoeColor: 0x111111 });
   g.position.set(px, pgy, pz); scene.add(g);
   const p = {
+    cloth: clothes,
     group: g, x: px, z: pz, angle: 0, alive: true, walking: false, timer: 0, phase: 0,
     state: 'waiting', slot, dest: null, fare: 0, waitT: 20 + Math.random() * 40,
     boarded: 0
@@ -18602,6 +18623,38 @@ function taxiDoorPos(v, out) {
 const _taxiDoor = { x: 0, z: 0 };
 // 【fix467】车前接客点：乘客先跑到车头右侧，再绕到车门
 const _taxiFront = { x: 0, z: 0 };
+// 【fix468】上下客时把镜头摆到车的右侧前方 8 米处，一直跟拍乘客，
+// 动画结束立刻把镜头还给玩家（乘客跑到车头那一段原来完全被车身挡住）。
+let _tcOn = false;
+const _tcPos = new THREE.Vector3(), _tcLook = new THREE.Vector3();
+const _tcTmpP = new THREE.Vector3(), _tcTmpL = new THREE.Vector3();
+function taxiCamActive() {
+  const v = currentCar;
+  return !!(v && v._taxiAnim && v._taxiAnim.p && v._taxiAnim.p.group);
+}
+function taxiCamDrop() { _tcOn = false; }
+function taxiCamTick(dt) {
+  const v = currentCar;
+  if (!taxiCamActive()) { _tcOn = false; return; }
+  const a = v._taxiAnim, p = a.p;
+  const fx = Math.sin(v.angle), fz = Math.cos(v.angle);
+  const rx = fz, rz = -fx;                       // 车身右侧（车门在这边）
+  const wx = v.x + fx * 3.0 + rx * 8.2;
+  const wz = v.z + fz * 3.0 + rz * 8.2;
+  const wy = Math.max(terrainHeight(wx, wz), terrainHeight(v.x, v.z)) + 4.4;
+  // 目标点放在乘客和车之间，人和车都在画面里
+  const lx = p.x * 0.62 + v.x * 0.38;
+  const lz = p.z * 0.62 + v.z * 0.38;
+  const ly = Math.max(personGroundY(p.x, p.z), terrainHeight(v.x, v.z)) + 1.35;
+  _tcTmpP.set(wx, wy, wz);
+  _tcTmpL.set(lx, ly, lz);
+  if (!_tcOn) { _tcOn = true; _tcPos.copy(_tcTmpP); _tcLook.copy(_tcTmpL); }
+  const k = 1 - Math.pow(0.0002, Math.min(0.2, Math.max(0.001, dt || 0.016)));
+  _tcPos.lerp(_tcTmpP, k);
+  _tcLook.lerp(_tcTmpL, k);
+  camera.position.copy(_tcPos);
+  camera.lookAt(_tcLook);
+}
 function taxiFrontPos(v, out) {
   const fx = Math.sin(v.angle), fz = Math.cos(v.angle);
   out.x = v.x + fx * 3.6 + fz * 1.3;
@@ -18616,11 +18669,12 @@ function taxiAction(v) {
     const p = v.passengers[0];
     const d = Math.hypot(p.dest.x - v.x, p.dest.z - v.z);
     if (d < 12) {
+      ensurePaxBody(p);
       p.state = 'alighting';
   p.group.visible = true; p.group.scale.set(1, 1, 1);   // 【fix201】下车动画开始先让乘客现身
       v._taxiAnim = { kind: 'leave', p: p, t: 0, stage: 0 };
       taxiAnimLock = 1;
-      setHint('乘客正在下车…');
+      setHint('乘客正在下车，下车后会自己走开…');
       return true;
     }
     setHint('乘客还没到目的地，还差 ' + Math.round(d) + 'm（按 E 让客人下车）');
@@ -18637,11 +18691,12 @@ function taxiAction(v) {
   if (!best) return false;
   best.dest = TAXI_DESTS[Math.floor(Math.random() * TAXI_DESTS.length)];
   best.fare = taxiFare(Math.hypot(best.dest.x - TAXI_STAND.x, best.dest.z - TAXI_STAND.z) * 1.6);
+  ensurePaxBody(best);
   best.state = 'boarding2';
   v._taxiAnim = { kind: 'board', p: best, t: 0, stage: 0 };
   best.group.visible = true; best.group.scale.set(1, 1, 1);   // 【fix201】上车动画开始先让乘客现身
   taxiAnimLock = 1;
-  setHint('乘客正在上车…');
+  setHint('乘客正从车头跑过来上车…');
   return true;
 }
 function updateTaxiAnim(v, dt) {
@@ -18654,7 +18709,7 @@ function updateTaxiAnim(v, dt) {
   if (a.t > 12) {  // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
     if (a.kind === 'board') { p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1); v.passengers = v.passengers || []; if (v.passengers.indexOf(p) < 0) v.passengers.push(p); }
     else { const _i = v.passengers.indexOf(p); if (_i >= 0) v.passengers.splice(_i, 1); p.state = 'leaving'; p.timer = 0; }
-    v._taxiAnim = null; taxiAnimLock = 0;
+    v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
     setHint('乘客流程已结束，可以继续开车了');
     return;
   }
@@ -18712,7 +18767,7 @@ function updateTaxiAnim(v, dt) {
         p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1);
         v.passengers = v.passengers || [];
         v.passengers.push(p);
-        v._taxiAnim = null; taxiAnimLock = 0;
+        v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
         setHint('乘客上车了！送到 (' + Math.round(p.dest.x) + ', ' + Math.round(p.dest.z) + ')');
         sfx('coin');
       }
@@ -18751,7 +18806,7 @@ function updateTaxiAnim(v, dt) {
       p.state = 'leaving'; p.timer = 0;
       p.angle = Math.atan2(p.x - v.x, p.z - v.z);
       p.leave = { x: Math.sin(p.angle), z: Math.cos(p.angle) };
-      v._taxiAnim = null; taxiAnimLock = 0;
+      v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
       setHint('乘客已下车走远了，到账 ' + pay + ' 金币');
     }
   }
@@ -18794,6 +18849,7 @@ function updateTaxi(dt) {
     const p = taxiQueue[i];
     p.timer += dt;
     if (p.state === 'waiting') {
+      if (!p._bodyOK) { ensurePaxBody(p); p._bodyOK = true; }   // 【fix469】开局模型被合并优化吞掉的补身子
       p.phase += dt * 6;
       animateHuman(p.group, p.phase, 0, 'fist', false, 0, 0);
     } else if (p.state === 'boarding') {
@@ -24616,6 +24672,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     camera.lookAt(camLook);
     }
   } catch(e) { console.error('[Camera update error]', e); }
+  try { taxiCamTick(dt); } catch (eTC) { console.error('[taxiCam]', eTC); }
 
   // 下了载具就把炮塔/机头瞄准复位，下次上车是正的（不然会带着上次的偏角）
   if (state !== 'drive') { vehAimYaw = 0; vehAimPitch = 0; }
@@ -31729,8 +31786,8 @@ function retTick(dt) {
   const el = retOverlayEl();
   const t = R.t;
   // 阶段 1：0~1.2s 黑场淡入，并在全黑时把人和飞机就位
-  if (t < 1.2) {
-    el.style.opacity = String(Math.min(1, t / 1.2));
+  if (t < 0.9) {
+    el.style.opacity = String(Math.min(1, t / 0.9));
   } else if (!R.swapped) {
     el.style.opacity = '1';
     R.swapped = true;
@@ -31743,13 +31800,17 @@ function retTick(dt) {
     person.visible = true;
     person.position.set(hp.x - 10, 2, hp.z + 20);
     vy = 0; onGround = false;
-    // 镜头先架在跑道侧面看飞机滑回来
-    camPos.set(hp.x + 46, hp.y + 11, hp.z + 52);
+    // 【fix469】不再把镜头架到跑道侧面的固定点（那里会钻进航站楼/雨幕，用户看到整屏全白）。
+    // 改成：人站在停机位旁边，镜头就在人背后一点，朝着跑道方向看飞机滑回来。
+    camYaw = Math.atan2(hp.x - person.position.x, hp.z - person.position.z);
+    camPitch = 0.12;
+    camPos.set(person.position.x - Math.sin(camYaw) * 9, person.position.y + 4.6, person.position.z - Math.cos(camYaw) * 9);
     camera.position.copy(camPos);
-    camera.lookAt(R.fromX, hp.y + 3, hp.z);
+    camera.lookAt(hp.x, hp.y + 3, hp.z);
+    if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
   } else {
     // 阶段 2：1.2s 之后淡出黑场，飞机从跑道滑回来停稳
-    const fade = Math.max(0, 1 - (t - 1.2) / 0.9);
+    const fade = Math.max(0, 1 - (t - 1.2) / 0.7);
     el.style.opacity = String(fade);
     const k = Math.min(1, Math.max(0, (t - 1.6) / 6.5));
     const ease = k * k * (3 - 2 * k);
@@ -31758,15 +31819,9 @@ function retTick(dt) {
       // 滑行时轻微摆头，看起来像在转弯对正
       AIRLINER.rotation.y = Math.PI / 2 + Math.sin(ease * Math.PI) * 0.06;
     }
-    // 镜头跟着飞机走，尾随在侧后方
-    if (AIRLINER && R.home) {
-      const ax = AIRLINER.position.x;
-      camera.position.set(ax - 52, R.home.y + 20, R.home.z + 66);
-      camera.lookAt(ax, R.home.y + 4, R.home.z);
-      camPos.copy(camera.position);
-      if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 正在滑回航站楼…');
-    }
-    if (t >= 8.6) retFinish();
+    // 【fix469】镜头不再跟着飞机飞，交给玩家自己的第三人称镜头（人就在停机位旁边）
+    if (hintTextEl && R.t < 2.2) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
+    if (t >= 7.4) retFinish();
   }
 }
 
@@ -32998,6 +33053,50 @@ try {
         try { (window.__FLOORS = window.__FLOORS || []).push({ x0: 2018, x1: 2032, z0: -444, z1: -140, top: 5.36 }); } catch (eF) {}
       } catch (eR) { window.__yamenRoadErr = String(eR); }
     })();
+// 【fix469】中镇山山顶（祠堂青砖广场）夜景灯光：夜里四角灯柱 + 祠堂门前暖光，城市里能看到山顶是亮的。
+(function () {
+  try {
+    var SX = 694, SZ = 0;
+    var base = (typeof personGroundY === 'function') ? personGroundY(SX, SZ) : 150;
+    if (!(base > 60)) base = 150;   // 兜底：山顶平台高度 150 米，读不到就用它，绝不让灯沉到地底
+    var grp = new THREE.Group(); grp.name = 'zzSummitLights';
+    var heads = [], glows = [];
+    function lampPost(x, z, h) {
+      var y = (typeof personGroundY === 'function') ? personGroundY(x, z) : base;
+      var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.22, h, 8), new THREE.MeshLambertMaterial({ color: 0x3a2c22 }));
+      pole.position.set(x, y + h / 2, z); grp.add(pole);
+      var cap = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.22, 1.15), new THREE.MeshLambertMaterial({ color: 0x2a2019 }));
+      cap.position.set(x, y + h + 0.30, z); grp.add(cap);
+      var head = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.36, 0.92), new THREE.MeshBasicMaterial({ color: 0xfff2c8 }));
+      head.position.set(x, y + h + 0.09, z); grp.add(head); heads.push(head);
+      var glow = new THREE.Mesh(new THREE.SphereGeometry(1.9, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd79a, transparent: true, opacity: 0.0, depthWrite: false }));
+      glow.position.set(x, y + h + 0.09, z); grp.add(glow); glows.push(glow);
+    }
+    lampPost(SX - 42, SZ - 36, 6.6);
+    lampPost(SX - 42, SZ + 36, 6.6);
+    lampPost(SX + 30, SZ - 36, 6.6);
+    lampPost(SX + 30, SZ + 36, 6.6);
+    var L1 = new THREE.PointLight(0xffb268, 0, 52, 1.7);
+    L1.position.set(SX - 8, base + 7.5, -13); grp.add(L1);
+    var L2 = new THREE.PointLight(0xffb268, 0, 52, 1.7);
+    L2.position.set(SX - 8, base + 7.5, 13); grp.add(L2);
+    var L3 = new THREE.PointLight(0xffe6bc, 0, 78, 1.5);
+    L3.position.set(SX - 2, base + 13, 0); grp.add(L3);
+    scene.add(grp);
+    var lites = [L1, L2, L3];
+    function tickNight() {
+      var n = 1 - Math.min(1, Math.max(0, (typeof dayLightF === 'number' ? dayLightF : 1)));
+      for (var i = 0; i < lites.length; i++) lites[i].intensity = (i === 2 ? 1.15 : 1.6) * n;
+      for (var k = 0; k < glows.length; k++) {
+        glows[k].material.opacity = 0.05 + 0.20 * n;
+        glows[k].visible = n > 0.08;
+      }
+    }
+    tickNight();
+    setInterval(tickNight, 400);
+    window.__zzLights = { base: base, lights: 3, lamps: heads.length };
+  } catch (e) { try { console.error('[zzLights]', e); } catch (e2) {} }
+})();
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
