@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix466-cranebtn';
+const BUILD = '20261112-fix467-taxiwalk';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -18600,6 +18600,14 @@ function taxiDoorPos(v, out) {
   return out;
 }
 const _taxiDoor = { x: 0, z: 0 };
+// 【fix467】车前接客点：乘客先跑到车头右侧，再绕到车门
+const _taxiFront = { x: 0, z: 0 };
+function taxiFrontPos(v, out) {
+  const fx = Math.sin(v.angle), fz = Math.cos(v.angle);
+  out.x = v.x + fx * 3.6 + fz * 1.3;
+  out.z = v.z + fz * 3.6 - fx * 1.3;
+  return out;
+}
 function taxiAction(v) {
   if (!v || !v.isTaxi) return false;
   if (v._taxiAnim) { setHint('乘客正在上下车，请稍等…'); return false; }
@@ -18643,7 +18651,7 @@ function updateTaxiAnim(v, dt) {
   if (p && p.group) p.group.visible = true;   // 【fix201】兜底：动画期间一定可见
   if (!p || !p.group) { v._taxiAnim = null; taxiAnimLock = 0; return; }
   a.t += dt;
-  if (a.t > 6) {   // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
+  if (a.t > 12) {  // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
     if (a.kind === 'board') { p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1); v.passengers = v.passengers || []; if (v.passengers.indexOf(p) < 0) v.passengers.push(p); }
     else { const _i = v.passengers.indexOf(p); if (_i >= 0) v.passengers.splice(_i, 1); p.state = 'leaving'; p.timer = 0; }
     v._taxiAnim = null; taxiAnimLock = 0;
@@ -18675,14 +18683,20 @@ function updateTaxiAnim(v, dt) {
     standStill();
     return true;
   };
+  taxiFrontPos(v, _taxiFront);
   if (a.kind === 'board') {
-    if (a.stage === 0) {                       // ① 走到车门旁
-      if (stepTo(outX, outZ, 3.2)) { a.stage = 1; a.t = 0; }
-    } else if (a.stage === 1) {                // ② 拉开车门（定格）
+    if (a.stage === 0) {                       // ① 跑到车前
+      if (stepTo(_taxiFront.x, _taxiFront.z, 4.2)) { a.stage = 1; a.t = 0; }
+    } else if (a.stage === 1) {                // ② 在车前站定、面向车子
+      standStill();
+      if (a.t > 0.30) { a.stage = 2; a.t = 0; }
+    } else if (a.stage === 2) {                // ③ 从车头绕到车门旁
+      if (stepTo(outX, outZ, 2.8)) { a.stage = 3; a.t = 0; }
+    } else if (a.stage === 3) {                // ④ 拉开车门（定格）
       v.doorT = 0.35;
       standStill();
-      if (a.t > 0.55) { a.stage = 2; a.t = 0; sfx('carDoor'); }
-    } else if (a.stage === 2) {                // ③ 弯腰进车
+      if (a.t > 0.45) { a.stage = 4; a.t = 0; sfx('carDoor'); }
+    } else if (a.stage === 4) {                // ⑤ 弯腰进车
       v.doorT = 0.35;
       const k = Math.min(1, a.t / 0.6);
       p.x = outX + (insideX - outX) * k;
@@ -18691,8 +18705,8 @@ function updateTaxiAnim(v, dt) {
       p.group.rotation.y = faceDoor;
       p.group.scale.set(1, 1 - k * 0.12, 1);
       animateHuman(p.group, p.phase, 0, 'fist', false, 0, 0);
-      if (k >= 1) { a.stage = 3; a.t = 0; }
-    } else if (a.stage === 3) {                // ④ 关车门，之后才交还控制权
+      if (k >= 1) { a.stage = 5; a.t = 0; }
+    } else if (a.stage === 5) {                // ⑥ 关车门，之后才交还控制权
       v.doorT = Math.max(0, (v.doorT || 0) - dt * 2.4);
       if (a.t > 0.45) {
         p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1);
@@ -18721,9 +18735,12 @@ function updateTaxiAnim(v, dt) {
   } else if (a.stage === 2) {                  // ③ 关车门
     v.doorT = Math.max(0, (v.doorT || 0) - dt * 2.4);
     if (a.t > 0.45) { a.stage = 3; a.t = 0; }
-  } else if (a.stage === 3) {                  // ④ 乘客走远，才结算并交还控制权
-    const away = Math.atan2(p.x - v.x, p.z - v.z);
-    if (stepTo(p.x + Math.sin(away) * 5, p.z + Math.cos(away) * 5, 2.0) || a.t > 2.4) {
+  } else if (a.stage === 3) {                  // ④ 下车后跑到远处再结算（用户：下车走了）
+    if (!a.away) {
+      const ax = (p.x - v.x), az = (p.z - v.z), al = Math.hypot(ax, az) || 1;
+      a.away = { x: p.x + ax / al * 13, z: p.z + az / al * 13 };
+    }
+    if (stepTo(a.away.x, a.away.z, 3.4) || a.t > 5.5) {
       const idx = v.passengers.indexOf(p);
       if (idx >= 0) v.passengers.splice(idx, 1);
       const pay = p.fare, xp = Math.round(p.fare * 0.6);
@@ -18732,8 +18749,10 @@ function updateTaxiAnim(v, dt) {
       floatText('+' + xp + ' 经验', '#9b59b6');
       sfx('coin');
       p.state = 'leaving'; p.timer = 0;
+      p.angle = Math.atan2(p.x - v.x, p.z - v.z);
+      p.leave = { x: Math.sin(p.angle), z: Math.cos(p.angle) };
       v._taxiAnim = null; taxiAnimLock = 0;
-      setHint('乘客已下车，到账 ' + pay + ' 金币');
+      setHint('乘客已下车走远了，到账 ' + pay + ' 金币');
     }
   }
 }
@@ -18802,14 +18821,16 @@ function updateTaxi(dt) {
       const v = currentCar;
       if (!v || !v.isTaxi) { p.state = 'leaving'; p.group.visible = true; p.group.scale.set(1, 1, 1); }
     } else if (p.state === 'leaving') {
-      p.angle += dt * 0.6;
-      p.x += Math.sin(p.angle) * 2.2 * dt;
-      p.z += Math.cos(p.angle) * 2.2 * dt;
+      // 【fix467】下车后朝一个固定方向走远（不再原地绕圈）
+      if (!p.leave) { p.leave = { x: Math.sin(p.angle), z: Math.cos(p.angle) }; }
+      const _sp = 3.0;
+      p.x += p.leave.x * _sp * dt;
+      p.z += p.leave.z * _sp * dt;
       p.phase += dt * 11;
       p.group.position.set(p.x, personGroundY(p.x, p.z), p.z);
       p.group.rotation.y = p.angle;
       animateHuman(p.group, p.phase, 0, 'run', true, 0, 0);
-      if (p.timer > 7) { scene.remove(p.group); taxiQueue.splice(i, 1); }
+      if (p.timer > 3 && (Math.hypot(p.x - (p.spawnX || p.x), p.z - (p.spawnZ || p.z)) > 34 || p.timer > 9)) { scene.remove(p.group); taxiQueue.splice(i, 1); }
     }
   }
   // 补充新乘客
