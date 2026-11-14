@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix460-polish';
+const BUILD = '20261112-fix489-slab3';
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -7420,12 +7420,13 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
 // 炸毁后由 updateMilitaryRespawn() 按倒计时重新生成（不再永久消失）。
 
 // 立交桥（连接各区域的高架路）
+// 【fix470】用户："把这里的灰色立交桥去掉" —— 第三段 (x -150~150, z=150, 高 4 米) 正好横在
+// 出租车场正上方，把整个车场罩在灰色桥面下，接客时看不见天也看不见乘客。
+// 三段全部删除（纯装饰，没有任何碰撞/车流/任务依赖它）。要恢复就把下面的 segments 重新跑一遍。
 (function addOverpass() {
-  const segments = [
-    { x1: -100, z1: -100, x2: 100, z2: -100, y: 5 },
-    { x1: 100, z1: -100, x2: 100, z2: 100, y: 5 },
-    { x1: -150, z1: 150, x2: 150, z2: 150, y: 4 },
-  ];
+  return;   // 【fix470】已停用：整座灰色高架桥不再生成
+  /* eslint-disable no-unreachable */
+  const segments = [];
   const roadMat = new THREE.MeshLambertMaterial({ color: 0x555560 });
   const railMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
   segments.forEach(s => {
@@ -14443,7 +14444,16 @@ addEventListener('keydown', e => {
   if (k === 'e') tryToggle();
   if (k === ' ') { jump(); _carJumpReq = true; }
   if (k === 'r') reloadWeapon();
-  if (k === 'f') { if (grapple) releaseGrapple(); else fireGrapple(); }
+  if (k === 'f') {
+    // 【fix471】用户要求：电脑上开出租车时，接客/下客用 F 键。
+    // E 从此只负责下车 —— 原来 E 兼职接客，站在车场或目的地时一按 E 就被当成"接客/下客"，
+    // 人想下车反而下不来。
+    if (state === 'drive' && currentCar && currentCar.isTaxi) {
+      try { taxiAction(currentCar); } catch (eTx) { console.error('[taxiF]', eTx); }
+      return;
+    }
+    if (grapple) releaseGrapple(); else fireGrapple();
+  }
   if (k === 'q') kickTarget();
   if (k === 'b') toggleShop();
   const n = parseInt(e.key, 10);
@@ -18367,11 +18377,42 @@ const TAXI_DESTS = [
   { x: 180, z: -40 }, { x: -60, z: 190 }, { x: 120, z: 60 },
   { x: -190, z: 100 }, { x: 30, z: 200 }
 ];
+// 【fix472】用户要求：目的地随机刷，但必须离出租车场 200 米以外，位置不限。
+// 做法：在车场周围 200~470 米环形里随机撒点 → 夹进地图边界 → 吸附到最近车道（保证开得过去）
+// → 排除海里/山体（terrainHeight 太低、x>480 的都不要）→ 夹完还不到 200 米就重摇。
+const TAXI_DEST_MIN = 200, TAXI_DEST_MAX = 470;
+function rollTaxiDest() {
+  for (let i = 0; i < 80; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const rr = TAXI_DEST_MIN + Math.random() * (TAXI_DEST_MAX - TAXI_DEST_MIN);
+    let x = TAXI_STAND.x + Math.cos(a) * rr;
+    let z = TAXI_STAND.z + Math.sin(a) * rr;
+    const lim = HALF - 12;
+    x = Math.max(-lim, Math.min(lim, x));
+    z = Math.max(-lim, Math.min(lim, z));
+    const ox = x, oz = z;
+    try { const q = snapToRoadLane(x, z); if (q && isFinite(q[0]) && isFinite(q[1])) { x = q[0]; z = q[1]; } } catch (eS) {}
+    if (Math.hypot(x - ox, z - oz) > 45) continue;   // 离最近车道太远（荒地里/海上），重摇
+    const d = Math.hypot(x - TAXI_STAND.x, z - TAXI_STAND.z);
+    if (d < TAXI_DEST_MIN) continue;                 // 夹边界/吸附之后还不够远，重摇
+    if (d > TAXI_DEST_MAX + 90) continue;            // 吸附跑太远也不要
+    let gy = 0;
+    try { gy = terrainHeight(x, z); } catch (eT) { gy = 0; }
+    if (!(gy > 0.6)) continue;                       // 海里/水边不要
+    if (x > 480) continue;                           // 中镇山山体（车开不上去）不要
+    return { x: x, z: z };
+  }
+  let best = TAXI_DESTS[0], bd = -1;
+  for (const p of TAXI_DESTS) { const d = Math.hypot(p.x - TAXI_STAND.x, p.z - TAXI_STAND.z); if (d > bd) { bd = d; best = p; } }
+  return { x: best.x, z: best.z };
+}
 const CONSTRUCTION_SITE = { x: 120, z: -120, r: 34, dropX: 150, dropZ: -140 };
 // 卸货点：每次装货时在工地四周重新随机一个位置（原来固定在 (150,-140) 一个点）。
 const CONSTRUCTION_SITE_RING = { min: 11, max: 25 };   // 相对工地中心的半径范围（米）
 // 吊车后半部吊钩的位置（货物挂在这里；原来挂在前伸吊臂末端的车头前面）
 const CRANE_HOOK_Z = -2.5, CRANE_HOOK_Y = 0.55;
+// 【fix465】车尾吊臂下沿 / 运输吊绳长 / 货物顶端离钩距离 / 货物最低点到挂点距离
+const CRANE_BOOM_Y = 4.62, CRANE_HANG = 1.40, CRANE_HOLD = 0.35, CARGO_HALF = 2.05;
 function rollCraneDropPoint() {
   const a = Math.random() * Math.PI * 2;
   const rr = CONSTRUCTION_SITE_RING.min + Math.random() * (CONSTRUCTION_SITE_RING.max - CONSTRUCTION_SITE_RING.min);
@@ -18464,14 +18505,17 @@ function decorateCrane(g) {
   // 现在改成车尾平板上方：货物由车后半部的吊钩吊起。
   const rear = new THREE.Group();
   rear.position.set(0, 1.55, CRANE_HOOK_Z);
-  const rearMast = new THREE.Mesh(new THREE.BoxGeometry(0.36, 1.0, 0.36), yellow);
-  rearMast.position.y = 0.3; rear.add(rearMast);
-  const rearBoom = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.26, 0.9), yellow);
-  rearBoom.position.y = CRANE_HOOK_Y + 0.28; rear.add(rearBoom);
-  const rearRope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 5), dark);
-  rearRope.position.y = CRANE_HOOK_Y - 0.5; rear.add(rearRope);
-  const rearHook = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
-  rearHook.position.y = CRANE_HOOK_Y - 1.0; rear.add(rearHook);
+  // 【fix465】车尾吊臂加高到 4.6 米：原来 1 米高的桅杆根本抬不起 2 米高的货物
+  const rearMast = new THREE.Mesh(new THREE.BoxGeometry(0.46, 4.6, 0.46), yellow);
+  rearMast.position.y = 2.3; rear.add(rearMast);
+  const rearBrace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.3, 0.22), yellow);
+  rearBrace.position.set(0, 1.05, 0.52); rearBrace.rotation.x = -0.40; rear.add(rearBrace);
+  const rearBoom = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.30, 0.9), yellow);
+  rearBoom.position.y = CRANE_BOOM_Y; rear.add(rearBoom);
+  const rearRope = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1, 5), dark);
+  rearRope.position.y = CRANE_BOOM_Y - CRANE_HANG / 2; rearRope.scale.y = CRANE_HANG; rear.add(rearRope);
+  const rearHook = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.34, 0.30), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
+  rearHook.position.y = CRANE_BOOM_Y - CRANE_HANG; rear.add(rearHook);
   g.add(rear);
   g.userData.craneRear = rear;
   // 覆盖回车头那套：updateCrane 驱动的是「吊货的」绳和钩
@@ -18566,6 +18610,26 @@ function nearJobSite(x, z) {
   return false;
 }
 function taxiFare(dist) { return Math.max(30, Math.round(dist * 0.55)); }
+// 【fix469】开局那批乘客的模型被静态合并优化吞掉了（组还在、网格 0 个 → 上下车完全看不见人）。
+// 这里做一次体检：一个网格都没有就重建一个完整人形，不管它是被谁吞的。
+function paxMeshCount(p) {
+  let n = 0;
+  if (p && p.group) p.group.traverse(function (o) { if (o.isMesh) n++; });
+  return n;
+}
+function ensurePaxBody(p) {
+  if (!p || !p.group || paxMeshCount(p) > 0) return;
+  try {
+    const clothes = (p.cloth !== undefined) ? p.cloth : 0x2b6cb0;
+    const g = makeHuman(clothes, false, { uniformColor: clothes, clothColor: clothes, pantColor: 0x2c3e50, shoeColor: 0x111111 });
+    try { scene.remove(p.group); } catch (e0) {}
+    p.group = g;
+    g.position.set(p.x, personGroundY(p.x, p.z), p.z);
+    g.rotation.y = p.angle || 0;
+    scene.add(g);
+    window.__paxRebuilt = (window.__paxRebuilt || 0) + 1;
+  } catch (e1) { console.error('[paxBody]', e1); }
+}
 function spawnTaxiPassenger(slot) {
   const idx = taxiQueue.length;
   const px = TAXI_STAND.x - 6 + (idx % 3) * 3, pz = TAXI_STAND.z - 9 - Math.floor(idx / 3) * 2.4;
@@ -18574,6 +18638,7 @@ function spawnTaxiPassenger(slot) {
   const g = makeHuman(clothes, false, { uniformColor: clothes, clothColor: clothes, pantColor: 0x2c3e50, shoeColor: 0x111111 });
   g.position.set(px, pgy, pz); scene.add(g);
   const p = {
+    cloth: clothes,
     group: g, x: px, z: pz, angle: 0, alive: true, walking: false, timer: 0, phase: 0,
     state: 'waiting', slot, dest: null, fare: 0, waitT: 20 + Math.random() * 40,
     boarded: 0
@@ -18595,6 +18660,46 @@ function taxiDoorPos(v, out) {
   return out;
 }
 const _taxiDoor = { x: 0, z: 0 };
+// 【fix467】车前接客点：乘客先跑到车头右侧，再绕到车门
+const _taxiFront = { x: 0, z: 0 };
+// 【fix468】上下客时把镜头摆到车的右侧前方 8 米处，一直跟拍乘客，
+// 动画结束立刻把镜头还给玩家（乘客跑到车头那一段原来完全被车身挡住）。
+let _tcOn = false;
+const _tcPos = new THREE.Vector3(), _tcLook = new THREE.Vector3();
+const _tcTmpP = new THREE.Vector3(), _tcTmpL = new THREE.Vector3();
+function taxiCamActive() {
+  const v = currentCar;
+  return !!(v && v._taxiAnim && v._taxiAnim.p && v._taxiAnim.p.group);
+}
+function taxiCamDrop() { _tcOn = false; }
+function taxiCamTick(dt) {
+  const v = currentCar;
+  if (!taxiCamActive()) { _tcOn = false; return; }
+  const a = v._taxiAnim, p = a.p;
+  const fx = Math.sin(v.angle), fz = Math.cos(v.angle);
+  const rx = fz, rz = -fx;                       // 车身右侧（车门在这边）
+  const wx = v.x + fx * 3.0 + rx * 8.2;
+  const wz = v.z + fz * 3.0 + rz * 8.2;
+  const wy = Math.max(terrainHeight(wx, wz), terrainHeight(v.x, v.z)) + 4.4;
+  // 目标点放在乘客和车之间，人和车都在画面里
+  const lx = p.x * 0.62 + v.x * 0.38;
+  const lz = p.z * 0.62 + v.z * 0.38;
+  const ly = Math.max(personGroundY(p.x, p.z), terrainHeight(v.x, v.z)) + 1.35;
+  _tcTmpP.set(wx, wy, wz);
+  _tcTmpL.set(lx, ly, lz);
+  if (!_tcOn) { _tcOn = true; _tcPos.copy(_tcTmpP); _tcLook.copy(_tcTmpL); }
+  const k = 1 - Math.pow(0.0002, Math.min(0.2, Math.max(0.001, dt || 0.016)));
+  _tcPos.lerp(_tcTmpP, k);
+  _tcLook.lerp(_tcTmpL, k);
+  camera.position.copy(_tcPos);
+  camera.lookAt(_tcLook);
+}
+function taxiFrontPos(v, out) {
+  const fx = Math.sin(v.angle), fz = Math.cos(v.angle);
+  out.x = v.x + fx * 3.6 + fz * 1.3;
+  out.z = v.z + fz * 3.6 - fx * 1.3;
+  return out;
+}
 function taxiAction(v) {
   if (!v || !v.isTaxi) return false;
   if (v._taxiAnim) { setHint('乘客正在上下车，请稍等…'); return false; }
@@ -18603,32 +18708,34 @@ function taxiAction(v) {
     const p = v.passengers[0];
     const d = Math.hypot(p.dest.x - v.x, p.dest.z - v.z);
     if (d < 12) {
+      ensurePaxBody(p);
       p.state = 'alighting';
   p.group.visible = true; p.group.scale.set(1, 1, 1);   // 【fix201】下车动画开始先让乘客现身
       v._taxiAnim = { kind: 'leave', p: p, t: 0, stage: 0 };
       taxiAnimLock = 1;
-      setHint('乘客正在下车…');
+      setHint('乘客正在下车，下车后会自己走开…');
       return true;
     }
-    setHint('乘客还没到目的地，还差 ' + Math.round(d) + 'm（按 E 让客人下车）');
+    setHint('乘客还没到目的地，还差 ' + Math.round(d) + 'm（按 F 让客人下车）');
     return false;
   }
   // 接客
   const waiting = taxiQueue.filter(p => p.state === 'waiting');
-  if (!waiting.length) { setHint('出租车场没有等待的乘客'); return false; }
+  if (!waiting.length) { setHint('出租车场没有等待的乘客（等有人来）'); return false; }
   // 必须把车开回出租车场才能接客：不然乘客会从远处一路走过来，把车锁死很久
   const standD = Math.hypot(v.x - TAXI_STAND.x, v.z - TAXI_STAND.z);
-  if (standD > 18) { setHint('回出租车场接客（还差 ' + Math.round(standD) + 'm）'); return false; }
+  if (standD > 18) { setHint('回出租车场接客（还差 ' + Math.round(standD) + 'm），按 F 接客'); return false; }
   let best = null, bd = 1e9;
   for (const p of waiting) { const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; } }
   if (!best) return false;
-  best.dest = TAXI_DESTS[Math.floor(Math.random() * TAXI_DESTS.length)];
+  best.dest = rollTaxiDest();   // 【fix472】离车场 200 米以外的随机位置
   best.fare = taxiFare(Math.hypot(best.dest.x - TAXI_STAND.x, best.dest.z - TAXI_STAND.z) * 1.6);
+  ensurePaxBody(best);
   best.state = 'boarding2';
   v._taxiAnim = { kind: 'board', p: best, t: 0, stage: 0 };
   best.group.visible = true; best.group.scale.set(1, 1, 1);   // 【fix201】上车动画开始先让乘客现身
   taxiAnimLock = 1;
-  setHint('乘客正在上车…');
+  setHint('乘客正从车头跑过来上车…');
   return true;
 }
 function updateTaxiAnim(v, dt) {
@@ -18638,10 +18745,10 @@ function updateTaxiAnim(v, dt) {
   if (p && p.group) p.group.visible = true;   // 【fix201】兜底：动画期间一定可见
   if (!p || !p.group) { v._taxiAnim = null; taxiAnimLock = 0; return; }
   a.t += dt;
-  if (a.t > 6) {   // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
+  if (a.t > 12) {  // 看门狗：动画异常（乘客丢失/坐标异常）时强制收尾，绝不把玩家锁死
     if (a.kind === 'board') { p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1); v.passengers = v.passengers || []; if (v.passengers.indexOf(p) < 0) v.passengers.push(p); }
     else { const _i = v.passengers.indexOf(p); if (_i >= 0) v.passengers.splice(_i, 1); p.state = 'leaving'; p.timer = 0; }
-    v._taxiAnim = null; taxiAnimLock = 0;
+    v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
     setHint('乘客流程已结束，可以继续开车了');
     return;
   }
@@ -18670,14 +18777,20 @@ function updateTaxiAnim(v, dt) {
     standStill();
     return true;
   };
+  taxiFrontPos(v, _taxiFront);
   if (a.kind === 'board') {
-    if (a.stage === 0) {                       // ① 走到车门旁
-      if (stepTo(outX, outZ, 3.2)) { a.stage = 1; a.t = 0; }
-    } else if (a.stage === 1) {                // ② 拉开车门（定格）
+    if (a.stage === 0) {                       // ① 跑到车前
+      if (stepTo(_taxiFront.x, _taxiFront.z, 4.2)) { a.stage = 1; a.t = 0; }
+    } else if (a.stage === 1) {                // ② 在车前站定、面向车子
+      standStill();
+      if (a.t > 0.30) { a.stage = 2; a.t = 0; }
+    } else if (a.stage === 2) {                // ③ 从车头绕到车门旁
+      if (stepTo(outX, outZ, 2.8)) { a.stage = 3; a.t = 0; }
+    } else if (a.stage === 3) {                // ④ 拉开车门（定格）
       v.doorT = 0.35;
       standStill();
-      if (a.t > 0.55) { a.stage = 2; a.t = 0; sfx('carDoor'); }
-    } else if (a.stage === 2) {                // ③ 弯腰进车
+      if (a.t > 0.45) { a.stage = 4; a.t = 0; sfx('carDoor'); }
+    } else if (a.stage === 4) {                // ⑤ 弯腰进车
       v.doorT = 0.35;
       const k = Math.min(1, a.t / 0.6);
       p.x = outX + (insideX - outX) * k;
@@ -18686,15 +18799,15 @@ function updateTaxiAnim(v, dt) {
       p.group.rotation.y = faceDoor;
       p.group.scale.set(1, 1 - k * 0.12, 1);
       animateHuman(p.group, p.phase, 0, 'fist', false, 0, 0);
-      if (k >= 1) { a.stage = 3; a.t = 0; }
-    } else if (a.stage === 3) {                // ④ 关车门，之后才交还控制权
+      if (k >= 1) { a.stage = 5; a.t = 0; }
+    } else if (a.stage === 5) {                // ⑥ 关车门，之后才交还控制权
       v.doorT = Math.max(0, (v.doorT || 0) - dt * 2.4);
       if (a.t > 0.45) {
         p.state = 'riding'; p.group.visible = false; p.group.scale.set(1, 1, 1);
         v.passengers = v.passengers || [];
         v.passengers.push(p);
-        v._taxiAnim = null; taxiAnimLock = 0;
-        setHint('乘客上车了！送到 (' + Math.round(p.dest.x) + ', ' + Math.round(p.dest.z) + ')');
+        v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
+        setHint('乘客上车了！送到 (' + Math.round(p.dest.x) + ', ' + Math.round(p.dest.z) + ')，到点按 F 下客');
         sfx('coin');
       }
     }
@@ -18716,9 +18829,12 @@ function updateTaxiAnim(v, dt) {
   } else if (a.stage === 2) {                  // ③ 关车门
     v.doorT = Math.max(0, (v.doorT || 0) - dt * 2.4);
     if (a.t > 0.45) { a.stage = 3; a.t = 0; }
-  } else if (a.stage === 3) {                  // ④ 乘客走远，才结算并交还控制权
-    const away = Math.atan2(p.x - v.x, p.z - v.z);
-    if (stepTo(p.x + Math.sin(away) * 5, p.z + Math.cos(away) * 5, 2.0) || a.t > 2.4) {
+  } else if (a.stage === 3) {                  // ④ 下车后跑到远处再结算（用户：下车走了）
+    if (!a.away) {
+      const ax = (p.x - v.x), az = (p.z - v.z), al = Math.hypot(ax, az) || 1;
+      a.away = { x: p.x + ax / al * 13, z: p.z + az / al * 13 };
+    }
+    if (stepTo(a.away.x, a.away.z, 3.4) || a.t > 5.5) {
       const idx = v.passengers.indexOf(p);
       if (idx >= 0) v.passengers.splice(idx, 1);
       const pay = p.fare, xp = Math.round(p.fare * 0.6);
@@ -18727,8 +18843,10 @@ function updateTaxiAnim(v, dt) {
       floatText('+' + xp + ' 经验', '#9b59b6');
       sfx('coin');
       p.state = 'leaving'; p.timer = 0;
-      v._taxiAnim = null; taxiAnimLock = 0;
-      setHint('乘客已下车，到账 ' + pay + ' 金币');
+      p.angle = Math.atan2(p.x - v.x, p.z - v.z);
+      p.leave = { x: Math.sin(p.angle), z: Math.cos(p.angle) };
+      v._taxiAnim = null; taxiAnimLock = 0; taxiCamDrop();
+      setHint('乘客已下车走远了，到账 ' + pay + ' 金币');
     }
   }
 }
@@ -18770,6 +18888,7 @@ function updateTaxi(dt) {
     const p = taxiQueue[i];
     p.timer += dt;
     if (p.state === 'waiting') {
+      if (!p._bodyOK) { ensurePaxBody(p); p._bodyOK = true; }   // 【fix469】开局模型被合并优化吞掉的补身子
       p.phase += dt * 6;
       animateHuman(p.group, p.phase, 0, 'fist', false, 0, 0);
     } else if (p.state === 'boarding') {
@@ -18797,14 +18916,16 @@ function updateTaxi(dt) {
       const v = currentCar;
       if (!v || !v.isTaxi) { p.state = 'leaving'; p.group.visible = true; p.group.scale.set(1, 1, 1); }
     } else if (p.state === 'leaving') {
-      p.angle += dt * 0.6;
-      p.x += Math.sin(p.angle) * 2.2 * dt;
-      p.z += Math.cos(p.angle) * 2.2 * dt;
+      // 【fix467】下车后朝一个固定方向走远（不再原地绕圈）
+      if (!p.leave) { p.leave = { x: Math.sin(p.angle), z: Math.cos(p.angle) }; }
+      const _sp = 3.0;
+      p.x += p.leave.x * _sp * dt;
+      p.z += p.leave.z * _sp * dt;
       p.phase += dt * 11;
       p.group.position.set(p.x, personGroundY(p.x, p.z), p.z);
       p.group.rotation.y = p.angle;
       animateHuman(p.group, p.phase, 0, 'run', true, 0, 0);
-      if (p.timer > 7) { scene.remove(p.group); taxiQueue.splice(i, 1); }
+      if (p.timer > 3 && (Math.hypot(p.x - (p.spawnX || p.x), p.z - (p.spawnZ || p.z)) > 34 || p.timer > 9)) { scene.remove(p.group); taxiQueue.splice(i, 1); }
     }
   }
   // 补充新乘客
@@ -18825,40 +18946,33 @@ function updateTaxi(dt) {
 }
 
 // ---------- 吊车 / 工地 ----------
-function initCraneLoad(v) {
-  const hook = v.group.userData.craneHook;
+// 【fix465】吊车作业三段动画：
+//   ① 吊起：工地上的材料被钩住，从地面沿吊绳升到车尾吊钩上，升到顶原地就不再显示；
+//   ② 运输：货物挂在吊钩下面跟着车走；
+//   ③ 卸货：到绿色交付区后从吊钩上缓缓落到地面，落地才结算，留在卸货点；5 秒后材料回到原处。
+function craneCargoGroup() {
   const cargo = new THREE.Group();
   const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 1.5), new THREE.MeshLambertMaterial({ color: 0xb08040 }));
   b1.position.y = -0.9; cargo.add(b1);
   const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 1.1), new THREE.MeshLambertMaterial({ color: 0x8e6a33 }));
   b2.position.y = -1.7; cargo.add(b2);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.10, 1.56), new THREE.MeshLambertMaterial({ color: 0x6b4a20 }));
+  band.position.y = -1.32; cargo.add(band);
+  return cargo;
+}
+function initCraneLoad(v) {
+  if (v._cargo) { try { scene.remove(v._cargo); } catch (e0a) {} }
+  const cargo = craneCargoGroup();
   cargo.visible = false;
-  v.group.add(cargo);
+  scene.add(cargo);            // 世界坐标：要能在「原地 → 吊钩 → 卸货点」之间移动
   v._cargo = cargo;
-  v._cargoState = 'empty';    // empty | lifting | carried | dropping
+  v._cargoState = 'empty';
   v._cargoT = 0;
   v._cargoTarget = null;
+  v._liftFrom = null; v._dropFrom = null; v._dropTo = null;
 }
-function craneAction(v) {
-  // 一次只吊一件：吊起/放下动画期间按 E 无效，也不能再抓第二箱（原来这两种状态会漏到取货分支）
-  if (!v || !v.isCrane) return false;
-  // 送货
-  if (v._cargoState === 'lifting' || v._cargoState === 'dropping') {
-    setHint(v._cargoState === 'lifting' ? '正在吊起材料…（作业期间不能移动）' : '正在放下材料…（作业期间不能移动）');
-    return false;
-  }
-  if (v._cargoState === 'carried') {
-    const d = Math.hypot(v.x - CONSTRUCTION_SITE.dropX, v.z - CONSTRUCTION_SITE.dropZ);
-    if (d < 9) {
-      // 到达卸货点：不瞬间完成，转入放下动画，放完才结算（放的过程中车不能动）
-      v._cargoState = 'dropping'; v._cargoT = 0;
-      setHint('正在放下材料…（作业期间不能移动）');
-      return true;
-    }
-    setHint('把材料运到绿色交付区（还差 ' + Math.round(d) + 'm）');
-    return false;
-  }
-  // 取货
+// 取货（E 键 / 吊起按钮共用）
+function cranePickup(v) {
   let best = null, bd = 1e9;
   for (const c of siteCrates) {
     if (c.taken) continue;
@@ -18866,55 +18980,114 @@ function craneAction(v) {
     if (d < bd) { bd = d; best = c; }
   }
   if (!best) { setHint('工地材料已全部吊走，等一会儿补货'); return false; }
-  if (bd > 12) { setHint('靠近材料堆（' + Math.round(bd) + 'm）再按 E 吊起'); return false; }
-  best.taken = true;
-  best.mesh.visible = false;
+  if (bd > 12) { setHint('靠近材料堆（' + Math.round(bd) + 'm）再吊起'); return false; }
+  best.taken = true;            // 先记成已取，但模型先留着 —— 要看着它自己升上去
   v._cargoTarget = best;
+  v._liftFrom = { x: best.mesh.position.x, y: best.mesh.position.y + CARGO_HALF, z: best.mesh.position.z };
   v._cargoState = 'lifting';
   v._cargoT = 0;
   if (v._cargo) v._cargo.visible = true;
   setHint('吊起材料！送到绿色交付区按 E 卸货');
   sfx('coin');
-  // 【fix40 修复】这一行原来写在 return true 之后，属于不可达代码 —— 注释承诺的
-  // "每次装货都换一个随机卸货点"实际上从来没生效，卸货点从开局随机一次后就永久固定。
-  // 现在移到 return 之前，恢复注释所声明的行为（工地四周 11~25m 环带内重新随机）。
   rollCraneDropPoint();
   return true;
 }
+// 放下（E 键 / 放下按钮共用）：到绿色交付区才放得下
+function craneStartDrop(v) {
+  const d = Math.hypot(v.x - CONSTRUCTION_SITE.dropX, v.z - CONSTRUCTION_SITE.dropZ);
+  if (d >= 9) { setHint('把材料运到绿色交付区（还差 ' + Math.round(d) + 'm）'); return false; }
+  const gx = CONSTRUCTION_SITE.dropX, gz = CONSTRUCTION_SITE.dropZ;
+  v._dropTo = { x: gx, y: terrainHeight(gx, gz) + CARGO_HALF, z: gz };
+  v._dropFrom = null;
+  v._cargoState = 'dropping'; v._cargoT = 0;
+  setHint('正在放下材料…（作业期间不能移动）');
+  return true;
+}
+function craneAction(v) {
+  if (!v || !v.isCrane) return false;
+  if (v._cargoState === 'lifting' || v._cargoState === 'dropping') {
+    setHint(v._cargoState === 'lifting' ? '正在吊起材料…（作业期间不能移动）' : '正在放下材料…（作业期间不能移动）');
+    return false;
+  }
+  if (v._cargoState === 'carried') return craneStartDrop(v) === true;
+  return cranePickup(v);
+}
 function updateCrane(v, dt) {
   if (!v || !v.isCrane || !v._cargo) return;
-  const hook = v.group.userData.craneHook;
-  const rope = v.group.userData.craneRope;
+  const ud = v.group.userData;
+  const hook = ud.craneHook, rope = ud.craneRope;
+  const boomY = (ud.craneBoomY || CRANE_BOOM_Y);
   const st = v._cargoState;
-  if (st === 'empty') {
-    v._cargoT = Math.min(1, v._cargoT + dt * 2);
+  v._sway = (v._sway || 0) + dt * (st === 'carried' ? 1.7 : 0.6);
+  const sway = Math.sin(v._sway) * (st === 'carried' ? 0.10 : 0.04);
+  let len = CRANE_HANG;
+  if (st === 'dropping') {
+    v._cargoT = Math.min(1, v._cargoT + dt * 0.55);
+    const dropLen = Math.max(CRANE_HANG, boomY - (CARGO_HALF + CRANE_HOLD));
+    len = CRANE_HANG + (dropLen - CRANE_HANG) * v._cargoT;
   } else if (st === 'lifting') {
-    v._cargoT += dt * 0.8;
-    if (v._cargoT >= 1) { v._cargoState = 'carried'; v._cargoT = 0; }
-  } else if (st === 'carried') {
-    v._cargoT += dt * 1.4;
-  } else if (st === 'dropping') {
-    v._cargoT = Math.min(1, v._cargoT + dt * 0.7);
-    if (v._cargoT >= 1) craneFinishDrop(v);
+    v._cargoT = Math.min(1, v._cargoT + dt * 0.75);
   }
-  let hang;
-  if (st === 'carried') hang = 1.0;
-  else if (st === 'dropping') hang = 1.0 - 0.95 * Math.min(1, v._cargoT);   // 缓缓放到地面
-  else if (st === 'lifting') {
-    const t = Math.min(1, v._cargoT);
-    hang = t < 0.35 ? 0.2 - (t / 0.35) * 0.15 : 0.05 + ((t - 0.35) / 0.65) * 0.95;
-  } else hang = 0.35 - 0.15 * Math.min(1, v._cargoT);
-  const len = 1.0 + hang * 3.0;
-  v._sway = (v._sway || 0) + dt * (st === 'carried' ? 2.2 : 0.8);
-  const sway = Math.sin(v._sway) * (st === 'carried' ? 0.14 : 0.05);
-  if (rope) { rope.scale.y = len; rope.position.y = CRANE_HOOK_Y - len / 2; rope.rotation.z = sway; }
-  if (hook) hook.position.y = CRANE_HOOK_Y - len; hook.rotation.z = sway;
-  // 货物挂在后半部吊钩正下方（货物是车组的子节点，所以用车组坐标 CRANE_HOOK_Z）
-  if (v._cargo) { v._cargo.position.set(0, CRANE_HOOK_Y - len - 0.9, CRANE_HOOK_Z); v._cargo.rotation.z = sway; v._cargo.rotation.y = Math.sin(v._sway * 0.7) * 0.1; }
+  if (rope) { rope.scale.y = Math.max(0.05, len); rope.position.y = boomY - len / 2; rope.rotation.z = sway; }
+  if (hook) { hook.position.y = boomY - len; hook.rotation.z = sway; }
+  const hw = new THREE.Vector3();
+  if (hook) { hook.updateWorldMatrix(true, false); hook.getWorldPosition(hw); }
+  const cargo = v._cargo;
+  if (st === 'lifting') {
+    const u = v._cargoT, e = u * u * (3 - 2 * u);
+    const f = v._liftFrom || { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    cargo.visible = true;
+    cargo.position.set(f.x + (hw.x - f.x) * e, f.y + (hw.y - CRANE_HOLD - f.y) * e, f.z + (hw.z - f.z) * e);
+    const m = v._cargoTarget && v._cargoTarget.mesh;
+    if (m) {
+      m.visible = u < 0.90;
+      m.position.set(cargo.position.x, cargo.position.y - CARGO_HALF, cargo.position.z);
+    }
+    if (u >= 1) {
+      if (m) m.visible = false;
+      v._cargoState = 'carried'; v._cargoT = 0;
+    }
+  } else if (st === 'carried') {
+    cargo.visible = true;
+    cargo.position.set(hw.x, hw.y - CRANE_HOLD, hw.z);
+    cargo.rotation.y = Math.sin(v._sway * 0.7) * 0.08;
+  } else if (st === 'dropping') {
+    if (!v._dropFrom) v._dropFrom = { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    const to = v._dropTo || { x: hw.x, y: hw.y - CRANE_HOLD, z: hw.z };
+    const u = v._cargoT, e = u * u * (3 - 2 * u);
+    cargo.visible = true;
+    cargo.position.set(v._dropFrom.x + (to.x - v._dropFrom.x) * e, v._dropFrom.y + (to.y - v._dropFrom.y) * e, v._dropFrom.z + (to.z - v._dropFrom.z) * e);
+    if (u >= 1) craneFinishDrop(v);
+  } else {
+    cargo.visible = false;
+  }
+  cargo.rotation.z = sway * 0.5;
 }
-// 吊车吊起/放下货物时锁住车辆：一次只吊一件，作业期间不能开车走位
 function craneBusy(v) {
   return !!(v && v.isCrane && (v._cargoState === 'lifting' || v._cargoState === 'dropping'));
+}
+// 卸下的货物：先在卸货点显示，5 秒后消失，材料回到原来被吊起的位置
+const craneDelivered = [];
+function spawnCraneDelivered(pos, src) {
+  const m = craneCargoGroup();
+  m.position.set(pos.x, pos.y, pos.z);
+  m.rotation.y = Math.random() * 0.6 - 0.3;
+  scene.add(m);
+  craneDelivered.push({ mesh: m, t: 0, src: src || null });
+}
+function updateCraneDelivered(dt) {
+  for (let i = craneDelivered.length - 1; i >= 0; i--) {
+    const d = craneDelivered[i];
+    d.t += dt;
+    if (d.t > 5) {
+      try { scene.remove(d.mesh); } catch (e1) {}
+      if (d.src) {
+        d.src.taken = false; d.src.respawn = 0;
+        try { d.src.mesh.position.set(d.src.x, terrainHeight(d.src.x, d.src.z), d.src.z); d.src.mesh.visible = true; } catch (e2) {}
+      }
+      craneDelivered.splice(i, 1);
+    }
+  }
 }
 function craneFinishDrop(v) {
   const pay = 260, xp = 90;
@@ -18923,13 +19096,15 @@ function craneFinishDrop(v) {
   floatText('+' + xp + ' 经验', '#9b59b6');
   spawnBurst(CONSTRUCTION_SITE.dropX, CONSTRUCTION_SITE.dropZ, 0x66ff99, 16);
   sfx('coin');
-  if (v._cargoTarget) { v._cargoTarget.taken = false; v._cargoTarget.respawn = 0; v._cargoTarget.mesh.visible = true; }
-  v._cargoState = 'empty'; v._cargoTarget = null; v._cargoT = 0;
+  if (v._dropTo) spawnCraneDelivered(v._dropTo, v._cargoTarget);
   if (v._cargo) v._cargo.visible = false;
-  setHint('卸货完成！按 E 再吊一箱');
+  v._cargoState = 'empty'; v._cargoT = 0;
+  v._cargoTarget = null; v._liftFrom = null; v._dropFrom = null; v._dropTo = null;
+  setHint('卸货完成！材料 5 秒后回到原处，按 E 再吊一箱');
 }
-
 function updateSite(dt) {
+  try { updateCraneDelivered(dt); } catch (eD) {}
+  try { updateCraneBtns(); } catch (eB) {}
   for (const c of siteCrates) {
     if (!c.taken) continue;
     c.respawn += dt;
@@ -19006,6 +19181,11 @@ function updateJobs(dt) {
   } catch (e) {}
   try { updateSite(dt); } catch (e) { console.error('[site]', e); }
   try { if (currentCar && currentCar.isCrane) updateCrane(currentCar, dt); } catch (e) { console.error('[crane]', e); }
+  try {
+    for (const c of cars) {
+      if (c && c.isCrane && c !== currentCar && c._cargo && c._cargo.visible) updateCrane(c, dt);
+    }
+  } catch (e2) {}
   // HUD 提示
   if (state === 'drive' && currentCar) {
     const v = currentCar;
@@ -19015,7 +19195,7 @@ function updateJobs(dt) {
       if (v.passengers && v.passengers.length) {
         const p = v.passengers[0];
         const d = Math.hypot(p.dest.x - v.x, p.dest.z - v.z);
-        hudText(hintTextEl, 'hint', '出租车：送乘客到目的地（' + Math.round(d) + 'm），到达后按 E 让客人下车收钱');
+        hudText(hintTextEl, 'hint', '出租车：送乘客到目的地（' + Math.round(d) + 'm），到达后按 F 让客人下车收钱');
       } else {
         hudText(hintTextEl, 'hint', '出租车：开回出租车场按 E 接客（乘客 ' + taxiQueue.filter(p => p.state === 'waiting').length + ' 人等待）');
       }
@@ -19146,7 +19326,7 @@ function jobGuideTarget(v) {
       const p = v.passengers[0];
       return { x: p.dest.x, z: p.dest.z, label: '送乘客到目的地' };
     }
-    return { x: TAXI_STAND.x, z: TAXI_STAND.z, label: '到出租车场接客' };
+    return { x: TAXI_STAND.x, z: TAXI_STAND.z, label: '到出租车场接客', key: 'F' };
   }
   if (v.isCrane) {
     if (v._cargoState === 'lifting') return { x: v.x, z: v.z, label: '吊起材料中' };
@@ -19177,10 +19357,63 @@ function updateJobGuide(dt) {
   const px = playerWorldX(), pz = playerWorldZ();
   const d = Math.hypot(t.x - px, t.z - pz);
   const _bdx = t.x - px, _bdz = t.z - pz;
-  if (hintTextEl) hudText(hintTextEl, 'hint', '黄色指引：' + t.label + ' · ' + bearing8(_bdx, _bdz) + ' ' + Math.round(d) + 'm' + (t.noE ? '' : ' · 到达后按 E'));
+  if (hintTextEl) hudText(hintTextEl, 'hint', '黄色指引：' + t.label + ' · ' + bearing8(_bdx, _bdz) + ' ' + Math.round(d) + 'm' + (t.noE ? '' : (' · 到达后按 ' + (t.key || 'E'))));
 }
 
 // ---------- 车库旁的「召回爱车」按钮 ----------
+// 【fix466】驾驶吊车到工地时，屏幕中下方出现「吊起货物 / 放下货物」两个按钮
+let craneBtnsEl = null, craneLiftBtnEl = null, craneDropBtnEl = null;
+function ensureCraneBtns() {
+  if (craneBtnsEl) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'craneBtns';
+  wrap.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:104px;z-index:9000;display:none;' +
+    'gap:14px;align-items:center;pointer-events:none;';
+  const mk = function (txt, bg) {
+    const b = document.createElement('div');
+    b.textContent = txt;
+    b.style.cssText = 'pointer-events:auto;cursor:pointer;user-select:none;min-width:132px;text-align:center;' +
+      'padding:13px 18px;border-radius:14px;font-weight:bold;font-size:16px;color:#1b1b1b;' +
+      'box-shadow:0 6px 18px rgba(0,0,0,.5);background:' + bg + ';';
+    wrap.appendChild(b);
+    return b;
+  };
+  craneLiftBtnEl = mk('吊起货物', 'linear-gradient(#ffe07a,#f0b429)');
+  craneDropBtnEl = mk('放下货物', 'linear-gradient(#9cf2bb,#33c46a)');
+  const stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); };
+  craneLiftBtnEl.addEventListener('pointerdown', stop);
+  craneDropBtnEl.addEventListener('pointerdown', stop);
+  craneLiftBtnEl.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    const v = currentCar;
+    if (!v || !v.isCrane) return;
+    if (v._cargoState !== 'empty') { setHint('车上已经有一件材料了'); return; }
+    cranePickup(v);
+  });
+  craneDropBtnEl.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    const v = currentCar;
+    if (!v || !v.isCrane) return;
+    if (v._cargoState !== 'carried') {
+      setHint(v._cargoState === 'empty' ? '车上没有货物，先按「吊起货物」' : '正在作业，稍等');
+      return;
+    }
+    craneStartDrop(v);
+  });
+  document.body.appendChild(wrap);
+  craneBtnsEl = wrap;
+}
+function updateCraneBtns() {
+  ensureCraneBtns();
+  const v = (state === 'drive') ? currentCar : null;
+  const near = v && v.isCrane && Math.hypot(v.x - CONSTRUCTION_SITE.x, v.z - CONSTRUCTION_SITE.z) < 70;
+  if (!craneBtnsEl) return;
+  craneBtnsEl.style.display = near ? 'flex' : 'none';
+  if (!near) return;
+  const st = v._cargoState;
+  if (craneLiftBtnEl) craneLiftBtnEl.style.opacity = (st === 'empty') ? '1' : '0.45';
+  if (craneDropBtnEl) craneDropBtnEl.style.opacity = (st === 'carried') ? '1' : '0.45';
+}
 let garageBtnEl = null;
 function ensureGarageBtn() {
   if (garageBtnEl) return;
@@ -19213,7 +19446,7 @@ function updateGarageBtn() {
 function tryJobAction() {
   if (state !== 'drive' || !currentCar) return false;
   // 返回 true 表示"刚才在做任务"，拦住下车；false 时让 E 正常下车
-  if (currentCar.isTaxi) return taxiAction(currentCar) === true;
+  // 【fix471】出租车不再占用 E 键（改到 F），E 在出租车里就是纯下车。
   if (currentCar.isCrane) return craneAction(currentCar) === true;
   return false;
 }
@@ -22721,7 +22954,6 @@ function drawFullMap() {
   const ANC_BLD = [
     ['鼓楼', 1790, -441, 30, 30],
     ['木塔', 1830, -700, 52, 52],
-    ['荷芷署', 2025, -426, 300, 600],
     ['城门楼', 1656, -645, 24, 20],
     ['城门楼', 1656, -425, 24, 20],
     ['城门楼', 1656, -205, 24, 20],
@@ -22799,6 +23031,53 @@ function drawFullMap() {
   // 建筑
   ctx.fillStyle = '#3b4453';
   for (const b of buildings) ctx.fillRect(X(b.minX), Y(b.minZ), (b.maxX - b.minX) * s, (b.maxZ - b.minZ) * s);
+  // 【fix461】州署（荷芷署）平面图：院墙 + 中轴甬道 + 主要殿宇。
+  // 原来整座衙门在图上只是一块 300×600 的灰色实心方块，什么都看不出来。
+  try {
+    const YX0 = 1886, YX1 = 2164, YZ0 = -830, YZ1 = -140;
+    ctx.save();
+    ctx.fillStyle = 'rgba(62,55,45,0.95)';
+    ctx.fillRect(X(YX0), Y(YZ0), (YX1 - YX0) * s, (YZ1 - YZ0) * s);
+    ctx.strokeStyle = 'rgba(201,162,39,0.85)';
+    ctx.lineWidth = Math.max(1.2, 3 * s);
+    ctx.strokeRect(X(YX0), Y(YZ0), (YX1 - YX0) * s, (YZ1 - YZ0) * s);
+    // 中轴甬道（青石路面）
+    ctx.fillStyle = 'rgba(120,134,150,0.95)';
+    ctx.fillRect(X(2018), Y(-444), 14 * s, 340 * s);
+    // 主要殿宇
+    const YB = [
+      ['仪门', 2025, -150, 56, 16],
+      ['亲民堂', 2025, -435, 150, 62],
+      ['退思堂', 2025, -568, 66, 34],
+      ['知州宅', 2025, -644, 78, 40],
+      ['六房', 1938, -330, 34, 120],
+      ['六房', 2112, -330, 34, 120]
+    ];
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    for (const b of YB) {
+      const bx = X(b[1] - b[3] / 2), by = Y(b[2] - b[4] / 2);
+      ctx.fillStyle = 'rgba(150,124,86,0.95)';
+      ctx.fillRect(bx, by, b[3] * s, b[4] * s);
+      ctx.strokeStyle = 'rgba(238,214,160,0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, b[3] * s, b[4] * s);
+      if (s > 0.55) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillText(b[0], X(b[1]) + 1, by + 11);
+        ctx.fillStyle = '#ffe9b0';
+        ctx.fillText(b[0], X(b[1]), by + 10);
+      }
+    }
+    if (s > 0.4) {
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillText('州署', X(2025) + 1, Y(-96) + 1);
+      ctx.fillStyle = '#ffd76a';
+      ctx.fillText('州署', X(2025), Y(-96));
+    }
+    ctx.restore();
+  } catch (eY) {}
   // 重要地点图标
   drawLandmarks(ctx, X, Y, null);
   drawQuestMarkers(ctx, X, Y, null, (state === 'drive' && currentCar ? currentCar.x : person.position.x), (state === 'drive' && currentCar ? currentCar.z : person.position.z));
@@ -23777,7 +24056,16 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     } else if (joyActive) { th = joyY; st = -joyX; }
     // 上下客动画锁：只有当前车真的在播动画才锁。
     // 之前是纯标志位，动画播到一半下车/车辆爆炸，锁就永远留着 -> 车再也开不动。
-    if (taxiAnimLock > 0 && !(currentCar && currentCar.isTaxi && currentCar._taxiAnim)) taxiAnimLock = 0;
+    if (taxiAnimLock > 0 && !(currentCar && currentCar.isTaxi && currentCar._taxiAnim)) {
+      // 【fix471】E 现在随时能下车，动画可能被中途打断：把没上/没下完的乘客放回等待状态，
+      // 免得他永远卡在"上车中"（既不排队也不在车上，等于凭空消失一个人）。
+      try {
+        for (const q of taxiQueue) {
+          if (q.state === 'boarding2' || q.state === 'alighting') { q.state = 'waiting'; if (q.group) { q.group.visible = true; q.group.scale.set(1, 1, 1); } }
+        }
+      } catch (eQ) {}
+      taxiAnimLock = 0;
+    }
 
     // ========== 直升机飞行控制 ==========
     if (currentCar.isHelicopter) {
@@ -23827,7 +24115,14 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       heli.flyHeight = THREE.MathUtils.clamp((heli.flyHeight || 0) + (heli.flyVy || 0) * dt, 0, 80);
 
       // 更新位置
-      heli.group.position.set(heli.x, terrainHeight(heli.x, heli.z) + heli.flyHeight + 1.8, heli.z);
+      // 【fix473】直升机飞越中镇山时视角穿山：terrainHeight 在山顶广场一带读不到台基高度（会给出海床高度），
+      // 于是机身在 80 米高度时其实已经钻进山里，镜头跟着机体走就变成"贴着广场地面看"。
+      // 这里给中镇山加一个硬性抬升：只要进入山体范围，机体离地高度必须按山顶 150 米算。
+      let _hg = terrainHeight(heli.x, heli.z);
+      try { const _pg = personGroundY(heli.x, heli.z); if (_pg > _hg) _hg = _pg; } catch (eH1) {}
+      if (heli.x > 596 && heli.x < 792 && heli.z > -92 && heli.z < 92 && _hg < 150) _hg = 150;   // 中镇山山体
+      heli._groundY = _hg;
+      heli.group.position.set(heli.x, _hg + heli.flyHeight + 1.8, heli.z);
       heli.group.rotation.y = heli.angle;
       heli.group.rotation.x = -(heli.pitch || 0) * 0.5;   // 前倾飞行姿态
 
@@ -24432,6 +24727,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     camera.lookAt(camLook);
     }
   } catch(e) { console.error('[Camera update error]', e); }
+  try { taxiCamTick(dt); } catch (eTC) { console.error('[taxiCam]', eTC); }
 
   // 下了载具就把炮塔/机头瞄准复位，下次上车是正的（不然会带着上次的偏角）
   if (state !== 'drive') { vehAimYaw = 0; vehAimPitch = 0; }
@@ -27024,7 +27320,52 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       det(BX(dw2 + 0.5, 0.30, 0.52), 0xc8a24a, cx, 1.2 + dh2 + 0.1, cz + d / 2 + 0.03);
       // 【fix311】檐下斗拱 + 青绿彩画额枋 + 大红灯笼（照片里最抢眼的装饰）
       // 【fix323】真斗拱：坐斗 + 十字拱 + 昂 + 散斗
-      dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
+      // 【fix462】前檐木构彩绘：壁柱 + 裙板 + 隔扇棂条 + 青绿彩画额枋（两山墙也带一条）
+      // 用户："外面墙壁不用这么单调，可以显示用那种木结构彩绘的感觉"
+      if (o.painted) {
+        const FZ = cz + d / 2 + 0.07;
+        const Y0 = 2.80, Y1 = 1.2 + h - 1.15;
+        const woodD = 0x4a2c18, woodM = 0x6b4a30, woodL = 0x8a5a34;
+        const green = 0x2e6b4c, gold = 0xc8a24a, red = 0x8a2f2a;
+        const bays = [];
+        for (const s of [-1, 1]) {
+          const xa = cx + s * (dw2 / 2 + 0.30), xb = cx + s * (w / 2 - 1.15);
+          const span = Math.abs(xb - xa), n = Math.max(2, Math.round(span / 4.2));
+          for (let i = 0; i < n; i++) {
+            const a = xa + s * span * i / n, b = xa + s * span * (i + 1) / n;
+            bays.push([Math.min(a, b), Math.max(a, b)]);
+          }
+        }
+        for (const bb of bays) {
+          const xa = bb[0] + 0.22, xb = bb[1] - 0.22, bw = xb - xa, mx = (xa + xb) / 2;
+          if (bw < 0.8) continue;
+          det(BX(0.44, Y1 - Y0, 0.30), red, xa, (Y0 + Y1) / 2, FZ + 0.02);
+          det(BX(0.44, Y1 - Y0, 0.30), red, xb, (Y0 + Y1) / 2, FZ + 0.02);
+          // 下裙板 + 金线
+          det(BX(bw - 0.44, 2.30, 0.24), woodD, mx, Y0 + 1.15, FZ);
+          det(BX(bw - 0.44, 0.10, 0.30), gold, mx, Y0 + 2.32, FZ + 0.02);
+          // 中段隔扇：深木底 + 竖棂条 + 横抹头
+          const yA = Y0 + 2.45, yB = Y1 - 1.55;
+          det(BX(bw - 0.44, yB - yA, 0.20), 0x2b1a10, mx, (yA + yB) / 2, FZ);
+          const nv = Math.max(4, Math.round(bw / 0.75));
+          for (let i = 0; i <= nv; i++) {
+            det(BX(0.10, yB - yA - 0.10, 0.26), woodL, xa + 0.22 + (bw - 0.44) * i / nv, (yA + yB) / 2, FZ + 0.03);
+          }
+          for (let i = 1; i < 5; i++) {
+            det(BX(bw - 0.44, 0.10, 0.26), woodM, mx, yA + (yB - yA) * i / 5, FZ + 0.03);
+          }
+          // 上额枋：青绿彩画 + 双金线 + 红垫板
+          det(BX(bw - 0.30, 0.95, 0.26), green, mx, Y1 - 0.98, FZ + 0.02);
+          det(BX(bw - 0.30, 0.11, 0.30), gold, mx, Y1 - 0.49, FZ + 0.03);
+          det(BX(bw - 0.30, 0.11, 0.30), gold, mx, Y1 - 1.47, FZ + 0.03);
+          det(BX(bw - 0.30, 0.26, 0.26), red, mx, Y1 - 1.62, FZ + 0.02);
+        }
+        for (const s of [-1, 1]) {
+          det(BX(0.26, 0.95, d - 1.6), green, cx + s * (w / 2 + 0.03), Y1 - 0.98, cz);
+          det(BX(0.30, 0.11, d - 1.6), gold, cx + s * (w / 2 + 0.03), Y1 - 0.49, cz);
+        }
+      }
+            dougongRow(cx, 1.2 + h - 0.10, cz + d / 2 + 1.80, w - 1.4);
       det(BX(w + 3.4, 0.52, 0.30), 0x2e6b4c, cx, 1.2 + h - 0.30, cz + d / 2 + 1.72);
       det(BX(w + 3.4, 0.14, 0.34), 0xc8a24a, cx, 1.2 + h - 0.60, cz + d / 2 + 1.72);
       // 【fix327】旋子彩画：额枋上一圈金旋子（外金环 + 内青芯）
@@ -27045,8 +27386,11 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       }
       roof(cx, cz, w, d, 1.2 + h + 0.44, o.tileA, o.tileB, o.roofStyle || 'xieshan');
       if (o.plaque) {
-        const py = 1.2 + h - 1.85, pz = cz + d / 2 + 3.55;
-        plaque3d(o.plaque, cx, py, pz, w * 0.40, w * 0.40 * 0.30, '#1b2a4a', '#e8c86a');
+        // 【fix462】匾额大小/高低可调：亲民堂的匾原来 41×12 米，整面墙都被它压住了
+        const pw2 = w * (o.plaqueW || 0.40);
+        const ph2 = o.plaqueH || pw2 * 0.30;
+        const py = 1.2 + h - (o.plaqueDrop || 1.85), pz = cz + d / 2 + 3.55;
+        plaque3d(o.plaque, cx, py, pz, pw2, ph2, '#1b2a4a', '#e8c86a');
       }
       if (o.steps !== false) stairs(cx, cz + d / 2 + 3.2, Math.min(w * 0.62, 16), o.stepN || 4, 0.36, 1);
     }
@@ -27556,11 +27900,15 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     (function steles() {
       const list = [[AX - 46, -196, '荷芷署重修记', '乾隆二十三年'], [AX + 46, -196, '州治题名碑', '道光九年'], [AX - 46, -262, '公生明训碑', '康熙五十年']];
       for (const it of list) {
-        det(BX(2.6, 0.5, 1.6), 0xa8a294, it[0], 0.25, it[1]);
-        det(BX(1.8, 2.6, 0.44), 0xb0aa9e, it[0], 1.85, it[1]);
-        det(BX(2.1, 0.36, 0.62), 0xb8b4a8, it[0], 3.34, it[1]);
-        plaque3d(it[2], it[0], 2.20, it[1] + 0.26, 1.45, 0.95, '#b8b4a8', '#2b2b2b');
-        plaque3d(it[3], it[0], 1.45, it[1] + 0.26, 1.30, 0.42, '#b8b4a8', '#4a3f34');
+        // 【fix474】碑座/碑身/碑帽同样按台基顶面抬起来（原来碑面字被台基埋掉大半）
+        let _sl = 0;
+        { const _floor = 6.25; if (_floor > BASE) _sl = _floor - BASE; }   // 碑座坐在 6.25 米的台基顶面
+        if (!(_sl > 0)) _sl = 0;
+        det(BX(2.6, 0.5, 1.6), 0xa8a294, it[0], 0.25 + _sl, it[1]);
+        det(BX(1.8, 2.6, 0.44), 0xb0aa9e, it[0], 1.85 + _sl, it[1]);
+        det(BX(2.1, 0.36, 0.62), 0xb8b4a8, it[0], 3.34 + _sl, it[1]);
+        plaque3d(it[2], it[0], 2.20 + _sl, it[1] + 0.26, 1.45, 0.95, '#b8b4a8', '#2b2b2b');
+        plaque3d(it[3], it[0], 1.45 + _sl, it[1] + 0.26, 1.30, 0.42, '#b8b4a8', '#4a3f34');
       }
     })();
 
@@ -27594,17 +27942,62 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (const s5 of [-1, 1]) det(new THREE.CylinderGeometry(0.52, 0.48, 0.55, 10), 0xb0aa9e, gx + sd * 30 + s5 * 2.0, 0.28, -192);
     }
 
+    // 【fix480】去掉大门前那块悬空的长条地板。
+    // 实测：@2025,-124 有一条 236 米长、6 米深、悬在 0.99~1.05 米的薄板（离地约 1 米）。
+    (function killFloatingSlab() {
+      let n = 0;
+      try {
+        scene.updateMatrixWorld(true);
+        const _all = []; scene.traverse(function (o) { if (o.isMesh) _all.push(o); });
+        for (const m of _all) {
+          if (!m.visible) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const w = b.max.x - b.min.x, d = b.max.z - b.min.z, h = b.max.y - b.min.y;
+          const cz = (b.min.z + b.max.z) / 2;
+          if (w > 90 && h < 0.8 && b.min.y > 0.5 && b.max.y < 3.2 && cz > -175 && cz < -70 && Math.abs((b.min.x + b.max.x) / 2 - 2025) < 90) {
+            m.visible = false; n++;
+          }
+        }
+      } catch (eS) {}
+      try { window.__SLAB_N = n; } catch (eS2) {}
+    })();
+    // 【fix479 方案B1】东西跨院整块抬到主台基面 5.10 米。
+    // 原来跨院台地顶面只有 2.60 米，比主院子（5.10 米）低 2.5 米，站在主院看就是"后面的小房子全埋在地下"。
+    // 这里把主院以外的低矮构件统一 +2.50，和主台基面拉平。
+    (function liftSideWingsB1() {
+      const DY = 2.50;
+      let n = 0;
+      try {
+        YG.updateMatrixWorld(true);
+        for (const m of YG.children.slice()) {
+          if (!m.isMesh) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const cx = (b.min.x + b.max.x) / 2;
+          if (Math.abs(cx - AX) < 30) continue;        // 主甬道/院心/执事牌 不动
+          if (b.max.y > 9.5) continue;                // 高楼阁/大殿屋顶 不动
+          if (b.min.y > 5.0) continue;                // 已经在上面的 不动
+          m.position.y += DY;
+          n++;
+        }
+      } catch (eL) {}
+      try { window.__LIFT_N = n; } catch (eL2) {}
+    })();
     // 【fix333】衙前执事牌：肃静 / 回避 / 荷芷署 / 正堂（成对站在大门前）
     (function zhishiPai() {
       const names = ['肃静', '回避', '荷芷署', '正堂'];
       let k = 0;
       for (const sx of [-1, 1]) for (const s2 of [0, 1]) {
         const bx = AX + sx * (12.5 + s2 * 5.0), bz = -230;
-        det(BX(1.8, 0.24, 1.1), 0x4a2416, bx, 0.12, bz);
-        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx - 0.55, 1.85, bz);
-        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx + 0.55, 1.85, bz);
-        det(BX(1.5, 0.20, 0.32), 0x6d3a20, bx, 3.62, bz);
-        plaque3d(names[k % 4], bx, 2.35, bz + 0.22, 1.30, 2.70, '#241608', '#e8c86a');
+        // 【fix474】执事牌原来按 y=0 起算，台基顶面比它高一截，牌子下半截（连字）埋进地里。
+        // 按台基顶面 platformTopAt 抬起来；只在"确实更高"时抬，绝不往下砸。
+        let _lift = 0;
+        { const _floor = 6.25; if (_floor > BASE) _lift = _floor - BASE - 0.12; }   // 实测台基顶面 6.32 米，牌座略压进 7 厘米
+        if (!(_lift > 0)) _lift = 0;
+        det(BX(1.8, 0.24, 1.1), 0x4a2416, bx, 0.12 + _lift, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx - 0.55, 1.85 + _lift, bz);
+        det(BX(0.26, 3.4, 0.26), 0x5a2f18, bx + 0.55, 1.85 + _lift, bz);
+        det(BX(1.5, 0.20, 0.32), 0x6d3a20, bx, 3.62 + _lift, bz);
+        plaque3d(names[k % 4], bx, 2.35 + _lift, bz + 0.22, 1.30, 2.70, '#241608', '#e8c86a');
         k++;
       }
     })();
@@ -28160,7 +28553,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       for (let i = 0; i < 3; i++) det(BX(3.8, 0.10, 1.10), 0xa8a294, AX, 0.66 + i * 0.64, YC + 13.0 - i * 1.7, 0.29, 0, 0);
       for (const s of [-1, 1]) det(BX(0.55, 0.44, 6.7), 0xb0aa9e, AX + s * 2.85, 1.00, YC + 10.6, 0.29, 0, 0);
       (window.__FLOORS = window.__FLOORS || []).push({ x0: AX - 20, x1: AX + 20, z0: YC - 10, z1: YC + 10, top: BASE + 1.6 });
-      hall(AX, Z - 8, 104, 50, 20.6, { plaque: '亲民堂', steps: false });
+      hall(AX, Z - 8, 104, 50, 20.6, { plaque: '亲民堂', steps: false, painted: true, plaqueW: 0.17, plaqueH: 5.2, plaqueDrop: 3.2 });
       // 【fix311】大堂内景：屏风 + 公案 + 三块匾 + 楹联 + 宫灯（照片里知州审案的场面）
       (function courtroom() {
         const IZ = Z + 2;
@@ -31497,8 +31890,8 @@ function retTick(dt) {
   const el = retOverlayEl();
   const t = R.t;
   // 阶段 1：0~1.2s 黑场淡入，并在全黑时把人和飞机就位
-  if (t < 1.2) {
-    el.style.opacity = String(Math.min(1, t / 1.2));
+  if (t < 0.9) {
+    el.style.opacity = String(Math.min(1, t / 0.9));
   } else if (!R.swapped) {
     el.style.opacity = '1';
     R.swapped = true;
@@ -31511,13 +31904,17 @@ function retTick(dt) {
     person.visible = true;
     person.position.set(hp.x - 10, 2, hp.z + 20);
     vy = 0; onGround = false;
-    // 镜头先架在跑道侧面看飞机滑回来
-    camPos.set(hp.x + 46, hp.y + 11, hp.z + 52);
+    // 【fix469】不再把镜头架到跑道侧面的固定点（那里会钻进航站楼/雨幕，用户看到整屏全白）。
+    // 改成：人站在停机位旁边，镜头就在人背后一点，朝着跑道方向看飞机滑回来。
+    camYaw = Math.atan2(hp.x - person.position.x, hp.z - person.position.z);
+    camPitch = 0.12;
+    camPos.set(person.position.x - Math.sin(camYaw) * 9, person.position.y + 4.6, person.position.z - Math.cos(camYaw) * 9);
     camera.position.copy(camPos);
-    camera.lookAt(R.fromX, hp.y + 3, hp.z);
+    camera.lookAt(hp.x, hp.y + 3, hp.z);
+    if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
   } else {
     // 阶段 2：1.2s 之后淡出黑场，飞机从跑道滑回来停稳
-    const fade = Math.max(0, 1 - (t - 1.2) / 0.9);
+    const fade = Math.max(0, 1 - (t - 1.2) / 0.7);
     el.style.opacity = String(fade);
     const k = Math.min(1, Math.max(0, (t - 1.6) / 6.5));
     const ease = k * k * (3 - 2 * k);
@@ -31526,15 +31923,9 @@ function retTick(dt) {
       // 滑行时轻微摆头，看起来像在转弯对正
       AIRLINER.rotation.y = Math.PI / 2 + Math.sin(ease * Math.PI) * 0.06;
     }
-    // 镜头跟着飞机走，尾随在侧后方
-    if (AIRLINER && R.home) {
-      const ax = AIRLINER.position.x;
-      camera.position.set(ax - 52, R.home.y + 20, R.home.z + 66);
-      camera.lookAt(ax, R.home.y + 4, R.home.z);
-      camPos.copy(camera.position);
-      if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 正在滑回航站楼…');
-    }
-    if (t >= 8.6) retFinish();
+    // 【fix469】镜头不再跟着飞机飞，交给玩家自己的第三人称镜头（人就在停机位旁边）
+    if (hintTextEl && R.t < 2.2) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
+    if (t >= 7.4) retFinish();
   }
 }
 
@@ -32692,6 +33083,129 @@ try {
     musicEl.load();                       // 预解码第一首，把媒体管线建起来
   }
 } catch (e) { console.warn('[prewarm-music]', e); }
+
+    /* ===== 【fix461】州署中轴青石甬道 =====
+       用户反馈："中间的这条贯穿的路，地板怎么还不是青石板砖路面"。
+       原因：中轴那层旧铺装铺在 2.76 米，台面上另有一层 2.96 米的石面压在它上面，
+       两层几乎共面，青砖被盖住 / 闪没了，看上去还是一块灰地。
+       这里在 2.963 米（顶面 2.988）重新铺一条 14 米宽的青石板路，从大门(-104)
+       铺到亲民堂前(-444)，正中再压一条 3.4 米宽的御路石（顶面 3.000），不再受旧面影响。 */
+    (function yamenStoneRoad() {
+      try {
+        function stoneTex(light, dark) {
+          const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+          const c = cv.getContext('2d');
+          c.fillStyle = dark; c.fillRect(0, 0, 256, 256);
+          // 【fix464】长方形古砖：4 列 × 8 行、隔行错缝，一块 64×32 像素 = 0.48×0.24 米
+          for (let r = 0; r < 8; r++) {
+            const off = (r % 2) * 32;
+            for (let q = -1; q < 5; q++) {
+              const g = light + ((r * 5 + q * 13 + 9) % 5) * 4 - 8;
+              c.fillStyle = 'rgb(' + (g - 8) + ',' + g + ',' + (g + 10) + ')';
+              c.fillRect(q * 64 + off + 1, r * 32 + 1, 62, 30);
+              c.fillStyle = 'rgba(255,255,255,0.06)';
+              c.fillRect(q * 64 + off + 2, r * 32 + 2, 60, 2);
+            }
+          }
+          const tx = new THREE.CanvasTexture(cv);
+          tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+          return tx;
+        }
+        // 主甬道：14 米宽青石板（每块 0.9×0.9 米，四块一循环）
+        const tx1 = stoneTex(96, '#39414a');
+        tx1.repeat.set(14 / 3.60, 304 / 3.60);   // 【fix474】砖放大到 0.9×0.45 米
+        const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
+        const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
+        road.position.set(2025, 5.140, -292);    // fix478 高出地面 6 厘米，消除深度冲突
+        // 【fix486】路面材质开 polygonOffset：远处也压在地面之上，不再"走近才出现"
+        try { for (const _mo of [road, royal]) { if (_mo.material) { _mo.material.polygonOffset = true; _mo.material.polygonOffsetFactor = -6; _mo.material.polygonOffsetUnits = -6; } } } catch (eP) {}    // fix477 实测地面 5.10，路面顶 5.105 与地面齐平
+        // fix478 去掉 lodShared：远处会被裁掉，看着像走近才出现
+        scene.add(road);
+        // 御路石：正中 3.4 米宽，青灰偏亮
+        const tx2 = stoneTex(116, '#454e56');
+        tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix474】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
+        const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
+        const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
+        royal.position.set(2025, 5.210, -292);   // fix478 御路再高 1.5 厘米   // fix477 御路比甬道高 1.5 厘米
+        // fix478 同上
+        scene.add(royal);
+        // 两侧路缘石
+        const curbMat = new THREE.MeshLambertMaterial({ color: 0xa9a49a });
+        for (const s of [-1, 1]) {
+          const curb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.10, 304), curbMat);
+          curb.position.set(2025 + s * 7.1, 5.210, -292);   // fix478 路缘石保留 10 厘米   // fix477 路缘石保留 10 厘米高
+          scene.add(curb);
+        }
+        // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
+        const tx3 = stoneTex(112, '#4a525a');
+        tx3.repeat.set(16 / 3.60, 28 / 3.60);     // 【fix474】门前引道同规格
+        const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
+        const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
+        inRoad.position.set(2025, 0.560, -110);
+        // fix478 同上（门前引道）
+        scene.add(inRoad);
+        // 【fix473】用户："我只让你铺青石在中间的小路上，你怎么全都铺上了"
+        // 原来这里往整个院子（308×712 米）铺了一整片青砖，把台基的土黄地面全盖住了。
+        // 现在整片撤掉，青石只留在：中间 14 米甬道 + 正中 3.4 米御路 + 门前 16 米引道。
+        // const tx4 = stoneTex(104, '#3f4750');
+        // tx4.repeat.set(308 / 1.92, 712 / 1.92);
+        // const mat4 = new THREE.MeshLambertMaterial({ map: tx4 });
+        // const court = new THREE.Mesh(new THREE.BoxGeometry(308, 0.04, 712), mat4);
+        // court.position.set(2032, 5.28, -490);
+        // court.userData.lodShared = true;
+        // scene.add(court);
+        window.__yamenCourt = 1;
+        window.__yamenPlaza = 1;
+        window.__yamenRoad = { y: 2.988, x0: 2018, x1: 2032, z0: -444, z1: -104 };
+        // 让行走高度认这块新路面（原来站在 5.2 米，砖面 5.34 米，人是陷在砖里的）
+        try { (window.__FLOORS = window.__FLOORS || []).push({ x0: 2018, x1: 2032, z0: -444, z1: -140, top: 5.17 }); } catch (eF) {}
+      } catch (eR) { window.__yamenRoadErr = String(eR); }
+    })();
+// 【fix469】中镇山山顶（祠堂青砖广场）夜景灯光：夜里四角灯柱 + 祠堂门前暖光，城市里能看到山顶是亮的。
+(function () {
+  try {
+    var SX = 694, SZ = 0;
+    var base = (typeof personGroundY === 'function') ? personGroundY(SX, SZ) : 150;
+    if (!(base > 60)) base = 150;   // 兜底：山顶平台高度 150 米，读不到就用它，绝不让灯沉到地底
+    var grp = new THREE.Group(); grp.name = 'zzSummitLights';
+    var heads = [], glows = [];
+    function lampPost(x, z, h) {
+      var y = (typeof personGroundY === 'function') ? personGroundY(x, z) : base;
+      var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.22, h, 8), new THREE.MeshLambertMaterial({ color: 0x3a2c22 }));
+      pole.position.set(x, y + h / 2, z); grp.add(pole);
+      var cap = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.22, 1.15), new THREE.MeshLambertMaterial({ color: 0x2a2019 }));
+      cap.position.set(x, y + h + 0.30, z); grp.add(cap);
+      var head = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.36, 0.92), new THREE.MeshBasicMaterial({ color: 0xfff2c8 }));
+      head.position.set(x, y + h + 0.09, z); grp.add(head); heads.push(head);
+      var glow = new THREE.Mesh(new THREE.SphereGeometry(1.9, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd79a, transparent: true, opacity: 0.0, depthWrite: false }));
+      glow.position.set(x, y + h + 0.09, z); grp.add(glow); glows.push(glow);
+    }
+    lampPost(SX - 42, SZ - 36, 6.6);
+    lampPost(SX - 42, SZ + 36, 6.6);
+    lampPost(SX + 30, SZ - 36, 6.6);
+    lampPost(SX + 30, SZ + 36, 6.6);
+    var L1 = new THREE.PointLight(0xffb268, 0, 52, 1.7);
+    L1.position.set(SX - 8, base + 7.5, -13); grp.add(L1);
+    var L2 = new THREE.PointLight(0xffb268, 0, 52, 1.7);
+    L2.position.set(SX - 8, base + 7.5, 13); grp.add(L2);
+    var L3 = new THREE.PointLight(0xffe6bc, 0, 78, 1.5);
+    L3.position.set(SX - 2, base + 13, 0); grp.add(L3);
+    scene.add(grp);
+    var lites = [L1, L2, L3];
+    function tickNight() {
+      var n = 1 - Math.min(1, Math.max(0, (typeof dayLightF === 'number' ? dayLightF : 1)));
+      for (var i = 0; i < lites.length; i++) lites[i].intensity = (i === 2 ? 1.15 : 1.6) * n;
+      for (var k = 0; k < glows.length; k++) {
+        glows[k].material.opacity = 0.05 + 0.20 * n;
+        glows[k].visible = n > 0.08;
+      }
+    }
+    tickNight();
+    setInterval(tickNight, 400);
+    window.__zzLights = { base: base, lights: 3, lamps: heads.length };
+  } catch (e) { try { console.error('[zzLights]', e); } catch (e2) {} }
+})();
+try{setTimeout(function(){try{var _a=[];scene.traverse(function(o){if(o.isMesh)_a.push(o);});var _n=0;for(var _i=0;_i<_a.length;_i++){var _m=_a[_i];if(!_m.visible)continue;var _b=new THREE.Box3().setFromObject(_m);var _w=_b.max.x-_b.min.x,_d=_b.max.z-_b.min.z,_h=_b.max.y-_b.min.y,_cx=(_b.min.x+_b.max.x)/2,_cz=(_b.min.z+_b.max.z)/2;if(((_w>90&&_h<0.8&&_b.min.y>0.5&&_b.max.y<3.2)||((_w>10&&_w<90&&_d>12&&_d<90&&_h<1.6&&_b.min.y>-1&&_b.max.y<2.6)||(_w>20&&_d>8&&_h<3.0&&_b.min.y>0.6&&_b.max.y<3.2)||(_w>100&&_d<12&&_h<2.6&&_b.min.y>2.4&&_b.max.y<6.6)))&&_cz>-200&&_cz<-55&&Math.abs(_cx-2025)<175){_m.visible=false;_n++;}}window.__SLAB_N=_n;var _pn=0;for(var _j=0;_j<_a.length;_j++){var _r=_a[_j];try{var _g=_r.geometry&&_r.geometry.parameters?(_r.geometry.parameters.width)||0:0;var _dp=_r.geometry&&_r.geometry.parameters?(_r.geometry.parameters.depth)||0:0;if(_dp>300&&_g>=3&&_g<=16){var _mm=_r.material;if(Array.isArray(_mm)){for(var _k=0;_k<_mm.length;_k++){_mm[_k].polygonOffset=true;_mm[_k].polygonOffsetFactor=-10;_mm[_k].polygonOffsetUnits=-10;}}else if(_mm){_mm.polygonOffset=true;_mm.polygonOffsetFactor=-10;_mm.polygonOffsetUnits=-10;}_r.renderOrder=2;_pn++;}}catch(eX){}}var _g2=0;for(var _q=0;_q<_a.length;_q++){var _s=_a[_q];try{if(!_s.visible)continue;var _bb=new THREE.Box3().setFromObject(_s);var _ww=_bb.max.x-_bb.min.x,_dd=_bb.max.z-_bb.min.z,_hh=_bb.max.y-_bb.min.y;if(_ww>=15&&_dd>=8&&_hh<=3.6&&_bb.min.y>=0.25&&_bb.max.y<=3.8&&_bb.min.z>-210&&_bb.max.z>-40&&_bb.min.x<2260&&_bb.max.x>1890){_s.visible=false;_g2++;}}catch(eY){}}window.__SLAB_N=_n+_g2;var _g3=0;for(var _z=0;_z<_a.length;_z++){var _t2=_a[_z];try{if(!_t2.visible)continue;var _b3=new THREE.Box3().setFromObject(_t2);var _w3=_b3.max.x-_b3.min.x,_d3=_b3.max.z-_b3.min.z,_h3=_b3.max.y-_b3.min.y;var _cx3=(_b3.min.x+_b3.max.x)/2,_cz3=(_b3.min.z+_b3.max.z)/2;if(_h3<1.6&&_b3.min.y>0.35&&_b3.max.y<2.6&&_w3>10&&_d3>5&&_cx3>1850&&_cx3<2300&&_cz3>-460&&_cz3<-40){_t2.visible=false;_g3++;}}catch(eZ3){}}window.__SLAB_N=_n+_g2+_g3;window.__PO_N=_pn;window.__SLAB3=_g3;}catch(eQ){}},300);}catch(eR){}
 renderer.setAnimationLoop(frameLoop);
 // 页面隐藏（切后台/关标签页）：停音效与音乐；回来时恢复
 function pauseGameAudio() {
