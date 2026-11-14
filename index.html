@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix494-qinmintang-stele">
+<meta name="cf-build" content="20261114-fix495-return-flight-lighting">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -23954,6 +23954,15 @@ function updateDayNight(dt) {
     updateFerrisLights();  // Task #9：摩天轮底部 LED 灯圈的上照灯
     updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
   }
+  // 【fix495】给 updateWeather 一个「本帧基准刚被写回绝对值」的凭证。
+  // 本函数上面全是**绝对赋值**（sun.intensity=、hemi.intensity=、scene.background.copy、
+  // scene.fog.far=），而 updateWeather 里对应的是 *= / lerp / multiplyScalar 的**就地累积**。
+  // 两者必须严格成对：只要哪一帧本函数没跑，updateWeather 就会在上一帧结果上再乘一次系数，
+  // 60fps 下 1~2 秒就指数发散（hemi 晴天×0.94 → 全黑；阴天×1.22 / 小雨×1.30 → 过曝全白；
+  // fog.far 小雨×0.46 → 雾收缩成白剪影）。用户报的「返程机全黑全白、不只是下雨」即由此而来。
+  // 之前只靠 `if (!FLIGHT)` 挡去程过场，漏了 RET 返程演出和 gamePaused 暂停面板 ——
+  // 这两种情况 update() 都会提前 return，本函数不跑，但 frameLoop 尾部的 updateWeather 照跑。
+  window.__dnFrame = _frameCnt;
 }
 function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
@@ -32115,6 +32124,12 @@ window.__retInfo = function () { return RET ? { t: Math.round(RET.t * 10) / 10, 
 function retTick(dt) {
   if (RET && RET.t > 20) { retFinish(); return; }   // 【fix160】超过 20 秒一律结束，杜绝卡死
   const R = RET; if (!R) return;
+  // 【fix495】返程演出和去程一样会让 update() 整段 return，常规 updateDayNight 不跑。
+  // 去程 flightTick 早在 fix85 就补了这一句（32236），**返程一直漏着**：
+  // 于是 updateWeather 的天气系数没有基准重置，7.4 秒演出里 sun/hemi/fog/背景一路累积，
+  // 晴天越乘越黑、阴雨越乘越白 —— 用户报的「返程机全黑全白，不只是下雨」。
+  // 补上后与去程完全对称：昼夜/天空/光照每帧写回绝对值，天气效果连续、不再突变也不再发散。
+  try { updateDayNight(dt); } catch (eDN) { console.warn('[ret daynight]', eDN); }
   R.t += dt;
   const el = retOverlayEl();
   const t = R.t;
@@ -32799,11 +32814,19 @@ function updateWeather(dt) {
   _wxCur.sun += (P.sun - _wxCur.sun) * k;
   _wxCur.hemi += (P.hemi - _wxCur.hemi) * k;
   _wxCur.wet += (P.wet - _wxCur.wet) * k;
-  // ⚠️ 下面这些**只在非过场时施加**。乘机过场期间 update() 会直接 return（由 flightTick 接管），
-  //    updateDayNight 不再执行、也就不会把这些值重置回基准 —— 而这里的 *= 和
-  //    lerp / multiplyScalar 都是**就地累积**的，于是天空会一帧比一帧黑，
-  //    表现就是用户实测的"下雨时坐飞机先闪白、然后全黑"。
-  if (!FLIGHT) {
+  // ⚠️ 下面这些**只在「本帧基准已刷新」且非去程过场时施加**。
+  //    这里的 *= / lerp / multiplyScalar 全是就地累积，必须每帧先由 updateDayNight 写回
+  //    绝对值，否则在旧值上反复乘系数，几十帧就指数发散（历史：坐飞机先闪白、然后全黑）。
+  // 【fix495】原守卫只有 `!FLIGHT`，漏了两个同样会让 update() 提前 return 的状态：
+  //   · RET 返程演出（用户这次报的「返程机全黑全白」）—— FLIGHT 是 null，守卫形同虚设；
+  //   · gamePaused 面板暂停（商店/地图/属性等）—— update() 整段不跑。
+  //   而本函数挂在 frameLoop 尾部、**无条件每帧执行**，于是这两种情况下天气系数一直累积。
+  //   晴天 hemi×0.94 → 越来越黑；多云/阴/小雨 hemi×1.06/1.22/1.30 → 过曝全白；
+  //   小雨 fogFar×0.46 → 雾收缩成白剪影。所以「不只是下雨」，任何天气都会中招，只是雨/阴最剧烈。
+  //   现在用 updateDayNight 末尾盖的帧戳做凭证：基准没刷新就绝不施加累积。
+  //   去程 FLIGHT 仍要跳过（它自己调 updateDayNight，但这段会覆盖演出专用的高空雾 near/far）。
+  const baseFresh = (window.__dnFrame === _frameCnt);
+  if (!FLIGHT && baseFresh) {
     sun.intensity *= _wxCur.sun;
     hemi.intensity *= _wxCur.hemi;
     scene.fog.far *= _wxCur.fogFar;
