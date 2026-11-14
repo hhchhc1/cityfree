@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix492-standalone">
+<meta name="cf-build" content="20261114-fix493-newcity-life">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -9860,6 +9860,65 @@ const streetLightPool = [];   // 复用的点光源（只给玩家附近最近�
   }
 })();
 
+// ==================== 【fix493】新城区（南岸新区·霓虹楼群）路网常量 ====================
+// 用户需求："给新城市的那边的城市区的路灯加上真正的光照，照明效果就和主城区一样，
+//            然后给新城市安排上和主城区类似的交通逻辑和行人"
+// 背景：新城区是后期追加的装饰城市（buildSouthDistrict，行 29397），路灯只有灯杆+自发光灯头，
+//   没进 STREET_LAMPS（分不到 PointLight）、也没有地面光斑/灯晕 → 夜里"灯头亮、地面全黑"；
+//   车流 addTraffic() 只刷在主城 roads[]，行人 randomSidewalkSpot() 只采主城人行道，
+//   远处回收也只会把人搬回主城 → 新城一条空街。
+// 做法：三套系统全部复用主城现成的 updater，不另起循环（撞人/抢车/爆炸/掉落全自动生效）。
+// ⚠️ 必须用 var 且放在**所有引用它的函数之前**：行 11797 生成居民时会立刻调用
+//    randomSidewalkSpot()，顶层 const/let 晚声明会踩 TDZ 导致整个脚本白屏。
+var NC = {
+  minX: 965, maxX: 1518, minZ: -80, maxZ: 318,   // 与 buildSouthDistrict 的 DX0/DX1/DZ0/DZ1 一致
+  avX: [1080, 1400], stZ: [30, 155, 280],         // AVX 两条南北主干道 / STZ 三条东西街道
+  avW: 20, stW: 16,                               // AVW / STW 路宽
+  // 人行道铺装比路面每侧宽 3m（pbox(AVW+6) / pbox(STW+6)），路面半宽 10 / 8；
+  // 行人目标落在「路缘外 2.2m」处：主干道 c±12.2、横街 c±10.2，都稳稳在铺装上。
+  curbOut: 2.2
+};
+// 新城区路灯坐标收集点：两处建灯代码只 push 数字；等 batchStaticScene() 跑完后再统一建
+// 光斑/光晕并注册进 STREET_LAMPS —— 放后面才不会被静态合批吃掉逐帧的 visible 控制。
+var NEW_CITY_LAMPS = [];
+// 玩家是否在新城区：由 updateStreetLights() 每帧刷新（那里本来就算了 px/pz）。
+// randomSidewalkSpot() 只读这个布尔，初始化阶段 person/state 还没建好时也不会抛错。
+var _ncPlayerHere = false;
+function inNC(x, z) {
+  return x > 900 && x >= NC.minX - 90 && x <= NC.maxX + 90 && z >= NC.minZ - 90 && z <= NC.maxZ + 90;
+}
+// 新城区人行道采样点，返回格式与 randomSidewalkSpot 完全一致，
+// 额外带 nc/ncMin/ncMax：让 updateResident 用新城边界，而不是被 clampCity / CITY-8 夹回主城。
+function ncRandomSidewalkSpot() {
+  // 【关键】横向分流道必须和主城 updateResident 的 sidewalkLanePref() 用的是同一组常量。
+  // 早先这里凭感觉写了 6.45 / 6.90，而主城实际是 SIDEWALK_LANE_IN=5.60 / OUT=6.45，
+  // 并且 21405 每帧会把 |坐标-roadC| 平滑拉回 5.60 或 6.45 —— 新城行人一出生就被
+  // 横拖 0.45~0.85m，看起来像集体往路边抽搐一下。改成同源后生成即稳态。
+  // 用 typeof 兜底：这些是 var（hoisted 但可能尚未赋值），不能直接裸引用。
+  const inLane  = (typeof SIDEWALK_LANE_IN  === 'number') ? SIDEWALK_LANE_IN  : 5.60;
+  const outLane = (typeof SIDEWALK_LANE_OUT === 'number') ? SIDEWALK_LANE_OUT : 6.45;
+  const swMid   = (inLane + outLane) / 2;
+  const vertical = Math.random() < 0.5;
+  const side = Math.random() < 0.5 ? 1 : -1;
+  const sign = Math.random() < 0.5 ? 1 : -1;
+  const lat = side * ((side * sign > 0) ? inLane : outLane);
+  // 新城路面比主城宽得多（半宽 10 / 8，主城只有 4.5）。这里不把 roadC 设成真实路中心，
+  // 而是设成一个「等效路中心」：让 roadC + 5.60/6.45 正好落在真实人行道上。
+  // 这样 21404 的夹取范围 SIDEWALK_IN~OUT、pedAvoidance、pedLatOff 全都能原样复用。
+  if (vertical) {
+    const c = NC.avX[(Math.random() * NC.avX.length) | 0];
+    const along = NC.minZ + 22 + Math.random() * (NC.maxZ - NC.minZ - 44);
+    const roadC = c + side * (NC.avW / 2 + NC.curbOut - swMid);
+    return { x: roadC + lat, z: along, axis: 'v', roadC, side, sign,
+             nc: true, ncMin: NC.minZ + 14, ncMax: NC.maxZ - 14 };
+  }
+  const c = NC.stZ[(Math.random() * NC.stZ.length) | 0];
+  const along = NC.minX + 22 + Math.random() * (NC.maxX - NC.minX - 44);
+  const roadC = c + side * (NC.stW / 2 + NC.curbOut - swMid);
+  return { x: along, z: roadC + lat, axis: 'h', roadC, side, sign,
+           nc: true, ncMin: NC.minX + 14, ncMax: NC.maxX - 14 };
+}
+
 // ========== 人形 ==========
 // ========== 汤米快跑风格火柴人模型（大圆头 + 白眼 + 全身统一阵营色） ==========
 // 阵营识别规则：传入 opts.uniformColor 时，头/躯干/手臂/腿/鞋**全部**用该颜色，
@@ -11779,6 +11838,10 @@ function randomSidewalkSpot(clanCenter) {
       ? { x: clanCenter.c + lat, z: along, axis: 'v', roadC: clanCenter.c, side: side, sign: sign }
       : { x: along, z: clanCenter.c + lat, axis: 'h', roadC: clanCenter.c, side: side, sign: sign });
   }
+  // 【fix493】玩家在新城区时，行人回收/复活必须落在**新城**人行道上。
+  // 原来这里永远返回主城坐标（|x|≤500），recyclePedestrians 的 26~110m 落点池在新城一个点
+  // 都挑不中 → 主城的人全被留在主城，新城一条空街。_ncPlayerHere 由 updateStreetLights 每帧刷新。
+  if (_ncPlayerHere) return ncRandomSidewalkSpot();
   const c = roads[(Math.random() * roads.length) | 0];
   const vertical = Math.random() < 0.5;
   const side = Math.random() < 0.5 ? 1 : -1;
@@ -12135,6 +12198,14 @@ const FIXED_RECALL_DELAY = 180;   // 【fix149】用户要求归位时间 ×3（
 const HELI_RECALL_DELAY = 75;   // 【fix149】用户要求归位时间 ×3（原 25）
 function updateFixedVehicleRecall(dt) {
   const pad = window.MIL_HELIPAD, heli = window.militaryHelicopter;
+  // 【fix493】自愈：早先 fix490 会把玩家开过的 fixed 载具连 mesh 一起删掉，
+  // 但 window.militaryHelicopter 引用仍在 —— 归位逻辑照跑、玩家却再也看不见飞机。
+  // 这里在归位前把它挂回场景/数组，旧存档里已经"丢"的直升机也能自己回来。
+  if (heli && !heli.exploded) {
+    if (heli.group && !heli.group.parent) scene.add(heli.group);
+    if (cars.indexOf(heli) < 0) cars.push(heli);
+    heli.playerUsed = false; heli.playerUsedDay = undefined;
+  }
   if (pad && heli && !heli.exploded) {
     if (state === 'drive' && currentCar === heli) heli.offHomeT = 0;
     else if (Math.hypot(heli.x - pad.x, heli.z - pad.z) < 12) heli.offHomeT = 0;
@@ -15564,7 +15635,11 @@ function tryToggle() {
         if (c.group.userData.driver) c.group.userData.driver.visible = false;
         person.visible = false;
       }
-      c.playerUsed = true;   // 【fix490】打"玩家动过"标记：停放满半个昼夜后自动消失，见 updatePlayerUsedCarDespawn
+      // 【fix490】打"玩家动过"标记：停放满半个昼夜后自动消失，见 updatePlayerUsedCarDespawn
+      // 【fix493】从源头排除固定/任务/已购载具：它们各有归位（updateFixedVehicleRecall）、
+      //   车库或重生机制，被清掉后 window.* 引用还在、mesh 却不在场景里，就成了"悬空载具"。
+      //   这正是用户报的「直升机飞到新城市放下后就不归位了」的根因。
+      if (!c.fixed && !c.owned) c.playerUsed = true;
       state = 'drive'; currentCar = c; speed.v = 0; c.damage = c.damage || 0;
     // 【fix149】在基地里动直升机/坦克 → 全部警卫立刻追打
     try { if ((c.isHelicopter || c.isTank) && inMilitaryBase(c.x, c.z)) alertBaseGuards(45); } catch (e) {}
@@ -17117,12 +17192,23 @@ spawnShockRing(v.x, _wy, v.z, 1.2, 11, 0.55, 0xffc45a);
 //     · 玩家下车（停好）时记 playerUsedDay = worldDay + worldTime（昼夜连续值，跨午夜单调）；
 //     · 一个完整昼夜 = worldDay +1，半个昼夜 = +0.5，所以"停了 >=0.5 个昼夜"即可清掉。
 //   豁免：正在驾驶的车（currentCar）、已炸成残骸的车（exploded，走 explodeCar 流程）、
-//        军用载具（直升机/坦克）由 militaryRespawn 倒计时归位，不会永久丢失。
+//        【fix493】以及**所有固定/任务载具**：军用直升机、坦克、固定林肯、车库自行车、
+//        玩家买下的车。它们各有自己的归位/重生机制（updateFixedVehicleRecall /
+//        ensureFixedLimoAtHome / militaryRespawn），被这里删掉后 window.* 引用还在、
+//        mesh 却已不在场景里，就变成"悬空载具"，正是用户报的
+//        「直升机飞到新城市放下后就不归位了」。militaryRespawn 只在 explodeCar 触发，
+//        被这里删除时并不会重生，所以必须显式跳过。
 function updatePlayerUsedCarDespawn() {
   const now = worldDay + worldTime;
   for (let i = cars.length - 1; i >= 0; i--) {
     const v = cars[i];
     if (!v || !v.playerUsed || v.playerUsedDay === undefined || v.exploded) continue;
+    if (v.fixed || v.isHelicopter || v.isTank || v.isLimo || v.owned) continue;   // 【fix493】固定/任务载具不清理
+    // 再加一层"全局引用白名单"：万一某个固定载具没打 fixed 标记（老存档、后续新增的
+    // 任务车），也不会被误删。比只靠字段更保险，代价只是几次指针比较。
+    if (v === window.militaryHelicopter || v === window.militaryTank ||
+        v === window.FIXED_LIMO_REF || v === window.FIXED_LIMO_REF2 ||
+        (typeof garageDoor !== 'undefined' && garageDoor && garageDoor.car === v)) continue;
     if (state === 'drive' && currentCar === v) continue;   // 正在开的车不收
     if (now - v.playerUsedDay < 0.5) continue;              // 还没停够半个昼夜
     try { if (v.group) scene.remove(v.group); } catch (e) {}
@@ -17297,7 +17383,12 @@ const DMG_REPAIR_T = 14;      // 轻微受损（1 档）多久后自动修好，
 const DMG_TOW_T = 26;         // 中度以上受损（2/3 档）多久后被拖走
 // 补车：车流只在开局生成一次（addTraffic），不像警车那样每帧补足数量。
 // 不补的话玩家一路撞车，城市车流会越来越少，最后变成空城。
-function respawnTrafficCar() {
+// 【fix493】补车要补回"被清掉那辆车所在的城区"：否则新城车被炸/被堵死后
+// 会补一辆主城车，跑一会儿新城又变空街。ncSpawnTrafficCar 是后面的函数声明（hoisted）。
+function respawnTrafficCar(dead) {
+  if (dead && dead.ncMax !== undefined && dead.ncMax !== null && typeof ncSpawnTrafficCar === 'function') {
+    ncSpawnTrafficCar(1); return;
+  }
   const v = makeTrafficVehicle();
   const dir = Math.random() < 0.5 ? 1 : -1;
   const ri = (Math.random() * roads.length) | 0;
@@ -17319,7 +17410,7 @@ function despawnDamagedCar(v) {
   const wi = wrecks.indexOf(v); if (wi >= 0) wrecks.splice(wi, 1);
   if (v.group) { scene.remove(v.group); unregisterDynamicObject(v.group); }
   for (let k = 0; k < 3; k++) emitSmoke(v.x + (Math.random() - 0.5) * 1.4, 0.9 + Math.random() * 0.8, v.z + (Math.random() - 0.5) * 1.4, true);
-  if (wasTraffic) respawnTrafficCar();   // 保持车流密度
+  if (wasTraffic) respawnTrafficCar(v);   // 【fix493】保持车流密度，并补回原城区
 }
 
 // 堵车清理：交通车连续停住很久（不是等红灯，红灯最长约 8 秒）且玩家不在附近，
@@ -21316,7 +21407,12 @@ function updateResident(r, dt) {
     const p = { x: r.x + fx * spd * dt + rx * latV * dt,
                 z: r.z + fz * spd * dt + rz * latV * dt };
     collideNpc(p, 0.4, r);
-    clampCity(p);
+    // 【fix493】新城行人不能走主城 clampCity（会把 x≈1000 的人按主城边界处理）。
+    // 用新城自己的矩形夹取，其余碰撞/避让/掉头逻辑完全复用主城 updateResident。
+    if (r.ncMax !== undefined && r.ncMax !== null) {
+      p.x = Math.max(NC.minX, Math.min(NC.maxX, p.x));
+      p.z = Math.max(NC.minZ, Math.min(NC.maxZ, p.z));
+    } else clampCity(p);
     if (r.sidewalk) {
       // 【路边规则】把横向偏移夹回人行道带：就算被车撞飞、被爆炸推出去，
       // 下一帧也会自己走回路边，绝不会停在车道上。
@@ -21335,9 +21431,13 @@ function updateResident(r, dt) {
       try { if (typeof collideBuildingsFast === 'function') collideBuildingsFast(p, 0.45); } catch (ePedBld) {}
       // 走到城市边缘：掉头（不然会一直贴着边界原地踏步）
       const along = (r.axis === 'v') ? p.z : p.x;
-      const lim = CITY - 8;
-      if (along > lim || along < -lim) {
-        if (r.axis === 'v') p.z = along > 0 ? lim : -lim; else p.x = along > 0 ? lim : -lim;
+      // 【fix493】走到街区尽头就掉头：新城用 ncMin/ncMax，主城仍是 ±(CITY-8)。
+      // 原来 `along > 0 ? lim : -lim` 对新城 x 恒为正的坐标会把人瞬移到主城边界。
+      const limHi = (r.ncMax !== undefined && r.ncMax !== null) ? r.ncMax : (CITY - 8);
+      const limLo = (r.ncMin !== undefined && r.ncMin !== null) ? r.ncMin : -(CITY - 8);
+      if (along > limHi || along < limLo) {
+        const cl = Math.max(limLo, Math.min(limHi, along));
+        if (r.axis === 'v') p.z = cl; else p.x = cl;
         r.walkSign = -(r.walkSign || 1);
         r.angle = sidewalkAngle(r.axis, r.walkSign);
       }
@@ -21380,6 +21480,10 @@ function respawnResident(r) {
     // 路人重生也必须落在人行道上：原来统一在城市里随机撒点，复活即站在马路中间
     const s = randomSidewalkSpot();
     r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
+    // 【fix493】落点在新城就把边界标记同步给人；落点在主城则清掉。
+    // 三处（复活 / 清出球场 / 远处回收）都要做，漏一处人就会被主城 CITY 夹走。
+    r.ncMin = (s.ncMin !== undefined) ? s.ncMin : null;
+    r.ncMax = (s.ncMax !== undefined) ? s.ncMax : null;
     r.angle = sidewalkAngle(s.axis, s.sign);
     r.group.position.set(r.x, terrainHeight(r.x, r.z), r.z); r.group.rotation.y = r.angle;
     return;
@@ -21426,6 +21530,10 @@ function recyclePedestrians(dt) {
     if (inPitchArea(r.x, r.z, 2)) {
       const s = randomSidewalkSpot();
       r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
+      // 【fix493】第三处搬迁落点：同样要同步新城边界标记，否则随机落到新城的人
+      // 下一帧会被 clampCity 按主城边界夹走（复活/回收两处已在 21465、21566 处理）。
+      r.ncMin = (s.ncMin !== undefined) ? s.ncMin : null;
+      r.ncMax = (s.ncMax !== undefined) ? s.ncMax : null;
       r.angle = sidewalkAngle(s.axis, s.sign);
       r.walking = true; r.walkTime = 1.5 + Math.random() * 2.5; r.timer = Math.random() * 2;
       if (r.group) { r.group.position.set(r.x, terrainHeight(r.x, r.z), r.z); r.group.rotation.y = r.angle; }
@@ -21477,6 +21585,10 @@ function recyclePedestrians(dt) {
     }
     const s = pick.t;
     r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
+    // 【fix493】落点在新城就把边界标记同步给人；落点在主城则清掉。
+    // 三处（复活 / 清出球场 / 远处回收）都要做，漏一处人就会被主城 CITY 夹走。
+    r.ncMin = (s.ncMin !== undefined) ? s.ncMin : null;
+    r.ncMax = (s.ncMax !== undefined) ? s.ncMax : null;
     r.angle = sidewalkAngle(s.axis, s.sign);
     r.walking = true; r.walkTime = 1.5 + Math.random() * 2.5; r.timer = Math.random() * 2;
     r.hate = null;
@@ -22079,7 +22191,14 @@ function updateTraffic(t, dt) {
     }
     const edge = CITY - 8;
     const coord = t.road === 'v' ? t.z : t.x;
-    if (coord * t.dir > edge - 0.4) {
+    // 【fix493】新城车流用自己的边界区间：主城判据 `coord*dir > CITY-8` 假设坐标以 0 为中心，
+    // 而新城 x≈965~1518 / z≈-80~318 从生成那一刻就"越界"，车会原地掉头卡死。
+    // 新城车不设 roadIdx，interFor() 会直接返回 null → 跳过主城路口相位，只在自己街区内往返。
+    const _ncEdge = (t.ncMax !== undefined && t.ncMax !== null);
+    const overEdge = _ncEdge
+      ? (t.dir > 0 ? coord > t.ncMax : coord < t.ncMin)
+      : (coord * t.dir > edge - 0.4);
+    if (overEdge) {
       t.speed = Math.max(0, t.speed - TRAFFIC_DECEL * dt);
       if (t.speed < 0.2) {
         // 【靠右行驶】掉头后要并入对向的"右侧车道"：南北向路的车道是 cx - dir*lane，
@@ -23670,6 +23789,9 @@ function updateStreetLights() {
   if (!streetLightPool.length) initStreetLightPool();
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+  // 【fix493】顺手刷新"玩家是否在新城区"，供 randomSidewalkSpot / 行人回收使用。
+  // 放在这里是因为本函数每帧都跑、且已经算好了 px/pz，不必另外再取一次玩家坐标。
+  _ncPlayerHere = (typeof inNC === 'function') ? inNC(px, pz) : false;
   _lampNear.length = 0;
   const on = nightF >= 0.04;
   const litR2 = LAMP_LIT_RADIUS * LAMP_LIT_RADIUS;   // 真正点亮 PointLight 的半径（灯罩/光斑已不按距离剔除）
@@ -23682,7 +23804,10 @@ function updateStreetLights() {
     // 夜里全部提交渲染，而每个 Sprite 都是一个独立 draw call —— 这是晚上开车卡顿的主要来源之一。
     // 现在按 160m（正好等于雾的 near）剔除，边界被雾自然盖住，看不出"突然消失"。
     // 迟滞 30m：防止在半径边缘来回开车时灯罩反复闪烁。
-    const haloR = L._lit ? LAMP_HALO_RADIUS : LAMP_HALO_RADIUS - 30;
+    // 【fix493】新城区路灯更密（约 150 盏），光晕剔除半径收窄到 110m（主城 160m），
+    // 免得夜里一进新城凭空多出几十个 Sprite 的 draw call；迟滞 30m 的规则不变。
+    const _hR = L.nc ? 110 : LAMP_HALO_RADIUS;
+    const haloR = L._lit ? _hR : _hR - 30;
     L._lit = on && d2 < haloR * haloR;
     if (L.halo) L.halo.visible = L._lit;
     if (L.pool) L.pool.visible = L._lit;
@@ -24540,11 +24665,14 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     updateMilitaryRespawn(dt);
   updateBurningVehicles(dt);
   updateIdleHelicopters(dt);
-  updateFixedVehicleRecall(dt);
   updateFerris(dt);
     updateVehicleDoors(dt);
-  updatePlayerUsedCarDespawn();   // 【fix490】玩家动过的车停放半个昼夜后自动消失
   } catch(e) { console.error('[Vehicle update error]', e); }
+  // 【fix493】固定载具归位 / 玩家动过的车自动消失：从上面的大 try 里挪出来独立跑。
+  // 以前挤在同一个 try 块，前面任何一辆车抛异常（例如新城区某处 terrainHeight 读到异常值）
+  // 都会连带把这两个 updater 一起跳过，表现就是「直升机飞到新城市放下后永远不归位」。
+  try { updateFixedVehicleRecall(dt); updatePlayerUsedCarDespawn(); }
+  catch(e) { console.error('[Recall/Despawn error]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
   try { updateRagdolls(dt); } catch(e) { console.error('[Ragdolls update error]', e); }
@@ -26240,6 +26368,7 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
       pole.position.set(px, 4.3, z); add(pole);
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 2.0), lampHeadM);
       head.position.set(px - s * 1.1, 8.4, z); add(head);
+      NEW_CITY_LAMPS.push({ x: px - s * 1.1, y: 8.4, z: z });   // 【fix493】登记灯位，稍后补真实光照
     }
   }
   const tlBoxM = new THREE.MeshLambertMaterial({ color: 0x1b1e22 });
@@ -29468,6 +29597,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
       det(new THREE.CylinderGeometry(0.14, 0.2, 8.4, 6), 0x4a4f55, px, 4.2, z);
       det(BX(0.6, 0.28, 2.2), 0x4a4f55, px - s * 1.1, 8.5, z);
       det(BX(1.6, 0.12, 0.9), 0xfff0bb, px - s * 1.8, 8.36, z, 0, 0, 0, true);
+      NEW_CITY_LAMPS.push({ x: px - s * 1.8, y: 8.36, z: z });   // 【fix493】登记灯位
     }
     // 东西向街道的路灯（原来只给两条主干道装了灯，横街夜里是**全黑**的）
     for (const rz of STZ) for (let x = DX0 + 34; x < DX1 - 22; x += 56) for (const s of [-1, 1]) {
@@ -29475,6 +29605,7 @@ m4a.position.set(AX, BASE + 0.18, -141);
       det(new THREE.CylinderGeometry(0.14, 0.2, 8.0, 6), 0x4a4f55, x, 4.0, pz);
       det(BX(2.2, 0.28, 0.6), 0x4a4f55, x, 8.1, pz - s * 1.1);
       det(BX(1.2, 0.12, 1.6), 0xfff0bb, x, 8.0, pz - s * 1.8, 0, 0, 0, true);
+      NEW_CITY_LAMPS.push({ x: x, y: 8.0, z: pz - s * 1.8 });   // 【fix493】登记灯位
     }
     // 【fix112】人行道外侧的绿化带（3.2m 宽，树就种在里面）—— 参考图里"草地+路缘石+柏油路"的层次
     const zcuts = [DZ0];
@@ -32257,6 +32388,111 @@ try { batchStaticScene(); } catch (error) { console.error('[Static batch 2 error
   gm.renderOrder = -1;
   scene.add(gm);
 })();
+
+// ==================== 【fix493】新城区：真实路灯 + 交通车流 + 行人 ====================
+// 本模块必须在 batchStaticScene() 之后执行：新建的光斑/光晕/车/人不能被引擎的静态合批
+// 摘掉（合批会移除原 mesh，逐帧的 visible 控制就失效了）。
+// 三套系统全部复用主城 updater，不另起循环，所以撞人、抢车、爆炸、掉落、任务统计全都自动生效。
+//   · 路灯 → 补 pool/halo + push 进 STREET_LAMPS → updateStreetLights() 分配最近 4 盏真实 PointLight
+//   · 车流 → push 进 traffic[] → updateTraffic()，跟车/避让行人/靠右/边缘掉头全照旧
+//   · 行人 → push 进 residents[] → updateResident() + recyclePedestrians() 远处回收
+
+// 新城区车流。关键：**不设 roadIdx** → interFor() 直接返回 null，跳过主城路口相位
+// （新城区没接那套 INTERSECTIONS 红绿灯网格；trafficDetourSide 遇到 undefined 会安全返回 0）。
+// ncMin/ncMax → updateTraffic 用自己的街区边界掉头，而不是被主城 CITY-8 判定成"已出界"原地卡死。
+function ncSpawnTrafficCar(count) {
+  for (let n = 0; n < count; n++) {
+    const v = makeTrafficVehicle();
+    const vertical = Math.random() < 0.5;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    let x, z, ncMin, ncMax;
+    if (vertical) {
+      const c = NC.avX[(Math.random() * NC.avX.length) | 0];
+      x = c - dir * TRAFFIC_LANE;                 // 与主城 addTraffic 一致：南北向靠右
+      ncMin = NC.minZ + 16; ncMax = NC.maxZ - 16;
+      z = ncMin + Math.random() * (ncMax - ncMin);
+    } else {
+      const c = NC.stZ[(Math.random() * NC.stZ.length) | 0];
+      z = c + dir * TRAFFIC_LANE;                 // 东西向靠右
+      ncMin = NC.minX + 16; ncMax = NC.maxX - 16;
+      x = ncMin + Math.random() * (ncMax - ncMin);
+    }
+    for (let k = 0; k < 6 && !trafficSpawnFree(x, z, v.radius); k++) {
+      if (vertical) z = ncMin + Math.random() * (ncMax - ncMin);
+      else x = ncMin + Math.random() * (ncMax - ncMin);
+    }
+    v.group.position.set(x, terrainHeight(x, z), z);
+    v.group.rotation.y = vertical ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+    scene.add(v.group);
+    traffic.push({
+      group: v.group, x, z, baseX: x, baseZ: z,
+      road: vertical ? 'v' : 'h',                 // 注意：故意不给 roadIdx
+      dir, speed: 0, maxSpeed: 11 + Math.random() * 7,
+      radius: v.radius, rideH: v.rideH, topSpeed: v.topSpeed, accel: v.accel,
+      angle: v.group.rotation.y, hasRider: v.hasRider || false, riderDown: false,
+      saveId: 'nc-traffic-' + traffic.length, saveKind: v.saveKind,
+      saveColor: v.saveColor, durability: v.durability,
+      ncMin, ncMax
+    });
+  }
+}
+// 新城区行人。用便服路人（faction -1、不持枪），避免在新城刷出一堆会开火的帮派；
+// 之后 recyclePedestrians 还会按玩家位置把远处的人继续搬过来（randomSidewalkSpot 已支持新城）。
+function ncSpawnResidents(count) {
+  for (let k = 0; k < count; k++) {
+    const clanIdx = k % 7;
+    const bodyColor = CIVILIAN_CLAN_COLORS[clanIdx];
+    const g = makeHuman(bodyColor, false, {
+      uniformColor: bodyColor, skinColor: bodyColor, clothColor: bodyColor,
+      pantColor: bodyColor, shoeColor: bodyColor
+    });
+    const s = ncRandomSidewalkSpot();
+    const a0 = sidewalkAngle(s.axis, s.sign);
+    g.position.set(s.x, terrainHeight(s.x, s.z), s.z);
+    g.rotation.y = a0;
+    scene.add(g);
+    const hp = 40 + Math.random() * 30;
+    residents.push({
+      group: g, x: s.x, z: s.z, angle: a0, alive: true, walking: true,
+      timer: Math.random() * 2, walkTime: 0, respawn: 0, hp, maxHp: hp,
+      melee: 'fist', ranged: null, faction: -1, clan: clanIdx, flee: false,
+      hate: null, down: false, downT: 0, attackCd: 0,
+      armed: false, ammo: 0, maxAmmo: 0,
+      sidewalk: true, axis: s.axis, roadC: s.roadC, side: s.side, walkSign: s.sign,
+      ncMin: s.ncMin, ncMax: s.ncMax
+    });
+  }
+}
+(function newCityLife() {
+  // ① 路灯三件套：主城每盏灯是「灯杆 + 灯泡 + 地面光斑 pool + 灯头光晕 halo + STREET_LAMPS 登记」，
+  //    新城区只有前两件，所以夜里灯头亮着、地面却是全黑（用户截图）。
+  const poolGeo = new THREE.CircleGeometry(10, 24);
+  for (const p of NEW_CITY_LAMPS) {
+    let pool = null, halo = null;
+    if (lampPoolMat) {
+      pool = new THREE.Mesh(poolGeo, lampPoolMat);
+      pool.rotation.x = -Math.PI / 2;
+      // 新城区铺装顶面约 0.045~0.175，比主城裸地形高；光斑抬到 +0.24 才不会被铺装盖住。
+      pool.position.set(p.x, terrainHeight(p.x, p.z) + 0.24, p.z);
+      pool.renderOrder = 2;
+      scene.add(pool);
+      if (typeof registerDynamicObject === 'function') registerDynamicObject(pool);
+    }
+    if (lampHaloMat) {
+      halo = new THREE.Sprite(lampHaloMat);
+      halo.scale.set(9, 9, 1);
+      halo.position.set(p.x, p.y, p.z);
+      halo.renderOrder = 3;
+      scene.add(halo);
+    }
+    // 新城灯头在 8.0~8.4m，主城灯泡在 5.1m。PointLight 有距离衰减，挂太高地面会偏暗，
+    // 所以登记时把光源高度压到 5.4~5.8m，照度才和主城区接近。
+    STREET_LAMPS.push({ x: p.x, y: p.y - 2.6, z: p.z, pool: pool, halo: halo, nc: true });
+  }
+  // ② ③ 数量按端位收敛，手机减半（车流每帧全量 AI，行人有 LOD 但仍占 draw call）。
+  ncSpawnTrafficCar(isMobile ? 8 : 14);
+  ncSpawnResidents(isMobile ? 12 : 20);
+})();
 // 【fix129】新城建筑已全部登记进 buildings，这里把它们的可站立面网格建起来
 try { ncBuildGrid(); } catch (e) { console.error('[nc grid]', e); }
 // 【fix132】返程点光柱：用户"回程机票的位置在哪里" —— 原来返程是个**看不见的触发圈**，
@@ -32280,8 +32516,8 @@ try {
 // 背景（这是一个反复踩到的坑）：GitHub Pages 给 HTML 的响应头是 `Cache-Control: max-age=600`，
 // 所以**即使我每次都推送更新，浏览器/CDN 也可能在最长 10 分钟内继续用旧文件** ——
 // 表现就是"右上角还显示上一个 build 号""刚修的问题看起来还在"。
-// 守卫的做法：启动后异步取一次"带时间戳"的自身副本（绕开缓存），只取前 64KB
-// （BUILD 常量在文件靠前处，足够覆盖），然后比对版本号：
+// 守卫的做法：启动后异步取一次"带时间戳"的自身副本（绕开缓存），只取前 128KB
+// （fix492 起版本号写在 head 的 <meta name="cf-build">，第 214 字节，足够覆盖），然后比对版本号：
 //   · 一致      → 什么都不做
 //   · 线上更新了 → 自动带 ?v=<新版本> 重载一次，从而绕开 HTML 缓存
 // 用 sessionStorage 记住"已经为这个版本重载过"，避免刷新死循环。
