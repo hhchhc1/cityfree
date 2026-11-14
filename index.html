@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix496-south-island-abutment-car-cam">
+<meta name="cf-build" content="20261114-fix497-soccer-sprint-trail-goal-shield">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -8706,6 +8706,203 @@ function makeSprintRing(color) {
   return m;
 }
 
+// ==================== 【fix497】足球：疾跑丝带拖尾 + 球门蜂窝护盾 ====================
+// 用户：『踢球过程中如果点击疾跑或者（捡到）疾跑鞋之后，人物的脚上走过去会有一种痕迹，
+//  这种痕迹也是逐渐变弱，就和那种滑过的一道丝带或者轨迹一样；
+//  如果捡到球门护盾的话，就在自己的球门那里显示一个蓝色的、六边形的、包裹住整个球门的
+//  保护罩，上边表面是许多浅蓝色六边形。护盾破了就不显示。』
+// 设计要点：
+//  · 拖尾不是"一串离散脚印"，而是**每人一条连续的 ribbon**（一个 BufferGeometry + 一次 draw call），
+//    顶点自带 aAlpha，越老的采样点越细越透明 → 就是"滑过的一道丝带"、并且会逐渐变弱消失。
+//    用 ShaderMaterial 是因为 r128 的 vertexColors 只有 RGB 没有逐顶点 alpha。
+//  · 只在 spT>0（疾跑中）落采样点；停跑后已有丝带继续按寿命淡出，不会突变消失。
+//    点「疾跑」按钮和捡「疾跑鞋」都写 SOC.spT，所以两条触发路径自动都覆盖；AI 疾跑同理。
+//  · 护盾按 SOC.shieldTeam 显示/隐藏，破盾时该值被置 0 → 自动淡出，不需要在进球判定里加代码。
+//  · 所有 mesh 都是**运行时懒创建**（此时 batchStaticScene 早已跑完），并登记 dynamic 防再次合批；
+//    frustumCulled=false：动态改顶点后包围球是旧的，开着剔除会整条丝带凭空消失。
+var _socTrails = [];                 // 每条丝带一条记录
+var _socTrailLife = 0.85;           // 痕迹寿命（秒）：从亮到完全消失
+var _socTrailMax = 16;              // 每条丝带最多几个采样点
+var _socTrailStep = 0.25;           // 每移动 0.25m 落一个点（太密会糊成一片）
+var _socShield = null;              // 球门护盾（全局唯一，按 shieldTeam 挪到对应球门）
+
+function _socTrailMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) } },
+    vertexShader: 'attribute float aAlpha; varying float vAlpha; void main(){ vAlpha = aAlpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 uColor; varying float vAlpha; void main(){ gl_FragColor = vec4(uColor, vAlpha); }',
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending
+  });
+}
+function _socTrailCreate(owner, color) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(_socTrailMax * 2 * 3), 3));
+  geo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(_socTrailMax * 2), 1));
+  const idx = [];
+  for (let i = 0; i < _socTrailMax - 1; i++) {
+    const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  geo.setIndex(idx);
+  geo.setDrawRange(0, 0);
+  const mesh = new THREE.Mesh(geo, _socTrailMaterial(color));
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 6;
+  mesh.visible = false;
+  scene.add(mesh);
+  try { registerDynamicObject(mesh); } catch (e) {}
+  const tr = { owner: owner, geo: geo, mesh: mesh, pts: [], lastX: 0, lastZ: 0 };
+  owner.__trail = tr;
+  _socTrails.push(tr);
+  return tr;
+}
+// 每帧给某个球员采一次样。sprinting=false 时只更新"上一帧位置"，不落点（旧丝带仍会自己淡出）。
+function soccerTrailSample(owner, x, y, z, sprinting, color) {
+  if (!owner) return;
+  let tr = owner.__trail;
+  if (!tr) { tr = _socTrailCreate(owner, color); tr.lastX = x; tr.lastZ = z; }
+  if (!sprinting) { tr.lastX = x; tr.lastZ = z; return; }
+  const dx = x - tr.lastX, dz = z - tr.lastZ, d = Math.hypot(dx, dz);
+  if (d < _socTrailStep) return;
+  // 开球 / 庆祝 / 传送会让人瞬移十几米 —— 不切断的话会拉出一条横穿全场的假丝带
+  if (d > 3.5) { tr.pts.length = 0; tr.lastX = x; tr.lastZ = z; return; }
+  tr.lastX = x; tr.lastZ = z;
+  const inv = 1 / (d || 1);
+  // ⚠️ 草皮是 0.22m 厚的盒子（中心 P.gy → 顶面 P.gy+0.11），白线更高（P.gy+0.165）。
+  // 人物脚底 y 却只有 terrainHeight = P.gy，所以"y+0.07"的贴地特效会被草皮整个盖住。
+  // 统一抬到 P.gy+0.20（草皮上 9cm、白线上 3.5cm），既有贴地感又不会闪烁/被埋。
+  const groundY = Math.max(y, PITCH.gy) + 0.20;
+  tr.pts.push({ x: x, y: groundY, z: z, dx: dx * inv, dz: dz * inv, age: 0 });
+  if (tr.pts.length > _socTrailMax) tr.pts.shift();
+}
+// 每帧统一老化 + 重建顶点（放在 updateSoccer 最前面，倒计时/庆祝这些提前 return 的分支也能淡出）
+function updateSoccerTrails(dt) {
+  if (!SOC) return;
+  for (const tr of _socTrails) {
+    const pts = tr.pts;
+    for (let i = pts.length - 1; i >= 0; i--) {
+      pts[i].age += dt;
+      if (pts[i].age > _socTrailLife) pts.splice(i, 1);
+    }
+    const n = pts.length;
+    if (n < 2) { tr.mesh.visible = false; continue; }
+    const pos = tr.geo.attributes.position.array, alp = tr.geo.attributes.aAlpha.array;
+    for (let i = 0; i < n; i++) {
+      const q = pts[i];
+      const k = Math.max(0, 1 - q.age / _socTrailLife);   // 新点=1，最老的点→0
+      const w = 0.30 * (0.35 + 0.65 * k);                 // 尾巴越老越细
+      const px = -q.dz, pz = q.dx;                        // 垂直运动方向 → 展开成带子
+      const o = i * 6;
+      pos[o] = q.x + px * w; pos[o + 1] = q.y; pos[o + 2] = q.z + pz * w;
+      pos[o + 3] = q.x - px * w; pos[o + 4] = q.y; pos[o + 5] = q.z - pz * w;
+      const a = k * k * 0.75;                             // 平方衰减：不是线性变暗，更像滑痕
+      alp[i * 2] = a; alp[i * 2 + 1] = a;
+    }
+    tr.geo.attributes.position.needsUpdate = true;
+    tr.geo.attributes.aAlpha.needsUpdate = true;
+    tr.geo.setDrawRange(0, (n - 1) * 6);
+    tr.mesh.visible = true;
+  }
+}
+function soccerClearTrails() {
+  for (const tr of _socTrails) {
+    tr.pts.length = 0; tr.mesh.visible = false;
+    try { scene.remove(tr.mesh); } catch (e) {}
+    try { unregisterDynamicObject(tr.mesh); } catch (e) {}
+    try { tr.geo.dispose(); tr.mesh.material.dispose(); } catch (e) {}
+    if (tr.owner) tr.owner.__trail = null;
+  }
+  _socTrails.length = 0;
+}
+
+// ---- 球门护盾：蓝色蜂窝能量罩 ----
+// 表面"许多浅蓝色六边形"用一张 CanvasTexture 画蜂窝（不是几十个 mesh，省 draw call），
+// 贴在一个刚好把门柱/横梁/球网整个包进去的盒形罩上；再加一圈亮蓝边线勾轮廓。
+function _socHexTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, 512, 512);
+  const R = 30, W = Math.sqrt(3) * R;      // 尖顶六边形：横向间距 √3R、纵向 1.5R、隔行错半格
+  for (let row = -1; row < 14; row++) for (let col = -1; col < 12; col++) {
+    const cx = col * W + ((row & 1) ? W / 2 : 0), cy = row * 1.5 * R;
+    c.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 2;
+      const px = cx + R * Math.cos(a), py = cy + R * Math.sin(a);
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+    c.fillStyle = 'rgba(70,170,255,0.10)'; c.fill();
+    c.strokeStyle = 'rgba(165,232,255,0.90)'; c.lineWidth = 2.4; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 0.8; c.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+function ensureSoccerGoalShield() {
+  if (_socShield) return _socShield;
+  const P = PITCH, BW = 3.6, BH = 3.7, BD = P.goalZ * 2 + 1.8;
+  const box = new THREE.BoxGeometry(BW, BH, BD);
+  const fill = new THREE.Mesh(box, new THREE.MeshBasicMaterial({
+    color: 0x2b8cff, transparent: true, opacity: 0.13,
+    side: THREE.DoubleSide, depthWrite: false }));
+  const hex = new THREE.Mesh(new THREE.BoxGeometry(BW + 0.06, BH + 0.06, BD + 0.06),
+    new THREE.MeshBasicMaterial({ map: _socHexTexture(), transparent: true, opacity: 0.85,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box),
+    new THREE.LineBasicMaterial({ color: 0xa8e8ff, transparent: true, opacity: 0.9, depthWrite: false }));
+  const g = new THREE.Group();
+  g.add(fill, hex, edges);
+  g.visible = false; g.renderOrder = 5;
+  hex.renderOrder = 5; edges.renderOrder = 6;
+  scene.add(g);
+  for (const o of [g, fill, hex, edges]) { try { registerDynamicObject(o); } catch (e) {} }
+  _socShield = { g: g, fill: fill, hex: hex, edges: edges, h: BH, team: 0, fadeT: 0, t: 0 };
+  return _socShield;
+}
+function updateSoccerGoalShield(dt) {
+  if (!SOC) return;
+  const team = SOC.active ? SOC.shieldTeam : 0;
+  if (team === 0 && !_socShield) return;      // 从没捡到过护盾就别建对象，省一张 512² 贴图
+  const S = ensureSoccerGoalShield();
+  if (team !== S.team) {
+    if (S.team > 0 && team === 0) S.fadeT = 0.42;   // 护盾被挡出 / 比赛结束：短促扩散淡出
+    S.team = team;
+    if (team > 0) {
+      const P = SOC.P;
+      // 蓝方(1)攻 +x 门、守 -x 门；红方(2)反过来。球网在门线外侧 1.3m，罩子要连网一起包住。
+      const gx = team === 1 ? (P.x - P.hw) : (P.x + P.hw);
+      const out = team === 1 ? -1 : 1;
+      S.g.position.set(gx + out * 1.1, P.gy + S.h / 2 - 0.05, P.z);
+      S.g.scale.set(1, 1, 1);
+      S.fadeT = 0;
+    }
+  }
+  S.t += dt;
+  const alive = team > 0, fading = S.fadeT > 0;
+  if (!alive && !fading) { S.g.visible = false; return; }
+  S.g.visible = true;
+  let op = 1;
+  if (fading) {
+    S.fadeT -= dt;
+    op = Math.max(0, S.fadeT / 0.42);
+    S.g.scale.setScalar(1 + (1 - op) * 0.18);
+    if (S.fadeT <= 0) { S.g.visible = false; return; }
+  } else {
+    const pulse = 0.5 + 0.5 * Math.sin(S.t * 2.4);       // 轻微呼吸，别死板
+    S.g.scale.set(1, 1 + pulse * 0.012, 1);
+    op = 0.82 + 0.18 * pulse;
+  }
+  S.fill.material.opacity = 0.13 * op;
+  S.hex.material.opacity = 0.85 * op;
+  S.edges.material.opacity = 0.90 * op;
+}
+function soccerHideShieldNow() {
+  if (!_socShield) return;
+  _socShield.team = 0; _socShield.fadeT = 0; _socShield.g.visible = false;
+}
+
 // 【2026-10-16】射门动作：右腿大力前摆（照搬 animateHuman 的 kick 姿态，但这里可以叠加在
 // 主游戏已经摆好的姿态之上，用于玩家自己 —— 玩家的 person 是主游戏在驱动，必须在之后覆盖）
 function applySoccerKickPose(g, t) {
@@ -8786,13 +8983,18 @@ function soccerPuModel(type) {
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.5, 24),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring);
-  if (type === 'sprint') {                                   // 鞋子
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.5), new THREE.MeshLambertMaterial({ color: 0x3aa0d8 }));
-    body.position.y = 0.5; g.add(body);
-    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshLambertMaterial({ color: 0x3aa0d8 }));
-    toe.position.set(0, 0.46, 0.28); toe.scale.set(1, 0.7, 1.1); g.add(toe);
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.56), new THREE.MeshBasicMaterial({ color: 0xeaffff }));
-    sole.position.set(0, 0.41, 0.02); g.add(sole);
+  if (type === 'sprint') {                                   // 【fix497】一双疾跑鞋（原来只画了一只）
+    const blue = new THREE.MeshLambertMaterial({ color: 0x3aa0d8 });
+    const soleM = new THREE.MeshBasicMaterial({ color: 0xeaffff });
+    for (const sx of [-0.22, 0.22]) {
+      const sh = new THREE.Group(); sh.position.x = sx; sh.rotation.y = sx < 0 ? 0.12 : -0.12; g.add(sh);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.16, 0.46), blue);
+      body.position.y = 0.5; sh.add(body);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), blue);
+      toe.position.set(0, 0.46, 0.26); toe.scale.set(1, 0.7, 1.1); sh.add(toe);
+      const sole = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.52), soleM);
+      sole.position.set(0, 0.41, 0.02); sh.add(sole);
+    }
   } else if (type === 'tackle') {                            // 时钟（冷却）
     const clock = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 20), new THREE.MeshLambertMaterial({ color: 0xffd24d }));
     clock.position.y = 0.56; g.add(clock);
@@ -8989,6 +9191,8 @@ function soccerBegin() {
   put(mt, false);
   attachJerseyNumber(person, 1, false);   // 【fix26】玩家自己（1号前锋）的号码也印到球衣正反面
   soccerClearPowerups(); SOC.puT = 5; SOC.tackleFastT = 0;   // 【fix26】每场技能包清空、重新计时
+  try { soccerClearTrails(); } catch (e) {}                    // 【fix497】每场从干净状态开始
+  try { soccerHideShieldNow(); } catch (e) {}
   SOC.active = true; SOC.phase = 'play'; SOC.score = [0, 0]; SOC.wins = [0, 0];
   SOC.round = 1; SOC.roundT = 0; SOC.sudden = false; SOC.kickCd = 0;
   SOC.kickoffTeam = SOC.playerTeam;          // 第 1 局：玩家所在的队开球
@@ -9031,6 +9235,8 @@ function soccerEnd(playerWon) {
   restoreSocKit();                                          // 【fix233】直接从母本还原玩家自己买的衣服，不再先刷蓝再还原
     detachJerseyNumber(person);                                  // 【fix26】比赛结束把玩家球衣上的号码片卸掉（回到普通路人）
     soccerClearPowerups(); SOC.tackleFastT = 0;                  // 【fix26】清掉场上残留技能包
+    try { soccerClearTrails(); } catch (e) {}                     // 【fix497】拆掉所有丝带 mesh，别跨场次累积
+    try { soccerHideShieldNow(); } catch (e) {}                   // 【fix497】比赛结束立刻收起护盾
     soccerResetBall();
     soccerHidePanel(); SOC.panelOn = false;
     if (SOC.kickBtn) SOC.kickBtn.style.display = 'none';
@@ -9162,6 +9368,11 @@ function soccerResolveRound() {
 
 function updateSoccer(dt) {
   if (!SOC) return;
+  // 【fix497】视觉特效每帧都要跑：放在所有提前 return（未开赛 / 倒计时 / 庆祝）之前，
+  // 这样暂停在这些阶段时旧丝带仍会正常淡出、护盾也不会卡在半透明状态。
+  // 各自包 try：特效出错绝不能把整段足球逻辑带崩。
+  try { updateSoccerTrails(dt); } catch (eTr) { console.warn('[soccer trail]', eTr); }
+  try { updateSoccerGoalShield(dt); } catch (eSh) { console.warn('[soccer shield]', eSh); }
   try {
     const P = SOC.P, b = SOC.ball;
     // ---- 触发提示（未开赛时）----
@@ -9396,12 +9607,15 @@ function updateSoccer(dt) {
         if (p.spT > 0) {
           const now = performance.now();
           p.ring.visible = true;
-          p.ring.position.set(p.x, p.mesh.position.y + 0.06, p.z);
+          p.ring.position.set(p.x, Math.max(p.mesh.position.y, P.gy) + 0.20, p.z);   // 【fix497】抬到草皮顶面之上，原来 +0.06 会被草皮盖住
           const pulse = 1 + Math.sin(now * 0.013) * 0.16;
           p.ring.scale.set(pulse, pulse, pulse);
           p.ring.material.opacity = 0.5 + 0.32 * Math.abs(Math.sin(now * 0.0095));
         } else p.ring.visible = false;
       }
+      // 【fix497】AI 疾跑时也在脚下留丝带（颜色跟它队伍的疾跑光环一致）
+      try { soccerTrailSample(p, p.x, p.mesh.position.y, p.z, p.spT > 0,
+                              p.team === 1 ? 0x5fd8ff : 0xffa54f); } catch (e) {}
     }
 
     // 【fix40 清理】这里原来有一个"号码牌：悬在头顶、永远面向相机"的每帧循环
@@ -9557,12 +9771,16 @@ function updateSoccer(dt) {
       if (SOC.spT > 0) {
         const now = performance.now();
         me.ring.visible = true;
-        me.ring.position.set(person.position.x, person.position.y + 0.06, person.position.z);
+        me.ring.position.set(person.position.x, Math.max(person.position.y, P.gy) + 0.20, person.position.z);  // 【fix497】同 AI：抬出草皮
         const pulse = 1 + Math.sin(now * 0.013) * 0.16;
         me.ring.scale.set(pulse, pulse, pulse);
         me.ring.material.opacity = 0.5 + 0.32 * Math.abs(Math.sin(now * 0.0095));
       } else me.ring.visible = false;
     }
+    // 【fix497】玩家疾跑丝带：SOC.spT 由「疾跑按钮」和「疾跑鞋技能包」共同写入，
+    // 所以两条触发路径都会出拖尾，不需要分别挂钩子。位置必须取 person 本体（足球模型是隐藏的）。
+    try { soccerTrailSample(me, person.position.x, person.position.y, person.position.z,
+                            SOC.spT > 0, me.team === 1 ? 0x5fd8ff : 0xffa54f); } catch (e) {}
 
     // ---- 球的位置：持球时贴脚（带滚动），离脚时走物理（含抛物线）----
     const REST_Y = P.gy + 0.34;                 // 球静止时的高度（半径 0.34）
