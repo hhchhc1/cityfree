@@ -25923,15 +25923,21 @@ function drawSignFace(ctx, ti) {
     ['#D2042D', '#98FF98', '#666699', '#98FF98'],
     ['#0247FE', '#F5011A', '#F5011A', '#F5011A']
   ][((ti | 0) % 5 + 5) % 5];
+  const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, 1024, 256);
-  ctx.fillStyle = T[0]; ctx.fillRect(0, 0, 1024, 256);
-  ctx.strokeStyle = T[2]; ctx.lineWidth = 10; ctx.strokeRect(14, 14, 996, 228);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = T[1]; ctx.font = 'bold 120px Microsoft YaHei, SimHei, sans-serif';
-  ctx.fillText('荷 芷 市', 512, 108);
-  ctx.fillStyle = T[3]; ctx.font = 'bold 44px Arial, sans-serif';
-  ctx.fillText('HEZHI  ·  河畔新城', 512, 200);
+  ctx.clearRect(0, 0, W, H);
+  // 【fix·荷芷市立牌】一张画布平铺 4 份（对应棱台 4 个面），每份都是正字"荷芷市 / HEZHI·河畔新城"
+  const Q = 4, qw = W / Q;
+  for (let q = 0; q < Q; q++) {
+    const ox = q * qw;
+    ctx.fillStyle = T[0]; ctx.fillRect(ox, 0, qw, H);
+    ctx.strokeStyle = T[2]; ctx.lineWidth = Math.max(6, W * 0.006); ctx.strokeRect(ox + W * 0.006, W * 0.006, qw - W * 0.012, H - W * 0.012);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = T[1]; ctx.font = 'bold ' + Math.round(H * 0.20) + 'px Microsoft YaHei, SimHei, sans-serif';
+    ctx.fillText('荷 芷 市', ox + qw / 2, H * 0.40);
+    ctx.fillStyle = T[3]; ctx.font = 'bold ' + Math.round(H * 0.072) + 'px Arial, sans-serif';
+    ctx.fillText('HEZHI  ·  河畔新城', ox + qw / 2, H * 0.80);
+  }
 }
 const SIGN_THEME_NAMES = ['阳光黄·帝王紫', '黑曜石·甜酷粉', '火苗蓝·湖光绿', '樱桃红·冰薄荷绿', '电光蓝·霓虹赤'];
 function cycleSignTheme() {
@@ -31476,26 +31482,37 @@ window.__woodBridge = { x0: 1492, x1: 1648, z: -120, hw: 3.4, y: 2.9 };   // 【
     const edge = new THREE.Mesh(new THREE.BoxGeometry(LH.rwyHalf * 2, 0.16, 0.5), rwMid);
     edge.position.set(LH.rwyCx, 0.19, DEST.z + s * 15); g.add(edge);
   }
-  // 城市名标牌（占位名，等用户定名）
-  const cvs = document.createElement('canvas'); cvs.width = 1024; cvs.height = 256;
+  // 城市名标牌：四面立体立牌（顶宽底窄的梯形 ×4，立在同一根柱子上）
+  // 【fix·荷芷市立牌】用户要求：不要单一大平面，要做成立体、四面都有字、顶部宽底部窄、四块牌子共一根柱子。
+  // 实现：中央石柱 + 顶部 4 面棱台（CylinderGeometry 的 4 边 = 4 块梯形牌面，顶半径>底半径即上宽下窄），
+  // 一张贴图绕 4 面平铺（每面都是正字"荷芷市 / HEZHI·河畔新城"）。
+  const cvs = document.createElement('canvas'); cvs.width = 2048; cvs.height = 720;
   const cx2 = cvs.getContext('2d');
-  // 【fix70】改用可切换的主题绘制（原来是写死的深蓝底 + 浅蓝字）
+  // 【fix70】可切换主题绘制（原来是写死的深蓝底 + 浅蓝字）；画 4 份等分在画布上，供棱台 4 面对应
   drawSignFace(cx2, PROGRESS.signTheme || 0);
-  // 换色入口：重绘 canvas 后让贴图重新上传（两块牌面共享同一材质，只需要更新一次）
+  // 换色入口：重绘 canvas 后让贴图重新上传（四面共享同一材质，只需更新一次）
   window.__cfSignApply = function () { drawSignFace(cx2, PROGRESS.signTheme || 0); signTex.needsUpdate = true; };
   const signTex = new THREE.CanvasTexture(cvs);
-  // 用 Plane + DoubleSide：原来用 Box，从跑道这侧看到的是"背面那张贴图"（镜像文字），
-  // 玩家正好是从南边进近，必须保证朝南这面是对的。
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide }));
-  // 城市名标牌：立在 CBD 临河一侧（原来的位置 x=DEST.x 正好是**河中央**，会悬在水上）
-  sign.position.set(LH.rivX0 - 44, 60, DEST.z + 130.06); g.add(sign);
-  // 【fix63】牌子原是单面 DoubleSide，从背面看字是**镜像反的**（用户截图）。
-  // 补一块朝里的牌面（同一张贴图、旋转 180°），这样两面看到的都是正字。
-  const signBack = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), sign.material.clone());
-  signBack.position.set(LH.rivX0 - 44, 60, DEST.z + 129.94);
-  signBack.rotation.y = Math.PI; g.add(signBack);
-  const signLeg = new THREE.Mesh(new THREE.BoxGeometry(6, 46, 6), new THREE.MeshLambertMaterial({ color: 0x5a6068 }));
-  signLeg.position.set(LH.rivX0 - 44, 23, DEST.z + 130); g.add(signLeg);
+  const _signX = LH.rivX0 - 44, _signZ = DEST.z + 130;   // 立在 CBD 临河一侧（原 x=DEST.x 是河中央，会悬水）
+  // —— 中央石柱（底座 + 柱身）——
+  const _pillarMat = new THREE.MeshLambertMaterial({ color: 0x4b5159 });
+  const _base = new THREE.Mesh(new THREE.BoxGeometry(20, 3, 20), _pillarMat);
+  _base.position.set(_signX, 1.5, _signZ); g.add(_base);
+  const _pillarH = 46;
+  const _pillar = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.6, _pillarH, 16), _pillarMat);
+  _pillar.position.set(_signX, 3 + _pillarH / 2, _signZ); g.add(_pillar);
+  // —— 顶部 4 面棱台（梯形牌面：顶半径 13 > 底半径 9.5 → 上宽下窄）——
+  const _crownH = 22;
+  const _crown = new THREE.Mesh(
+    new THREE.CylinderGeometry(13, 9.5, _crownH, 4),
+    new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide })
+  );
+  _crown.rotation.y = Math.PI / 4;             // 让 4 个面正对 东南西北
+  _crown.position.set(_signX, 3 + _pillarH + _crownH / 2, _signZ); g.add(_crown);
+  // 棱台顶面用素色盖板，避免贴图被压成小圆露在顶部
+  const _capMat = new THREE.MeshLambertMaterial({ color: 0x3a3f46 });
+  const _crownTop = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, 0.6, 4), _capMat);
+  _crownTop.rotation.y = Math.PI / 4; _crownTop.position.set(_signX, 3 + _pillarH + _crownH, _signZ); g.add(_crownTop);
   scene.add(g);
   // (3) 云：46 个云团（压扁的球拼出来），整组顶点色融合成 1~2 个网格 —— 否则是近 200 次调用
   const cg = new THREE.Group();
