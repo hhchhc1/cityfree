@@ -15538,6 +15538,7 @@ function tryToggle() {
         if (c.group.userData.driver) c.group.userData.driver.visible = false;
         person.visible = false;
       }
+      c.playerUsed = true;   // 【fix158】打"玩家动过"标记：停放满半个昼夜后自动消失，见 updatePlayerUsedCarDespawn
       state = 'drive'; currentCar = c; speed.v = 0; c.damage = c.damage || 0;
     // 【fix149】在基地里动直升机/坦克 → 全部警卫立刻追打
     try { if ((c.isHelicopter || c.isTank) && inMilitaryBase(c.x, c.z)) alertBaseGuards(45); } catch (e) {}
@@ -15561,6 +15562,8 @@ function tryToggle() {
     const u = person.userData;
     if (u) { u.torso.rotation.x = 0; u.legL.rotation.x = 0; u.legR.rotation.x = 0; u.legL.rotation.z = 0; u.legR.rotation.z = 0; u.armL.rotation.z = 0; u.armR.rotation.z = 0; if (u.elbowL) { u.elbowL.rotation.x = 0; u.elbowR.rotation.x = 0; } if (u.kneeL) { u.kneeL.rotation.x = 0; u.kneeR.rotation.x = 0; } if (u.hip) u.hip.rotation.x = 0; if (u.head) u.head.rotation.x = 0; }
     // 抢来的车下车后停在原地，不会自己跑走
+    // 【fix158】玩家刚停好这辆车：记下"停放起始昼夜"（worldDay+worldTime 跨午夜单调），供半个昼夜后自动消失
+    if (currentCar) { currentCar.playerUsed = true; currentCar.playerUsedDay = worldDay + worldTime; }
     currentCar = null; speed.v = 0;
   }
 }
@@ -17081,6 +17084,25 @@ spawnShockRing(v.x, _wy, v.z, 1.2, 11, 0.55, 0xffc45a);
   }
   // 军用载具（直升机/坦克）打爆后同样按倒计时重生归位
   if (v.isHelicopter || v.isTank) militaryRespawnIn = MILITARY_RESPAWN_SEC;
+}
+// 【fix158】玩家动过的车：停放满半个昼夜后自动消失，清理随意摆放、影响交通秩序的车
+//   判定与计时：
+//     · 玩家上车时给它打 playerUsed=true（"进入驾驶"处，见上方 drive 逻辑）；
+//     · 玩家下车（停好）时记 playerUsedDay = worldDay + worldTime（昼夜连续值，跨午夜单调）；
+//     · 一个完整昼夜 = worldDay +1，半个昼夜 = +0.5，所以"停了 >=0.5 个昼夜"即可清掉。
+//   豁免：正在驾驶的车（currentCar）、已炸成残骸的车（exploded，走 explodeCar 流程）、
+//        军用载具（直升机/坦克）由 militaryRespawn 倒计时归位，不会永久丢失。
+function updatePlayerUsedCarDespawn() {
+  const now = worldDay + worldTime;
+  for (let i = cars.length - 1; i >= 0; i--) {
+    const v = cars[i];
+    if (!v || !v.playerUsed || v.playerUsedDay === undefined || v.exploded) continue;
+    if (state === 'drive' && currentCar === v) continue;   // 正在开的车不收
+    if (now - v.playerUsedDay < 0.5) continue;              // 还没停够半个昼夜
+    try { if (v.group) scene.remove(v.group); } catch (e) {}
+    const ci = cars.indexOf(v); if (ci >= 0) cars.splice(ci, 1);
+    const pi = policeCars.indexOf(v); if (pi >= 0) policeCars.splice(pi, 1);   // 警车被玩家开过也一并清
+  }
 }
 function updateWrecks(dt) {
   for (let i = wrecks.length - 1; i >= 0; i--) {
@@ -24495,6 +24517,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   updateFixedVehicleRecall(dt);
   updateFerris(dt);
     updateVehicleDoors(dt);
+  updatePlayerUsedCarDespawn();   // 【fix158】玩家动过的车停放半个昼夜后自动消失
   } catch(e) { console.error('[Vehicle update error]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
