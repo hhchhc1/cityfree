@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix495-return-flight-lighting">
+<meta name="cf-build" content="20261114-fix496-south-island-abutment-car-cam">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7542,8 +7542,12 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     e1.position.set(0, 1.4, BRIDGE_START_Z + 16); scene.add(e1);
     const e2 = new THREE.Mesh(new THREE.BoxGeometry(12.4, 2.6, 26), embMat);
     e2.position.set(0, 3.5, BRIDGE_DECK_START_Z - 16); scene.add(e2);
-    const e3 = new THREE.Mesh(new THREE.BoxGeometry(13, 3.4, 34), embMat);
-    e3.position.set(0, 1.6, BRIDGE_END_Z + 18); scene.add(e3);
+    // 【fix496·2026-11-14】南岛这头原来还有一个 13×3.4×34 的深灰路堤 e3
+    // （BRIDGE_END_Z+18，即 z≈403，正好在南岛北岸、公路接岛的位置）。
+    // 用户：『把南岛这里连接的公路这里放的灰色的盒子去掉』——它和下面 fix264 的
+    // 桥头堡 abutS 叠在一起，从岛上斜看就是一堵突兀的大灰块/楔形块。
+    // 两者都删掉；岛面本身是逐顶点贴合 terrainHeight 的实体圆盘，南引桥 35 段
+    // 路面也逐段贴地，删掉这两块填充盒不会露出黑洞。桥面、箱梁、栏杆、北岸路堤全不动。
   }
   // 桥面中线（黄色虚线）
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xddaa00 });
@@ -7628,9 +7632,12 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   // 【fix264】桥头堡：桥面南端原本悬在沙滩上方，下面是个黑洞，沙子和桥面对不上。
 // 这里补一段实心石砌堤岸，从海底一路填到桥面高度，宽度比桥面略宽，彻底盖住接缝。
 const abutMat = new THREE.MeshLambertMaterial({ color: 0x9a938a });
-const abutS = new THREE.Mesh(new THREE.BoxGeometry(13, 9, 30), abutMat);
-abutS.position.set(0, bridgeY - 4.5, BRIDGE_END_Z + 12);
-scene.add(abutS);
+// 【fix496·2026-11-14】南端桥头堡 abutS（13×9×30，0x9a938a，z=BRIDGE_END_Z+12≈397）
+// 整块删除：它就横在南岛公路接岛处，是用户截图右侧那个"灰色盒子"的主体。
+// 当年 fix264 加它是为了补桥面与沙滩之间的黑洞，但后来南岛改成了随地形起伏的
+// 实体圆盘（addSouthIsland 的 48×96 极坐标网格）+ 35 段贴地引桥，接缝早已不存在，
+// 反倒是这个从 y=-3.9 顶到 y=5.1 的方盒子从草地里冒出一大截。
+// ⚠️ 只删南端（岛这头）；北端 abutN 在城市侧、压在引桥下面，用户没提，保持原样。
 const abutN = new THREE.Mesh(new THREE.BoxGeometry(13, 9, 30), abutMat);
 abutN.position.set(0, bridgeY - 4.5, BRIDGE_DECK_START_Z - 12);
 scene.add(abutN);
@@ -24885,17 +24892,30 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 近裁剪面把山体切开，整屏都是泥土/山体色（用户第二张截图）。
     // 正确做法（第三人称游戏标准解）：从人物头部 P 到相机 C 连采样 8 段，第一个"被地形挡住"的采样点
     // 就把相机沿 P→C 方向**拉近**到它前面。只拉近、不上顶，所以不会变成俯视。
-    const _hasP = (typeof person !== 'undefined' && person && person.position);
+    // 【fix496·2026-11-14·用户：『开车往南到这边视角就开始变化，视角里有时候就不显示车了，
+    //  像原地停着，但车还在走，下车之后车就在前面的位置』】真根因不在车、也不在山体本身：
+    //  汽车上车时 person.visible=false，但 **person.position 停在上车那一刻原地不动**
+    //  （只有摩托车 radius<1.2 才会在 updateDrive 里每帧同步人物坐标，见本文件 24555 行附近）。
+    //  下面 fix444 的地形遮挡却无条件拿 person.position 当 P 点：车开得越远，P→C 这条
+    //  8 段采样线就从"几百米外的上车点"一路横穿整张地图，中途任何山坡 / 新加的山体都会命中，
+    //  相机被硬拽回上车点附近；_gyBase 又被上车点的高度（可能站在 150m 山上）永久顶高。
+    //  于是镜头里看不到车、像卡住不动，而车辆其实一直在跑（下车发现车在前方）。
+    //  这也正好解释"骑车（摩托）没事"——摩托的 person.position 是跟着车走的。
+    //  修法：驾驶状态一律用 camTarget（= currentCar.group）当 P 点，完全不看隐藏人物；
+    //  并给"拉近"设下限，避免上坡时第 1 个采样点就把相机塞进车壳里。
+    const _driveNoPerson = (state === 'drive' && !!currentCar);
+    const _hasP = !_driveNoPerson && (typeof person !== 'undefined' && person && person.position && person.visible !== false);
     const _Px = _hasP ? person.position.x : camTarget.position.x;
-    const _Py = _hasP ? person.position.y + 1.5 : camTarget.position.y;
+    const _Py = _hasP ? person.position.y + 1.5 : camTarget.position.y + 1.5;
     const _Pz = _hasP ? person.position.z : camTarget.position.z;
+    const _minHitT = _driveNoPerson ? 0.42 : 0;   // 载具至少留 ~3.8m 镜头距离，车永远在画面里
     let _hitT = 1;
     for (let _i = 1; _i <= 8; _i++) {
       const _t = _i / 8;
       const _sx2 = _Px + (_cp.x - _Px) * _t;
       const _sy2 = _Py + (_cp.y - _Py) * _t;
       const _sz2 = _Pz + (_cp.z - _Pz) * _t;
-      if (terrainHeight(_sx2, _sz2) + 0.55 > _sy2) { _hitT = Math.max(0, (_i - 1) / 8 - 0.04); break; }
+      if (terrainHeight(_sx2, _sz2) + 0.55 > _sy2) { _hitT = Math.max(_minHitT, (_i - 1) / 8 - 0.04); break; }
     }
     if (_hitT < 1) {
       _cp.x = _Px + (_cp.x - _Px) * _hitT;
@@ -24917,6 +24937,21 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     if (_cp.y < _gy) _cp.y = _gy;
     _camLookA.set(camTarget.position.x + tfx * 4, camTarget.position.y + 1 - sp * 3, camTarget.position.z + tfz * 4);
     camLook.lerp(_camLookA, 1 - Math.pow(0.001, dt));
+    // 【fix496】最后一道自愈防线。用户补述：『创造了中镇山之后，开车去山那里第一次出现，
+    // 之后经常出现 …… 直接视角不知道干啥去了，不知道相机拍的哪一部分，可能就是拍的卡的那个时间』
+    // —— 时间线完全对得上：fix444 加 150m 中镇山时**同时**引入了上面这段 P→C 地形采样。
+    // 平地上陈旧的 person.position 也在平地，采样线不会命中，所以一直没暴露；
+    // 一旦车靠近/离开中镇山，那条从"上车点"横跨半张地图的采样线就会撞上 150m 山体，
+    // 相机被拉回上车点、_gyBase 又被上车点高度顶死，画面就永远停在"卡住的那一刻"。
+    // 上面的 _hasP 修的是根，这里再兜一层：只要驾驶中相机离载具超过 60m
+    // （正常最远是直升机 √(18²+12²)≈22m，汽车只有 10.5m），就判定镜头已经拍飞，
+    // 一帧把 camera.position / camPos / camLook 全部拉回目标身后，不留任何残留状态。
+    if (_driveNoPerson && !(typeof grapple !== 'undefined' && grapple) &&
+        _cp.distanceToSquared(camTarget.position) > 3600) {
+      camPos.copy(_camTmp);
+      _cp.copy(_camTmp);
+      camLook.copy(_camLookA);
+    }
     camera.lookAt(camLook);
     }
   } catch(e) { console.error('[Camera update error]', e); }
