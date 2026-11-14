@@ -1,0 +1,26 @@
+[
+ {
+  "outPath": "C:\\Users\\lenovo\\OneDrive\\Desktop\\10.13CITYFREE\\export_ground\\road_part1.glb",
+  "tris": 21304,
+  "bytes": 1794248,
+  "prims": 10
+ },
+ {
+  "outPath": "C:\\Users\\lenovo\\OneDrive\\Desktop\\10.13CITYFREE\\export_ground\\road_part2.glb",
+  "tris": 21968,
+  "bytes": 1850296,
+  "prims": 7
+ },
+ {
+  "outPath": "C:\\Users\\lenovo\\OneDrive\\Desktop\\10.13CITYFREE\\export_ground\\road_part3.glb",
+  "tris": 10272,
+  "bytes": 866120,
+  "prims": 4
+ },
+ {
+  "outPath": "C:\\Users\\lenovo\\OneDrive\\Desktop\\10.13CITYFREE\\export_ground\\road_part4.glb",
+  "tris": 26236,
+  "bytes": 2205256,
+  "prims": 5
+ }
+]

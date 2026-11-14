@@ -1,0 +1,57 @@
+    // 【fix460】瀑布水潭（重写 fix437）：原来只是一块悬空的蓝色圆盘。
+    // 现在补了石砌池壁（下沉 4 米）+ 池沿石圈，水面才像真的盛在潭里。
+    (function zzPoolAndPilgrims() {
+      try {
+        var _th = terrainHeight;
+        var PX = 846, PZ = 19;
+        var py = _th(PX, PZ);
+        var waterMat = new THREE.MeshLambertMaterial({ color: 0x4d86a8, transparent: true, opacity: 0.78, depthWrite: false });
+        var water = new THREE.Mesh(new THREE.CircleGeometry(5.6, 30), waterMat);
+        water.rotation.x = -Math.PI / 2;
+        water.position.set(PX, py + 0.22, PZ);
+        scene.add(water);
+        // 池壁：上宽下窄的开口圆筒，埋进山坡里，水面就有了"盆"
+        var wall = new THREE.Mesh(
+          new THREE.CylinderGeometry(6.0, 4.6, 4.2, 30, 1, true),
+          new THREE.MeshLambertMaterial({ color: 0x4a5560, side: THREE.DoubleSide })
+        );
+        wall.position.set(PX, py - 1.85, PZ);
+        scene.add(wall);
+        // 池沿石圈
+        var rim = new THREE.Mesh(
+          new THREE.TorusGeometry(5.9, 0.38, 8, 34),
+          new THREE.MeshLambertMaterial({ color: 0x9a958a })
+        );
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.set(PX, py + 0.16, PZ);
+        scene.add(rim);
+        // 浅水反光边
+        var shine = new THREE.Mesh(new THREE.RingGeometry(5.6, 6.0, 30),
+          new THREE.MeshLambertMaterial({ color: 0x9fc6d8, transparent: true, opacity: 0.35, depthWrite: false }));
+        shine.rotation.x = -Math.PI / 2;
+        shine.position.set(PX, py + 0.20, PZ);
+        scene.add(shine);
+        // 两位跪拜香客：朝向祠堂（东），上身微前倾，双手合十
+        var robe = new THREE.MeshLambertMaterial({ color: 0x2f3d52 });
+        var robe2 = new THREE.MeshLambertMaterial({ color: 0x4a3b52 });
+        var skin = new THREE.MeshLambertMaterial({ color: 0xd9b596 });
+        var spots = [[-3.6, -1.2, robe], [-3.6, 1.2, robe2]];
+        for (var i = 0; i < spots.length; i++) {
+          var gx = 683.6 + spots[i][0], gz = -32 + spots[i][1];
+          var gy2 = _th(gx, gz) + 0.10;
+          var g = new THREE.Group();
+          var low = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), spots[i][2]);
+          low.position.set(0, 0.21, 0); g.add(low);
+          var up = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.72, 0.5), spots[i][2]);
+          up.position.set(0.10, 0.62, 0); up.rotation.z = -0.42; g.add(up);
+          var head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skin);
+          head.position.set(0.28, 1.00, 0); g.add(head);
+          var hands = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.30, 0.16), skin);
+          hands.position.set(0.40, 0.78, 0); hands.rotation.z = -0.42; g.add(hands);
+          g.position.set(gx, gy2, gz);
+          g.rotation.y = -Math.PI / 2;
+          scene.add(g);
+        }
+        window.__zzPool = { x: PX, z: PZ, y: +py.toFixed(2) };
+      } catch (eZZ5) { }
+    })();

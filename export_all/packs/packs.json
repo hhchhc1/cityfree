@@ -1,0 +1,501 @@
+{
+ "maxTris": 29000,
+ "totalTris": 917953,
+ "packs": [
+  {
+   "name": "pack_01.glb",
+   "tris": 27928,
+   "bytes": 2351556,
+   "prims": 8,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_1500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_02.glb",
+   "tris": 28520,
+   "bytes": 2402224,
+   "prims": 10,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_0_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_03.glb",
+   "tris": 28200,
+   "bytes": 2375344,
+   "prims": 10,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_04.glb",
+   "tris": 27600,
+   "bytes": 2324912,
+   "prims": 10,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_-500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_05.glb",
+   "tris": 27748,
+   "bytes": 2339544,
+   "prims": 13,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_-500_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_06.glb",
+   "tris": 28332,
+   "bytes": 2391388,
+   "prims": 18,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_0.glb",
+    "tile_0_-500.glb",
+    "tile_1500_-1000.glb"
+   ]
+  },
+  {
+   "name": "pack_07.glb",
+   "tris": 28564,
+   "bytes": 2412808,
+   "prims": 21,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-500.glb",
+    "tile_-500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_08.glb",
+   "tris": 28104,
+   "bytes": 2374620,
+   "prims": 22,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_09.glb",
+   "tris": 28772,
+   "bytes": 2433164,
+   "prims": 25,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_2000_-500.glb",
+    "tile_1500_-1000.glb",
+    "tile_2000_-1000.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb"
+   ]
+  },
+  {
+   "name": "pack_10.glb",
+   "tris": 28288,
+   "bytes": 2391908,
+   "prims": 25,
+   "sources": [
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_2000_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_11.glb",
+   "tris": 27900,
+   "bytes": 2359276,
+   "prims": 25,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_12.glb",
+   "tris": 27900,
+   "bytes": 2359224,
+   "prims": 25,
+   "sources": [
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_13.glb",
+   "tris": 28956,
+   "bytes": 2330956,
+   "prims": 28,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb",
+    "tile_1500_0.glb",
+    "tile_-500_0.glb",
+    "tile_1000_0.glb",
+    "tile_2000_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_14.glb",
+   "tris": 28792,
+   "bytes": 2439236,
+   "prims": 34,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_15.glb",
+   "tris": 28760,
+   "bytes": 2437916,
+   "prims": 35,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_-500_0.glb",
+    "tile_-500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_16.glb",
+   "tris": 28512,
+   "bytes": 2416904,
+   "prims": 36,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_17.glb",
+   "tris": 28512,
+   "bytes": 2416844,
+   "prims": 36,
+   "sources": [
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_18.glb",
+   "tris": 28990,
+   "bytes": 2370092,
+   "prims": 37,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_1500_0.glb",
+    "tile_1500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_19.glb",
+   "tris": 28476,
+   "bytes": 2417672,
+   "prims": 41,
+   "sources": [
+    "tile_1500_0.glb",
+    "tile_0_0.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_20.glb",
+   "tris": 28432,
+   "bytes": 2415568,
+   "prims": 42,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_-500.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_-500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_21.glb",
+   "tris": 28710,
+   "bytes": 2454504,
+   "prims": 52,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_0.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-500.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_500_0.glb"
+   ]
+  },
+  {
+   "name": "pack_22.glb",
+   "tris": 28760,
+   "bytes": 2405512,
+   "prims": 61,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_-500_0.glb",
+    "tile_2000_-500.glb",
+    "tile_2000_-1000.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_1500_-500.glb",
+    "tile_0_-500.glb",
+    "tile_1000_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_23.glb",
+   "tris": 28708,
+   "bytes": 2008504,
+   "prims": 75,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_1000_-500.glb",
+    "tile_2000_-1000.glb",
+    "tile_1500_0.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_-500.glb",
+    "tile_-500_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_24.glb",
+   "tris": 28978,
+   "bytes": 2422248,
+   "prims": 90,
+   "sources": [
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_1500_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_-500_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-500.glb",
+    "tile_2000_-500.glb",
+    "tile_2000_-1000.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb"
+   ]
+  },
+  {
+   "name": "pack_25.glb",
+   "tris": 28716,
+   "bytes": 2471748,
+   "prims": 97,
+   "sources": [
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_26.glb",
+   "tris": 28858,
+   "bytes": 2404648,
+   "prims": 122,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_1500_-500.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_0_-500.glb",
+    "tile_1000_-1000.glb",
+    "tile_1500_-1000.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb"
+   ]
+  },
+  {
+   "name": "pack_27.glb",
+   "tris": 28962,
+   "bytes": 2302100,
+   "prims": 225,
+   "sources": [
+    "tile_1500_-500.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb",
+    "tile_0_0.glb",
+    "tile_-500_0.glb",
+    "tile_1000_-500.glb",
+    "tile_-500_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_0_-500.glb",
+    "tile_1000_-1000.glb"
+   ]
+  },
+  {
+   "name": "pack_28.glb",
+   "tris": 28912,
+   "bytes": 2598384,
+   "prims": 278,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb"
+   ]
+  },
+  {
+   "name": "pack_29.glb",
+   "tris": 28960,
+   "bytes": 2581088,
+   "prims": 281,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_-500.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_30.glb",
+   "tris": 28976,
+   "bytes": 2569824,
+   "prims": 420,
+   "sources": [
+    "tile_1500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_1500_-500.glb",
+    "tile_2000_-500.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_1000_-1000.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_2000_-1000.glb"
+   ]
+  },
+  {
+   "name": "pack_31.glb",
+   "tris": 28992,
+   "bytes": 2643700,
+   "prims": 957,
+   "sources": [
+    "tile_-500_-500.glb",
+    "tile_-500_0.glb",
+    "tile_0_-500.glb",
+    "tile_0_0.glb",
+    "tile_1000_-1000.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_-500.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb"
+   ]
+  },
+  {
+   "name": "pack_32.glb",
+   "tris": 28991,
+   "bytes": 2911572,
+   "prims": 1684,
+   "sources": [
+    "tile_0_0.glb",
+    "tile_1000_-1000.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb",
+    "tile_1500_-1000.glb",
+    "tile_1500_-500.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb",
+    "tile_-500_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb"
+   ]
+  },
+  {
+   "name": "pack_33.glb",
+   "tris": 4144,
+   "bytes": 837100,
+   "prims": 468,
+   "sources": [
+    "tile_1500_-500.glb",
+    "tile_1500_0.glb",
+    "tile_2000_-1000.glb",
+    "tile_2000_-500.glb",
+    "tile_500_-500.glb",
+    "tile_500_0.glb",
+    "tile_-500_0.glb",
+    "tile_0_0.glb",
+    "tile_-500_-500.glb",
+    "tile_0_-500.glb",
+    "tile_1000_-500.glb",
+    "tile_1000_0.glb"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,83 @@
+    /* --- 【fix459】世界坐标轴（对外约定：Z = 高度）---
+       原点就在中央公园正中 (0,0,0)：城市内 |x|,|z|<205 时 terrainHeight 恒为 0。
+       对外展示的坐标系（玩家看到的）：
+         X 红 = 东西（+ 东 / - 西）
+         Y 绿 = 南北（+ 南 / - 北）
+         Z 蓝 = 高度（+ 上 / - 下）
+       引擎内部仍是 three.js 的 y-up（world.x / world.z / world.y），
+       显示层做了映射：显示 X = world.x，显示 Y = world.z，显示 Z = world.y。 */
+    (function zzCoordFrameZUp() {
+      try {
+        var G = new THREE.Group();
+        G.position.set(0, 0, 0);
+        var mX = new THREE.MeshBasicMaterial({ color: 0xd23b2e });
+        var mX2 = new THREE.MeshBasicMaterial({ color: 0x7a2620 });
+        var mY = new THREE.MeshBasicMaterial({ color: 0x2fbf58 });
+        var mY2 = new THREE.MeshBasicMaterial({ color: 0x1c7a37 });
+        var mZ = new THREE.MeshBasicMaterial({ color: 0x2f7fe0 });
+        function bar(mat, w, h, d, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); G.add(m); return m; }
+        function head(mat, x, y, z, dir) {
+          var m = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 10), mat);
+          m.position.set(x, y, z);
+          if (dir === 'x') m.rotation.z = -Math.PI / 2;
+          if (dir === 'z') m.rotation.x = Math.PI / 2;
+          G.add(m); return m;
+        }
+        // 地面原点盘
+        var cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+        var c = cv.getContext('2d');
+        c.beginPath(); c.arc(128, 128, 120, 0, 7); c.fillStyle = 'rgba(18,22,28,0.92)'; c.fill();
+        c.lineWidth = 12; c.strokeStyle = '#d9b25a'; c.stroke();
+        c.fillStyle = '#f4e2ae'; c.textAlign = 'center';
+        c.font = 'bold 52px system-ui,sans-serif'; c.fillText('原点', 128, 118);
+        c.font = 'bold 30px system-ui,sans-serif'; c.fillText('0, 0, 0', 128, 168);
+        var tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
+        var disc = new THREE.Mesh(new THREE.CircleGeometry(2.2, 36), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+        disc.rotation.x = -Math.PI / 2; disc.position.y = 0.265; G.add(disc);
+
+        // X 轴（红）= 东西：+x 东 20 米，-x 西 6 米
+        bar(mX, 20, 0.03, 0.42, 10, 0.26, 0);
+        head(mX, 20.6, 0.26, 0, 'x');
+        bar(mX2, 6, 0.03, 0.26, -3, 0.26, 0);
+        head(mX2, -6.3, 0.26, 0, 'x');
+
+        // Y 轴（绿）= 南北：+z 南 20 米，-z 北 6 米
+        bar(mY, 0.42, 0.03, 20, 0, 0.26, 10);
+        head(mY, 0, 0.26, 20.6, 'z');
+        bar(mY2, 0.26, 0.03, 6, 0, 0.26, -3);
+        head(mY2, 0, 0.26, -6.3, 'z');
+
+        // Z 轴（蓝）= 高度：从原点向上 10 米
+        bar(mZ, 0.16, 10, 0.16, 0, 5, 0);
+        var zh = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 10), mZ); zh.position.set(0, 10.5, 0); G.add(zh);
+
+        // 文字标牌（永远朝向相机）
+        function label(text, x, y, z, w) {
+          var cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 128;
+          var c2 = cv2.getContext('2d');
+          c2.font = 'bold 60px system-ui,sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+          c2.lineWidth = 12; c2.strokeStyle = 'rgba(0,0,0,0.8)'; c2.strokeText(text, 128, 64);
+          c2.fillStyle = '#ffffff'; c2.fillText(text, 128, 64);
+          var t2 = new THREE.CanvasTexture(cv2); t2.needsUpdate = true;
+          var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t2, transparent: true, depthWrite: false }));
+          sp.position.set(x, y, z); sp.scale.set(w, w / 2, 1); G.add(sp); return sp;
+        }
+        label('X＋ 东', 20.6, 3.0, 0, 5.2);
+        label('X－ 西', -6.8, 2.6, 0, 4.4);
+        label('Y＋ 南', 0, 3.0, 20.6, 5.2);
+        label('Y－ 北', 0, 2.6, -6.8, 4.4);
+        label('Z 高度', 0, 11.8, 0, 5.2);
+
+        // 每 5 米一个刻度 + 数字
+        var mTick = new THREE.MeshBasicMaterial({ color: 0xf2e6c8 });
+        for (var d = 5; d <= 20; d += 5) {
+          bar(mTick, 0.5, 0.02, 0.14, d, 0.26, 0);
+          bar(mTick, 0.14, 0.02, 0.5, 0, 0.26, d);
+          label(String(d), d, 1.2, 0, 1.8);
+          label(String(d), 0, 1.2, d, 1.8);
+        }
+
+        scene.add(G);
+        window.__zzAxes = { x: 0, y: 0, z: 0, kids: G.children.length, mode: 'z-up' };
+      } catch (eAx) { try { console.error('[zzCoordFrameZUp]', eAx); } catch (e9) { } }
+    })();

@@ -1,0 +1,21 @@
+﻿EXPR: (function(){
+  var K='cityFreeMan.save.v1';
+  saveGame();
+   => "{\"x\":1200,\"z\":-100,\"gold\":777}"
+  ✓ q_sv3_district_air.png
+  ✓ q_sv3_skyup.png
+  ✓ q_sv3_sky_eye.png
+  ✓ q_sv3_garden_air.png
+  ✓ q_sv3_garden_lawn.png
+  ✓ q_sv3_garden_top.png
+  ✓ q_sv3_village_air.png
+  ✓ q_sv3_village_street.png
+  ✓ q_sv3_village_path.png
+  ✓ q_sv3_tulou.png
+  ✓ q_sv3_open_eye.png
+  ✓ q_sv3_open_up.png
+  ✓ q_sv3_street.png
+  ✓ q_sv3_street_n.png
+  ✓ q_sv3_tv.png
+  ✓ q_sv3_tv_air.png
+异常: (无)

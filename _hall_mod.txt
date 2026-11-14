@@ -1,0 +1,170 @@
+    /* --- 3.8b 中镇祠内景（fix456）---
+       为什么之前一直是空的：游戏主脚本是用 (0,eval) 在全局执行的，而 scene / person 都是 const，
+       不会变成 window 的属性；fix452~455 的内景代码写在了**外层脚本**里，typeof scene 得到
+       undefined 就直接 return 了，等于从来没运行过。这一版写进游戏闭包，建庙时一次性生成；
+       地面高度直接取台基顶 TERR.plinth.top，不再依赖玩家站在哪儿、什么时候进门。 */
+    (function zzHallInterior() {
+      try {
+        var HX = 706, HZ = 0, FY = TERR.plinth.top + 0.005;
+        var KEY = 'zzWishesHall_v1';
+        var wishes = [];
+        try { wishes = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e0) { wishes = []; }
+        function texOf(text) {
+          var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+          var c = cv.getContext('2d');
+          c.fillStyle = '#8e2a22'; c.fillRect(0, 0, 256, 128);
+          c.strokeStyle = '#e8c877'; c.lineWidth = 8; c.strokeRect(7, 7, 242, 114);
+          c.fillStyle = '#fbeec7'; c.font = 'bold 36px system-ui,sans-serif';
+          c.textAlign = 'center'; c.textBaseline = 'middle';
+          var s = String(text || '').slice(0, 8);
+          if (s.length > 4) { c.fillText(s.slice(0, 4), 128, 42); c.fillText(s.slice(4), 128, 88); } else c.fillText(s, 128, 64);
+          var tx = new THREE.CanvasTexture(cv); tx.needsUpdate = true; return tx;
+        }
+        var wood = new THREE.MeshLambertMaterial({ color: 0x4a2b18 });
+        var woodD = new THREE.MeshLambertMaterial({ color: 0x35200f });
+        var red = new THREE.MeshLambertMaterial({ color: 0x8e2a22 });
+        var gold = new THREE.MeshLambertMaterial({ color: 0xd9b25a, emissive: 0x2a1e06 });
+        var goldD = new THREE.MeshLambertMaterial({ color: 0xb08a3c });
+        var bronze = new THREE.MeshLambertMaterial({ color: 0x6b5330 });
+        var g = new THREE.Group();
+        g.position.set(HX, FY, HZ);
+        function box(w, h, d, mat, x, y, z) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; }
+        function cyl(rt, rb, h, seg, mat, x, y, z) { var m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y, z); g.add(m); return m; }
+
+        // ① 神台 + 中镇山神像（靠东侧后墙，面朝大门）
+        box(3.2, 0.95, 9.6, red, 5.6, 0.48, 0);
+        box(2.4, 0.22, 8.6, goldD, 5.55, 1.02, 0);
+        cyl(0.85, 1.05, 2.0, 12, gold, 5.6, 2.1, 0);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 12), gold); head.position.set(5.6, 3.45, 0); g.add(head);
+        var crown = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.55, 10), goldD); crown.position.set(5.6, 4.0, 0); g.add(crown);
+        var halo = new THREE.Mesh(new THREE.CircleGeometry(1.35, 24), new THREE.MeshBasicMaterial({ color: 0xf6d98a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+        halo.position.set(5.98, 3.3, 0); halo.rotation.y = -Math.PI / 2; g.add(halo);
+
+        // ② 供桌 + 三色供品
+        box(1.6, 0.18, 5.0, wood, 2.6, 1.32, 0);
+        box(0.16, 1.3, 0.16, woodD, 2.6, 0.66, -2.2);
+        box(0.16, 1.3, 0.16, woodD, 2.6, 0.66, 2.2);
+        for (var f = -1; f <= 1; f++) {
+          var fr = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshLambertMaterial({ color: f === 0 ? 0xd8532a : 0xc9a227 }));
+          fr.position.set(2.6, 1.62, f * 1.5); g.add(fr);
+        }
+
+        // ③ 香炉（带三炷香和青烟）
+        cyl(0.62, 0.48, 0.72, 14, bronze, 0.4, 0.36, 0);
+        var rim = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 16), goldD);
+        rim.rotation.x = Math.PI / 2; rim.position.set(0.4, 0.72, 0); g.add(rim);
+        var smokeMat = new THREE.MeshBasicMaterial({ color: 0xdfe8ee, transparent: true, opacity: 0.22, depthWrite: false });
+        for (var s3 = 0; s3 < 3; s3++) {
+          cyl(0.03, 0.03, 0.5, 5, new THREE.MeshLambertMaterial({ color: 0x8a5a2b }), 0.4 + (s3 - 1) * 0.12, 1.0, (s3 - 1) * 0.1);
+          var sm = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 7, 1, true), smokeMat);
+          sm.position.set(0.4 + (s3 - 1) * 0.12, 1.9, (s3 - 1) * 0.1); g.add(sm);
+        }
+
+        // ④ 一对烛台
+        for (var c2 = -1; c2 <= 1; c2 += 2) {
+          cyl(0.1, 0.18, 0.9, 8, goldD, 1.9, 0.45, c2 * 3.1);
+          cyl(0.09, 0.09, 0.52, 8, new THREE.MeshLambertMaterial({ color: 0xc0392b }), 1.9, 1.15, c2 * 3.1);
+          var fl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a }));
+          fl.position.set(1.9, 1.5, c2 * 3.1); g.add(fl);
+        }
+
+        // ⑤ 三个蒲团（跪拜位）
+        var cush = new THREE.MeshLambertMaterial({ color: 0x7a2c22 });
+        for (var p2 = -1; p2 <= 1; p2++) cyl(0.62, 0.62, 0.16, 12, cush, -1.1, 0.08, p2 * 1.9);
+
+        // ⑥ 四根殿内红柱（把 34 米宽的殿撑出进深感）
+        for (var cx = -1; cx <= 1; cx += 2) for (var cz = -1; cz <= 1; cz += 2) {
+          cyl(0.30, 0.34, 6.6, 10, red, cx < 0 ? 0.2 : 9.0, 3.3, cz * 6.6);
+          cyl(0.46, 0.46, 0.18, 10, goldD, cx < 0 ? 0.2 : 9.0, 0.09, cz * 6.6);
+        }
+
+        // ⑦ 许愿绳：两根立柱 + 绳 + 已存的祝福牌
+        box(0.16, 2.4, 0.16, woodD, -1.9, 1.2, -4.6);
+        box(0.16, 2.4, 0.16, woodD, -1.9, 1.2, 4.6);
+        box(0.06, 0.06, 9.2, new THREE.MeshLambertMaterial({ color: 0x6b4a2a }), -1.9, 2.32, 0);
+        function placeBoard(m, idx) { m.position.set(-1.9, 2.0 - Math.floor(idx / 8) * 0.5, -3.9 + (idx % 8) * 1.1); return m; }
+        for (var w0 = 0; w0 < wishes.length && w0 < 16; w0++) {
+          var bm = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.34, 0.04), new THREE.MeshBasicMaterial({ map: texOf(wishes[w0]), side: THREE.DoubleSide }));
+          g.add(placeBoard(bm, w0));
+        }
+
+        // ⑧ 功德箱（门内左手边）+ 长明灯两盏
+        box(0.9, 0.85, 0.62, woodD, -7.2, 0.43, 2.6);
+        box(0.95, 0.06, 0.67, goldD, -7.2, 0.88, 2.6);
+        for (var L = -1; L <= 1; L += 2) {
+          cyl(0.12, 0.16, 1.5, 8, goldD, -7.6, 0.75, L * 3.2);
+          var lampMat = new THREE.MeshBasicMaterial({ color: 0xffcf87 });
+          var lb = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), lampMat);
+          lb.position.set(-7.6, 1.62, L * 3.2); g.add(lb);
+        }
+
+        // ⑨ 红毯（从门槛一直铺到神台）＋ 四盏吊灯
+        var carpet = new THREE.Mesh(new THREE.PlaneGeometry(15.2, 6.4), new THREE.MeshLambertMaterial({ color: 0x7d1f18 }));
+        carpet.rotation.x = -Math.PI / 2; carpet.position.set(-3.4, 0.016, 0); g.add(carpet);
+        var rugMat = new THREE.MeshLambertMaterial({ color: 0xb8892f });
+        for (var rj = -1; rj <= 1; rj += 2) {
+          var rug = new THREE.Mesh(new THREE.PlaneGeometry(15.2, 0.16), rugMat);
+          rug.rotation.x = -Math.PI / 2; rug.position.set(-3.4, 0.02, rj * 2.9); g.add(rug);
+        }
+        var cordMat = new THREE.MeshLambertMaterial({ color: 0x2a1a10 });
+        var lampGlow = new THREE.MeshBasicMaterial({ color: 0xffc06a });
+        for (var lx = -1; lx <= 1; lx += 2) for (var lz = -1; lz <= 1; lz += 2) {
+          var lpx = 4.0 + lx * 4.6, lpz = lz * 8.4;
+          var cord = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.3, 5), cordMat);
+          cord.position.set(lpx, 6.7, lpz); g.add(cord);
+          var lmesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), lampGlow);
+          lmesh.scale.y = 1.25; lmesh.position.set(lpx, 5.4, lpz); g.add(lmesh);
+        }
+
+        // ⑩ 殿内暖光（有灯才看得见，不然只剩红墙剪影）
+        var pl1 = new THREE.PointLight(0xffb066, 0.95, 30, 2); pl1.position.set(5.6, 5.0, 0); g.add(pl1);
+        var pl2 = new THREE.PointLight(0xffc890, 0.55, 22, 2); pl2.position.set(-2.0, 4.2, 0); g.add(pl2);
+
+        scene.add(g);
+        window.__zzHall = { x: HX, y: FY, z: HZ, children: g.children.length };
+
+        // ⑪ 写祝福：站进殿里才出现按钮，牌子挂到许愿绳上并永久保留
+        var btn = document.createElement('div');
+        btn.textContent = '写祝福';
+        btn.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:98px;padding:10px 18px;border-radius:20px;' +
+          'background:rgba(160,40,30,.92);color:#ffe9b0;font:600 15px system-ui;z-index:9000;display:none;pointer-events:auto;cursor:pointer;user-select:none;' +
+          'box-shadow:0 4px 14px rgba(0,0,0,.35);';
+        document.body.appendChild(btn);
+        var panel = document.createElement('div');
+        panel.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:280px;padding:16px;' +
+          'background:rgba(28,22,18,.96);border:1px solid #8e6a3a;border-radius:14px;z-index:9001;display:none;color:#f7e2a8;font:14px system-ui;' +
+          'box-shadow:0 10px 30px rgba(0,0,0,.5);';
+        panel.innerHTML = '<div style="margin-bottom:10px;font-size:15px">在庙里写下祝福（最多 8 字）</div>' +
+          '<input id="zzHallIn" maxlength="8" style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #8e6a3a;background:#1a1512;color:#ffe9b0;font-size:15px;" placeholder="平安顺遂">' +
+          '<div style="display:flex;gap:10px;margin-top:12px;">' +
+          '<div id="zzHallOk" style="flex:1;text-align:center;padding:8px;border-radius:8px;background:#a02818;cursor:pointer;">挂上去</div>' +
+          '<div id="zzHallNo" style="flex:1;text-align:center;padding:8px;border-radius:8px;background:#3a322c;cursor:pointer;">取消</div></div>';
+        document.body.appendChild(panel);
+        function closePanel() { panel.style.display = 'none'; }
+        function openPanel() { panel.style.display = 'block'; var ip = document.getElementById('zzHallIn'); if (ip) { ip.value = ''; ip.focus(); } }
+        btn.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); openPanel(); });
+        panel.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+        var okEl = document.getElementById('zzHallOk'), noEl = document.getElementById('zzHallNo');
+        if (okEl) okEl.addEventListener('pointerdown', function () {
+          var ip = document.getElementById('zzHallIn');
+          var v = ((ip && ip.value) || '').trim().slice(0, 8) || '平安顺遂';
+          wishes.push(v);
+          if (wishes.length > 16) wishes = wishes.slice(-16);
+          try { localStorage.setItem(KEY, JSON.stringify(wishes)); } catch (e2) { }
+          var nbm = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.34, 0.04), new THREE.MeshBasicMaterial({ map: texOf(v), side: THREE.DoubleSide }));
+          g.add(placeBoard(nbm, wishes.length - 1));
+          closePanel();
+          try { setHint('已挂上祝福牌：' + v); } catch (e3) { }
+        });
+        if (noEl) noEl.addEventListener('pointerdown', closePanel);
+        setInterval(function () {
+          try {
+            if (typeof person === 'undefined' || !person) return;
+            var dx = person.position.x - HX, dz = person.position.z - HZ;
+            var near = (dx * dx + dz * dz) < 12 * 12;
+            btn.style.display = near ? 'block' : 'none';
+            if (!near && panel.style.display === 'block') closePanel();
+          } catch (e4) { }
+        }, 300);
+      } catch (eHall) { try { console.error('[zzHallInterior]', eHall); } catch (e9) { } }
+    })();

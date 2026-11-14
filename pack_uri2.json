@@ -1,0 +1,1186 @@
+{
+ "pk02": [
+  {
+   "uuid": "610c1678-c0ba-43c1-938d-3fb3933cfa2d.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/02qjclwtgsyrgreq.glb",
+   "err": 0.00028,
+   "mtime": "2026-11-12T18:11:15.319Z",
+   "L": 545.949,
+   "size": [
+    545.949,
+    4.894,
+    510.614
+   ],
+   "center": [
+    -47.802,
+    -0.592,
+    55.947
+   ]
+  },
+  {
+   "uuid": "0a6e89ed-5ac1-4dec-90a0-0fa7f5f5006a.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/k931ruxxts5moghr.glb",
+   "err": 0.00028,
+   "mtime": "2026-11-12T18:38:33.438Z",
+   "L": 545.949,
+   "size": [
+    545.949,
+    4.894,
+    510.614
+   ],
+   "center": [
+    -47.802,
+    -0.592,
+    55.947
+   ]
+  }
+ ],
+ "pk07": [
+  {
+   "uuid": "0c47a002-ae0d-4775-960b-d027175d93d0.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gmucgh4vihcu2frn.glb",
+   "err": 0.0005,
+   "mtime": "2026-11-12T18:15:25.299Z",
+   "L": 2346.584,
+   "size": [
+    2346.584,
+    54.608,
+    874.095
+   ],
+   "center": [
+    862.208,
+    25.446,
+    -279.149
+   ]
+  },
+  {
+   "uuid": "536eb88f-d704-4be0-b75a-a7bfed00b58f.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/j4vhpb0y2497i9xn.glb",
+   "err": 0.0005,
+   "mtime": "2026-11-12T18:42:44.862Z",
+   "L": 2346.584,
+   "size": [
+    2346.584,
+    54.608,
+    874.095
+   ],
+   "center": [
+    862.208,
+    25.446,
+    -279.149
+   ]
+  }
+ ],
+ "pk31": [
+  {
+   "uuid": "11c878cd-96ae-4fe4-848d-3ab4a0601c58.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9yk51jwsezr4vzsd.glb",
+   "err": 0.00042,
+   "mtime": "2026-11-12T18:35:33.367Z",
+   "L": 2543.012,
+   "size": [
+    2543.012,
+    202.364,
+    1243.4
+   ],
+   "center": [
+    950.706,
+    92.182,
+    -106.7
+   ]
+  },
+  {
+   "uuid": "7fc9718c-8799-45b4-9405-397a281ce328.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/c30gql37c4fpzs2t.glb",
+   "err": 0.00042,
+   "mtime": "2026-11-12T19:02:46.997Z",
+   "L": 2543.012,
+   "size": [
+    2543.012,
+    202.364,
+    1243.4
+   ],
+   "center": [
+    950.706,
+    92.182,
+    -106.7
+   ]
+  }
+ ],
+ "pk14": [
+  {
+   "uuid": "132276b6-a98c-4047-b88b-1b0d2add5727.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/y8ibtjapne5odrh5.glb",
+   "err": 0.00033,
+   "mtime": "2026-11-12T18:21:17.125Z",
+   "L": 610.151,
+   "size": [
+    486.349,
+    4.474,
+    610.151
+   ],
+   "center": [
+    -48.586,
+    2.048,
+    -136.057
+   ]
+  },
+  {
+   "uuid": "c5157f37-d0bf-446d-b1e1-366ab5ad7c3d.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s253uk06lol1hebs.glb",
+   "err": 0.00033,
+   "mtime": "2026-11-12T18:48:33.707Z",
+   "L": 610.151,
+   "size": [
+    486.349,
+    4.474,
+    610.151
+   ],
+   "center": [
+    -48.586,
+    2.048,
+    -136.057
+   ]
+  }
+ ],
+ "pk10": [
+  {
+   "uuid": "78075253-8eaa-4dce-a3ea-8c0778b95569.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qxk5oncmncy31ua0.glb",
+   "err": 0.00018,
+   "mtime": "2026-11-12T18:17:56.030Z",
+   "L": 2018.496,
+   "size": [
+    2018.496,
+    12.228,
+    659.677
+   ],
+   "center": [
+    1030.172,
+    5.499,
+    26.278
+   ]
+  },
+  {
+   "uuid": "16af99de-9b8f-47f5-a499-21831208b91d.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o721je5dcgrduv4c.glb",
+   "err": 0.00018,
+   "mtime": "2026-11-12T18:45:13.905Z",
+   "L": 2018.496,
+   "size": [
+    2018.496,
+    12.228,
+    659.677
+   ],
+   "center": [
+    1030.172,
+    5.499,
+    26.278
+   ]
+  }
+ ],
+ "pk28": [
+  {
+   "uuid": "1aaedbe5-aca9-410c-99a1-a173d35b6c63.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/he7awkrste6f1bp8.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T18:33:01.868Z",
+   "L": 505.599,
+   "size": [
+    505.599,
+    4.383,
+    480.019
+   ],
+   "center": [
+    -58.256,
+    1.429,
+    -63.489
+   ]
+  },
+  {
+   "uuid": "3dcc4bcb-9c3c-4bef-9fbd-237dc5126629.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/wy36reihnt8h68t0.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T19:00:15.782Z",
+   "L": 505.599,
+   "size": [
+    505.599,
+    4.383,
+    480.019
+   ],
+   "center": [
+    -58.256,
+    1.429,
+    -63.489
+   ]
+  }
+ ],
+ "pk24": [
+  {
+   "uuid": "1bf24cad-17c4-4cff-9896-726873037e3b.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jhoshhb41e3wpd5w.glb",
+   "err": 0.0002,
+   "mtime": "2026-11-12T18:29:42.086Z",
+   "L": 2369.704,
+   "size": [
+    2369.704,
+    175.049,
+    1212.819
+   ],
+   "center": [
+    866.348,
+    85.672,
+    -231.791
+   ]
+  },
+  {
+   "uuid": "b4e9db45-a66a-437d-bceb-c6c91ad4ba50.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vhnfcu6usxc2iui2.glb",
+   "err": 0.0002,
+   "mtime": "2026-11-12T18:56:55.706Z",
+   "L": 2369.704,
+   "size": [
+    2369.704,
+    175.049,
+    1212.819
+   ],
+   "center": [
+    866.348,
+    85.672,
+    -231.791
+   ]
+  }
+ ],
+ "pk33": [
+  {
+   "uuid": "1eb1e7be-9f41-49a0-b20c-e9302ef5ea80.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T19:04:26.998Z",
+   "L": 2530.75,
+   "size": [
+    2530.75,
+    236.862,
+    1215.68
+   ],
+   "center": [
+    956.125,
+    108.731,
+    -190.16
+   ]
+  }
+ ],
+ "pk30": [
+  {
+   "uuid": "a6a26df1-24df-4c7b-adf8-4f5a55054268.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nzv9y4xsqbmpn4ui.glb",
+   "err": 0.00036,
+   "mtime": "2026-11-12T18:34:43.166Z",
+   "L": 2541.69,
+   "size": [
+    2541.69,
+    259.61,
+    1262.295
+   ],
+   "center": [
+    950.205,
+    127.205,
+    -181.128
+   ]
+  },
+  {
+   "uuid": "1fa6e47a-6677-499a-b76f-1734aadbd494.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8rzupur3klg7gxvy.glb",
+   "err": 0.00036,
+   "mtime": "2026-11-12T19:01:57.040Z",
+   "L": 2541.69,
+   "size": [
+    2541.69,
+    259.61,
+    1262.295
+   ],
+   "center": [
+    950.205,
+    127.205,
+    -181.128
+   ]
+  }
+ ],
+ "pk13": [
+  {
+   "uuid": "1fc8f9c2-283f-4062-8e89-6995b5816c4c.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/09h7iev3mekgqdey.glb",
+   "err": 0.00043,
+   "mtime": "2026-11-12T18:20:26.850Z",
+   "L": 2303.789,
+   "size": [
+    2303.789,
+    72.399,
+    808.351
+   ],
+   "center": [
+    900.686,
+    34.468,
+    -29.624
+   ]
+  },
+  {
+   "uuid": "7270259e-2125-485d-a442-736b77f23db3.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/r968ey0lvq5exw4y.glb",
+   "err": 0.00043,
+   "mtime": "2026-11-12T18:47:44.202Z",
+   "L": 2303.789,
+   "size": [
+    2303.789,
+    72.399,
+    808.351
+   ],
+   "center": [
+    900.686,
+    34.468,
+    -29.624
+   ]
+  }
+ ],
+ "pk18": [
+  {
+   "uuid": "85894fdb-ea36-46e5-b038-fb42f362920c.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/a5kt81vp6709l3cs.glb",
+   "err": 0.00037,
+   "mtime": "2026-11-12T18:24:41.264Z",
+   "L": 2203.923,
+   "size": [
+    2203.923,
+    72.291,
+    1228.401
+   ],
+   "center": [
+    797.368,
+    34.242,
+    -91.129
+   ]
+  },
+  {
+   "uuid": "20f645bb-f09b-4158-a996-c2e6625ecf62.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ak482rn0ewx8exwy.glb",
+   "err": 0.00037,
+   "mtime": "2026-11-12T18:51:55.217Z",
+   "L": 2203.923,
+   "size": [
+    2203.923,
+    72.291,
+    1228.401
+   ],
+   "center": [
+    797.368,
+    34.242,
+    -91.129
+   ]
+  }
+ ],
+ "pk23": [
+  {
+   "uuid": "75dcf40d-10fe-43e5-ad4f-da19cf497a6e.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/15l13z1cbrm8hcy1.glb",
+   "err": 0.00029,
+   "mtime": "2026-11-12T18:28:50.507Z",
+   "L": 2639.638,
+   "size": [
+    2639.638,
+    322.789,
+    1226.98
+   ],
+   "center": [
+    813.576,
+    19.637,
+    -146.69
+   ]
+  },
+  {
+   "uuid": "26799855-72f2-43c0-86a7-eed54ef71a1f.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/q0x9rwdscj2kh5kw.glb",
+   "err": 0.00029,
+   "mtime": "2026-11-12T18:56:04.297Z",
+   "L": 2639.638,
+   "size": [
+    2639.638,
+    322.789,
+    1226.98
+   ],
+   "center": [
+    813.576,
+    19.637,
+    -146.69
+   ]
+  }
+ ],
+ "pk17": [
+  {
+   "uuid": "f43a5cdf-d0fc-4d56-9447-60d17e51921a.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ahbc5f34eai5s5mh.glb",
+   "err": 0.27921,
+   "mtime": "2026-11-12T18:22:56.985Z",
+   "L": 510.92,
+   "size": [
+    368.266,
+    11.204,
+    510.92
+   ],
+   "center": [
+    185.479,
+    6.668,
+    100.8
+   ]
+  },
+  {
+   "uuid": "d9eb817d-0697-48ad-a5fa-de50436f0216.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/by8l8h8a3fkweshb.glb",
+   "err": 0.00021,
+   "mtime": "2026-11-12T18:23:49.767Z",
+   "L": 510.92,
+   "size": [
+    368.266,
+    11.204,
+    510.92
+   ],
+   "center": [
+    185.479,
+    6.668,
+    100.8
+   ]
+  },
+  {
+   "uuid": "c3124dfe-5788-4004-a357-8d8088e15f51.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/inruzxwbiwgvp5f2.glb",
+   "err": 0.27921,
+   "mtime": "2026-11-12T18:50:15.568Z",
+   "L": 510.92,
+   "size": [
+    368.266,
+    11.204,
+    510.92
+   ],
+   "center": [
+    185.479,
+    6.668,
+    100.8
+   ]
+  },
+  {
+   "uuid": "2c49bc10-250e-4308-a8c8-32819bb888b5.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/6vh6kxzcooc4mw8n.glb",
+   "err": 0.00021,
+   "mtime": "2026-11-12T18:51:05.196Z",
+   "L": 510.92,
+   "size": [
+    368.266,
+    11.204,
+    510.92
+   ],
+   "center": [
+    185.479,
+    6.668,
+    100.8
+   ]
+  }
+ ],
+ "pk26": [
+  {
+   "uuid": "2f3af55c-365a-4d10-bee5-657e032811d2.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7gf39qry5wbu5pw6.glb",
+   "err": 0.0004,
+   "mtime": "2026-11-12T18:31:21.853Z",
+   "L": 2542.169,
+   "size": [
+    2542.169,
+    285.51,
+    1285.318
+   ],
+   "center": [
+    950.368,
+    140.231,
+    -178.569
+   ]
+  },
+  {
+   "uuid": "b3e8b4d1-75ac-4d39-b809-1fb327206d76.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/deflj60vnubk5eyb.glb",
+   "err": 0.0004,
+   "mtime": "2026-11-12T18:58:34.810Z",
+   "L": 2542.169,
+   "size": [
+    2542.169,
+    285.51,
+    1285.318
+   ],
+   "center": [
+    950.368,
+    140.231,
+    -178.569
+   ]
+  }
+ ],
+ "pk09": [
+  {
+   "uuid": "e36308aa-da2a-40bf-a330-1cb1e9e63f89.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jgjif07sarav8r2w.glb",
+   "err": 0.00017,
+   "mtime": "2026-11-12T18:17:06.371Z",
+   "L": 2433.71,
+   "size": [
+    2433.71,
+    44.029,
+    927.667
+   ],
+   "center": [
+    916.521,
+    20.946,
+    -296.329
+   ]
+  },
+  {
+   "uuid": "3248feb7-72c3-4957-88e0-84a5f52dda10.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/f3m37c1kh1irhl5f.glb",
+   "err": 0.00017,
+   "mtime": "2026-11-12T18:44:24.390Z",
+   "L": 2433.71,
+   "size": [
+    2433.71,
+    44.029,
+    927.667
+   ],
+   "center": [
+    916.521,
+    20.946,
+    -296.329
+   ]
+  }
+ ],
+ "pk21": [
+  {
+   "uuid": "ff3b8a85-817c-4bd1-bad0-14beb74939f9.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vvlxc576uei5eva8.glb",
+   "err": 0.00026,
+   "mtime": "2026-11-12T18:27:10.080Z",
+   "L": 2184.743,
+   "size": [
+    2184.743,
+    195.009,
+    986.955
+   ],
+   "center": [
+    807.492,
+    97.504,
+    40.668
+   ]
+  },
+  {
+   "uuid": "32706c26-0b9a-49ea-aa4c-e3df400e97a4.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9v9dyykr35lennl7.glb",
+   "err": 0.00026,
+   "mtime": "2026-11-12T18:54:25.925Z",
+   "L": 2184.743,
+   "size": [
+    2184.743,
+    195.009,
+    986.955
+   ],
+   "center": [
+    807.492,
+    97.504,
+    40.668
+   ]
+  }
+ ],
+ "pk12": [
+  {
+   "uuid": "932d4775-aa21-4254-9792-b03d06f8d556.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7tqr16xuod8jrgzq.glb",
+   "err": 0.42325,
+   "mtime": "2026-11-12T18:18:47.051Z",
+   "L": 470.319,
+   "size": [
+    145.679,
+    2.645,
+    470.319
+   ],
+   "center": [
+    75.565,
+    0.551,
+    -68.305
+   ]
+  },
+  {
+   "uuid": "97ddcde9-c995-480e-bdb5-2692d94b3495.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gqx0l6c3t8791q0x.glb",
+   "err": 0.00038,
+   "mtime": "2026-11-12T18:19:37.847Z",
+   "L": 470.319,
+   "size": [
+    145.679,
+    2.645,
+    470.319
+   ],
+   "center": [
+    75.565,
+    0.551,
+    -68.305
+   ]
+  },
+  {
+   "uuid": "3ca7db3f-c800-4cb5-b713-4426a31a17f6.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/3rpayznhvp4bhb9v.glb",
+   "err": 0.42325,
+   "mtime": "2026-11-12T18:46:03.472Z",
+   "L": 470.319,
+   "size": [
+    145.679,
+    2.645,
+    470.319
+   ],
+   "center": [
+    75.565,
+    0.551,
+    -68.305
+   ]
+  },
+  {
+   "uuid": "4a469ea1-fa8d-4e31-853b-2267fd0da9f7.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/529jpor09y37medz.glb",
+   "err": 0.00038,
+   "mtime": "2026-11-12T18:46:54.307Z",
+   "L": 470.319,
+   "size": [
+    145.679,
+    2.645,
+    470.319
+   ],
+   "center": [
+    75.565,
+    0.551,
+    -68.305
+   ]
+  }
+ ],
+ "pk20": [
+  {
+   "uuid": "ef66b578-c6a7-4626-8755-bb6d541d215b.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb",
+   "err": 0.00025,
+   "mtime": "2026-11-12T18:26:18.436Z",
+   "L": 2324.488,
+   "size": [
+    2324.488,
+    16.845,
+    1259.8
+   ],
+   "center": [
+    889.156,
+    8.612,
+    -163.25
+   ]
+  },
+  {
+   "uuid": "3fa279cf-cd55-41be-aaf5-36013950cb6c.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8ztcocnj6sx1s3he.glb",
+   "err": 0.00025,
+   "mtime": "2026-11-12T18:53:35.129Z",
+   "L": 2324.488,
+   "size": [
+    2324.488,
+    16.845,
+    1259.8
+   ],
+   "center": [
+    889.156,
+    8.612,
+    -163.25
+   ]
+  }
+ ],
+ "pk03": [
+  {
+   "uuid": "4374c7bc-2b1f-47fe-90f5-1def6a63e539.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o600esxco903w3wn.glb",
+   "err": 0.00043,
+   "mtime": "2026-11-12T18:12:03.666Z",
+   "L": 547.097,
+   "size": [
+    507.94,
+    4.139,
+    547.097
+   ],
+   "center": [
+    -51,
+    1.005,
+    -38.908
+   ]
+  },
+  {
+   "uuid": "c8bd6b91-0f79-4423-8f07-611da88a9a70.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s4j4s4bstvdxqgkb.glb",
+   "err": 0.00043,
+   "mtime": "2026-11-12T18:39:23.739Z",
+   "L": 547.097,
+   "size": [
+    507.94,
+    4.139,
+    547.097
+   ],
+   "center": [
+    -51,
+    1.005,
+    -38.908
+   ]
+  }
+ ],
+ "pk08": [
+  {
+   "uuid": "4f4fae08-48c7-4219-96af-6b27a0fcd12b.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/coqtxyxtidvi7juf.glb",
+   "err": 0.00048,
+   "mtime": "2026-11-12T18:16:15.315Z",
+   "L": 643.004,
+   "size": [
+    618.903,
+    4.094,
+    643.004
+   ],
+   "center": [
+    4.757,
+    -0.425,
+    -119.366
+   ]
+  },
+  {
+   "uuid": "4bb7cd4a-c024-41cd-b44d-708f2a89d4c7.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/byqum0lego88shir.glb",
+   "err": 0.00048,
+   "mtime": "2026-11-12T18:43:34.177Z",
+   "L": 643.004,
+   "size": [
+    618.903,
+    4.094,
+    643.004
+   ],
+   "center": [
+    4.757,
+    -0.425,
+    -119.366
+   ]
+  }
+ ],
+ "pk27": [
+  {
+   "uuid": "4c8d765e-57c6-4664-9a65-3948d670f42b.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/fkv2nqgl3ui14e02.glb",
+   "err": 0.00019,
+   "mtime": "2026-11-12T18:32:12.922Z",
+   "L": 2543.287,
+   "size": [
+    2543.287,
+    286.918,
+    1358.283
+   ],
+   "center": [
+    950.451,
+    139.249,
+    -142.142
+   ]
+  },
+  {
+   "uuid": "b51d3902-9f73-4b57-8d63-908ee3cf56ec.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vbvworbls9vpo75b.glb",
+   "err": 0.00019,
+   "mtime": "2026-11-12T18:59:25.929Z",
+   "L": 2543.287,
+   "size": [
+    2543.287,
+    286.918,
+    1358.283
+   ],
+   "center": [
+    950.451,
+    139.249,
+    -142.142
+   ]
+  }
+ ],
+ "pk22": [
+  {
+   "uuid": "4eae842c-e07e-4b8b-b02f-fcd2108387cb.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/l8o0mn36u36rf77f.glb",
+   "err": 0.00045,
+   "mtime": "2026-11-12T18:28:01.455Z",
+   "L": 2324.829,
+   "size": [
+    2324.829,
+    44.35,
+    1345.027
+   ],
+   "center": [
+    1058.178,
+    19.975,
+    -148.549
+   ]
+  },
+  {
+   "uuid": "d3c405d1-e5a8-4dc5-97ab-a2ee7d3a1a6f.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8eu7s4r93cy6qy1e.glb",
+   "err": 0.00045,
+   "mtime": "2026-11-12T18:55:15.213Z",
+   "L": 2324.829,
+   "size": [
+    2324.829,
+    44.35,
+    1345.027
+   ],
+   "center": [
+    1058.178,
+    19.975,
+    -148.549
+   ]
+  }
+ ],
+ "pk19": [
+  {
+   "uuid": "59a6d737-81bd-47fb-a59b-7c61a8ecd1e8.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/sbt1e26td0kyxny2.glb",
+   "err": 0.00048,
+   "mtime": "2026-11-12T18:25:27.737Z",
+   "L": 1976.854,
+   "size": [
+    1976.854,
+    7.79,
+    546.553
+   ],
+   "center": [
+    782.086,
+    4.215,
+    -22.478
+   ]
+  },
+  {
+   "uuid": "506e8025-956b-462a-a6fa-17424e57837e.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/59r6xqjeq9o3ogve.glb",
+   "err": 0.00048,
+   "mtime": "2026-11-12T18:52:44.252Z",
+   "L": 1976.854,
+   "size": [
+    1976.854,
+    7.79,
+    546.553
+   ],
+   "center": [
+    782.086,
+    4.215,
+    -22.478
+   ]
+  }
+ ],
+ "pk01": [
+  {
+   "uuid": "75bb79e4-ee16-44c0-86f7-70f4101e8c1c.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jpb73zdzn5apu6lp.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T18:09:04.238Z",
+   "L": 2125.455,
+   "size": [
+    2125.455,
+    47.634,
+    592.784
+   ],
+   "center": [
+    753.368,
+    23.817,
+    -155.125
+   ]
+  },
+  {
+   "uuid": "e2ac2e1d-b8e0-4efc-9875-ebf18fee6c22.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/pr1hnncp1fbsn48g.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T18:10:24.343Z",
+   "L": 2125.455,
+   "size": [
+    2125.455,
+    47.634,
+    592.784
+   ],
+   "center": [
+    753.368,
+    23.817,
+    -155.125
+   ]
+  },
+  {
+   "uuid": "57e59fec-8b7b-4296-9460-35621e89f61b.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tcqgxxudk5iaxo7n.glb",
+   "err": 0.00041,
+   "mtime": "2026-11-12T18:37:43.411Z",
+   "L": 2125.455,
+   "size": [
+    2125.455,
+    47.634,
+    592.784
+   ],
+   "center": [
+    753.368,
+    23.817,
+    -155.125
+   ]
+  }
+ ],
+ "pk04": [
+  {
+   "uuid": "b6ef7d23-6d58-4fd6-b688-3531f02a1985.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tv1am29ec5b5zd8x.glb",
+   "err": 0.0003,
+   "mtime": "2026-11-12T18:12:53.852Z",
+   "L": 681.747,
+   "size": [
+    380.58,
+    2.932,
+    681.747
+   ],
+   "center": [
+    107.38,
+    1.278,
+    -42.855
+   ]
+  },
+  {
+   "uuid": "5c126287-a489-43d6-b7b3-58805eb01e27.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/pahv48c7w6nx6pbs.glb",
+   "err": 0.0003,
+   "mtime": "2026-11-12T18:40:14.011Z",
+   "L": 681.747,
+   "size": [
+    380.58,
+    2.932,
+    681.747
+   ],
+   "center": [
+    107.38,
+    1.278,
+    -42.855
+   ]
+  }
+ ],
+ "pk06": [
+  {
+   "uuid": "60ef4a2f-9b86-45d8-b503-22382354d2ef.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vdf1u2k4uxi2s6cm.glb",
+   "err": 0.00036,
+   "mtime": "2026-11-12T18:14:34.797Z",
+   "L": 2147.229,
+   "size": [
+    2147.229,
+    46.46,
+    914.761
+   ],
+   "center": [
+    769.125,
+    21.41,
+    -255.359
+   ]
+  },
+  {
+   "uuid": "918ccbd4-b705-472e-b24e-ccd1062eb2d2.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s7io5ndu3hc39fb1.glb",
+   "err": 0.00036,
+   "mtime": "2026-11-12T18:41:54.783Z",
+   "L": 2147.229,
+   "size": [
+    2147.229,
+    46.46,
+    914.761
+   ],
+   "center": [
+    769.125,
+    21.41,
+    -255.359
+   ]
+  }
+ ],
+ "pk25": [
+  {
+   "uuid": "763d2d45-239e-4c3b-93a7-f5619d364ca3.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/5cu3n7v67vp3ss4v.glb",
+   "err": 0.00011,
+   "mtime": "2026-11-12T18:30:31.824Z",
+   "L": 2186.52,
+   "size": [
+    2186.52,
+    12.883,
+    802.675
+   ],
+   "center": [
+    793.13,
+    5.428,
+    -39.654
+   ]
+  },
+  {
+   "uuid": "7ddb8850-925b-48ef-95ec-5e3e74cb9f55.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/zgrfm5ngkmg63y56.glb",
+   "err": 0.00011,
+   "mtime": "2026-11-12T18:57:42.928Z",
+   "L": 2186.52,
+   "size": [
+    2186.52,
+    12.883,
+    802.675
+   ],
+   "center": [
+    793.13,
+    5.428,
+    -39.654
+   ]
+  }
+ ],
+ "pk05": [
+  {
+   "uuid": "766ff5c5-ca3e-4d52-8ee5-78dd89bf37ae.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/iwiu4uyzq83javpl.glb",
+   "err": 0.00032,
+   "mtime": "2026-11-12T18:13:44.220Z",
+   "L": 2128.118,
+   "size": [
+    2128.118,
+    44.015,
+    881.493
+   ],
+   "center": [
+    905.638,
+    22.007,
+    -284.23
+   ]
+  },
+  {
+   "uuid": "a456f327-ec46-4c19-a1e8-4720c78c54a8.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/eouahv3mnw5u1m5w.glb",
+   "err": 0.00032,
+   "mtime": "2026-11-12T18:41:04.759Z",
+   "L": 2128.118,
+   "size": [
+    2128.118,
+    44.015,
+    881.493
+   ],
+   "center": [
+    905.638,
+    22.007,
+    -284.23
+   ]
+  }
+ ],
+ "pk32": [
+  {
+   "uuid": "eed8033f-ba3b-4472-9d6b-bbf0784a0368.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/w2raxkb3aou1ij0m.glb",
+   "err": 0.00023,
+   "mtime": "2026-11-12T18:36:25.606Z",
+   "L": 2593.662,
+   "size": [
+    2593.662,
+    228.842,
+    1333.575
+   ],
+   "center": [
+    922.156,
+    112.741,
+    -164.563
+   ]
+  },
+  {
+   "uuid": "a7eb060b-3cb0-4d28-9f88-d69aea8aaea3.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qfk9o4abaq1ekp0k.glb",
+   "err": 0.00023,
+   "mtime": "2026-11-12T19:03:36.327Z",
+   "L": 2593.662,
+   "size": [
+    2593.662,
+    228.842,
+    1333.575
+   ],
+   "center": [
+    922.156,
+    112.741,
+    -164.563
+   ]
+  }
+ ],
+ "pk29": [
+  {
+   "uuid": "b7407dfa-e4e2-46b7-a045-48f93f69634e.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ngjp3lozltb78aen.glb",
+   "err": 0.00031,
+   "mtime": "2026-11-12T18:33:52.072Z",
+   "L": 2491.595,
+   "size": [
+    2491.595,
+    96.6,
+    1271.49
+   ],
+   "center": [
+    974.898,
+    45.7,
+    -177.955
+   ]
+  },
+  {
+   "uuid": "f79ccab5-1ff6-45e0-941c-d52bfc9d4792.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/isunp7c67rgk7qpo.glb",
+   "err": 0.00031,
+   "mtime": "2026-11-12T19:01:05.570Z",
+   "L": 2491.595,
+   "size": [
+    2491.595,
+    96.6,
+    1271.49
+   ],
+   "center": [
+    974.898,
+    45.7,
+    -177.955
+   ]
+  }
+ ],
+ "pk15": [
+  {
+   "uuid": "cf69b51f-f3d8-4ddd-9549-aeb421a70c8c.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kni10ty48dfa75vg.glb",
+   "err": 0.00017,
+   "mtime": "2026-11-12T18:22:07.501Z",
+   "L": 2296.073,
+   "size": [
+    2296.073,
+    16.171,
+    1172.9
+   ],
+   "center": [
+    895.839,
+    7.48,
+    -67.45
+   ]
+  },
+  {
+   "uuid": "d41de232-132a-4f73-a2e0-85eab9c55874.glb",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/h3aj9eiljrvzjhzu.glb",
+   "err": 0.00017,
+   "mtime": "2026-11-12T18:49:25.762Z",
+   "L": 2296.073,
+   "size": [
+    2296.073,
+    16.171,
+    1172.9
+   ],
+   "center": [
+    895.839,
+    7.48,
+    -67.45
+   ]
+  }
+ ]
+}

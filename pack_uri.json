@@ -1,0 +1,299 @@
+{
+ "pk01": {
+  "pack": "pack_01.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jpb73zdzn5apu6lp.glb",
+  "size": 2351676,
+  "packSize": 2351556,
+  "diff": 120,
+  "uuid": "75bb79e4-ee16-44c0-86f7-70f4101e8c1c.glb",
+  "when": "2026-11-12T18:09:04.238Z"
+ },
+ "pk02": {
+  "pack": "pack_02.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/02qjclwtgsyrgreq.glb",
+  "size": 2402352,
+  "packSize": 2402224,
+  "diff": 128,
+  "uuid": "610c1678-c0ba-43c1-938d-3fb3933cfa2d.glb",
+  "when": "2026-11-12T18:11:15.319Z"
+ },
+ "pk03": {
+  "pack": "pack_03.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o600esxco903w3wn.glb",
+  "size": 2375456,
+  "packSize": 2375344,
+  "diff": 112,
+  "uuid": "4374c7bc-2b1f-47fe-90f5-1def6a63e539.glb",
+  "when": "2026-11-12T18:12:03.666Z"
+ },
+ "pk04": {
+  "pack": "pack_04.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tv1am29ec5b5zd8x.glb",
+  "size": 2325056,
+  "packSize": 2324912,
+  "diff": 144,
+  "uuid": "b6ef7d23-6d58-4fd6-b688-3531f02a1985.glb",
+  "when": "2026-11-12T18:12:53.852Z"
+ },
+ "pk05": {
+  "pack": "pack_05.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/iwiu4uyzq83javpl.glb",
+  "size": 2339804,
+  "packSize": 2339544,
+  "diff": 260,
+  "uuid": "766ff5c5-ca3e-4d52-8ee5-78dd89bf37ae.glb",
+  "when": "2026-11-12T18:13:44.220Z"
+ },
+ "pk06": {
+  "pack": "pack_06.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vdf1u2k4uxi2s6cm.glb",
+  "size": 2391676,
+  "packSize": 2391388,
+  "diff": 288,
+  "uuid": "60ef4a2f-9b86-45d8-b503-22382354d2ef.glb",
+  "when": "2026-11-12T18:14:34.797Z"
+ },
+ "pk07": {
+  "pack": "pack_07.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gmucgh4vihcu2frn.glb",
+  "size": 2413200,
+  "packSize": 2412808,
+  "diff": 392,
+  "uuid": "0c47a002-ae0d-4775-960b-d027175d93d0.glb",
+  "when": "2026-11-12T18:15:25.299Z"
+ },
+ "pk08": {
+  "pack": "pack_08.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/coqtxyxtidvi7juf.glb",
+  "size": 2374880,
+  "packSize": 2374620,
+  "diff": 260,
+  "uuid": "4f4fae08-48c7-4219-96af-6b27a0fcd12b.glb",
+  "when": "2026-11-12T18:16:15.315Z"
+ },
+ "pk09": {
+  "pack": "pack_09.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jgjif07sarav8r2w.glb",
+  "size": 2433604,
+  "packSize": 2433164,
+  "diff": 440,
+  "uuid": "e36308aa-da2a-40bf-a330-1cb1e9e63f89.glb",
+  "when": "2026-11-12T18:17:06.371Z"
+ },
+ "pk10": {
+  "pack": "pack_10.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vdf1u2k4uxi2s6cm.glb",
+  "size": 2391676,
+  "packSize": 2391908,
+  "diff": 232,
+  "uuid": "60ef4a2f-9b86-45d8-b503-22382354d2ef.glb",
+  "when": "2026-11-12T18:14:34.797Z"
+ },
+ "pk11": {
+  "pack": "pack_11.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7tqr16xuod8jrgzq.glb",
+  "size": 2359504,
+  "packSize": 2359276,
+  "diff": 228,
+  "uuid": "932d4775-aa21-4254-9792-b03d06f8d556.glb",
+  "when": "2026-11-12T18:18:47.051Z"
+ },
+ "pk12": {
+  "pack": "pack_12.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7tqr16xuod8jrgzq.glb",
+  "size": 2359504,
+  "packSize": 2359224,
+  "diff": 280,
+  "uuid": "932d4775-aa21-4254-9792-b03d06f8d556.glb",
+  "when": "2026-11-12T18:18:47.051Z"
+ },
+ "pk13": {
+  "pack": "pack_13.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/09h7iev3mekgqdey.glb",
+  "size": 2331408,
+  "packSize": 2330956,
+  "diff": 452,
+  "uuid": "1fc8f9c2-283f-4062-8e89-6995b5816c4c.glb",
+  "when": "2026-11-12T18:20:26.850Z"
+ },
+ "pk14": {
+  "pack": "pack_14.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kni10ty48dfa75vg.glb",
+  "size": 2438792,
+  "packSize": 2439236,
+  "diff": 444,
+  "uuid": "cf69b51f-f3d8-4ddd-9549-aeb421a70c8c.glb",
+  "when": "2026-11-12T18:22:07.501Z"
+ },
+ "pk15": {
+  "pack": "pack_15.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kni10ty48dfa75vg.glb",
+  "size": 2438792,
+  "packSize": 2437916,
+  "diff": 876,
+  "uuid": "cf69b51f-f3d8-4ddd-9549-aeb421a70c8c.glb",
+  "when": "2026-11-12T18:22:07.501Z"
+ },
+ "pk16": {
+  "pack": "pack_16.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb",
+  "size": 2416308,
+  "packSize": 2416904,
+  "diff": 596,
+  "uuid": "ef66b578-c6a7-4626-8755-bb6d541d215b.glb",
+  "when": "2026-11-12T18:26:18.436Z"
+ },
+ "pk17": {
+  "pack": "pack_17.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb",
+  "size": 2416308,
+  "packSize": 2416844,
+  "diff": 536,
+  "uuid": "ef66b578-c6a7-4626-8755-bb6d541d215b.glb",
+  "when": "2026-11-12T18:26:18.436Z"
+ },
+ "pk18": {
+  "pack": "pack_18.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/a5kt81vp6709l3cs.glb",
+  "size": 2370732,
+  "packSize": 2370092,
+  "diff": 640,
+  "uuid": "85894fdb-ea36-46e5-b038-fb42f362920c.glb",
+  "when": "2026-11-12T18:24:41.264Z"
+ },
+ "pk19": {
+  "pack": "pack_19.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/by8l8h8a3fkweshb.glb",
+  "size": 2417668,
+  "packSize": 2417672,
+  "diff": 4,
+  "uuid": "d9eb817d-0697-48ad-a5fa-de50436f0216.glb",
+  "when": "2026-11-12T18:23:49.767Z"
+ },
+ "pk20": {
+  "pack": "pack_20.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb",
+  "size": 2416308,
+  "packSize": 2415568,
+  "diff": 740,
+  "uuid": "ef66b578-c6a7-4626-8755-bb6d541d215b.glb",
+  "when": "2026-11-12T18:26:18.436Z"
+ },
+ "pk21": {
+  "pack": "pack_21.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/y8ibtjapne5odrh5.glb",
+  "size": 2440052,
+  "packSize": 2454504,
+  "diff": 14452,
+  "uuid": "132276b6-a98c-4047-b88b-1b0d2add5727.glb",
+  "when": "2026-11-12T18:21:17.125Z"
+ },
+ "pk22": {
+  "pack": "pack_22.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vvlxc576uei5eva8.glb",
+  "size": 2405564,
+  "packSize": 2405512,
+  "diff": 52,
+  "uuid": "ff3b8a85-817c-4bd1-bad0-14beb74939f9.glb",
+  "when": "2026-11-12T18:27:10.080Z"
+ },
+ "pk23": {
+  "pack": "pack_23.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/15l13z1cbrm8hcy1.glb",
+  "size": 2009668,
+  "packSize": 2008504,
+  "diff": 1164,
+  "uuid": "75dcf40d-10fe-43e5-ad4f-da19cf497a6e.glb",
+  "when": "2026-11-12T18:28:50.507Z"
+ },
+ "pk24": {
+  "pack": "pack_24.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nzv9y4xsqbmpn4ui.glb",
+  "size": 2421076,
+  "packSize": 2422248,
+  "diff": 1172,
+  "uuid": "a6a26df1-24df-4c7b-adf8-4f5a55054268.glb",
+  "when": "2026-11-12T18:34:43.166Z"
+ },
+ "pk25": {
+  "pack": "pack_25.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/5cu3n7v67vp3ss4v.glb",
+  "size": 2473116,
+  "packSize": 2471748,
+  "diff": 1368,
+  "uuid": "763d2d45-239e-4c3b-93a7-f5619d364ca3.glb",
+  "when": "2026-11-12T18:30:31.824Z"
+ },
+ "pk26": {
+  "pack": "pack_26.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vvlxc576uei5eva8.glb",
+  "size": 2405564,
+  "packSize": 2404648,
+  "diff": 916,
+  "uuid": "ff3b8a85-817c-4bd1-bad0-14beb74939f9.glb",
+  "when": "2026-11-12T18:27:10.080Z"
+ },
+ "pk27": {
+  "pack": "pack_27.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tv1am29ec5b5zd8x.glb",
+  "size": 2325056,
+  "packSize": 2302100,
+  "diff": 22956,
+  "uuid": "b6ef7d23-6d58-4fd6-b688-3531f02a1985.glb",
+  "when": "2026-11-12T18:12:53.852Z"
+ },
+ "pk28": {
+  "pack": "pack_28.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/he7awkrste6f1bp8.glb",
+  "size": 2601396,
+  "packSize": 2598384,
+  "diff": 3012,
+  "uuid": "1aaedbe5-aca9-410c-99a1-a173d35b6c63.glb",
+  "when": "2026-11-12T18:33:01.868Z"
+ },
+ "pk29": {
+  "pack": "pack_29.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ngjp3lozltb78aen.glb",
+  "size": 2585516,
+  "packSize": 2581088,
+  "diff": 4428,
+  "uuid": "b7407dfa-e4e2-46b7-a045-48f93f69634e.glb",
+  "when": "2026-11-12T18:33:52.072Z"
+ },
+ "pk30": {
+  "pack": "pack_30.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9yk51jwsezr4vzsd.glb",
+  "size": 2569632,
+  "packSize": 2569824,
+  "diff": 192,
+  "uuid": "11c878cd-96ae-4fe4-848d-3ab4a0601c58.glb",
+  "when": "2026-11-12T18:35:33.367Z"
+ },
+ "pk31": {
+  "pack": "pack_31.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/he7awkrste6f1bp8.glb",
+  "size": 2601396,
+  "packSize": 2643700,
+  "diff": 42304,
+  "uuid": "1aaedbe5-aca9-410c-99a1-a173d35b6c63.glb",
+  "when": "2026-11-12T18:33:01.868Z"
+ },
+ "pk32": {
+  "pack": "pack_32.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/w2raxkb3aou1ij0m.glb",
+  "size": 2827316,
+  "packSize": 2911572,
+  "diff": 84256,
+  "uuid": "eed8033f-ba3b-4472-9d6b-bbf0784a0368.glb",
+  "when": "2026-11-12T18:36:25.606Z"
+ },
+ "pk33": {
+  "pack": "pack_33.glb",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb",
+  "size": 759484,
+  "packSize": 837100,
+  "diff": 77616,
+  "uuid": "1eb1e7be-9f41-49a0-b20c-e9302ef5ea80.glb",
+  "when": "2026-11-12T19:04:26.998Z"
+ }
+}

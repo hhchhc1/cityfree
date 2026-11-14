@@ -12369,8 +12369,12 @@ function updateHqLights() {
   const accentMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
 
   // ===== 山体视觉 =====
-  const hill = new THREE.Mesh(new THREE.CylinderGeometry(50, 55, hillTop, 24), new THREE.MeshLambertMaterial({ color: 0x3a3a32 }));
-  hill.position.set(hx, hillTop / 2, hz); scene.add(hill);
+  // 【fix·大本营】视觉锥原来用 CylinderGeometry(50,55,10)：顶半径50/高10，与 terrainHeight 的山丘斜坡
+  // （bhd 48→55 从 10.5 降到 0）对不上 —— 在半径 48~55 环带，锥壁比真实地形高出 0~3.5m。
+  // 玩家踩在真实地形上，却被更高的"虚体"山壁埋住、且能穿过去（用户："沙滩色的东西、人穿进去、身体被埋"）。
+  // 改成顶半径48/底半径55/高10.5，使锥壁正好贴合地形斜坡（(48,10.5)→(55,0)）：玩家站在斜坡上即贴合锥壁，不再被埋/穿透。
+  const hill = new THREE.Mesh(new THREE.CylinderGeometry(48, 55, 10.5, 24), new THREE.MeshLambertMaterial({ color: 0x3a3a32 }));
+  hill.position.set(hx, 10.5 / 2, hz); scene.add(hill);
   const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(48, 48, 0.3, 24), new THREE.MeshLambertMaterial({ color: 0x2a2a22 }));
   topPlate.position.set(hx, hillTop + 0.15, hz); scene.add(topPlate);
 
@@ -24713,7 +24717,10 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       _cp.z = _Pz + (_cp.z - _Pz) * _hitT;
     }
     // 拉近之后可能重新贴到地面，再兜一次"相机永远不低于地面 + 人物脚下"
-    let _gyBase = terrainHeight(_cp.x, _cp.z);
+    // 【fix·中镇山】原来用"相机自身 XZ 的 terrainHeight"做基准：开车/步行到 150m 陡坡（中镇山）时，
+    // 相机落在背后不同坡面上、高度骤变 → 相机高度被带飞、视角跟着一跳一跳（用户："开车到中镇山视角总会变化"）。
+    // 改成用"目标（角色/载具）脚下高度"做基准，相机高度只随目标稳定变化，不再被背后坡面带飞。
+    let _gyBase = terrainHeight(camTarget.position.x, camTarget.position.z);
     // 【fix407】衙署台面（砖地顶约 2.78 米）不在 terrainHeight 里，相机贴地时就会钻到砖地下面，
     // 于是"往上看能看见地板背面"。这里把台面高度也算进来，相机永远在砖地之上。
     if (_cp.x > 1876 && _cp.x < 2174 && _cp.z < -80 && _cp.z > -846) _gyBase = Math.max(_gyBase, 2.78);

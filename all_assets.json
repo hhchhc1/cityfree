@@ -1,0 +1,1774 @@
+[
+ {
+  "name": "城堡01",
+  "id": "7120504346626",
+  "scale": 1,
+  "faces": "49878",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786889730.glb"
+ },
+ {
+  "name": "花树03",
+  "id": "8939427856898",
+  "scale": 7.8989747379949335,
+  "faces": "2100",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8974625285890.glb"
+ },
+ {
+  "name": "古老花树01",
+  "id": "8974625280514",
+  "scale": 6.98539924621582,
+  "faces": "14202",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8974625280258.glb"
+ },
+ {
+  "name": "浅色小花01",
+  "id": "7600811520770",
+  "scale": 1,
+  "faces": "80",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/be667c5b25a8412ea118abf25e531a7e.png"
+ },
+ {
+  "name": "繁茂翠树",
+  "id": "8857382415106",
+  "scale": 6.518550157546997,
+  "faces": "6343",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8935080963074.glb"
+ },
+ {
+  "name": "双人花环秋千",
+  "id": "9761786956802",
+  "scale": 1,
+  "cat": "5/2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9820400660738.wprefab"
+ },
+ {
+  "name": "古典阁楼火锅店",
+  "id": "9855145032962",
+  "scale": 1,
+  "faces": "19997",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9782714967298.glb"
+ },
+ {
+  "name": "浮空石板平台",
+  "id": "4016993687554",
+  "scale": 2.5,
+  "faces": "2118",
+  "cat": "6",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9782714915074.glb"
+ },
+ {
+  "name": "青草01",
+  "id": "7600811520002",
+  "scale": 1,
+  "faces": "195",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/93d6f864e7174ff5a4e2e5e4deac6361.png"
+ },
+ {
+  "name": "原木围墙",
+  "id": "4016993379586",
+  "scale": 2.5,
+  "faces": "1012",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748592702466.glb"
+ },
+ {
+  "name": "勿忘草01",
+  "id": "7325452805890",
+  "scale": 1,
+  "faces": "28",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/64c7932667884c7d8a16d850c6fde3df.png"
+ },
+ {
+  "name": "石板地板",
+  "id": "4016993755138",
+  "scale": 1.5,
+  "faces": "1050",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855144996354.glb"
+ },
+ {
+  "name": "向日葵",
+  "id": "4016993396482",
+  "scale": 1.5,
+  "faces": "2052",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786931202.glb"
+ },
+ {
+  "name": "翠绿灌木02",
+  "id": "8497689643010",
+  "scale": 2.111510229598501,
+  "faces": "1257",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8817177600770.glb"
+ },
+ {
+  "name": "国风_三色游动锦鲤",
+  "id": "11280829479170",
+  "scale": 0.650706225335598,
+  "faces": "3200",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11776997040642.wprefab"
+ },
+ {
+  "name": "古城石板路",
+  "id": "2849341715202",
+  "scale": 2.6543979169865897,
+  "faces": "1000",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786889474.glb"
+ },
+ {
+  "name": "彩色高花",
+  "id": "11077140480770",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/1d080e42c1e2472cb535de0d04cc83b9.png"
+ },
+ {
+  "name": "国风_可坐石桌石凳组合",
+  "id": "11280829480962",
+  "scale": 1.8893309831619263,
+  "faces": "4000",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11728852584962.wprefab"
+ },
+ {
+  "name": "花树02",
+  "id": "8970577926658",
+  "scale": 6.405237669820183,
+  "faces": "2218",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8970577926402.glb"
+ },
+ {
+  "name": "国风_无根漂浮晃动荷叶",
+  "id": "11277665306882",
+  "scale": 1.8864609599113464,
+  "faces": "2400",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11775491780610.wprefab"
+ },
+ {
+  "name": "柳树01",
+  "id": "9983861792258",
+  "scale": 4.6638066209852695,
+  "faces": "3730",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855145076738.glb"
+ },
+ {
+  "name": "椰子树01",
+  "id": "8783639041282",
+  "scale": 9.199843464419246,
+  "faces": "1114",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8783639041026.glb"
+ },
+ {
+  "name": "国风_游动黄金锦鲤",
+  "id": "11276789785346",
+  "scale": 0.620024193662405,
+  "faces": "3199",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11728852585730.wprefab"
+ },
+ {
+  "name": "国风_轻晃荷花荷叶组",
+  "id": "11280430105346",
+  "scale": 1.1287325978279115,
+  "faces": "6000",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11728852585218.wprefab"
+ },
+ {
+  "name": "大鲸鱼",
+  "id": "9842634300674",
+  "scale": 1,
+  "faces": "1999",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9820400726018.glb"
+ },
+ {
+  "name": "枫树01",
+  "id": "8960471044354",
+  "scale": 7.216310501098633,
+  "faces": "3520",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8974625280770.glb"
+ },
+ {
+  "name": "校园_地板",
+  "id": "11277665291522",
+  "scale": 3,
+  "faces": "4888",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11276789770498.glb"
+ },
+ {
+  "name": "充气小黄鸭",
+  "id": "9782715015426",
+  "scale": 1,
+  "faces": "2000",
+  "cat": "3",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11775491797250.wprefab"
+ },
+ {
+  "name": "布偶猫",
+  "id": "9855145065986",
+  "scale": 1,
+  "faces": "2000",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9842634373634.glb"
+ },
+ {
+  "name": "低模刺柏",
+  "id": "2399877565442",
+  "scale": 4.221518039703369,
+  "faces": "1072",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9754990109442.glb"
+ },
+ {
+  "name": "国风_石质古代庭院拱桥",
+  "id": "11278740504066",
+  "scale": 5.269291996955872,
+  "faces": "4960",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11277665302786.glb"
+ },
+ {
+  "name": "翠绿灌木01",
+  "id": "8497689643266",
+  "scale": 2.111510229598501,
+  "faces": "1257",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8714296338178.glb"
+ },
+ {
+  "name": "大块岩石2",
+  "id": "4016993517570",
+  "scale": 2.5,
+  "faces": "4160",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786926850.glb"
+ },
+ {
+  "name": "竹子01",
+  "id": "10244190731522",
+  "scale": 9.691996351906141,
+  "faces": "635",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/10217387532290.glb"
+ },
+ {
+  "name": "古城石板路",
+  "id": "4016993390338",
+  "scale": 5,
+  "faces": "1012",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9852810243074.glb"
+ },
+ {
+  "name": "积雪松杉",
+  "id": "4016993781250",
+  "scale": 2.5,
+  "faces": "6172",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9777277447938.glb"
+ },
+ {
+  "name": "国风_积雪凉亭",
+  "id": "11278740504578",
+  "scale": 3.0135887145996096,
+  "faces": "11520",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11280430103810.glb"
+ },
+ {
+  "name": "平缓岩台",
+  "id": "4016993566722",
+  "scale": 1.5,
+  "faces": "1086",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748431429122.glb"
+ },
+ {
+  "name": "紫花地丁01",
+  "id": "7325452806914",
+  "scale": 1,
+  "faces": "28",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/e737e3dd23b54766903d6475937c0273.png"
+ },
+ {
+  "name": "狗尾草",
+  "id": "10977937939202",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/bd4b3acb1d7a418cbf9426e57a09d394.png"
+ },
+ {
+  "name": "薄霜榕树02",
+  "id": "9838848136450",
+  "scale": 10.418002620533045,
+  "faces": "22180",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/10065576963586.glb"
+ },
+ {
+  "name": "石板地板",
+  "id": "2849341708290",
+  "scale": 0.7967067030994375,
+  "faces": "498",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748431383298.glb"
+ },
+ {
+  "name": "蓝色小花",
+  "id": "11077140481026",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/fa10d88826b349bb88bbb7d43235938c.png"
+ },
+ {
+  "name": "城墙台阶",
+  "id": "4016993481474",
+  "scale": 2.5,
+  "faces": "4028",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9754990139906.glb"
+ },
+ {
+  "name": "荷花4",
+  "id": "4016993835778",
+  "scale": 1.5,
+  "faces": "6140",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9852810264322.glb"
+ },
+ {
+  "name": "小女孩",
+  "id": "11276789761538",
+  "scale": 1.8867520093917847,
+  "faces": "8900",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11280829452802.glb"
+ },
+ {
+  "name": "荷花3",
+  "id": "4016993835266",
+  "scale": 1.5,
+  "faces": "6144",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9838848032258.glb"
+ },
+ {
+  "name": "国风_游动丹顶锦鲤",
+  "id": "11280430101506",
+  "scale": 0.5800157763242721,
+  "faces": "2800",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11727216780802.wprefab"
+ },
+ {
+  "name": "柳树02",
+  "id": "9839101552130",
+  "scale": 4.172394835671896,
+  "faces": "2594",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855145076994.glb"
+ },
+ {
+  "name": "魔法喷泉",
+  "id": "4212357177090",
+  "scale": 2.5,
+  "faces": "6155",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9754990114050.glb"
+ },
+ {
+  "name": "国风_游动三色锦鲤",
+  "id": "11277665301250",
+  "scale": 0.6607937037944793,
+  "faces": "2400",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11776997041154.wprefab"
+ },
+ {
+  "name": "双人可摇晃秋千",
+  "id": "10126563841794",
+  "scale": 1,
+  "faces": "11484",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11727216794370.wprefab"
+ },
+ {
+  "name": "休息长椅",
+  "id": "4016993336834",
+  "scale": 1.5,
+  "faces": "1012",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748592705282.glb"
+ },
+ {
+  "name": "红色高花",
+  "id": "11051235841538",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/743405e29a7947bf9826c43c6a78512a.png"
+ },
+ {
+  "name": "死灵法师",
+  "id": "10668441607938",
+  "scale": 1.9015119671821594,
+  "faces": "10000",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/10014105706754.glb"
+ },
+ {
+  "name": "可乘坐滑索",
+  "id": "9568412196354",
+  "scale": 1,
+  "cat": "6",
+  "type": 9,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9595760647170.wprefab"
+ },
+ {
+  "name": "蓝色花团",
+  "id": "10977937939714",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/6841b5497276454e8c4ed219656bed86.png"
+ },
+ {
+  "name": "国风_可调范围下雪组件",
+  "id": "11277665304578",
+  "scale": 1,
+  "faces": "648528",
+  "cat": "6",
+  "type": 9,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11775491780866.wprefab"
+ },
+ {
+  "name": "黄色小花",
+  "id": "11077140480258",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/01e1c2a1f55c4e209dc39f4f311cc3a4.png"
+ },
+ {
+  "name": "农庄小木屋5",
+  "id": "4016993359618",
+  "scale": 6,
+  "faces": "8044",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855145014274.glb"
+ },
+ {
+  "name": "国风_可入宫殿",
+  "id": "11277665303042",
+  "scale": 5.276552510261535,
+  "faces": "20000",
+  "cat": "2",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11280430102786.glb"
+ },
+ {
+  "name": "樱花树",
+  "id": "2880737306626",
+  "scale": 2,
+  "faces": "5846",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9754990081026.glb"
+ },
+ {
+  "name": "秋千",
+  "id": "4016993773314",
+  "scale": 1.5,
+  "faces": "1036",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9839101476610.glb"
+ },
+ {
+  "name": "外城围墙",
+  "id": "2849341745154",
+  "scale": 26.556160356305416,
+  "faces": "6000",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748431382274.glb"
+ },
+ {
+  "name": "铃兰花",
+  "id": "11003028480514",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/46781af5f458497783be33ad7901ddbb.png"
+ },
+ {
+  "name": "可乘坐热气球",
+  "id": "9493708841474",
+  "scale": 1,
+  "faces": "18293",
+  "cat": "3",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9595760644610.wprefab"
+ },
+ {
+  "name": "可踢足球",
+  "id": "8789091865346",
+  "scale": 1,
+  "faces": "27312",
+  "cat": "5/6",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11728852594690.wprefab"
+ },
+ {
+  "name": "荷花2",
+  "id": "4016993834754",
+  "scale": 0.6,
+  "faces": "2199",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9852810264578.glb"
+ },
+ {
+  "name": "冲锋枪",
+  "id": "4016993364226",
+  "scale": 0.87,
+  "faces": "6010",
+  "cat": "4",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855145013762.glb"
+ },
+ {
+  "name": "海上木质栈桥甲板",
+  "id": "11345787449090",
+  "scale": 1,
+  "faces": "12224",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11379472116738.glb"
+ },
+ {
+  "name": "高弹蹦床",
+  "id": "8789091866882",
+  "scale": 3.20373046875,
+  "faces": "4623",
+  "cat": "6",
+  "type": 9,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11728852595970.wprefab"
+ },
+ {
+  "name": "低坡石坎",
+  "id": "4016993338370",
+  "scale": 2,
+  "faces": "1032",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9777277496578.glb"
+ },
+ {
+  "name": "浮空石板平台",
+  "id": "2848573487362",
+  "scale": 1.3273745687136502,
+  "faces": "1000",
+  "cat": "6",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9852810242562.glb"
+ },
+ {
+  "name": "大型苔藓岩石组件3",
+  "id": "4016993529858",
+  "scale": 2.5,
+  "faces": "4119",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786926338.glb"
+ },
+ {
+  "name": "蓝色穗花",
+  "id": "10954890248706",
+  "scale": 1,
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/6b6197ac1dbe4bf1863478f6257697e3.png"
+ },
+ {
+  "name": "竹子02",
+  "id": "10217387532802",
+  "scale": 9.726895980536938,
+  "faces": "635",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/10217387532546.glb"
+ },
+ {
+  "name": "榕树01",
+  "id": "9855145080578",
+  "scale": 10.130635738372803,
+  "faces": "15471",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9838848119554.glb"
+ },
+ {
+  "name": "繁茂金秋叶树",
+  "id": "8939427842818",
+  "scale": 6.518550157546997,
+  "faces": "6343",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8856936972290.glb"
+ },
+ {
+  "name": "野生凤仙花01",
+  "id": "7383628800258",
+  "scale": 1,
+  "faces": "24",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/03c44fbf8d4b4bfa98df7b29332979e0.png"
+ },
+ {
+  "name": "小木船",
+  "id": "4016993547778",
+  "scale": 4,
+  "faces": "2028",
+  "cat": "3",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748431430402.glb"
+ },
+ {
+  "name": "银杏树2",
+  "id": "2880737322754",
+  "scale": 3,
+  "faces": "5687",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9748592642562.glb"
+ },
+ {
+  "name": "国风_灰色砖石壁身",
+  "id": "11278740507650",
+  "scale": 1.8873990178108215,
+  "faces": "6500",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11280829480450.glb"
+ },
+ {
+  "name": "香雪球01",
+  "id": "7325452806146",
+  "scale": 1,
+  "faces": "28",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/ddf43412647a4cb598e64ae1eac667f2.png"
+ },
+ {
+  "name": "野兔",
+  "id": "4212357125122",
+  "scale": 0.6,
+  "faces": "2146",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9777277447682.glb"
+ },
+ {
+  "name": "嫩叶圆树",
+  "id": "8857382414850",
+  "scale": 6.675878956913948,
+  "faces": "1776",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8857382414594.glb"
+ },
+ {
+  "name": "雪白叶树03",
+  "id": "8789091863810",
+  "scale": 5.0428720116615295,
+  "faces": "4835",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/8789091863554.glb"
+ },
+ {
+  "name": "薰衣草01",
+  "id": "8320773121538",
+  "scale": 1,
+  "faces": "24",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/53f53660a88c4868b5895d8d97e3df6c.png"
+ },
+ {
+  "name": "浮萍",
+  "id": "2847099047682",
+  "scale": 0.3188442366721075,
+  "faces": "998",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761786906370.glb"
+ },
+ {
+  "name": "休憩猫咪",
+  "id": "9820400812034",
+  "scale": 1,
+  "faces": "2000",
+  "cat": "7",
+  "type": 8,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9842634392578.glb"
+ },
+ {
+  "name": "蓝星花01",
+  "id": "7325452803074",
+  "scale": 1,
+  "faces": "28",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/79d871de0fed417cb9f385de9a710c14.png"
+ },
+ {
+  "name": "泥土地坪",
+  "id": "4016993684482",
+  "scale": 2.5,
+  "faces": "2066",
+  "cat": "1",
+  "type": 7,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855144999682.glb"
+ },
+ {
+  "name": "传送回出生点石板",
+  "id": "8873594906882",
+  "scale": 1,
+  "faces": "528",
+  "cat": "6",
+  "type": 9,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11733060753154.wprefab"
+ },
+ {
+  "name": "松树01",
+  "id": "9839101551874",
+  "scale": 4.733469256457626,
+  "faces": "2512",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9839101551618.glb"
+ },
+ {
+  "name": "灌木丛",
+  "id": "4016993699074",
+  "scale": 1.5,
+  "faces": "2319",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9761779241218.glb"
+ },
+ {
+  "name": "彩虹",
+  "id": "9839101525506",
+  "scale": 1,
+  "faces": "17500",
+  "cat": "1",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11776997057538.wprefab"
+ },
+ {
+  "name": "铜钱草01",
+  "id": "7325452805634",
+  "scale": 1,
+  "faces": "28",
+  "cat": "1",
+  "type": 1,
+  "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/ec96b00214064d05acf1d7906f7f11ba.png"
+ },
+ {
+  "name": "国风_青石庭院曲桥",
+  "id": "11280430105090",
+  "scale": 4.529880094528198,
+  "faces": "9840",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11278740506370.glb"
+ },
+ {
+  "name": "可乘坐四轮四座组件车",
+  "id": "9595760643842",
+  "scale": 1,
+  "faces": "7352",
+  "cat": "3",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/11727216784642.wprefab"
+ },
+ {
+  "name": "木头栅栏3",
+  "id": "4016993629954",
+  "scale": 1.2,
+  "faces": "1006",
+  "cat": "2",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/9855145001730.glb"
+ },
+ {
+  "name": "ground_base",
+  "id": "11775492538882",
+  "scale": 3120,
+  "faces": "288",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/irgccsp612g47l1f.glb"
+ },
+ {
+  "name": "road_part4",
+  "id": "11629328717314",
+  "scale": 615.2086486816406,
+  "faces": "26236",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gxisu879m2pf3gi0.glb"
+ },
+ {
+  "name": "road_part3",
+  "id": "11802316834818",
+  "scale": 695.7307434082031,
+  "faces": "10272",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/1wbqjuyzi51qowy3.glb"
+ },
+ {
+  "name": "road_part2",
+  "id": "11618323565058",
+  "scale": 891.4999885559082,
+  "faces": "21968",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/j37yy5ks598ppvnu.glb"
+ },
+ {
+  "name": "road_part1",
+  "id": "11618323564034",
+  "scale": 2085.7127685546875,
+  "faces": "21304",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/sg96cd11ycsrmg0i.glb"
+ },
+ {
+  "name": "wkb33",
+  "id": "11593897763586",
+  "scale": 509.91253662109375,
+  "faces": "4718",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ya4li2biva8re26e.glb"
+ },
+ {
+  "name": "pk33",
+  "id": "11781619848450",
+  "scale": 2530.75,
+  "faces": "4144",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb"
+ },
+ {
+  "name": "pk32",
+  "id": "11722975203074",
+  "scale": 2593.6619262695312,
+  "faces": "28991",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qfk9o4abaq1ekp0k.glb"
+ },
+ {
+  "name": "pk31",
+  "id": "11618323517698",
+  "scale": 2543.0123901367188,
+  "faces": "28992",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/c30gql37c4fpzs2t.glb"
+ },
+ {
+  "name": "pk30",
+  "id": "11648774276610",
+  "scale": 2541.6900634765625,
+  "faces": "28976",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8rzupur3klg7gxvy.glb"
+ },
+ {
+  "name": "pk29",
+  "id": "11629328674306",
+  "scale": 2491.5950622558594,
+  "faces": "28960",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/isunp7c67rgk7qpo.glb"
+ },
+ {
+  "name": "pk28",
+  "id": "11669618266370",
+  "scale": 505.5985107421875,
+  "faces": "28912",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/wy36reihnt8h68t0.glb"
+ },
+ {
+  "name": "pk27",
+  "id": "11669618265090",
+  "scale": 2543.2869873046875,
+  "faces": "28962",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vbvworbls9vpo75b.glb"
+ },
+ {
+  "name": "pk26",
+  "id": "11722975201026",
+  "scale": 2542.169403076172,
+  "faces": "28858",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/deflj60vnubk5eyb.glb"
+ },
+ {
+  "name": "pk25",
+  "id": "11801857363970",
+  "scale": 2186.52001953125,
+  "faces": "28716",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/zgrfm5ngkmg63y56.glb"
+ },
+ {
+  "name": "pk24",
+  "id": "11669871181570",
+  "scale": 2369.7040100097656,
+  "faces": "28978",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vhnfcu6usxc2iui2.glb"
+ },
+ {
+  "name": "pk23",
+  "id": "11776997770242",
+  "scale": 2639.638214111328,
+  "faces": "28708",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/q0x9rwdscj2kh5kw.glb"
+ },
+ {
+  "name": "pk22",
+  "id": "11722975200514",
+  "scale": 2324.828926086426,
+  "faces": "28760",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8eu7s4r93cy6qy1e.glb"
+ },
+ {
+  "name": "pk21",
+  "id": "11801857361922",
+  "scale": 2184.7432861328125,
+  "faces": "28710",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9v9dyykr35lennl7.glb"
+ },
+ {
+  "name": "pk20",
+  "id": "11724943852034",
+  "scale": 2324.4876708984375,
+  "faces": "28432",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/8ztcocnj6sx1s3he.glb"
+ },
+ {
+  "name": "pk19",
+  "id": "11722975199490",
+  "scale": 1976.8543243408203,
+  "faces": "28476",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/59r6xqjeq9o3ogve.glb"
+ },
+ {
+  "name": "pk18",
+  "id": "11648774274818",
+  "scale": 2203.9234008789062,
+  "faces": "28990",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ak482rn0ewx8exwy.glb"
+ },
+ {
+  "name": "pk17",
+  "id": "11727217498114",
+  "scale": 510.9200134277344,
+  "faces": "28512",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/6vh6kxzcooc4mw8n.glb"
+ },
+ {
+  "name": "pk16",
+  "id": "11719399168770",
+  "scale": 500.62757873535156,
+  "faces": "28512",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/inruzxwbiwgvp5f2.glb"
+ },
+ {
+  "name": "pk15",
+  "id": "11669618262018",
+  "scale": 2296.072525024414,
+  "faces": "28760",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/h3aj9eiljrvzjhzu.glb"
+ },
+ {
+  "name": "pk14",
+  "id": "11728853336578",
+  "scale": 610.150634765625,
+  "faces": "28792",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s253uk06lol1hebs.glb"
+ },
+ {
+  "name": "pk13",
+  "id": "11669871178754",
+  "scale": 2303.7886657714844,
+  "faces": "28956",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/r968ey0lvq5exw4y.glb"
+ },
+ {
+  "name": "pk12",
+  "id": "11669618261506",
+  "scale": 470.3186340332031,
+  "faces": "27900",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/529jpor09y37medz.glb"
+ },
+ {
+  "name": "pk11",
+  "id": "11593897725442",
+  "scale": 302.1504440307617,
+  "faces": "27900",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/3rpayznhvp4bhb9v.glb"
+ },
+ {
+  "name": "pk10",
+  "id": "11842368087810",
+  "scale": 2018.4955310821533,
+  "faces": "28288",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o721je5dcgrduv4c.glb"
+ },
+ {
+  "name": "pk09",
+  "id": "11593897724162",
+  "scale": 2433.7098693847656,
+  "faces": "28772",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/f3m37c1kh1irhl5f.glb"
+ },
+ {
+  "name": "pk08",
+  "id": "11781619841026",
+  "scale": 643.0042877197266,
+  "faces": "28104",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/byqum0lego88shir.glb"
+ },
+ {
+  "name": "pk07",
+  "id": "11629328667650",
+  "scale": 2346.5836791992188,
+  "faces": "28564",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/j4vhpb0y2497i9xn.glb"
+ },
+ {
+  "name": "pk06",
+  "id": "11775492504834",
+  "scale": 2147.2290954589844,
+  "faces": "28332",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s7io5ndu3hc39fb1.glb"
+ },
+ {
+  "name": "pk05",
+  "id": "11593897721858",
+  "scale": 2128.1177825927734,
+  "faces": "27748",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/eouahv3mnw5u1m5w.glb"
+ },
+ {
+  "name": "pk04",
+  "id": "11669618260226",
+  "scale": 681.7470703125,
+  "faces": "27600",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/pahv48c7w6nx6pbs.glb"
+ },
+ {
+  "name": "pk03",
+  "id": "11593897721346",
+  "scale": 547.0974426269531,
+  "faces": "28200",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/s4j4s4bstvdxqgkb.glb"
+ },
+ {
+  "name": "pk02",
+  "id": "11719399160578",
+  "scale": 545.9489135742188,
+  "faces": "28520",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/k931ruxxts5moghr.glb"
+ },
+ {
+  "name": "pk01",
+  "id": "11669871176194",
+  "scale": 2125.455108642578,
+  "faces": "27928",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tcqgxxudk5iaxo7n.glb"
+ },
+ {
+  "name": "pk32",
+  "id": "11669618258434",
+  "scale": 2593.6619262695312,
+  "faces": "28991",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/w2raxkb3aou1ij0m.glb"
+ },
+ {
+  "name": "pk31",
+  "id": "11776997766914",
+  "scale": 2543.0123901367188,
+  "faces": "28992",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9yk51jwsezr4vzsd.glb"
+ },
+ {
+  "name": "pk30",
+  "id": "11775492503042",
+  "scale": 2541.6900634765625,
+  "faces": "28976",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nzv9y4xsqbmpn4ui.glb"
+ },
+ {
+  "name": "pk29",
+  "id": "11733061470466",
+  "scale": 2491.5950622558594,
+  "faces": "28960",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ngjp3lozltb78aen.glb"
+ },
+ {
+  "name": "pk28",
+  "id": "11781619834370",
+  "scale": 505.5985107421875,
+  "faces": "28912",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/he7awkrste6f1bp8.glb"
+ },
+ {
+  "name": "pk27",
+  "id": "11719399159810",
+  "scale": 2543.2869873046875,
+  "faces": "28962",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/fkv2nqgl3ui14e02.glb"
+ },
+ {
+  "name": "pk26",
+  "id": "11722975193602",
+  "scale": 2542.169403076172,
+  "faces": "28858",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7gf39qry5wbu5pw6.glb"
+ },
+ {
+  "name": "pk25",
+  "id": "11618323508738",
+  "scale": 2186.52001953125,
+  "faces": "28716",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/5cu3n7v67vp3ss4v.glb"
+ },
+ {
+  "name": "pk24",
+  "id": "11775492500482",
+  "scale": 2369.7040100097656,
+  "faces": "28978",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jhoshhb41e3wpd5w.glb"
+ },
+ {
+  "name": "pk23",
+  "id": "11648774268418",
+  "scale": 2639.638214111328,
+  "faces": "28708",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/15l13z1cbrm8hcy1.glb"
+ },
+ {
+  "name": "pk22",
+  "id": "11593897718018",
+  "scale": 2324.828926086426,
+  "faces": "28760",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/l8o0mn36u36rf77f.glb"
+ },
+ {
+  "name": "pk21",
+  "id": "11618323507202",
+  "scale": 2184.7432861328125,
+  "faces": "28710",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vvlxc576uei5eva8.glb"
+ },
+ {
+  "name": "pk20",
+  "id": "11724943843842",
+  "scale": 2324.4876708984375,
+  "faces": "28432",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb"
+ },
+ {
+  "name": "pk19",
+  "id": "11801857352962",
+  "scale": 1976.8543243408203,
+  "faces": "28476",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/sbt1e26td0kyxny2.glb"
+ },
+ {
+  "name": "pk18",
+  "id": "11727217492738",
+  "scale": 2203.9234008789062,
+  "faces": "28990",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/a5kt81vp6709l3cs.glb"
+ },
+ {
+  "name": "pk17",
+  "id": "11728853327362",
+  "scale": 510.9200134277344,
+  "faces": "28512",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/by8l8h8a3fkweshb.glb"
+ },
+ {
+  "name": "pk16",
+  "id": "11593897716226",
+  "scale": 500.62757873535156,
+  "faces": "28512",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ahbc5f34eai5s5mh.glb"
+ },
+ {
+  "name": "pk15",
+  "id": "11724943841538",
+  "scale": 2296.072525024414,
+  "faces": "28760",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kni10ty48dfa75vg.glb"
+ },
+ {
+  "name": "pk14",
+  "id": "11781619830530",
+  "scale": 610.150634765625,
+  "faces": "28792",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/y8ibtjapne5odrh5.glb"
+ },
+ {
+  "name": "pk13",
+  "id": "11781619830274",
+  "scale": 2303.7886657714844,
+  "faces": "28956",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/09h7iev3mekgqdey.glb"
+ },
+ {
+  "name": "pk12",
+  "id": "11722975188226",
+  "scale": 470.3186340332031,
+  "faces": "27900",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gqx0l6c3t8791q0x.glb"
+ },
+ {
+  "name": "pk11",
+  "id": "11719399154690",
+  "scale": 302.1504440307617,
+  "faces": "27900",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7tqr16xuod8jrgzq.glb"
+ },
+ {
+  "name": "pk10",
+  "id": "11669618249218",
+  "scale": 2018.4955310821533,
+  "faces": "28288",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qxk5oncmncy31ua0.glb"
+ },
+ {
+  "name": "pk09",
+  "id": "11593897711618",
+  "scale": 2433.7098693847656,
+  "faces": "28772",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jgjif07sarav8r2w.glb"
+ },
+ {
+  "name": "pk08",
+  "id": "11781619827202",
+  "scale": 643.0042877197266,
+  "faces": "28104",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/coqtxyxtidvi7juf.glb"
+ },
+ {
+  "name": "pk07",
+  "id": "11593897710850",
+  "scale": 2346.5836791992188,
+  "faces": "28564",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gmucgh4vihcu2frn.glb"
+ },
+ {
+  "name": "pk06",
+  "id": "11669871170306",
+  "scale": 2147.2290954589844,
+  "faces": "28332",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vdf1u2k4uxi2s6cm.glb"
+ },
+ {
+  "name": "pk05",
+  "id": "11669618246914",
+  "scale": 2128.1177825927734,
+  "faces": "27748",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/iwiu4uyzq83javpl.glb"
+ },
+ {
+  "name": "pk04",
+  "id": "11618323497474",
+  "scale": 681.7470703125,
+  "faces": "27600",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tv1am29ec5b5zd8x.glb"
+ },
+ {
+  "name": "pk03",
+  "id": "11775492491010",
+  "scale": 547.0974426269531,
+  "faces": "28200",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o600esxco903w3wn.glb"
+ },
+ {
+  "name": "pk02",
+  "id": "11727217482754",
+  "scale": 545.9489135742188,
+  "faces": "28520",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/02qjclwtgsyrgreq.glb"
+ },
+ {
+  "name": "pk01",
+  "id": "11727217481474",
+  "scale": 2125.455108642578,
+  "faces": "27928",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/pr1hnncp1fbsn48g.glb"
+ },
+ {
+  "name": "packs/pack_01",
+  "id": "11776997754626",
+  "scale": 2125.455108642578,
+  "faces": "27928",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jpb73zdzn5apu6lp.glb"
+ },
+ {
+  "name": "cf_10000",
+  "id": "11669618166018",
+  "scale": 471.67181396484375,
+  "faces": "12892",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/fahsdd7anp0fs1z9.glb"
+ },
+ {
+  "name": "cf_10000",
+  "id": "11593897649922",
+  "scale": 471.67181396484375,
+  "faces": "12892",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/wl4ea5rq43s5iz3p.glb"
+ },
+ {
+  "name": "cf_10000",
+  "id": "11629328582658",
+  "scale": 471.67181396484375,
+  "faces": "12892",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/97yqq3isiqm1qxae.glb"
+ },
+ {
+  "name": "cf_2000-1000",
+  "id": "11733061400834",
+  "scale": 332.2008056640625,
+  "faces": "10232",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/m3gct394a2h83ka5.glb"
+ },
+ {
+  "name": "cf_2000-1000",
+  "id": "11801857293314",
+  "scale": 332.2008056640625,
+  "faces": "10232",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/pbqf2dqtxg2a03qt.glb"
+ },
+ {
+  "name": "cf_2000-1000",
+  "id": "11719399069186",
+  "scale": 332.2008056640625,
+  "faces": "10232",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ynapq8x7svctf7i9.glb"
+ },
+ {
+  "name": "cf_1000-500",
+  "id": "11648774183938",
+  "scale": 524.7869873046875,
+  "faces": "6078",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/y8uidgyq5a0mufry.glb"
+ },
+ {
+  "name": "cf_1000-500",
+  "id": "11669871092994",
+  "scale": 524.7869873046875,
+  "faces": "6078",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/a1jsncnebuzt7c0k.glb"
+ },
+ {
+  "name": "cf_1000-500",
+  "id": "11722975102978",
+  "scale": 524.7869873046875,
+  "faces": "6078",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ajrh5qu48i6cf6ov.glb"
+ },
+ {
+  "name": "cf_5000",
+  "id": "11669871090946",
+  "scale": 513.6990966796875,
+  "faces": "6206",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ao27zf8k92b43zw2.glb"
+ },
+ {
+  "name": "cf_5000",
+  "id": "11727217428482",
+  "scale": 513.6990966796875,
+  "faces": "6206",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ra2399f1m1xesk1f.glb"
+ },
+ {
+  "name": "cf_5000",
+  "id": "11801857291778",
+  "scale": 513.6990966796875,
+  "faces": "6206",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/738fkxynsdpd874e.glb"
+ },
+ {
+  "name": "cf_500-500",
+  "id": "11669618156034",
+  "scale": 520.1819458007812,
+  "faces": "5244",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/t0g7iwlw6fmmjjbs.glb"
+ },
+ {
+  "name": "cf_500-500",
+  "id": "11669871087362",
+  "scale": 520.1819458007812,
+  "faces": "5244",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9sbago7l2aqbybbx.glb"
+ },
+ {
+  "name": "cf_500-500",
+  "id": "11842368005122",
+  "scale": 520.1819458007812,
+  "faces": "5244",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kpcz06vr7mqutlwd.glb"
+ },
+ {
+  "name": "cf_1000-1000",
+  "id": "11733061396226",
+  "scale": 232.4224853515625,
+  "faces": "636",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/wfjjahoxginvspp4.glb"
+ },
+ {
+  "name": "cf_1000-1000",
+  "id": "11724943748866",
+  "scale": 232.4224853515625,
+  "faces": "636",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nxr6r4x9exnyb6qb.glb"
+ },
+ {
+  "name": "cf_1000-1000",
+  "id": "11728853255426",
+  "scale": 232.4224853515625,
+  "faces": "636",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vlp5dzu2cdt2o082.glb"
+ },
+ {
+  "name": "yamen_final",
+  "id": "11618323410178",
+  "scale": 394.04998779296875,
+  "faces": "12701",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/wku9otmdqe9xwe7e.glb"
+ },
+ {
+  "name": "cf_1500-500",
+  "id": "11722975090178",
+  "scale": 510.25537109375,
+  "faces": "17767",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/n1vuo96d958eqlof.glb"
+ },
+ {
+  "name": "cf_1500-500",
+  "id": "11719399057154",
+  "scale": 510.25537109375,
+  "faces": "17767",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ecr3cjhvb31xk916.glb"
+ },
+ {
+  "name": "cf_1500-500",
+  "id": "11728853249538",
+  "scale": 510.25537109375,
+  "faces": "17767",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/bv4m2gnhyg9u5q2g.glb"
+ },
+ {
+  "name": "cf_1500-1000",
+  "id": "11669871078658",
+  "scale": 538.244873046875,
+  "faces": "16588",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ll282mxmdecx3ut7.glb"
+ },
+ {
+  "name": "cf_1500-1000",
+  "id": "11724943740674",
+  "scale": 538.244873046875,
+  "faces": "16588",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/4smer15rjwtzxltr.glb"
+ },
+ {
+  "name": "cf_1500-1000",
+  "id": "11775492412162",
+  "scale": 538.244873046875,
+  "faces": "16588",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9pz2xllhvdzvd7nj.glb"
+ },
+ {
+  "name": "cf_2000-500",
+  "id": "11669871077634",
+  "scale": 394.04998779296875,
+  "faces": "12701",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ij9bm9z1u68fm4g9.glb"
+ },
+ {
+  "name": "cf_2000-500",
+  "id": "11724943740162",
+  "scale": 394.04998779296875,
+  "faces": "12701",
+  "cat": "",
+  "type": 1,
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/z6olfalmtt3qqxnk.glb"
+ }
+]

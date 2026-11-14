@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>dsh版 · 地面层 + 33包 拼合校验</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b1220; overflow: hidden; }
+    canvas { display: block; }
+    #hud { position: fixed; left: 12px; bottom: 12px; color: #cfe3ff; font: 13px/1.6 Consolas, monospace; text-shadow: 0 1px 2px #000; }
+  </style>
+  <script src="/three.min.js"></script>
+  <script src="/_GLTFLoader.js"></script>
+</head>
+
+<body>
+  <div id="hud">loading…</div>
+  <script>
+    const hud = document.getElementById('hud');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1626);
+    const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 40000);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x2a3140, 2.0));
+    const d1 = new THREE.DirectionalLight(0xffffff, 1.6); d1.position.set(-1.2, 2.4, 1.2); scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0x9fc4ff, 0.6); d2.position.set(1.4, 1.0, -1.6); scene.add(d2);
+    const Q = new URLSearchParams(location.search);
+    const loader = new THREE.GLTFLoader();
+    const box = new THREE.Box3();
+    const loadOne = (dir, file) => new Promise(res => loader.load('/' + dir + file, g => {
+      const o = g.scene; o.scale.setScalar(1);
+      o.traverse(n => { if (n.isMesh) { n.material.side = THREE.DoubleSide; } });
+      scene.add(o); box.expandByObject(o); res(true);
+    }, undefined, e => { console.log('ERR', file, String(e)); res(false); }));
+    (async () => {
+      const L = await (await fetch('/combo.json')).json();
+      let ok = 0, p = 0, gg = 0;
+      const doPacks = !Q.has('only') || Q.get('only') === 'packs';
+      const doGnd = !Q.has('only') || Q.get('only') === 'gnd';
+      if (doGnd) for (const it of L.gnd) { if (await loadOne(it.dir, it.file)) gg++; }
+      if (doPacks) for (const it of L.packs) { if (await loadOne(it.dir, it.file)) p++; }
+      ok = p + gg;
+      hud.textContent = 'packs ' + p + '/' + L.packs.length + '  ground ' + gg + '/' + L.gnd.length;
+      const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+      const radius = Math.max(size.x, size.z) * 0.5;
+      const dist = radius / Math.tan((45 * Math.PI / 180) / 2) * 1.15;
+      const dir = new THREE.Vector3(0.25, 1.0, 0.78).normalize();
+      cam.position.copy(c.clone().add(dir.multiplyScalar(dist)));
+      cam.far = dist * 8; cam.updateProjectionMatrix(); cam.lookAt(c);
+      if (Q.has('cx')) {
+        const cx = +Q.get('cx'), cz = +Q.get('cz'), dd = +(Q.get('dist') || 300), cy = Q.has('cy') ? +Q.get('cy') : 4;
+        cam.position.set(cx + 0.35 * dd, cy + 0.55 * dd, cz + 0.75 * dd);
+        cam.lookAt(cx, cy, cz);
+      }
+      if (Q.has('top')) {
+        const span = Math.max(size.x, size.z) / 2 * 1.05;
+        cam.position.set(c.x, c.y + span / Math.tan((45 * Math.PI / 180) / 2), c.z + 1);
+        cam.lookAt(c.x, c.y, c.z);
+      }
+      hud.textContent += '  bmin ' + box.min.toArray().map(v => v.toFixed(0)).join(',') + '  bmax ' + box.max.toArray().map(v => v.toFixed(0)).join(',') + '  size ' + size.toArray().map(v => v.toFixed(0)).join(',');
+      window.__ready = true;
+      renderer.render(scene, cam);
+    })();
+    renderer.setAnimationLoop(() => renderer.render(scene, cam));
+  </script>
+</body>
+
+</html>

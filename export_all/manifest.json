@@ -1,0 +1,109 @@
+{
+ "world": {
+  "minX": -374.675341776982,
+  "maxX": 2222.21240234375,
+  "minZ": -904.7880249023438,
+  "maxZ": 558,
+  "meshes": 5701
+ },
+ "tiles": [
+  {
+   "name": "tile_-500_-500.glb",
+   "meshes": 730,
+   "tris": 159608,
+   "bytes": 13625268
+  },
+  {
+   "name": "tile_-500_0.glb",
+   "meshes": 1266,
+   "tris": 199865,
+   "bytes": 16890144
+  },
+  {
+   "name": "tile_-500_500.glb",
+   "meshes": 1,
+   "tris": 44,
+   "bytes": 3476
+  },
+  {
+   "name": "tile_0_-500.glb",
+   "meshes": 652,
+   "tris": 149148,
+   "bytes": 12842008
+  },
+  {
+   "name": "tile_0_0.glb",
+   "meshes": 1525,
+   "tris": 288249,
+   "bytes": 25193748
+  },
+  {
+   "name": "tile_0_500.glb",
+   "meshes": 1,
+   "tris": 44,
+   "bytes": 3476
+  },
+  {
+   "name": "tile_500_-500.glb",
+   "meshes": 140,
+   "tris": 4828,
+   "bytes": 335220
+  },
+  {
+   "name": "tile_500_0.glb",
+   "meshes": 120,
+   "tris": 6418,
+   "bytes": 512876
+  },
+  {
+   "name": "tile_1000_-1000.glb",
+   "meshes": 22,
+   "tris": 1064,
+   "bytes": 97768
+  },
+  {
+   "name": "tile_1000_-500.glb",
+   "meshes": 87,
+   "tris": 6284,
+   "bytes": 711364
+  },
+  {
+   "name": "tile_1000_0.glb",
+   "meshes": 99,
+   "tris": 10518,
+   "bytes": 1353012
+  },
+  {
+   "name": "tile_1500_-1000.glb",
+   "meshes": 85,
+   "tris": 16300,
+   "bytes": 1393808
+  },
+  {
+   "name": "tile_1500_-500.glb",
+   "meshes": 156,
+   "tris": 17356,
+   "bytes": 1652740
+  },
+  {
+   "name": "tile_1500_0.glb",
+   "meshes": 190,
+   "tris": 35886,
+   "bytes": 2730488
+  },
+  {
+   "name": "tile_2000_-1000.glb",
+   "meshes": 88,
+   "tris": 10268,
+   "bytes": 944356
+  },
+  {
+   "name": "tile_2000_-500.glb",
+   "meshes": 151,
+   "tris": 12161,
+   "bytes": 1123464
+  }
+ ],
+ "colliders": 3223,
+ "generatedAt": "2026-11-12T18:07:48.094Z"
+}

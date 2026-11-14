@@ -1,0 +1,926 @@
+{
+ "pk01": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jpb73zdzn5apu6lp.glb",
+  "uuid": "75bb79e4-ee16-44c0-86f7-70f4101e8c1c.glb",
+  "err": 0.00041,
+  "L": 2125.455,
+  "size": [
+   2125.455,
+   47.634,
+   592.784
+  ],
+  "center": [
+   753.368,
+   23.817,
+   -155.125
+  ],
+  "mn": [
+   -309.3591613769531,
+   0,
+   -451.51739501953125
+  ],
+  "mx": [
+   1816.095947265625,
+   47.63413619995117,
+   141.26705932617188
+  ],
+  "tris": 27928,
+  "copies": 3
+ },
+ "pk02": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/02qjclwtgsyrgreq.glb",
+  "uuid": "610c1678-c0ba-43c1-938d-3fb3933cfa2d.glb",
+  "err": 0.00028,
+  "L": 545.949,
+  "size": [
+   545.949,
+   4.894,
+   510.614
+  ],
+  "center": [
+   -47.802,
+   -0.592,
+   55.947
+  ],
+  "mn": [
+   -320.776611328125,
+   -3.0390007495880127,
+   -199.36000061035156
+  ],
+  "mx": [
+   225.17230224609375,
+   1.8550000190734863,
+   311.25390625
+  ],
+  "tris": 28520,
+  "copies": 2
+ },
+ "pk03": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o600esxco903w3wn.glb",
+  "uuid": "4374c7bc-2b1f-47fe-90f5-1def6a63e539.glb",
+  "err": 0.00043,
+  "L": 547.097,
+  "size": [
+   507.94,
+   4.139,
+   547.097
+  ],
+  "center": [
+   -51,
+   1.005,
+   -38.908
+  ],
+  "mn": [
+   -304.97039794921875,
+   -1.0642727613449097,
+   -312.4571228027344
+  ],
+  "mx": [
+   202.97000122070312,
+   3.0749964714050293,
+   234.64031982421875
+  ],
+  "tris": 28200,
+  "copies": 2
+ },
+ "pk04": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/tv1am29ec5b5zd8x.glb",
+  "uuid": "b6ef7d23-6d58-4fd6-b688-3531f02a1985.glb",
+  "err": 0.0003,
+  "L": 681.747,
+  "size": [
+   380.58,
+   2.932,
+   681.747
+  ],
+  "center": [
+   107.38,
+   1.278,
+   -42.855
+  ],
+  "mn": [
+   -82.91000366210938,
+   -0.18798202276229858,
+   -383.7280578613281
+  ],
+  "mx": [
+   297.6699523925781,
+   2.743604898452759,
+   298.0190124511719
+  ],
+  "tris": 27600,
+  "copies": 2
+ },
+ "pk05": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/iwiu4uyzq83javpl.glb",
+  "uuid": "766ff5c5-ca3e-4d52-8ee5-78dd89bf37ae.glb",
+  "err": 0.00032,
+  "L": 2128.118,
+  "size": [
+   2128.118,
+   44.015,
+   881.493
+  ],
+  "center": [
+   905.638,
+   22.007,
+   -284.23
+  ],
+  "mn": [
+   -158.42100524902344,
+   4.76837147544984e-9,
+   -724.9761962890625
+  ],
+  "mx": [
+   1969.69677734375,
+   44.01499938964844,
+   156.51681518554688
+  ],
+  "tris": 27748,
+  "copies": 2
+ },
+ "pk06": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vdf1u2k4uxi2s6cm.glb",
+  "uuid": "60ef4a2f-9b86-45d8-b503-22382354d2ef.glb",
+  "err": 0.00036,
+  "L": 2147.229,
+  "size": [
+   2147.229,
+   46.46,
+   914.761
+  ],
+  "center": [
+   769.125,
+   21.41,
+   -255.359
+  ],
+  "mn": [
+   -304.4891052246094,
+   -1.8196696043014526,
+   -712.739990234375
+  ],
+  "mx": [
+   1842.739990234375,
+   44.63999938964844,
+   202.02099609375
+  ],
+  "tris": 28332,
+  "copies": 2
+ },
+ "pk07": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gmucgh4vihcu2frn.glb",
+  "uuid": "0c47a002-ae0d-4775-960b-d027175d93d0.glb",
+  "err": 0.0005,
+  "L": 2346.584,
+  "size": [
+   2346.584,
+   54.608,
+   874.095
+  ],
+  "center": [
+   862.208,
+   25.446,
+   -279.149
+  ],
+  "mn": [
+   -311.08367919921875,
+   -1.857534646987915,
+   -716.196533203125
+  ],
+  "mx": [
+   2035.5,
+   52.75,
+   157.89889526367188
+  ],
+  "tris": 28564,
+  "copies": 2
+ },
+ "pk08": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/coqtxyxtidvi7juf.glb",
+  "uuid": "4f4fae08-48c7-4219-96af-6b27a0fcd12b.glb",
+  "err": 0.00048,
+  "L": 643.004,
+  "size": [
+   618.903,
+   4.094,
+   643.004
+  ],
+  "center": [
+   4.757,
+   -0.425,
+   -119.366
+  ],
+  "mn": [
+   -304.69415283203125,
+   -2.4720444679260254,
+   -440.8685302734375
+  ],
+  "mx": [
+   314.20843505859375,
+   1.6218950748443604,
+   202.13575744628906
+  ],
+  "tris": 28104,
+  "copies": 2
+ },
+ "pk09": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jgjif07sarav8r2w.glb",
+  "uuid": "e36308aa-da2a-40bf-a330-1cb1e9e63f89.glb",
+  "err": 0.00017,
+  "L": 2433.71,
+  "size": [
+   2433.71,
+   44.029,
+   927.667
+  ],
+  "center": [
+   916.521,
+   20.946,
+   -296.329
+  ],
+  "mn": [
+   -300.3343811035156,
+   -1.068784236907959,
+   -760.1621704101562
+  ],
+  "mx": [
+   2133.37548828125,
+   42.959999084472656,
+   167.50494384765625
+  ],
+  "tris": 28772,
+  "copies": 2
+ },
+ "pk10": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qxk5oncmncy31ua0.glb",
+  "uuid": "78075253-8eaa-4dce-a3ea-8c0778b95569.glb",
+  "err": 0.00018,
+  "L": 2018.496,
+  "size": [
+   2018.496,
+   12.228,
+   659.677
+  ],
+  "center": [
+   1030.172,
+   5.499,
+   26.278
+  ],
+  "mn": [
+   20.92451286315918,
+   -0.615100622177124,
+   -303.5603332519531
+  ],
+  "mx": [
+   2039.4200439453125,
+   11.613242149353027,
+   356.1170654296875
+  ],
+  "tris": 28288,
+  "copies": 2
+ },
+ "pk11": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7tqr16xuod8jrgzq.glb",
+  "uuid": "932d4775-aa21-4254-9792-b03d06f8d556.glb",
+  "err": 0.00029,
+  "L": 302.15,
+  "size": [
+   221.388,
+   1.582,
+   302.15
+  ],
+  "center": [
+   -95.691,
+   1.005,
+   25.526
+  ],
+  "mn": [
+   -206.3851318359375,
+   0.21364980936050415,
+   -125.54891204833984
+  ],
+  "mx": [
+   15.002480506896973,
+   1.7954264879226685,
+   176.60153198242188
+  ],
+  "tris": 27900,
+  "copies": 2
+ },
+ "pk12": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gqx0l6c3t8791q0x.glb",
+  "uuid": "97ddcde9-c995-480e-bdb5-2692d94b3495.glb",
+  "err": 0.00038,
+  "L": 470.319,
+  "size": [
+   145.679,
+   2.645,
+   470.319
+  ],
+  "center": [
+   75.565,
+   0.551,
+   -68.305
+  ],
+  "mn": [
+   2.7255656719207764,
+   -0.771780788898468,
+   -303.4638366699219
+  ],
+  "mx": [
+   148.40480041503906,
+   1.872975468635559,
+   166.85479736328125
+  ],
+  "tris": 27900,
+  "copies": 2
+ },
+ "pk13": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/09h7iev3mekgqdey.glb",
+  "uuid": "1fc8f9c2-283f-4062-8e89-6995b5816c4c.glb",
+  "err": 0.00043,
+  "L": 2303.789,
+  "size": [
+   2303.789,
+   72.399,
+   808.351
+  ],
+  "center": [
+   900.686,
+   34.468,
+   -29.624
+  ],
+  "mn": [
+   -251.20858764648438,
+   -1.731982707977295,
+   -433.7999267578125
+  ],
+  "mx": [
+   2052.580078125,
+   70.66751098632812,
+   374.5513000488281
+  ],
+  "tris": 28956,
+  "copies": 2
+ },
+ "pk14": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/y8ibtjapne5odrh5.glb",
+  "uuid": "132276b6-a98c-4047-b88b-1b0d2add5727.glb",
+  "err": 0.00033,
+  "L": 610.151,
+  "size": [
+   486.349,
+   4.474,
+   610.151
+  ],
+  "center": [
+   -48.586,
+   2.048,
+   -136.057
+  ],
+  "mn": [
+   -291.760009765625,
+   -0.18911424279212952,
+   -441.13189697265625
+  ],
+  "mx": [
+   194.58851623535156,
+   4.284999847412109,
+   169.01873779296875
+  ],
+  "tris": 28792,
+  "copies": 2
+ },
+ "pk15": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/kni10ty48dfa75vg.glb",
+  "uuid": "cf69b51f-f3d8-4ddd-9549-aeb421a70c8c.glb",
+  "err": 0.00017,
+  "L": 2296.073,
+  "size": [
+   2296.073,
+   16.171,
+   1172.9
+  ],
+  "center": [
+   895.839,
+   7.48,
+   -67.45
+  ],
+  "mn": [
+   -252.19752502441406,
+   -0.6055223941802979,
+   -653.9000244140625
+  ],
+  "mx": [
+   2043.875,
+   15.5649995803833,
+   519
+  ],
+  "tris": 28760,
+  "copies": 2
+ },
+ "pk16": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ahbc5f34eai5s5mh.glb",
+  "uuid": "f43a5cdf-d0fc-4d56-9447-60d17e51921a.glb",
+  "err": 0.0005,
+  "L": 500.628,
+  "size": [
+   500.628,
+   4.005,
+   480.353
+  ],
+  "center": [
+   -60.946,
+   2.267,
+   -63.527
+  ],
+  "mn": [
+   -311.260009765625,
+   0.26456937193870544,
+   -303.7032775878906
+  ],
+  "mx": [
+   189.36756896972656,
+   4.269999980926514,
+   176.64987182617188
+  ],
+  "tris": 28512,
+  "copies": 2
+ },
+ "pk17": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/by8l8h8a3fkweshb.glb",
+  "uuid": "d9eb817d-0697-48ad-a5fa-de50436f0216.glb",
+  "err": 0.00021,
+  "L": 510.92,
+  "size": [
+   368.266,
+   11.204,
+   510.92
+  ],
+  "center": [
+   185.479,
+   6.668,
+   100.8
+  ],
+  "mn": [
+   1.3459843397140503,
+   1.0658704042434692,
+   -154.66000366210938
+  ],
+  "mx": [
+   369.61175537109375,
+   12.270000457763672,
+   356.260009765625
+  ],
+  "tris": 28512,
+  "copies": 2
+ },
+ "pk18": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/a5kt81vp6709l3cs.glb",
+  "uuid": "85894fdb-ea36-46e5-b038-fb42f362920c.glb",
+  "err": 0.00037,
+  "L": 2203.923,
+  "size": [
+   2203.923,
+   72.291,
+   1228.401
+  ],
+  "center": [
+   797.368,
+   34.242,
+   -91.129
+  ],
+  "mn": [
+   -304.59344482421875,
+   -1.9037102460861206,
+   -705.3300170898438
+  ],
+  "mx": [
+   1899.3299560546875,
+   70.3875961303711,
+   523.071044921875
+  ],
+  "tris": 28990,
+  "copies": 2
+ },
+ "pk19": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/sbt1e26td0kyxny2.glb",
+  "uuid": "59a6d737-81bd-47fb-a59b-7c61a8ecd1e8.glb",
+  "err": 0.00048,
+  "L": 1976.854,
+  "size": [
+   1976.854,
+   7.79,
+   546.553
+  ],
+  "center": [
+   782.086,
+   4.215,
+   -22.478
+  ],
+  "mn": [
+   -206.3408966064453,
+   0.3198479413986206,
+   -295.75506591796875
+  ],
+  "mx": [
+   1770.513427734375,
+   8.109938621520996,
+   250.7981719970703
+  ],
+  "tris": 28476,
+  "copies": 2
+ },
+ "pk20": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/40ekrj8ibmbnpptr.glb",
+  "uuid": "ef66b578-c6a7-4626-8755-bb6d541d215b.glb",
+  "err": 0.00025,
+  "L": 2324.488,
+  "size": [
+   2324.488,
+   16.845,
+   1259.8
+  ],
+  "center": [
+   889.156,
+   8.612,
+   -163.25
+  ],
+  "mn": [
+   -273.0877685546875,
+   0.1899999976158142,
+   -793.1500244140625
+  ],
+  "mx": [
+   2051.39990234375,
+   17.03499984741211,
+   466.6499938964844
+  ],
+  "tris": 28432,
+  "copies": 2
+ },
+ "pk21": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/vvlxc576uei5eva8.glb",
+  "uuid": "ff3b8a85-817c-4bd1-bad0-14beb74939f9.glb",
+  "err": 0.00026,
+  "L": 2184.743,
+  "size": [
+   2184.743,
+   195.009,
+   986.955
+  ],
+  "center": [
+   807.492,
+   97.504,
+   40.668
+  ],
+  "mn": [
+   -284.8800048828125,
+   -1.9073486612342094e-7,
+   -452.80999755859375
+  ],
+  "mx": [
+   1899.86328125,
+   195.0086669921875,
+   534.145263671875
+  ],
+  "tris": 28710,
+  "copies": 2
+ },
+ "pk22": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/l8o0mn36u36rf77f.glb",
+  "uuid": "4eae842c-e07e-4b8b-b02f-fcd2108387cb.glb",
+  "err": 0.00045,
+  "L": 2324.829,
+  "size": [
+   2324.829,
+   44.35,
+   1345.027
+  ],
+  "center": [
+   1058.178,
+   19.975,
+   -148.549
+  ],
+  "mn": [
+   -104.23639678955078,
+   -2.200000047683716,
+   -821.0620727539062
+  ],
+  "mx": [
+   2220.592529296875,
+   42.150001525878906,
+   523.9650268554688
+  ],
+  "tris": 28760,
+  "copies": 2
+ },
+ "pk23": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/15l13z1cbrm8hcy1.glb",
+  "uuid": "75dcf40d-10fe-43e5-ad4f-da19cf497a6e.glb",
+  "err": 0.00029,
+  "L": 2639.638,
+  "size": [
+   2639.638,
+   322.789,
+   1226.98
+  ],
+  "center": [
+   813.576,
+   19.637,
+   -146.69
+  ],
+  "mn": [
+   -506.2431945800781,
+   -141.75765991210938,
+   -760.18017578125
+  ],
+  "mx": [
+   2133.39501953125,
+   181.0316925048828,
+   466.79998779296875
+  ],
+  "tris": 28708,
+  "copies": 2
+ },
+ "pk24": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jhoshhb41e3wpd5w.glb",
+  "uuid": "1bf24cad-17c4-4cff-9896-726873037e3b.glb",
+  "err": 0.0002,
+  "L": 2369.704,
+  "size": [
+   2369.704,
+   175.049,
+   1212.819
+  ],
+  "center": [
+   866.348,
+   85.672,
+   -231.791
+  ],
+  "mn": [
+   -318.5040588378906,
+   -1.8522876501083374,
+   -838.2000122070312
+  ],
+  "mx": [
+   2051.199951171875,
+   173.19715881347656,
+   374.61895751953125
+  ],
+  "tris": 28978,
+  "copies": 2
+ },
+ "pk25": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/5cu3n7v67vp3ss4v.glb",
+  "uuid": "763d2d45-239e-4c3b-93a7-f5619d364ca3.glb",
+  "err": 0.00011,
+  "L": 2186.52,
+  "size": [
+   2186.52,
+   12.883,
+   802.675
+  ],
+  "center": [
+   793.13,
+   5.428,
+   -39.654
+  ],
+  "mn": [
+   -300.1300048828125,
+   -1.0130224227905273,
+   -440.99188232421875
+  ],
+  "mx": [
+   1886.3900146484375,
+   11.869999885559082,
+   361.6830139160156
+  ],
+  "tris": 28716,
+  "copies": 2
+ },
+ "pk26": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/7gf39qry5wbu5pw6.glb",
+  "uuid": "2f3af55c-365a-4d10-bee5-657e032811d2.glb",
+  "err": 0.0004,
+  "L": 2542.169,
+  "size": [
+   2542.169,
+   285.51,
+   1285.318
+  ],
+  "center": [
+   950.368,
+   140.231,
+   -178.569
+  ],
+  "mn": [
+   -320.7170104980469,
+   -2.524000883102417,
+   -821.2277221679688
+  ],
+  "mx": [
+   2221.452392578125,
+   282.9857177734375,
+   464.0899963378906
+  ],
+  "tris": 28858,
+  "copies": 2
+ },
+ "pk27": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/fkv2nqgl3ui14e02.glb",
+  "uuid": "4c8d765e-57c6-4664-9a65-3948d670f42b.glb",
+  "err": 0.00019,
+  "L": 2543.287,
+  "size": [
+   2543.287,
+   286.918,
+   1358.283
+  ],
+  "center": [
+   950.451,
+   139.249,
+   -142.142
+  ],
+  "mn": [
+   -321.1920166015625,
+   -4.210000038146973,
+   -821.2831420898438
+  ],
+  "mx": [
+   2222.094970703125,
+   282.7078857421875,
+   537
+  ],
+  "tris": 28962,
+  "copies": 2
+ },
+ "pk28": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/he7awkrste6f1bp8.glb",
+  "uuid": "1aaedbe5-aca9-410c-99a1-a173d35b6c63.glb",
+  "err": 0.00041,
+  "L": 505.599,
+  "size": [
+   505.599,
+   4.383,
+   480.019
+  ],
+  "center": [
+   -58.256,
+   1.429,
+   -63.489
+  ],
+  "mn": [
+   -311.05499267578125,
+   -0.7629306316375732,
+   -303.4982604980469
+  ],
+  "mx": [
+   194.54351806640625,
+   3.619999885559082,
+   176.5207977294922
+  ],
+  "tris": 28912,
+  "copies": 2
+ },
+ "pk29": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ngjp3lozltb78aen.glb",
+  "uuid": "b7407dfa-e4e2-46b7-a045-48f93f69634e.glb",
+  "err": 0.00031,
+  "L": 2491.595,
+  "size": [
+   2491.595,
+   96.6,
+   1271.49
+  ],
+  "center": [
+   974.898,
+   45.7,
+   -177.955
+  ],
+  "mn": [
+   -270.8999938964844,
+   -2.5999999046325684,
+   -813.7000122070312
+  ],
+  "mx": [
+   2220.695068359375,
+   94,
+   457.7900085449219
+  ],
+  "tris": 28960,
+  "copies": 2
+ },
+ "pk30": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nzv9y4xsqbmpn4ui.glb",
+  "uuid": "a6a26df1-24df-4c7b-adf8-4f5a55054268.glb",
+  "err": 0.00036,
+  "L": 2541.69,
+  "size": [
+   2541.69,
+   259.61,
+   1262.295
+  ],
+  "center": [
+   950.205,
+   127.205,
+   -181.128
+  ],
+  "mn": [
+   -320.6400146484375,
+   -2.5999999046325684,
+   -812.2750244140625
+  ],
+  "mx": [
+   2221.050048828125,
+   257.0103454589844,
+   450.0199890136719
+  ],
+  "tris": 28976,
+  "copies": 2
+ },
+ "pk31": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/9yk51jwsezr4vzsd.glb",
+  "uuid": "11c878cd-96ae-4fe4-848d-3ab4a0601c58.glb",
+  "err": 0.00042,
+  "L": 2543.012,
+  "size": [
+   2543.012,
+   202.364,
+   1243.4
+  ],
+  "center": [
+   950.706,
+   92.182,
+   -106.7
+  ],
+  "mn": [
+   -320.79998779296875,
+   -9,
+   -728.4000244140625
+  ],
+  "mx": [
+   2222.21240234375,
+   193.3639373779297,
+   515
+  ],
+  "tris": 28992,
+  "copies": 2
+ },
+ "pk32": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/w2raxkb3aou1ij0m.glb",
+  "uuid": "eed8033f-ba3b-4472-9d6b-bbf0784a0368.glb",
+  "err": 0.00023,
+  "L": 2593.662,
+  "size": [
+   2593.662,
+   228.842,
+   1333.575
+  ],
+  "center": [
+   922.156,
+   112.741,
+   -164.563
+  ],
+  "mn": [
+   -374.67535400390625,
+   -1.679574966430664,
+   -831.3499755859375
+  ],
+  "mx": [
+   2218.986572265625,
+   227.16221618652344,
+   502.22491455078125
+  ],
+  "tris": 28991,
+  "copies": 2
+ },
+ "pk33": {
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb",
+  "uuid": "1eb1e7be-9f41-49a0-b20c-e9302ef5ea80.glb",
+  "err": 0.00041,
+  "L": 2530.75,
+  "size": [
+   2530.75,
+   236.862,
+   1215.68
+  ],
+  "center": [
+   956.125,
+   108.731,
+   -190.16
+  ],
+  "mn": [
+   -309.25,
+   -9.699999809265137,
+   -798
+  ],
+  "mx": [
+   2221.5,
+   227.16221618652344,
+   417.67999267578125
+  ],
+  "tris": 4144,
+  "copies": 1
+ }
+}

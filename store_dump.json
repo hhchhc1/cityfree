@@ -1,0 +1,213 @@
+{
+ "nodes": [
+  {
+   "id": "100663030",
+   "name": "pk30"
+  },
+  {
+   "id": "224973466",
+   "name": "pk26"
+  },
+  {
+   "id": "282716027",
+   "name": "pk33"
+  },
+  {
+   "id": "607710423",
+   "name": "pack_30_1"
+  },
+  {
+   "id": "634975247",
+   "name": "pk31"
+  },
+  {
+   "id": "679967009",
+   "name": "pk16"
+  },
+  {
+   "id": "750902110",
+   "name": "地形块(0,0)"
+  },
+  {
+   "id": "912664237",
+   "name": "pk33"
+  },
+  {
+   "id": "1106508512",
+   "name": "pk32"
+  },
+  {
+   "id": "1357630743",
+   "name": "pk29"
+  },
+  {
+   "id": "1379704555",
+   "name": "湖泊"
+  },
+  {
+   "id": "1409203955",
+   "name": "pack_33_1"
+  },
+  {
+   "id": "1422634173",
+   "name": "pack_27_1"
+  },
+  {
+   "id": "1465652140",
+   "name": "地表物体"
+  },
+  {
+   "id": "1652720872",
+   "name": "pk28"
+  },
+  {
+   "id": "1694159390",
+   "name": "地形块"
+  },
+  {
+   "id": "1744402227",
+   "name": "pk30"
+  },
+  {
+   "id": "1794876613",
+   "name": "pk16"
+  },
+  {
+   "id": "1962238160",
+   "name": "pk32"
+  },
+  {
+   "id": "2146853465",
+   "name": "pack_32_1"
+  },
+  {
+   "id": "-1906234144",
+   "name": "GameRoot"
+  },
+  {
+   "id": "-145304910",
+   "name": "地图"
+  },
+  {
+   "id": "-518093461",
+   "name": "地形"
+  },
+  {
+   "id": "-1235874755",
+   "name": "出生点"
+  },
+  {
+   "id": "-1723930656",
+   "name": "pack_32_1"
+  },
+  {
+   "id": "-2146757077",
+   "name": "pk31"
+  },
+  {
+   "id": "-1698920719",
+   "name": "pack_31_1"
+  },
+  {
+   "id": "-1658990489",
+   "name": "pk27"
+  },
+  {
+   "id": "-1122757078",
+   "name": "pk25"
+  },
+  {
+   "id": "-326687685",
+   "name": "pack_33_1"
+  },
+  {
+   "id": "-1261455079",
+   "name": "pack_31_1"
+  },
+  {
+   "id": "-530198832",
+   "name": "pack_30_1"
+  },
+  {
+   "id": "-160835993",
+   "name": "pk29"
+  }
+ ],
+ "entCount": 891,
+ "sample": [
+  "id",
+  "name",
+  "desc",
+  "preview",
+  "resource",
+  "resourceType",
+  "dataType",
+  "resourceUrls",
+  "style",
+  "shapeType",
+  "categoryList",
+  "productCategoryList",
+  "module",
+  "scale",
+  "createTime",
+  "source",
+  "resourceTaskId",
+  "isFavorite",
+  "capacity",
+  "faceCount",
+  "logicalCenter",
+  "rigged",
+  "internalCreatorUid",
+  "createFrom",
+  "status",
+  "platformStatus",
+  "isPublish",
+  "totalUsageCount",
+  "totalFavoriteCount"
+ ],
+ "sampleFull": {
+  "id": "11781619848450",
+  "name": "pk33",
+  "desc": "该资产由大量分布松散的微小几何像素单元构成，整体轮廓分散无规整聚合形态。单元带有浅绿、粉、黄、蓝、灰等多种低饱和度色彩，部分单元带有细小的标识色块，整体呈现出简约的低模像素风格。",
+  "preview": {
+   "url": "https://p3-dy-hamlet-ugc-sign.byteimg.com/tos-cn-i-c2ox06qgwk/aigc_editor/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/adca104b909e494ca0c7c2d7171865fc.png~tplv-c2ox06qgwk-image-256.png?rk3s=649a29f5&x-expires=1797119205&x-signature=ZWIh6J6dHHOAhFqkZ%2BLob1BV%2Fzk%3D",
+   "uri": "tos-cn-i-c2ox06qgwk/aigc_editor/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/adca104b909e494ca0c7c2d7171865fc.png"
+  },
+  "resource": {
+   "url": "https://lf26-hamlet-resource-sign.douyincdn.com/hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb?x-expires=1797119205&x-signature=xTwhxnUZrcUNX4Dibdf0bYAGAWM%3D",
+   "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/336m3st62tu2uxu8.glb"
+  },
+  "resourceType": 1,
+  "dataType": 1,
+  "resourceUrls": [],
+  "style": 4,
+  "shapeType": 1,
+  "categoryList": [],
+  "productCategoryList": [],
+  "module": 1,
+  "scale": {
+   "x": 2530.75,
+   "y": 2530.75,
+   "z": 2530.75
+  },
+  "createTime": 1794510322,
+  "source": 2,
+  "resourceTaskId": "0",
+  "isFavorite": false,
+  "capacity": "4344",
+  "faceCount": "4144",
+  "logicalCenter": {
+   "x": -0.3778030228193223,
+   "y": 0.0038328557973980586,
+   "z": 0.0751397821444668
+  },
+  "rigged": false,
+  "internalCreatorUid": "2870183467157400",
+  "createFrom": "User",
+  "status": "Online",
+  "platformStatus": "Online",
+  "isPublish": false,
+  "totalUsageCount": "0",
+  "totalFavoriteCount": "0"
+ }
+}

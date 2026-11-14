@@ -1,0 +1,92 @@
+{
+ "gndbase_0": {
+  "id": "11781619900674",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/jprpb7sz8lctmmcr.glb",
+  "scale": 1000,
+  "faceCount": "16384"
+ },
+ "gndbase_1": {
+  "id": "11719399218178",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/o7zz4ylj4d9r17cy.glb",
+  "scale": 1000,
+  "faceCount": "16384"
+ },
+ "mtn_2": {
+  "id": "11593897780738",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/qiqiqggum8b7k38l.glb",
+  "scale": 2150,
+  "faceCount": "17100"
+ },
+ "mtn_1": {
+  "id": "11593897780482",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/zel9se2n1t047095.glb",
+  "scale": 1659.2091369628906,
+  "faceCount": "9912"
+ },
+ "mtn_0": {
+  "id": "11776997808386",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/imu399yhjamurncq.glb",
+  "scale": 839.657470703125,
+  "faceCount": "1720"
+ },
+ "person": {
+  "id": "11728853374466",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/utk4v6182iqvxxx5.glb",
+  "scale": 1.5624999552965164,
+  "faceCount": "1652"
+ },
+ "car_cop": {
+  "id": "11593897779458",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/ll6qtviucvf5w85p.glb",
+  "scale": 4.743000030517578,
+  "faceCount": "3566"
+ },
+ "car_sedan": {
+  "id": "11593897779202",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/zzsir976z3ykaf59.glb",
+  "scale": 4.648000001907349,
+  "faceCount": "3076"
+ },
+ "ground_base": {
+  "id": "11775492538882",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/irgccsp612g47l1f.glb",
+  "scale": 3120,
+  "faceCount": "288"
+ },
+ "road_part4": {
+  "id": "11629328717314",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/gxisu879m2pf3gi0.glb",
+  "scale": 615.2086486816406,
+  "faceCount": "26236"
+ },
+ "road_part3": {
+  "id": "11802316834818",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/1wbqjuyzi51qowy3.glb",
+  "scale": 695.7307434082031,
+  "faceCount": "10272"
+ },
+ "road_part2": {
+  "id": "11618323565058",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/j37yy5ks598ppvnu.glb",
+  "scale": 891.4999885559082,
+  "faceCount": "21968"
+ },
+ "road_part1": {
+  "id": "11618323564034",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/sg96cd11ycsrmg0i.glb",
+  "scale": 2085.7127685546875,
+  "faceCount": "21304"
+ },
+ "hill_01": {
+  "id": "11629328727042",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/nzcu4gdt6fcu2wn0.glb",
+  "scale": 269.37213134765625,
+  "faceCount": "912"
+ },
+ "far_ground": {
+  "id": "11802316849666",
+  "uri": "hamlet-ugc/aigc_editor/dev/unity/MS4wLjABAAAApSFUm2mTDSLCmRCr8mDEn0kt0YLsHKnCdywL23OlGsf3gtDWJW6yXU3_ApY-R8MI/59o6yflpg9jc7tp3.glb",
+  "scale": 8000,
+  "faceCount": "2"
+ }
+}

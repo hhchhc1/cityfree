@@ -1,0 +1,61 @@
+    // 【fix460】东肩观景台（重写 fix436）：原版把南北两侧的栏杆立柱按纵轴摆，
+    // 立柱跑到台面外半空里。这里按"边长"逐根生成，并让 4 根柱脚各自落到地面。
+    (function zzDeck2() {
+      try {
+        var _th = terrainHeight;
+        var DX = 812, DZ = -66, W = 10, D = 8, HW = W / 2, HD = D / 2;
+        var cs = [[-HW, -HD], [HW, -HD], [-HW, HD], [HW, HD]];
+        var top = _th(DX, DZ);
+        for (var ci = 0; ci < 4; ci++) top = Math.max(top, _th(DX + cs[ci][0], DZ + cs[ci][1]));
+        var dy = top + 0.55;                       // 台面高度：比最高一角再高半米
+        var g = new THREE.Group();
+        var wood = new THREE.MeshLambertMaterial({ color: 0x7a5232 });
+        var woodDark = new THREE.MeshLambertMaterial({ color: 0x5d3d24 });
+        // 台面：12 块板
+        for (var i = 0; i < 12; i++) {
+          var plank = new THREE.Mesh(new THREE.BoxGeometry(W, 0.16, D / 12 * 0.9), wood);
+          plank.position.set(0, 0, -HD + D / 12 * (i + 0.5));
+          g.add(plank);
+        }
+        // 4 根柱脚：各自落到本角地面（坡地上不会悬空）
+        for (var k2 = 0; k2 < 4; k2++) {
+          var cxx = cs[k2][0], czz = cs[k2][1];
+          var groundY = _th(DX + cxx, DZ + czz);
+          var hgt = Math.max(0.6, dy - groundY + 0.4);
+          var post = new THREE.Mesh(new THREE.BoxGeometry(0.4, hgt, 0.4), woodDark);
+          post.position.set(cxx * 0.94, -hgt / 2, czz * 0.94);
+          g.add(post);
+        }
+        // 三面栏杆（北 -z / 南 +z / 东 +x），西侧朝上山方向留口
+        function railNorthSouth(sz) {
+          var top2 = new THREE.Mesh(new THREE.BoxGeometry(W, 0.12, 0.16), woodDark);
+          top2.position.set(0, 1.05, sz); g.add(top2);
+          var mid = new THREE.Mesh(new THREE.BoxGeometry(W, 0.09, 0.12), wood);
+          mid.position.set(0, 0.56, sz); g.add(mid);
+          for (var k = 0; k <= 6; k++) {
+            var p = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.05, 0.13), wood);
+            p.position.set(-HW + 0.25 + k * ((W - 0.5) / 6), 0.53, sz);
+            g.add(p);
+          }
+        }
+        railNorthSouth(-HD); railNorthSouth(HD);
+        var topE = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, D), woodDark);
+        topE.position.set(HW, 1.05, 0); g.add(topE);
+        var midE = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, D), wood);
+        midE.position.set(HW, 0.56, 0); g.add(midE);
+        for (var k3 = 0; k3 <= 5; k3++) {
+          var pe = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.05, 0.13), wood);
+          pe.position.set(HW, 0.53, -HD + 0.25 + k3 * ((D - 0.5) / 5));
+          g.add(pe);
+        }
+        g.position.set(DX, dy, DZ);
+        scene.add(g);
+        // 台面下的两条斜撑
+        for (var b2 = -1; b2 <= 1; b2 += 2) {
+          var brace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, D * 0.9), woodDark);
+          brace.position.set(DX + b2 * (HW - 1.0), dy - 0.9, DZ);
+          scene.add(brace);
+        }
+        window.__zzDeck = { x: DX, z: DZ, deckY: +dy.toFixed(2) };
+      } catch (eZZ4) { }
+    })();

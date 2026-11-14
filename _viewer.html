@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>dsh版 城市自由人 33包拼合校验</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b1220; overflow: hidden; }
+    canvas { display: block; }
+    #hud { position: fixed; left: 12px; bottom: 12px; color: #cfe3ff; font: 13px/1.6 Consolas, monospace; text-shadow: 0 1px 2px #000; }
+  </style>
+  <script src="/three.min.js"></script>
+  <script src="/_GLTFLoader.js"></script>
+</head>
+
+<body>
+  <div id="hud">loading…</div>
+  <script>
+    const hud = document.getElementById('hud');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x101a2c);
+    scene.fog = null;
+
+    const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 60000);
+    cam.position.set(900, 2400, 2600);
+    cam.lookAt(876, 20, -173);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x30364a, 1.5));
+    const d1 = new THREE.DirectionalLight(0xffffff, 1.5); d1.position.set(-1.2, 2.2, 1.4); scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0x9fc4ff, 0.7); d2.position.set(1.6, 1.0, -1.4); scene.add(d2);
+
+    // 地面参考网格（1格=100m，方便看尺度）
+    const grid = new THREE.GridHelper(6000, 60, 0x2b4a72, 0x1b3050);
+    grid.position.y = -0.5;
+    scene.add(grid);
+
+    const loader = new THREE.GLTFLoader();
+    const IS_TILES = location.search.includes('tiles');
+    const ONE = new URLSearchParams(location.search).get('one');
+    const QS = ONE ? '/one.json?f=' + encodeURIComponent(ONE) : (IS_TILES ? '/tiles.json' : (location.search.includes('scale1') ? '/packs1.json' : '/packs.json'));
+    const DIR = ONE ? '/one/' : (IS_TILES ? '/tiles/' : '/packs/');
+    fetch(QS).then(r => r.json()).then(async (list) => {
+      const box = new THREE.Box3();
+      let done = 0;
+      for (const p of list) {
+        await new Promise((res) => {
+          loader.load(DIR + p.file, (g) => {
+            const o = g.scene;
+            o.position.set(0, 0, 0);
+            o.scale.setScalar(p.scale);
+            o.traverse((n) => { if (n.isMesh) { n.material.side = THREE.DoubleSide; if (n.material.map) n.material.map.anisotropy = 4; } });
+            scene.add(o);
+            box.expandByObject(o);
+            done++;
+            hud.textContent = '载入 ' + done + '/' + list.length;
+            res();
+          }, undefined, (e) => { hud.textContent = 'ERROR ' + p.file + ' ' + e; res(); });
+        });
+      }
+      // 自动取景
+      const c = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const radius = Math.max(size.x, size.z) * 0.5;
+      const dist = radius / Math.tan((45 * Math.PI / 180) / 2) * 1.25;
+      const dir = new THREE.Vector3(0.25, 1.0, 0.78).normalize();
+      cam.position.copy(c.clone().add(dir.multiplyScalar(dist)));
+      cam.far = dist * 6; cam.updateProjectionMatrix();
+      cam.lookAt(c.x, c.y, c.z);
+      hud.textContent = 'packs ' + done + '/' + list.length +
+        '  bmin ' + box.min.toArray().map(v => v.toFixed(0)).join(',') +
+        '  bmax ' + box.max.toArray().map(v => v.toFixed(0)).join(',') +
+        '  size ' + size.toArray().map(v => v.toFixed(0)).join(',') +
+        '  dist ' + dist.toFixed(0);
+      const q = new URLSearchParams(location.search);
+      if (q.has('cx')) {
+        const cx = +q.get('cx'), cz = +q.get('cz'), dd = +(q.get('dist') || 900);
+        cam.position.set(cx + 0.30 * dd, (q.has('cy') ? +q.get('cy') : 40) + 0.72 * dd, cz + 0.62 * dd);
+        cam.lookAt(cx, q.has('cy') ? +q.get('cy') : 40, cz);
+      }
+      if (location.search.includes('fix')) {
+        cam.position.set(860 + 0.19 * 3200, 30 + 0.76 * 3200, -150 + 0.60 * 3200);
+        cam.lookAt(860, 30, -150);
+      }
+      if (location.search.includes('top')) {
+        const span = Math.max(size.x, size.z) / 2 * 1.05;
+        cam.position.set(c.x, c.y + span / Math.tan((45 * Math.PI / 180) / 2), c.z + 1);
+        cam.lookAt(c.x, c.y, c.z);
+        scene.remove(grid);
+      }
+      window.__ready = true;
+      renderer.render(scene, cam);
+    });
+
+    renderer.setAnimationLoop(() => renderer.render(scene, cam));
+  </script>
+</body>
+
+</html>
