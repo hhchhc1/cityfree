@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix493-newcity-life">
+<meta name="cf-build" content="20261114-fix494-qinmintang-stele">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -28654,6 +28654,25 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       const Z = -470;
       // 【fix329】月台整体南移到殿前（原来半个压在殿身下面）
       const YC = Z + 34;
+      // 【fix494】亲民堂前"有字的石头"被埋 —— 立在主院地面上的陈设统一抬升量。
+      // 历史链条（三次改动各漏了一块，别再只改表面）：
+      //   · 荷芷署整体挂在 YG 组上，YG.position.y = BASE = 2.60，所有 det/plaque3d 的 y
+      //     都是"相对台基面"的偏移；本组陈设的底座 y=0.10、半高 0.10 → 底面正好落在 y=2.60。
+      //   · fix461/fix477/fix478 给中轴铺青石甬道时实测「地面 5.10」，路面顶 5.165，
+      //     于是主院可见地面从 2.60 涨到 5.10，这组和地面一起长的东西全被埋了 2.50m。
+      //   · fix479 的 liftSideWingsB1() 用 DY=2.50 把两侧构件拉平，但开头写了
+      //     `if (Math.abs(cx - AX) < 30) continue; // 主甬道/院心/执事牌 不动`，
+      //     本组仪仗牌在 x=AX±6.2~8.8，正好被跳过。
+      //   · fix491 补的是**大门前** z=-196~-262 的碑刻与 z=-230 的执事牌（按 6.25 台基抬），
+      //     没覆盖 z≈-423 的亲民堂前这一组。
+      // 结果：牌座底 2.60、牌面 3.50~5.90，而地面 5.10 → 只露出顶端 0.8m，
+      // 金字连同下半截一起埋进青砖里，正是用户报的「有字的石头一部分被埋在地下」。
+      // 这里只抬**底座原本落在 2.60 台基面上的落地陈设**（仪仗牌 + 铜鹤/铜龟/日晷），
+      // 不动月台本体/望柱/栏板/踏跺（它们底面不在 2.60，单独抬会悬空）。
+      const LIFT = 5.10 - BASE;      // = 2.50，抬完底座正好坐在 5.10 的主院地面上
+      const detL = function (geo, hex, x, y, z, a, b, c, d, e) {
+        return det(geo, hex, x, y + LIFT, z, a, b, c, d, e);
+      };
       det(BX(58, 1.6, 20), 0xb6b0a2, AX, 0.8, YC);
       for (const s of [-1, 1]) det(BX(1.0, 1.15, 20), 0xc8c2b4, AX + s * 28.6, 2.02, YC);
       det(BX(58, 1.15, 1.0), 0xc8c2b4, AX, 2.02, YC + 9.5);
@@ -28696,38 +28715,44 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
         let kk = 0;
         for (const s of [-1, 1]) for (const s2 of [0, 1]) {
           const bx9 = AX + s * (6.2 + s2 * 2.6), bz9 = YC + 13.2;
-          det(BX(1.4, 0.20, 0.9), 0x4a2416, bx9, 0.10, bz9);
-          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 - 0.42, 1.65, bz9);
-          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 + 0.42, 1.65, bz9);
-          det(BX(1.25, 0.18, 0.26), 0x6d3a20, bx9, 3.24, bz9);
-          plaque3d(nm[kk % 4], bx9, 2.10, bz9 + 0.18, 1.15, 2.40, '#241608', '#e8c86a');
+          // 【fix494】整组 +LIFT：牌座底 5.10 落地、牌面 6.00~8.40 完整露出，
+          // 柱子/顶横木同量抬升，保持"牌嵌在两柱之间"的原有相对关系。
+          det(BX(1.4, 0.20, 0.9), 0x4a2416, bx9, 0.10 + LIFT, bz9);
+          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 - 0.42, 1.65 + LIFT, bz9);
+          det(BX(0.20, 3.0, 0.20), 0x5a2f18, bx9 + 0.42, 1.65 + LIFT, bz9);
+          det(BX(1.25, 0.18, 0.26), 0x6d3a20, bx9, 3.24 + LIFT, bz9);
+          plaque3d(nm[kk % 4], bx9, 2.10 + LIFT, bz9 + 0.18, 1.15, 2.40, '#241608', '#e8c86a');
           kk++;
         }
       }
       // 【fix346】月台前陈设：铜鹤一对 + 铜龟一对 + 日晷
+      // 【fix494】这一组底座同样原本坐在 2.60 台基面上（鹤座 y=0.15/半高0.15、
+      //   龟座 y=0.17/半高0.17、日晷 y=0.95/半高0.95），主院地面涨到 5.10 后整组埋光。
+      //   和仪仗牌是同一根因、同一片地，用 detL 统一 +LIFT 一次抬齐；
+      //   不改各自的 y 数值，内部相对造型（鹤颈/龟头/晷针）完全保持原样。
       {
         const BR = 0x6f6a52, BR2 = 0x837c5e;
         for (const s of [-1, 1]) {
           const hx = AX + s * 9.5, hz = YC + 11.5;
-          det(BX(1.6, 0.30, 1.6), 0x9d968a, hx, 0.15, hz);
-          for (const s2 of [-1, 1]) det(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 6), BR, hx + s2 * 0.22, 0.95, hz);
-          det(new THREE.CylinderGeometry(0.30, 0.52, 1.5, 10), BR, hx, 2.05, hz, 0, 0, Math.PI / 2);
-          det(new THREE.CylinderGeometry(0.10, 0.12, 1.5, 8), BR2, hx + s * 0.62, 2.85, hz, 0, 0, -s * 0.28);
-          det(new THREE.SphereGeometry(0.24, 8, 6), BR2, hx + s * 0.92, 3.48, hz);
-          det(new THREE.CylinderGeometry(0.02, 0.09, 0.55, 6), 0xb08a3a, hx + s * 1.22, 3.42, hz, 0, 0, Math.PI / 2);
-          det(new THREE.CylinderGeometry(0.02, 0.34, 0.85, 8), BR, hx - s * 0.95, 2.20, hz, 0, 0, Math.PI / 2 - s * 0.35);
+          detL(BX(1.6, 0.30, 1.6), 0x9d968a, hx, 0.15, hz);
+          for (const s2 of [-1, 1]) detL(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 6), BR, hx + s2 * 0.22, 0.95, hz);
+          detL(new THREE.CylinderGeometry(0.30, 0.52, 1.5, 10), BR, hx, 2.05, hz, 0, 0, Math.PI / 2);
+          detL(new THREE.CylinderGeometry(0.10, 0.12, 1.5, 8), BR2, hx + s * 0.62, 2.85, hz, 0, 0, -s * 0.28);
+          detL(new THREE.SphereGeometry(0.24, 8, 6), BR2, hx + s * 0.92, 3.48, hz);
+          detL(new THREE.CylinderGeometry(0.02, 0.09, 0.55, 6), 0xb08a3a, hx + s * 1.22, 3.42, hz, 0, 0, Math.PI / 2);
+          detL(new THREE.CylinderGeometry(0.02, 0.34, 0.85, 8), BR, hx - s * 0.95, 2.20, hz, 0, 0, Math.PI / 2 - s * 0.35);
         }
         for (const s of [-1, 1]) {
           const gx2 = AX + s * 15.5, gz2 = YC + 11.5;
-          det(BX(2.0, 0.34, 1.6), 0x9d968a, gx2, 0.17, gz2);
-          det(new THREE.SphereGeometry(0.72, 10, 6), BR, gx2, 0.80, gz2);
-          det(new THREE.CylinderGeometry(0.26, 0.32, 0.5, 8), BR2, gx2 + s * 0.95, 0.62, gz2, 0, 0, Math.PI / 2);
-          det(new THREE.SphereGeometry(0.22, 7, 5), BR2, gx2 + s * 1.28, 0.66, gz2);
-          for (let k7 = 0; k7 < 3; k7++) det(BX(1.1, 0.10, 0.16), 0x5f5a44, gx2, 1.10 + k7 * 0.18, gz2 + 0.18 - k7 * 0.18);
+          detL(BX(2.0, 0.34, 1.6), 0x9d968a, gx2, 0.17, gz2);
+          detL(new THREE.SphereGeometry(0.72, 10, 6), BR, gx2, 0.80, gz2);
+          detL(new THREE.CylinderGeometry(0.26, 0.32, 0.5, 8), BR2, gx2 + s * 0.95, 0.62, gz2, 0, 0, Math.PI / 2);
+          detL(new THREE.SphereGeometry(0.22, 7, 5), BR2, gx2 + s * 1.28, 0.66, gz2);
+          for (let k7 = 0; k7 < 3; k7++) detL(BX(1.1, 0.10, 0.16), 0x5f5a44, gx2, 1.10 + k7 * 0.18, gz2 + 0.18 - k7 * 0.18);
         }
-        det(new THREE.CylinderGeometry(0.45, 0.55, 1.9, 8), 0x9d968a, AX, 0.95, YC + 11.5);
-        det(new THREE.CylinderGeometry(1.25, 1.25, 0.18, 16), 0x8a8578, AX, 2.0, YC + 11.5, 0.62, 0, 0);
-        det(BX(0.10, 2.6, 0.10), 0xb08a3a, AX, 2.55, YC + 11.5, 0.62, 0, 0);
+        detL(new THREE.CylinderGeometry(0.45, 0.55, 1.9, 8), 0x9d968a, AX, 0.95, YC + 11.5);
+        detL(new THREE.CylinderGeometry(1.25, 1.25, 0.18, 16), 0x8a8578, AX, 2.0, YC + 11.5, 0.62, 0, 0);
+        detL(BX(0.10, 2.6, 0.10), 0xb08a3a, AX, 2.55, YC + 11.5, 0.62, 0, 0);
       }
       // 【fix336】月台四角宫灯
       {
