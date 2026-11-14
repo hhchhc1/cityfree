@@ -926,7 +926,7 @@ window.addEventListener('keydown', e => {
   }
 }, true);
 // 构建版本号：每次改动代码请把末尾数字 +1，右上角会显示，方便确认浏览器加载的是新文件而不是缓存
-const BUILD = '20261112-fix489-slab3';
+const BUILD = '20261114-fix491-nofakeground';   // 【fix491】升版号：autoUpdateGuard 靠它强制用户端重载，改代码不升号＝用户继续吃旧缓存
 // 【修复·根因】NPC 武器尺寸归一化常量必须在这里就赋好值：
 // addWeaponMesh 在 3256 行（车流摩托车骑手的武器）就会被调用，而原定义在 6102 行 ——
 // 早期调用时它是 undefined，Math.pow(undefined / 枪长, undefined) = NaN，
@@ -6237,17 +6237,25 @@ function makeSignPlane(text, w, h, bg, fg, border) {
 
 
 // ========== 新增地图区域 ==========
-// 海滩区（东南方向，蓝色地面+棕榈树）
+// 【fix491】旧「海滩区」的两块「恒定高度假地面」整块删除 —— 这才是用户反复报的"虚体埋人"真正的根因。
+//   历史：这里在 (280,200) 铺了一张 CircleGeometry(70,28)、颜色 0xf0d080 沙黄、固定 y=0.05 的圆盘，
+//   外加一张 (330,200)、y=-0.2 的蓝色水圆，四周再摆棕榈树和沙滩椅。
+//   问题：主地面 makeGround 的顶点是**逐点贴合 terrainHeight** 的起伏网格，而这两张圆盘是"死平板"：
+//   高度写死、既不跟地形，也不参与 personGroundY / 碰撞 / 可站立面。于是平板与地形互相穿插 ——
+//   地势低处露出沙黄、高处穿出绿草，交界是一条 28 边形折线（截图里那些锐利折角就是这么来的）；
+//   玩家按 terrainHeight 走，一走进去下半身就被平板挡住，看着像"人埋进沙里、还能穿过去"（即"虚体"）。
+//   用户截图里的坐标 (326,207) 距圆心仅 46m，正站在圆盘内；圆盘又正好铺在黑帮大本营 (350,310)
+//   南侧，所以看起来就是"大本营门前一片沙滩色的东西"。
+//   ⚠️ 之前误把大本营那个**深灰色**山体视觉锥 (0x3a3a32 / CylinderGeometry(48,55,10.5,24))
+//      当成元凶去修，颜色根本对不上，所以这个 bug 一直没消失、被用户第二次报上来。
+//   处理：按项目一贯做法（fix126 删沙色大板、fix157 删草地大板）整块删除，不留任何"假地面"。
+//   棕榈树本身是逐棵用 terrainHeight 定位的贴地实体，保留；蓝水圆和 4 张橙色沙滩椅是这块
+//   假海滩的配套，一并去掉，免得草地上孤零零杵着几张椅子 / 一摊悬空蓝水。
 (function addBeachZone() {
   const zx = 280, zz = 200, R = 70;
-  const beachMat = new THREE.MeshLambertMaterial({ color: 0xf0d080 });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(R, 28), beachMat);
-  ground.rotation.x = -Math.PI / 2; ground.position.set(zx, 0.05, zz); scene.add(ground);
-  // 海水
-  const waterMat = new THREE.MeshLambertMaterial({ color: 0x1a8fcc, transparent: true, opacity: 0.7 });
-  const water = new THREE.Mesh(new THREE.CircleGeometry(R + 30, 28), waterMat);
-  water.rotation.x = -Math.PI / 2; water.position.set(zx + 50, -0.2, zz); scene.add(water);
-  // 棕榈树
+  // 沙黄圆盘 / 蓝色水圆 / 沙滩椅：全部删除（见上方 fix474 说明）
+  // 棕榈树：保留，逐棵贴 terrainHeight，不构成虚体
+
   for (let i = 0; i < 10; i++) {
     const a = Math.random() * Math.PI * 2, d = 20 + Math.random() * 40;
     const tx = zx + Math.cos(a) * d, tz = zz + Math.sin(a) * d;
@@ -6264,21 +6272,22 @@ function makeSignPlane(text, w, h, bg, fg, border) {
     leaves.position.set(tx, gy + 5.2, tz); scene.add(leaves);
     treeObstacles.push({ x: tx, z: tz, r: 0.5 });
   }
-  // 沙滩椅
-  for (let i = 0; i < 4; i++) {
-    const cx = zx - 30 + i * 15, cz = zz + 30;
-    const chair = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1.8), new THREE.MeshLambertMaterial({ color: 0xff6600 }));
-    chair.position.set(cx, terrainHeight(cx, cz) + 0.3, cz); chair.rotation.x = -0.2; scene.add(chair);
-    treeObstacles.push({ x: cx, z: cz, r: 0.4 });
-  }
+  // 【fix491】4 张沙滩椅连同其 treeObstacles 碰撞一并删除：假海滩既然整块拿掉，
+  // 草坪上再留一排橙色椅子只会更突兀，而且它们带着圆点碰撞，会莫名挡路。
 })();
 
 // 体育场（西南方向，椭圆形看台+绿茵场）
+// 【fix491】同一类"恒定高度假地面"，一并删掉：这张 CircleGeometry(35,24)、纯色 0x2d8a2d、
+//   固定 y=0.06 的绿圆盘，就是用户报的「军地基地门前有一片绿油油的东西，也是虚体的，
+//   能把人覆盖住、人好像埋进去了」。军事基地在 (-280,120)，这块绿盘在 (-280,200)，
+//   正好在南门外 80m；当时误判成"线上 CDN 陈旧部署里还活着的 fix148 草地大板"，
+//   其实它一直好好地活在本地代码里，所以推多少次新版本都不会消失。
+//   删掉后看台中间直接露出主地形的绿草（本来就是草地，视觉差别很小），
+//   看台 / 球门 / buildings 碰撞全部保留；可玩的 3v3 足球场在**南岛**、是另一套 PITCH，
+//   与本模块毫无关系，不受任何影响。
 (function addStadium() {
   const zx = -280, zz = 200;
-  const fieldMat = new THREE.MeshLambertMaterial({ color: 0x2d8a2d });
-  const field = new THREE.Mesh(new THREE.CircleGeometry(35, 24), fieldMat);
-  field.rotation.x = -Math.PI / 2; field.position.set(zx, 0.06, zz); scene.add(field);
+  // 绿茵圆盘：整块删除（见上方 fix474 说明）
   // 看台（环形）
   const standMat = new THREE.MeshLambertMaterial({ color: 0x6a6a72 });
   for (let a = 0; a < Math.PI * 2; a += 0.3) {
@@ -15538,7 +15547,7 @@ function tryToggle() {
         if (c.group.userData.driver) c.group.userData.driver.visible = false;
         person.visible = false;
       }
-      c.playerUsed = true;   // 【fix158】打"玩家动过"标记：停放满半个昼夜后自动消失，见 updatePlayerUsedCarDespawn
+      c.playerUsed = true;   // 【fix490】打"玩家动过"标记：停放满半个昼夜后自动消失，见 updatePlayerUsedCarDespawn
       state = 'drive'; currentCar = c; speed.v = 0; c.damage = c.damage || 0;
     // 【fix149】在基地里动直升机/坦克 → 全部警卫立刻追打
     try { if ((c.isHelicopter || c.isTank) && inMilitaryBase(c.x, c.z)) alertBaseGuards(45); } catch (e) {}
@@ -15562,7 +15571,7 @@ function tryToggle() {
     const u = person.userData;
     if (u) { u.torso.rotation.x = 0; u.legL.rotation.x = 0; u.legR.rotation.x = 0; u.legL.rotation.z = 0; u.legR.rotation.z = 0; u.armL.rotation.z = 0; u.armR.rotation.z = 0; if (u.elbowL) { u.elbowL.rotation.x = 0; u.elbowR.rotation.x = 0; } if (u.kneeL) { u.kneeL.rotation.x = 0; u.kneeR.rotation.x = 0; } if (u.hip) u.hip.rotation.x = 0; if (u.head) u.head.rotation.x = 0; }
     // 抢来的车下车后停在原地，不会自己跑走
-    // 【fix158】玩家刚停好这辆车：记下"停放起始昼夜"（worldDay+worldTime 跨午夜单调），供半个昼夜后自动消失
+    // 【fix490】玩家刚停好这辆车：记下"停放起始昼夜"（worldDay+worldTime 跨午夜单调），供半个昼夜后自动消失
     if (currentCar) { currentCar.playerUsed = true; currentCar.playerUsedDay = worldDay + worldTime; }
     currentCar = null; speed.v = 0;
   }
@@ -17085,7 +17094,7 @@ spawnShockRing(v.x, _wy, v.z, 1.2, 11, 0.55, 0xffc45a);
   // 军用载具（直升机/坦克）打爆后同样按倒计时重生归位
   if (v.isHelicopter || v.isTank) militaryRespawnIn = MILITARY_RESPAWN_SEC;
 }
-// 【fix158】玩家动过的车：停放满半个昼夜后自动消失，清理随意摆放、影响交通秩序的车
+// 【fix490】玩家动过的车：停放满半个昼夜后自动消失，清理随意摆放、影响交通秩序的车
 //   判定与计时：
 //     · 玩家上车时给它打 playerUsed=true（"进入驾驶"处，见上方 drive 逻辑）；
 //     · 玩家下车（停好）时记 playerUsedDay = worldDay + worldTime（昼夜连续值，跨午夜单调）；
@@ -20066,12 +20075,12 @@ function attack() {
   }
 }
 // 【fix149】基地告警：一声枪响 / 有人动了直升机坦克 → 全部守卫一起追打那个人
-var _baseAlarmUntil = 0;   // 【fix158】上一轮警报的到期时间
+var _baseAlarmUntil = 0;   // 【fix490】上一轮警报的到期时间
 function inMilitaryBase(x, z) { return x > -330 && x < -230 && z > 75 && z < 175; }
 function alertBaseGuards(sec) {
-  // 【fix158】同一轮警报只提示一次：用户在基地里每开一枪都弹"基地警报"，太吵。
+  // 【fix490】同一轮警报只提示一次：用户在基地里每开一枪都弹"基地警报"，太吵。
   // 只要上一轮还没过期，就只在后台续时间，不再刷提示。
-  // 【fix158】同一轮警报只响一次
+  // 【fix490】同一轮警报只响一次
   const _nowMs = performance.now();
   const _baseAlarmFresh = _nowMs > _baseAlarmUntil;
   const until = _nowMs + (sec || 45) * 1000;
@@ -20831,7 +20840,7 @@ function npcFriendlyFire(shooter, victim) {
 }
 function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
-  // 【fix158】警报期间守卫的追击半径放宽到 90m：原来一律 22m，基地这么大，
+  // 【fix490】警报期间守卫的追击半径放宽到 90m：原来一律 22m，基地这么大，
   // 远处的守卫一看"超过 22 米"就直接放弃仇恨，所以只有离玩家最近的那个会来打。
   const _chaseCap = (r.baseAlertUntil && performance.now() < r.baseAlertUntil) ? 90 : 22;
   if (d > _chaseCap) return false;
@@ -24517,7 +24526,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   updateFixedVehicleRecall(dt);
   updateFerris(dt);
     updateVehicleDoors(dt);
-  updatePlayerUsedCarDespawn();   // 【fix158】玩家动过的车停放半个昼夜后自动消失
+  updatePlayerUsedCarDespawn();   // 【fix490】玩家动过的车停放半个昼夜后自动消失
   } catch(e) { console.error('[Vehicle update error]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
@@ -27936,7 +27945,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
     (function steles() {
       const list = [[AX - 46, -196, '荷芷署重修记', '乾隆二十三年'], [AX + 46, -196, '州治题名碑', '道光九年'], [AX - 46, -262, '公生明训碑', '康熙五十年']];
       for (const it of list) {
-        // 【fix474】碑座/碑身/碑帽同样按台基顶面抬起来（原来碑面字被台基埋掉大半）
+        // 【fix491】碑座/碑身/碑帽同样按台基顶面抬起来（原来碑面字被台基埋掉大半）
         let _sl = 0;
         { const _floor = 6.25; if (_floor > BASE) _sl = _floor - BASE; }   // 碑座坐在 6.25 米的台基顶面
         if (!(_sl > 0)) _sl = 0;
@@ -28024,7 +28033,7 @@ LH_BLD.push({ minX: cx - B * 1.15, maxX: cx + B * 1.15, minZ: cz - B * 1.15, max
       let k = 0;
       for (const sx of [-1, 1]) for (const s2 of [0, 1]) {
         const bx = AX + sx * (12.5 + s2 * 5.0), bz = -230;
-        // 【fix474】执事牌原来按 y=0 起算，台基顶面比它高一截，牌子下半截（连字）埋进地里。
+        // 【fix491】执事牌原来按 y=0 起算，台基顶面比它高一截，牌子下半截（连字）埋进地里。
         // 按台基顶面 platformTopAt 抬起来；只在"确实更高"时抬，绝不往下砸。
         let _lift = 0;
         { const _floor = 6.25; if (_floor > BASE) _lift = _floor - BASE - 0.12; }   // 实测台基顶面 6.32 米，牌座略压进 7 厘米
@@ -32266,7 +32275,12 @@ try {
   setTimeout(function () {
     fetch(location.pathname + '?_cb=' + Date.now(), {
       cache: 'no-store',
-      headers: { Range: 'bytes=0-65535' }      // 只要前 64KB，不用整个 1.2MB
+      // 【fix491】原来只取前 64KB，而 BUILD 常量实测在**第 65195 字节**（文件前段有大量中文注释，
+      // UTF-8 每个中文占 3 字节，字符偏移才 57171、字节偏移却已逼近上限），只剩 341 字节余量 ——
+      // 只要在文件前部再写两行中文注释，Range 就会把 BUILD 截掉，守卫从此静默失效，
+      // 表现就是"代码明明推上去了、用户刷新却还是旧版本、刚修的 bug 看着还在"。
+      // 放宽到 128KB，留足余量；服务器不支持 Range 时会返回全文（200），同样能匹配到，无副作用。
+      headers: { Range: 'bytes=0-131071' }
     })
       .then(function (r) { return (r.ok || r.status === 206) ? r.text() : ''; })
       .then(function (t) {
@@ -33160,7 +33174,7 @@ try {
         }
         // 主甬道：14 米宽青石板（每块 0.9×0.9 米，四块一循环）
         const tx1 = stoneTex(96, '#39414a');
-        tx1.repeat.set(14 / 3.60, 304 / 3.60);   // 【fix474】砖放大到 0.9×0.45 米
+        tx1.repeat.set(14 / 3.60, 304 / 3.60);   // 【fix491】砖放大到 0.9×0.45 米
         const mat1 = new THREE.MeshLambertMaterial({ map: tx1 });
         const road = new THREE.Mesh(new THREE.BoxGeometry(14, 0.05, 304), mat1);
         road.position.set(2025, 5.140, -292);    // fix478 高出地面 6 厘米，消除深度冲突
@@ -33170,7 +33184,7 @@ try {
         scene.add(road);
         // 御路石：正中 3.4 米宽，青灰偏亮
         const tx2 = stoneTex(116, '#454e56');
-        tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix474】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
+        tx2.repeat.set(3.4 / 3.40, 304 / 3.40);   // 【fix491】御路宽 3.4 米正好 4 块，一块 0.85×0.425 米
         const mat2 = new THREE.MeshLambertMaterial({ map: tx2 });
         const royal = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.05, 304), mat2);
         royal.position.set(2025, 5.210, -292);   // fix478 御路再高 1.5 厘米   // fix477 御路比甬道高 1.5 厘米
@@ -33185,7 +33199,7 @@ try {
         }
         // 门前广场的青石引道（原来这块是条石和台基同高，互相打架，看上去就是一片土黄）
         const tx3 = stoneTex(112, '#4a525a');
-        tx3.repeat.set(16 / 3.60, 28 / 3.60);     // 【fix474】门前引道同规格
+        tx3.repeat.set(16 / 3.60, 28 / 3.60);     // 【fix491】门前引道同规格
         const mat3 = new THREE.MeshLambertMaterial({ map: tx3 });
         const inRoad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.05, 28), mat3);
         inRoad.position.set(2025, 0.560, -110);
