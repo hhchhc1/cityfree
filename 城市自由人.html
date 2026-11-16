@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix506-mountain-ticket-gate">
+<meta name="cf-build" content="20261116-fix507-achievements">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -474,6 +474,32 @@
   /* 【2026-10-21·fix38】拖动提示 + 设置按钮（设置按钮用灰色，跟人物属性区分开） */
   #mapPanel .map-hint { font-size: 12px; color: rgba(255,255,255,0.55); -webkit-user-select: none; user-select: none; }
   #settingsBtn { background: #455a64; }
+  /* 【fix507】成就按钮（金色，和人物属性蓝、设置灰区分开） */
+  #achvBtn { background: linear-gradient(180deg,#f5c542,#e09b0b); color:#3a2a08; font-weight:bold; }
+  /* ---- 【fix507】成就面板 ---- */
+  #achvPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: none; z-index: 97; color: #fff; font-family: sans-serif; overflow-y: auto; }
+  #achvPanel .st-head { padding: 16px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); position: sticky; top: 0; background: rgba(20,16,8,0.96); z-index: 2; }
+  #achvPanel .achv-progress { padding: 12px 16px 4px; font-size: 14px; color: #f5c542; }
+  #achvPanel .achv-summary { padding: 0 16px 10px; font-size: 12px; color: rgba(255,255,255,0.6); }
+  #achvPanel .achv-list { padding: 6px 12px 24px; display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 10px; }
+  #achvPanel .achv-card { border: 1px solid rgba(245,197,66,0.25); border-radius: 12px; padding: 12px 14px; background: rgba(255,255,255,0.045); }
+  #achvPanel .achv-card.done { border-color: rgba(245,197,66,0.85); background: linear-gradient(135deg,rgba(245,197,66,0.14),rgba(255,255,255,0.045)); }
+  #achvPanel .achv-t { font-size: 15px; font-weight: bold; }
+  #achvPanel .achv-card.done .achv-t { color: #f5c542; }
+  #achvPanel .achv-card.lock .achv-t { color: rgba(255,255,255,0.7); }
+  #achvPanel .achv-d { font-size: 12px; color: rgba(255,255,255,0.62); margin-top: 5px; line-height: 1.45; }
+  #achvPanel .achv-r { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 7px; }
+  #achvPanel .achv-card.done .achv-r { color: #9be7a4; }
+  /* 成就达成横幅：屏幕中上方金色条幅，比普通飘字醒目 */
+  #achvToast { position: fixed; left: 50%; top: 16%; transform: translateX(-50%) translateY(-12px); z-index: 9997;
+    pointer-events: none; opacity: 0; transition: opacity .28s, transform .28s; text-align: center;
+    padding: 14px 30px; border-radius: 16px; min-width: 260px; max-width: 88vw;
+    background: linear-gradient(135deg,rgba(58,42,8,0.96),rgba(120,80,10,0.96));
+    border: 2px solid #f5c542; box-shadow: 0 10px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(245,197,66,0.2); }
+  #achvToast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #achvToast .at-top { font-size: 13px; letter-spacing: 3px; color: #ffe9a3; }
+  #achvToast .at-name { font-size: 22px; font-weight: 900; color: #ffd54f; margin: 4px 0; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }
+  #achvToast .at-rew { font-size: 13px; color: #fff3c4; }
   /* ---- 设置面板（沿用角色属性面板的外观） ---- */
   #setPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 96; color: #fff; font-family: sans-serif; overflow-y: auto; }
   #setPanel .st-head { padding: 16px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); }
@@ -804,10 +830,19 @@
     <canvas id="mapCanvas" width="800" height="520"></canvas>
     <div class="map-foot">
       <div class="map-btn" id="statsBtn">🧍 人物属性</div>
+      <div class="map-btn" id="achvBtn">🏆 成就</div>
       <div class="map-btn" id="settingsBtn">⚙️ 设置</div>
       <span class="map-hint">👆 拖动移动地图</span>
     </div>
   </div>
+  <!-- 【fix507】成就面板：点地图底栏「🏆 成就」打开，列出全部 20 个小成就的达成状态 -->
+  <div id="achvPanel" style="display:none">
+    <div class="st-head"><span>🏆 成就</span><span class="st-close" id="achvClose">×</span></div>
+    <div class="achv-progress" id="achvProgress"></div>
+    <div class="achv-summary">完成成就可获得金币与经验，部分成就还有特殊奖励。</div>
+    <div class="achv-list" id="achvList"></div>
+  </div>
+  <div id="achvToast"><div class="at-top">🏆 成就达成</div><div class="at-name" id="achvToastName"></div><div class="at-rew" id="achvToastRew"></div></div>
   <div id="statsPanel" style="display:none">
     <div class="st-head"><span>🧍 角色属性</span><span class="st-close" id="statsClose">×</span></div>
     <div class="st-xp" id="statsXp"></div>
@@ -4035,6 +4070,7 @@ function boardFerris() {
     sfx('coin'); return;
   }
   gold -= FERRIS.price; ferrisRefreshGold();
+  achUnlock('romance');        // 【fix507】浪漫时刻：第一次坐上摩天轮
   ferrisRide.active = true;
   ferrisRide.idx = ferrisNearestGondola();   // 坐当前最低的那个厢，到站就上
   ferrisRide.t = 0;
@@ -9246,6 +9282,7 @@ function soccerEnd(playerWon) {
     document.body.classList.remove('soccer-mode');   // 恢复战斗按钮
     if (playerWon) {
       gold += 500;
+      achUnlock('football');   // 【fix507】足球小将：第一次在南岛足球比赛获胜
       floatText('夺冠！+500 💰', '#ffd54f');
       setHint('足球：你赢了这场比赛，奖金 +500 金币');
       try { sfx('coin'); } catch (e) {}
@@ -12294,6 +12331,7 @@ function claimQuest(id) {
   addXp(q.rewardXp);
   if (q.unlockTank) {
     PROGRESS.tankUnlocked = true;
+    achUnlock('justice');    // 【fix507】维护正义！：剿灭黑社会团体（军事基地直升机任务，解锁坦克）
     showQuestResult(true, '任务完成！',
       q.name + '\n\n+ ' + q.rewardGold + ' 金币\n+ ' + q.rewardXp + ' 经验\n\n🏆 解锁【坦克】使用权！\n现在可以直接开走军事基地里的坦克了。');
   } else {
@@ -13278,6 +13316,7 @@ var questBridge = { despawnRaceCar: null, RACE_CHECKS: 6 };
           q.phase = 'done';
           clearQuestCheckpoints(q);
           completeQuest(q.id);
+          achUnlock('racer');  // 【fix507】我是赛车手：第一次完成街头赛车任务
           floatText('🏁 赛车完成！', '#ffd24a');
         } else {
           setHint('检查点 ' + q.checkpointIndex + ' / ' + total);
@@ -14299,6 +14338,173 @@ for (const k in clothesAttach) clothesAttach[k].visible = false;
 }
 
 function addGold(n) { gold += n; }
+
+// ============================================================================
+// 【fix507】成就系统（用户 2026-11-16 要求）
+// 点左上角小地图 → 地图底栏新增「🏆 成就」→ 全屏面板列出 20 个小成就。
+// 设计要点：
+//  ① 全部用 var / function（本项目硬性约定），全局 ACHY 走存档持久化。
+//  ② achHit(id) 幂等：done[id] 为真就绝不重复发奖/弹屏。
+//  ③ 累计类（击杀/图鉴）由 achCount(id,n) 累加，达到阈值自动解锁。
+//  ④ 特殊奖励：坦克使用权、氮气引擎、夜视仪（已有则按原价返金币）、
+//     发现新大陆送三种传送卷各一张（存进免费券库存，用完仍可付费购买）。
+// ============================================================================
+var ACH_DEFS = [
+  { id:'firstBlood',  name:'第一滴雪',        desc:'成功击败第一个敌人',                 gold:300,  xp:60 },
+  { id:'spiderman',   name:'我是蜘蛛人？',     desc:'第一次使用钩爪',                     gold:300,  xp:60 },
+  { id:'truth',       name:'真理在手',        desc:'第一次成功购买武器',                 gold:400,  xp:80 },
+  { id:'dress',       name:'会穿就行',        desc:'第一次购买服饰并穿上',               gold:400,  xp:80 },
+  { id:'racer',       name:'我是赛车手',       desc:'第一次完成街头赛车任务',             gold:800,  xp:180 },
+  { id:'stronger',    name:'俺变得更强壮了',   desc:'第一次使用升级点升级人物属性',       gold:400,  xp:80 },
+  { id:'justice',     name:'维护正义！',       desc:'第一次成功剿灭黑社会团体（军事基地直升机任务，解锁坦克）', gold:1500, xp:400, reward:'坦克使用权' },
+  { id:'rebirth',     name:'不是终点',        desc:'第一次死亡并复活',                   gold:300,  xp:60 },
+  { id:'punish',      name:'惩恶扬善',        desc:'累计击败 100 名敌人',                gold:1200, xp:300, reward:'夜视仪（已有则返还 2800 金币）' },
+  { id:'romance',     name:'浪漫时刻',        desc:'第一次坐上摩天轮',                   gold:300,  xp:60 },
+  { id:'football',    name:'足球小将',        desc:'第一次在南岛足球比赛中获胜',         gold:800,  xp:180 },
+  { id:'driver',      name:'我是司机',        desc:'第一次用出租车成功接送乘客',         gold:800,  xp:180, reward:'氮气引擎（已有则返还 2500 金币）' },
+  { id:'labor',       name:'劳动光荣',        desc:'第一次用吊车在工地成功吊起并放下货物', gold:800, xp:180 },
+  { id:'newland',     name:'发现新大陆',      desc:'第一次乘坐飞机到达荷芷市',           gold:1000, xp:250, reward:'三种传送卷各一张（免费）' },
+  { id:'folk',        name:'古建筑之旅',      desc:'收集到每个古建筑光标，学习我国传统古建筑文化', gold:2000, xp:500 },
+  { id:'pray',        name:'祈愿江南落雪',    desc:'第一次到达中镇山并且成功祈福',       gold:800,  xp:180 },
+  { id:'weaponLover', name:'武器爱好者',      desc:'成功解锁全部武器',                   gold:2500, xp:600 },
+  { id:'fashion',     name:'时尚达人',        desc:'成功解锁所有服饰',                   gold:2500, xp:600 },
+  { id:'dragon',      name:'屠龙少年',        desc:'累计成功击败 1000 个敌人（包括 NPC 和城管）', gold:5000, xp:1200 },
+  { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 }
+];
+// 运行时状态（存档字段 achv）：done=已达成；count=累计计数（击杀/图鉴）；tpFree=免费传送卷库存
+var ACHY = { done:{}, count:{ kills:0, folk:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
+var _achvToastTimer = 0;
+function achvShowToast(name, rewText) {
+  var box = document.getElementById('achvToast');
+  var nEl = document.getElementById('achvToastName'), rEl = document.getElementById('achvToastRew');
+  if (!box) return;
+  if (nEl) nEl.textContent = '🏆 ' + name;
+  if (rEl) rEl.textContent = rewText || ('+' + ' 奖励已到账');
+  box.classList.add('show');
+  clearTimeout(_achvToastTimer);
+  _achvToastTimer = setTimeout(function () { box.classList.remove('show'); }, 3600);
+}
+// 发放特殊奖励，返回要并进横幅的文字。called only inside achUnlock.
+function achvSpecialReward(def) {
+  var extra = '';
+  try {
+    if (def.id === 'justice') {
+      // 坦克使用权：任务本身已解锁；这里确保标记为真并提示
+      PROGRESS.tankUnlocked = true;
+      extra = ' · 获得坦克使用权';
+    } else if (def.id === 'driver') {
+      // 氮气引擎：没买过就免费给（算进已购服饰并穿上）；已买过则返还原价
+      if (typeof CLOTHES !== 'undefined' && CLOTHES.nitro) {
+        if (ownedClothes.indexOf('nitro') < 0) { ownedClothes.push('nitro'); try { equipClothes('nitro'); } catch (e) {} extra = ' · 获得氮气引擎'; }
+        else { addGold(CLOTHES.nitro.price); extra = ' · 已有氮气引擎，返还 ' + CLOTHES.nitro.price + ' 金币'; }
+      }
+    } else if (def.id === 'punish') {
+      // 夜视仪：同上逻辑
+      if (typeof CLOTHES !== 'undefined' && CLOTHES.glasses2) {
+        if (ownedClothes.indexOf('glasses2') < 0) { ownedClothes.push('glasses2'); try { equipClothes('glasses2'); } catch (e) {} extra = ' · 获得夜视仪'; }
+        else { addGold(CLOTHES.glasses2.price); extra = ' · 已有夜视仪，返还 ' + CLOTHES.glasses2.price + ' 金币'; }
+      }
+    } else if (def.id === 'newland') {
+      // 三种传送卷各送一张，进免费库存；商店里优先消耗，用完照常付费
+      for (var i = 0; i < TP_SCROLLS.length; i++) {
+        var k = TP_SCROLLS[i].key;
+        if (!(k in ACHY.tpFree)) ACHY.tpFree[k] = 0;
+        ACHY.tpFree[k] += 1;
+      }
+      extra = ' · 三种传送卷各 ×1';
+    }
+  } catch (e) { try { console.warn('[achv special]', e); } catch (e2) {} }
+  return extra;
+}
+// 成就解锁（幂等）。silent=true 只记账不发奖（读档恢复时用）。
+function achUnlock(id, silent) {
+  var def = null;
+  for (var i = 0; i < ACH_DEFS.length; i++) if (ACH_DEFS[i].id === id) { def = ACH_DEFS[i]; break; }
+  if (!def || ACHY.done[id]) return false;
+  ACHY.done[id] = true;
+  if (silent) return true;
+  var extra = achvSpecialReward(def);
+  addGold(def.gold);
+  try { addXp(def.xp); } catch (e) {}
+  var rew = '+' + def.gold + ' 金币　+' + def.xp + ' 经验' + extra;
+  achvShowToast(def.name, rew);
+  try { sfx('coin'); } catch (e) {}
+  try { renderAchievements(); } catch (e) {}
+  try { saveGame(); } catch (e) {}
+  return true;
+}
+// 累计到 n 时解锁（kills / folk 用）。阈值按 id 决定。
+function achCount(id, n) {
+  ACHY.count[id] = (ACHY.count[id] || 0) + n;
+  if (id === 'kills') {
+    if (ACHY.count.kills >= 1)    achUnlock('firstBlood');
+    if (ACHY.count.kills >= 100)  achUnlock('punish');
+    if (ACHY.count.kills >= 1000) achUnlock('dragon');
+  } else if (id === 'folk') {
+    if (ACHY.count.folk >= 20) achUnlock('folk');
+  }
+}
+// 古建筑之旅：记录玩家查看过的光柱词条（按名字去重），看满 20 根即达成
+function achFolkSeen(name) {
+  if (!name) return;
+  ACHY.folkSeen[name] = 1;
+  var seen = 0; for (var k in ACHY.folkSeen) if (ACHY.folkSeen[k]) seen++;
+  ACHY.count.folk = seen;
+  if (seen >= 20) achUnlock('folk');
+  try { saveGame(); } catch (e) {}
+}
+// 检查"全解锁/全满"类条件（在买武器/买服饰/加点后调用）
+function achCheckCollections() {
+  try {
+    var allW = true, wk;
+    for (wk in WEAPONS) if (ownedWeapons.indexOf(wk) < 0) { allW = false; break; }
+    if (allW) achUnlock('weaponLover');
+  } catch (e) {}
+  try {
+    var allC = true, ck;
+    for (ck in CLOTHES) { if (RETIRED_CLOTHES && RETIRED_CLOTHES[ck]) continue; if (ownedClothes.indexOf(ck) < 0) { allC = false; break; } }
+    if (allC) achUnlock('fashion');
+  } catch (e) {}
+  try {
+    var allS = true;
+    if (typeof SKILLS !== 'undefined') for (var s = 0; s < SKILLS.length; s++) if ((player[SKILLS[s].key] || 0) < SKILLS[s].max) { allS = false; break; }
+    if (allS) achUnlock('perfect');
+  } catch (e) {}
+}
+function renderAchievements() {
+  var list = document.getElementById('achvList');
+  if (!list) return;
+  var doneN = 0, html = '';
+  for (var i = 0; i < ACH_DEFS.length; i++) {
+    var d = ACH_DEFS[i], done = !!ACHY.done[d.id];
+    if (done) doneN++;
+    var tail = '';
+    if (d.id === 'kills' || d.id === 'folk') {}
+    if (done) tail = '✓ 已达成';
+    else if (d.id === 'punish') tail = '进度 ' + Math.min(100, ACHY.count.kills || 0) + '/100';
+    else if (d.id === 'dragon') tail = '进度 ' + Math.min(1000, ACHY.count.kills || 0) + '/1000';
+    else if (d.id === 'folk') tail = '进度 ' + Math.min(20, ACHY.count.folk || 0) + '/20';
+    else tail = '+' + d.gold + ' 金币 · +' + d.xp + ' 经验' + (d.reward ? ' · ' + d.reward : '');
+    html += '<div class="achv-card ' + (done ? 'done' : 'lock') + '">' +
+      '<div class="achv-t">' + (done ? '🏆 ' : '🔒 ') + d.name + '</div>' +
+      '<div class="achv-d">' + d.desc + '</div>' +
+      '<div class="achv-r">' + tail + '</div></div>';
+  }
+  list.innerHTML = html;
+  var pg = document.getElementById('achvProgress');
+  if (pg) pg.textContent = '已达成 ' + doneN + ' / ' + ACH_DEFS.length;
+  try { drawAvatar && drawAvatar(); } catch (e) {}
+}
+function achvPanelOpen() {
+  var p = document.getElementById('achvPanel');
+  return !!(p && p.style.display === 'block');
+}
+function openAchievements() {
+  renderAchievements();
+  var p = document.getElementById('achvPanel');
+  if (p) p.style.display = 'block';
+}
+
 function addHeat(n) {
   // 【perf16】两星以上，轻罪不再攒热度 —— 否则"打城管/撞人"照样能把星级推上去，
   // 违背"两星以上只要不打死人就不再加星"。
@@ -14405,6 +14611,7 @@ function useWantedCard() {
 function arrest() {
   const wasCopKill = killedByCop;
   killedByCop = false;
+  achUnlock('rebirth');        // 【fix507】不是终点：第一次死亡并复活
   // 【2026-10-13 用户要求】重生必须满血满耐力（原来只补了血，耐力还是空的，
   // 复活后跑两步就喘，很别扭）。
   player.hp = player.maxHp;
@@ -15109,7 +15316,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel, #achvPanel, #achvClose'));
 }
 addEventListener('touchstart', e => {
   // 【fix53】机票面板必须在这里让位！
@@ -15119,6 +15326,7 @@ addEventListener('touchstart', e => {
   //   ② 随后 e.preventDefault() → 浏览器不合成 click → 三个按钮**全都点不动**
   // 两个症状同一个根因。（我当初只用 CDP 鼠标点击验证过，而手机走的是 touch 事件，漏了。）
     if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen || (window.__wikiPanelOpen && window.__wikiPanelOpen())) return;   // 【fix237】民居百科面板也让位     // 【fix234】返程面板也要让位，否则手机点不动
+  if (typeof achvPanelOpen === 'function' && achvPanelOpen()) return;   // 【fix507】成就面板打开时触摸让位，别把摇杆拉起来
   // 【2026-10-15】足球开赛面板开着时同样让位：否则点「开赛」「取消」会穿透到游戏里、把摇杆拉起来
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
   let handled = false;                             // 本次事件是否真的启动了摇杆/视角（启动了才 preventDefault）
@@ -15437,6 +15645,7 @@ function fireGrapple() {
   // 【fix406】衙署里禁用钩爪：这里不再造假盒子、不再传送，只拦截动作
   if (person.position.x > 1876 && person.position.x < 2174 && person.position.z < -80 && person.position.z > -844) { setHint('衙署里不能用钩爪'); return; }
   if (!tgt) { setHint('准心没有可勾的目标'); return; }
+  achUnlock('spiderman');      // 【fix507】我是蜘蛛人？：第一次成功使用钩爪
   const px = person.position.x, py = person.position.y, pz = person.position.z;
   if (tgt.type === 'entity') {
     const o = tgt.o;
@@ -15929,6 +16138,8 @@ function buyWeapon(key) {
   gold -= w.price;
   ownedWeapons.push(key);
   equipWeapon(key);
+  achUnlock('truth');          // 【fix507】真理在手：第一次成功购买武器
+  achCheckCollections();       // 【fix507】武器爱好者：集齐全部武器
 }
 function applyClothing() {
   const u = person.userData;
@@ -16007,6 +16218,8 @@ function buyClothes(key) {
   gold -= c.price;
   ownedClothes.push(key);
   equipClothes(key);   // 买完自动穿上（内部会给金币音效 + 刷新商店）
+  achUnlock('dress');          // 【fix507】会穿就行：第一次购买服饰并穿上
+  achCheckCollections();       // 【fix507】时尚达人：集齐全部服饰
 }
 // ========== 弹类 / 换弹系统 ==========
 const MAG_STATE = Object.create(null);   // key -> { n: 弹弹内弹数, re: 剩余换弹时间 }
@@ -16269,7 +16482,17 @@ const TP_SCROLLS = [
 function useTpScroll(k) {
   const s = TP_SCROLLS.filter(function (v) { return v.key === k; })[0];
   if (!s) return;
-  if (gold < s.price) { setHint('金币不够，还差 ' + (s.price - gold) + ' 金币'); return; }
+  // 【fix507】发现新大陆成就送的免费传送卷：有库存就优先消耗一张，不扣金币；用完照常付费购买。
+  var _free = 0;
+  try { _free = (ACHY.tpFree && typeof ACHY.tpFree[k] === 'number') ? ACHY.tpFree[k] : 0; } catch (eF) {}
+  if (_free > 0) {
+    ACHY.tpFree[k] = _free - 1;
+    try { saveGame(); } catch (eS) {}
+    try { setHint('使用免费传送卷（' + s.name + '）· 还剩 ' + ACHY.tpFree[k] + ' 张免费'); } catch (eH) {}
+  } else {
+    if (gold < s.price) { setHint('金币不够，还差 ' + (s.price - gold) + ' 金币'); return; }
+    gold -= s.price;
+  }
   let tx = s.x, tz = s.z;
   if (k === 'tpairport') {
     try {
@@ -16278,7 +16501,7 @@ function useTpScroll(k) {
     } catch (e) {}
     if (tx === null || tx === undefined) { tx = 1120; tz = -240; }
   }
-  gold -= s.price; sfx('coin');
+  sfx('coin');
   try {
     let gy = 0.6;
     try { gy = personGroundY(tx, tz); } catch (e1) { gy = terrainHeight(tx, tz); }
@@ -16905,7 +17128,11 @@ function renderShopDetail(item) {
   // 【2026-10-13】消耗品（消星卡）：按钮写"使用"而不是"购买"，
   // 让玩家一眼看出这是刷卡当场生效的东西，而不是买来放进仓库的装备。
   if (item.consumable) {
-    if (gold >= item.price) { btnClass = 'can-buy'; btnText = '使用（立即生效） ' + item.price + ' 💰'; }
+    // 【fix507】免费传送卷（发现新大陆成就奖励）：有库存时按钮显示"免费使用 ×N"，且无视金币不足
+    var _achvFree = 0;
+    try { if (ACHY.tpFree && typeof ACHY.tpFree[item.key] === 'number') _achvFree = ACHY.tpFree[item.key]; } catch (eF) {}
+    if (_achvFree > 0) { btnClass = 'can-buy'; btnText = '免费使用（赠） ×' + _achvFree; }
+    else if (gold >= item.price) { btnClass = 'can-buy'; btnText = '使用（立即生效） ' + item.price + ' 💰'; }
     else { btnClass = 'no-buy'; btnText = '金币不足'; }
   }
   el.innerHTML =
@@ -19385,6 +19612,7 @@ function updateTaxiAnim(v, dt) {
       if (idx >= 0) v.passengers.splice(idx, 1);
       const pay = p.fare, xp = Math.round(p.fare * 0.6);
       gold += pay; addXp(xp);
+      achUnlock('driver');     // 【fix507】我是司机：第一次用出租车成功接送乘客
       floatText('+' + pay + ' 金币', '#ffd24a');
       floatText('+' + xp + ' 经验', '#9b59b6');
       sfx('coin');
@@ -19638,6 +19866,7 @@ function updateCraneDelivered(dt) {
 function craneFinishDrop(v) {
   const pay = 260, xp = 90;
   gold += pay; addXp(xp);
+  achUnlock('labor');          // 【fix507】劳动光荣：第一次用吊车成功吊起并放下货物
   floatText('+' + pay + ' 金币', '#ffd24a');
   floatText('+' + xp + ' 经验', '#9b59b6');
   spawnBurst(CONSTRUCTION_SITE.dropX, CONSTRUCTION_SITE.dropZ, 0x66ff99, 16);
@@ -20061,6 +20290,9 @@ function updateHospitalPacks(dt) {
 }
 function killResident(r, by) {
   r.alive = false; r.respawn = 6;
+  // 【fix507】击杀累计（第一滴雪/惩恶扬善/屠龙少年）：只算玩家造成的击杀，
+  // 排除 NPC 互殴(by='npc') 和警察执法(by='cop')；暗杀 stealth/撞车 car/枪 gun/近战都算玩家。
+  if (by !== 'npc' && by !== 'cop') achCount('kills', 1);
   r.group.rotation.x = Math.PI / 2;   // 尸体躺 6 秒后消失（重生到别处）
   r.group.rotation.z = 0;             // 确保不侧翻
   r.down = true; r.downT = 999;       // 永久倒地，防止起身逻辑干扰
@@ -20084,6 +20316,8 @@ function killResident(r, by) {
 }
 function killCop(c, by) {
   c.alive = false; c.respawn = 6; c.group.rotation.x = Math.PI / 2;
+  // 【fix507】击杀累计：城管也算（屠龙少年要求含城管）；排除 NPC/警察执法来源
+  if (by !== 'npc' && by !== 'cop') achCount('kills', 1);
   spawnBurst(c.x, c.z, 0xff5533, 12);
   dropReward(c.x, c.z, c);
   // 打死城管＝杀人：走击杀阶梯加星（非玩家击杀、暗杀都不加热度/星）
@@ -23886,6 +24120,8 @@ function buySkill(key) {
   player.skillPoints--;
   player[sk.key]++;
   recomputeStats();
+  achUnlock('stronger');       // 【fix507】俺变得更强壮了：第一次用升级点升级属性
+  achCheckCollections();       // 【fix507】完美身躯：全部属性加满
   const _after = statValueOf(sk.of);
   setHint(sk.name + ' +1（' + (player[sk.key] - 1) + '→' + player[sk.key] + '）　' + _label + ' ' + _before + ' → ' + _after);
   sfx('coin');
@@ -24008,6 +24244,9 @@ document.getElementById('mapAvatar').addEventListener('click', openStats);
 document.getElementById('mapAvatar').addEventListener('touchstart', e => { e.preventDefault(); openStats(); });
 document.getElementById('statsBtn').addEventListener('click', openStats);
 document.getElementById('statsClose').addEventListener('click', () => { document.getElementById('statsPanel').style.display = 'none'; });
+// 【fix507】成就按钮 / 关闭：成就面板打开时也让位，避免误触世界
+document.getElementById('achvBtn').addEventListener('click', () => { try { document.getElementById('mapPanel').style.display = 'none'; } catch (e) {} openAchievements(); });
+document.getElementById('achvClose').addEventListener('click', () => { document.getElementById('achvPanel').style.display = 'none'; });
 function syncPersonGround(unit) {
   if (unit.fly) return;
   // 【2026-10-21·fix30 移植】被钩爪拽到高处的人/车，钉在放置高度上，不被地形压平。
@@ -25642,6 +25881,7 @@ function saveGame() {
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
     progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode },
+    achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
     islandSign: { text: islandSignState.text, board: islandSignState.board, txt: islandSignState.txt, glow: !!islandSignState.glow },   // 【fix16】南岛立牌自定义内容
@@ -25755,6 +25995,20 @@ function restoreSaveGame() {
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
   if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）
+  // 【fix507】成就进度恢复（静默，不重复发奖）
+  try {
+    if (data.achv) {
+      if (data.achv.done && typeof data.achv.done === 'object') ACHY.done = data.achv.done;
+      if (data.achv.count && typeof data.achv.count === 'object') {
+        ACHY.count.kills = saveNumber(data.achv.count.kills, 0, 0, 1000000);
+        ACHY.count.folk  = saveNumber(data.achv.count.folk, 0, 0, 1000);
+      }
+      if (data.achv.folkSeen && typeof data.achv.folkSeen === 'object') ACHY.folkSeen = data.achv.folkSeen;
+      if (data.achv.tpFree && typeof data.achv.tpFree === 'object') {
+        for (var _tk in ACHY.tpFree) if (typeof data.achv.tpFree[_tk] === 'number') ACHY.tpFree[_tk] = Math.max(0, Math.floor(data.achv.tpFree[_tk]));
+      }
+    }
+  } catch (eA) { try { console.warn('[achv load]', eA); } catch (eA2) {} }
   // 任务状态（接取中的任务要恢复进度，完成的任务不再显示绿色光柱）
   // worldDay 要在 deserializeQuestState 之前恢复，冷却判断依赖它
   if (typeof data.worldDay === 'number') worldDay = data.worldDay;
@@ -26452,6 +26706,7 @@ function gamePaused() {
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
       || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel')
       || vis('setPanel')
+      || vis('achvPanel')   // 【fix507】成就面板打开时暂停世界（手动关闭后恢复，非 update 驱动）
       || vis('flightPanel') || vis('retPanel')   // 【fix47】机票对话打开时也要暂停世界（否则对话时人物还能乱跑）
       // 【2026-10-21·fix38】布局编辑模式也要暂停：玩家在摆按钮时世界必须冻住，
       // 否则背后的车流/NPC 照跑，一退出编辑就"世界自己动了半天"。
@@ -31127,6 +31382,7 @@ const byName = {};
 
   function show(d) {
     if (!d) return;
+    try { achFolkSeen(d.name); } catch (eAch) {}   // 【fix507】古建筑之旅：记录已查看的古建光标
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'wikiPanel';
@@ -32846,6 +33102,7 @@ function flightCamera(t, ks, dt) {
 }
 // ---- 结束/复位 ----
 function endFlightShow() {
+  achUnlock('newland');    // 【fix507】发现新大陆：第一次乘坐飞机到达荷芷市（送三种传送卷各一张）
   // 【fix134】落地保险期：结束演出的瞬间清掉按键/触摸残留，1 秒内不允许开火
   _noFireUntil = performance.now() + 1000;
   try { keys[' '] = false; keys['e'] = false; mouseDown = false; atkCd = Math.max(atkCd, 0.6); } catch (e) {}
@@ -33806,6 +34063,7 @@ function enterLayoutEdit() {
   document.getElementById('mapPanel').style.display = 'none';
   document.getElementById('statsPanel').style.display = 'none';
   document.getElementById('setPanel').style.display = 'none';
+  document.getElementById('achvPanel').style.display = 'none';   // 【fix507】成就面板 z97，也会盖住 HUD
   layoutEditing = true;
   document.body.classList.add('layout-editing');
   // 打命中标记 + 记住进入前的显示状态（退出时原样还回去，不破坏游戏自己的显隐逻辑）。
@@ -35658,6 +35916,7 @@ window.focus();
       if (now - PRAY.last < 3000) return false;
       PRAY.last = now;
       PRAY.prayers++;
+      achUnlock('pray');       // 【fix507】祈愿江南落雪：第一次到中镇山成功祈福
       PRAY.ribbons = Math.min(9, PRAY.ribbons + 1);
       updateRibbons();
       PRAY.t = 0;
