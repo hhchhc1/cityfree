@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix505-yamen-folk-pillar">
+<meta name="cf-build" content="20261116-fix506-mountain-ticket-gate">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -17007,6 +17007,38 @@ function clampCity(p) {
   // 玩家撞到的是碰撞边界，感觉像『一股无形的屏障/空气墙』（用户实测）。
   p.z = Math.max(WORLD_LIMIT_Z_MIN, Math.min(WORLD_LIMIT_Z_MAX, p.z));
 }
+// ========== 【fix506】中镇山门禁：买机票前，山靠主城这侧是一堵看不见的墙 ==========
+// 用户 2026-11-16：「没解锁那张去新城市的机票，那座山就不能被通过，紧邻主城市这边
+// 直接就有一道空气墙不能过去；只有解锁一张机票之后，墙才解除，玩家才能上山翻过去。」
+// 关键设计（这几点错了就会把玩家卡死，务必保留）：
+//  ① 单向墙：只拦「从主城侧(x<GATE) 往东翻山」；已经人在东侧（x>GATE，比如读档在山上、
+//     新城市，或从山顶往西走回来）一律放行，绝不把人夹回去 —— 否则读档在荷芷市的人
+//     一加载就被瞬移到山脚，且再也走不回来。
+//  ② 只管步行/地面载具/直升机这些「玩家 controllable 实体」，不管居民/NPC 车流
+//     （它们本来就不会翻山，加了反而浪费性能）。
+//  ③ 解锁判定用 flightHasPass()（永久往返机票）。单次票只是"飞一趟"，不构成"解锁"，
+//     和游戏里机票面板的语义一致。要用单次也解锁的话，只需在 flightBuy 里改判断。
+var ZZ_GATE_X = 500;   // 山脚西侧、石堤起点(x≈501)。玩家从主城过来第一脚踩坡的位置。
+var _zzGateHintCd = 0;
+var _zzGatePrevX = {}; // 各实体上一帧的 x（key 见各写回点）。用位移判定是否"穿越"，别用区域判定——
+                       // 区域判定会把读档在山上/传送到新城的人瞬间夹回山脚，且再也走不回去。
+function zzGateClamp(key, p) {
+  var curX = p.x;
+  var prev = _zzGatePrevX[key];
+  _zzGatePrevX[key] = curX;                         // 先记本帧 x，作为下一帧的 prev
+  if (typeof flightHasPass === 'function' && flightHasPass()) return false;        // 已解锁 → 墙消失
+  if (typeof isDevOn === 'function' && isDevOn()) return false;                    // 开发者模式放行，便于调试
+  if (typeof prev !== 'number' || !isFinite(prev)) return false;                  // 首帧/读档：不判定，记下即可
+  if (!(prev <= ZZ_GATE_X) || !(curX > ZZ_GATE_X)) return false;                  // 不是"由西向东穿越墙"
+  if (curX - prev > 50) return false;                                             // 传送卷轴/读档的大跳变，不是翻山
+  if (performance.now() > _zzGateHintCd) {
+    _zzGateHintCd = performance.now() + 3500;
+    try { if (typeof setHint === 'function') setHint('中镇山尚未开放：去机场光柱解锁「去新城市的机票」才能翻山'); } catch (e) {}
+  }
+  p.x = ZZ_GATE_X;
+  _zzGatePrevX[key] = ZZ_GATE_X;                    // 夹回后 prev 同步修正，避免下一帧 prev 还停在墙东侧
+  return true;
+}
 // ========== 空间网格：加速碰撞/射线检测 ==========
 const GRID_CELL = 40, GRID_MIN_X = -WORLD_LIMIT_X, GRID_MIN_Z = WORLD_LIMIT_Z_MIN;
 // 【fix450】网格东边界原来只到 WORLD_LIMIT_X=615（主城），中镇山山顶在 x≈674~724：
@@ -24476,7 +24508,7 @@ function update(dt) {
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
        collideGasBarrels(p, 0.4);
        collideTreesFast(p, 0.4);
-      clampCity(p); person.position.x = p.x; person.position.z = p.z;
+      clampCity(p); zzGateClamp('walk', p); person.position.x = p.x; person.position.z = p.z;   // 【fix506】中镇山门禁（含钩爪/游泳）
     } else {
       // mx / mz 已在 walk 分支开头算好（游泳要用），这里直接复用，不要重复声明
       // 【2026-10-16】足球模式：场上有独立的「疾跑」按钮（5 秒加速 / 15 秒冷却），
@@ -24545,7 +24577,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
        collideGasBarrels(p, 0.4);
        collideTreesFast(p, 0.4);
-      clampCity(p); person.position.x = p.x; person.position.z = p.z;
+      clampCity(p); zzGateClamp('walk', p); person.position.x = p.x; person.position.z = p.z;   // 【fix506】中镇山门禁
       // 斜坡碰撞：玩家站在斜坡上时升高
       let onRamp = false;
       for (const rp of ramps) {
@@ -24675,7 +24707,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       // 于是飞到 80m 高空掠过树顶，照样被一棵根本够不着的树挡住，
       // 玩家感觉就是"撞上了一道看不见的墙"。树冠最高约 7m，飞过它就不该再算。
       if (heliY < terrainHeight(heli.x, heli.z) + 7) collideTreesFast(p, heli.radius);
-      clampCity(p);
+      clampCity(p); zzGateClamp('car', p);   // 【fix506】中镇山门禁：直升机低空也不能从主城越过山
       heli.x = p.x; heli.z = p.z;
 
       // 高度控制（限制最大80m）
@@ -24745,7 +24777,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       const p = { x: tank.x, z: tank.z };
       collideBuildingsFast(p, tank.radius);
       collideTreesFast(p, tank.radius);
-      clampCity(p);
+      clampCity(p); zzGateClamp('car', p);   // 【fix506】中镇山门禁
       tank.x = p.x; tank.z = p.z;
       tank.group.position.set(tank.x, terrainHeight(tank.x, tank.z) + 0.6, tank.z);
       // ̹��������ײ�������������ٶȺܸ�ʱֱ�ӱ�ը
@@ -24945,7 +24977,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       // 新城树：_gridTree 空槽同样查不到，线性扫描
       for (const tr of treeObstacles) pushCircle(p, currentCar.radius, tr, tr.r);
     } else collideTreesFast(p, currentCar.radius);
-    clampCity(p); currentCar.x = p.x; currentCar.z = p.z;
+    clampCity(p); zzGateClamp('car', p);   // 【fix506】中镇山门禁：普通汽车/摩托也不能从主城翻山绕过机票
+    currentCar.x = p.x; currentCar.z = p.z;
     currentCar.group.position.x = currentCar.x; currentCar.group.position.z = currentCar.z;
     // 【fix498】载具"沉 1.5m 造半沉效果"原来用『出 ±400 即海』判定，那是 fix60 时代的旧地图：
     // 后来 fix429 把 x500~882 抬成 150m 中镇山、fix50 把 x>880 变成荷芷市陆地、南岛也是陆地，
