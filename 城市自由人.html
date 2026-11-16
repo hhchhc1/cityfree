@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix498-car-ground-no-sink-central-park-invisible-wall">
+<meta name="cf-build" content="20261116-fix499-sanctuary-terrace-car-ground">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -24792,7 +24792,15 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 表现就是用户报的『摩托车/汽车看不见、像埋在地下、连行人和建筑都撞不到』（车沉地下、镜头盯着地面）。
     // 真正需要半沉的只有水面以下（海床 -9 / 河道 -2.6），而桥面(5.1)、岛面、山顶(150)、新城(≥0) 的
     // terrainHeight 一律高于 WATER_Y(-0.6)，用『地面低于水面』一判即可自动区分，旧的桥/岛豁免也不再需要。
-    const _carGround = terrainHeight(currentCar.x, currentCar.z);
+    let _carGround = terrainHeight(currentCar.x, currentCar.z);
+    // 【fix499】中镇山祠堂台基：fix444 把台基/月台/台阶高度(zzTerraceY，最高 +1.14m)只挂给了
+    // personGroundY 和 platformTopAt，车读的是 terrainHeight(只到山顶基准 150)→ 车开到祠堂
+    // 青砖广场/月台上就整台埋进石面（用户截图：山顶祠堂前车只剩一点车顶露出来）。
+    // 这里把台基高度补进来；zzTerraceY 在无台基处返回 -1，Math.max 不影响其它地形。
+    if (typeof window.__zzTerraceY === 'function') {
+      const _terr = window.__zzTerraceY(currentCar.x, currentCar.z);
+      if (_terr > _carGround) _carGround = _terr;
+    }
     const _carInWater = _carGround < WATER_Y - 0.01;
     currentCar.group.position.y = _carGround + (currentCar.air || 0) + (_carInWater ? -1.5 : 0);
     // 撞到 NPC 车辆：对方减速（接触时持续慢下来）
@@ -34048,6 +34056,9 @@ window.focus();
     return c > m ? c : m;
   }
   window.__zzHeight = zzHeight;
+  // 【fix499】把祠堂台基/月台/台阶高度暴露出去，供载具贴地用（车不读 personGroundY，
+  // 之前只在 personGroundY/platformTopAt 里吃 zzTerraceY，车开上祠堂广场就埋进石台面）。
+  window.__zzTerraceY = zzTerraceY;
 
   /* ---------------- 2. 挂到地形高度函数 ---------------- */
   var _thBefore = terrainHeight;
