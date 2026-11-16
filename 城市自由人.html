@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix503-drumtower-sign-distance">
+<meta name="cf-build" content="20261116-fix504-vehicle-cards">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -16255,6 +16255,11 @@ const SHOP_CATS = [
 ];
 // 消星卡：1000 元，买下**立刻生效**（不用进背包、不用手动使用）
 const WANTED_CARD = { key: 'wantedcard', icon: '🎫', name: '消星卡', price: 1000 };
+// 【fix504】用户要求新增两张载具道具卡：
+//  · 获得载具卡：3500 金币，买下瞬间在玩家身边随机刷一辆车（全部 CAR_SHOP 车型都有可能）；
+//  · 修补载具卡：800 金币，买下瞬间把当前驾驶的车耐久补满 100%（没在车上不扣钱）。
+const VEHICLE_CARD = { key: 'vehiclecard', icon: '🚙', name: '获得载具卡', price: 3500 };
+const REPAIR_CARD  = { key: 'repaircard',  icon: '🔧', name: '修补载具卡', price: 800 };
 // 【fix303】传送卷轴（用户要求）：800 元一张，买下即传送，任何地方都能用。
 const TP_SCROLLS = [
   { key: 'tpcity', icon: '📜', name: '传送卷轴 · 古建筑城', price: 800, x: 2025, z: -146, label: '古建筑城 · 荷芷署牌坊前' },
@@ -16282,6 +16287,89 @@ function useTpScroll(k) {
   } catch (e2) {}
   try { showOverlay('传送 · ' + s.label, 1.8); } catch (e3) {}
   try { renderShop(); } catch (e4) {}
+}
+
+// ===== 【fix504】获得载具卡 / 修补载具卡 =====
+// 用户："道具里加两个东西，一个获得载具卡，一个修补载具卡。获得载具卡买完在玩家身边
+// 随机刷出一个载具（任何车辆都可能）；修补载具卡让当前驾驶的车耐久直接到 100%。"
+// 两张都沿用消星卡模式：consumable=true、owned 恒 false、买下瞬间生效、扣钱在效果函数里做。
+function cardVehicleSpot(x, z, r, heading) {
+  const dirs = [0, 0.7, -0.7, 1.5, -1.5, 2.4, -2.4, Math.PI];
+  const dists = [6.5, 8.5, 5.5, 10];
+  for (const d of dists) {
+    for (const off of dirs) {
+      const a = heading + off;
+      const nx = x + Math.sin(a) * d, nz = z + Math.cos(a) * d;
+      const gy = terrainHeight(nx, nz);
+      if (gy < WATER_Y + 0.1) continue;              // 不把车刷进水里
+      if (!trafficSpawnFree(nx, nz, r)) continue;    // 不叠在已有车辆上
+      let blocked = false;
+      if (typeof LH_BLD !== 'undefined') {
+        for (const b of LH_BLD) {
+          if (gy >= b.top - 0.3 || gy <= (b.minY || 0) - 0.6) continue;
+          if (nx > b.minX - r - 1 && nx < b.maxX + r + 1 && nz > b.minZ - r - 1 && nz < b.maxZ + r + 1) { blocked = true; break; }
+        }
+      }
+      if (!blocked) return { x: nx, z: nz, y: gy, angle: a };
+    }
+  }
+  // 全被占满时的兜底：仍刷在身边，至少不会因为找不到完美车位而吞卡。
+  const a = heading + (Math.random() - 0.5) * 1.6;
+  const fx = x + Math.sin(a) * 4.5, fz = z + Math.cos(a) * 4.5;
+  return { x: fx, z: fz, y: terrainHeight(fx, fz), angle: a };
+}
+function spawnCardVehicleNearPlayer() {
+  const keys = Object.keys(CAR_SHOP);
+  const key = keys[Math.floor(Math.random() * keys.length)];
+  const def = CAR_SHOP[key];
+  const g = makeShopVehicle(def.kind, def.color);
+  const sh = shopVehicleShape(key);
+  // 驾驶中买卡时以车辆为锚点（此时 person 是隐藏的陈旧坐标），步行时才用人物位置和朝向。
+  const driving = (state === 'drive' && currentCar && !currentCar.exploded);
+  const px = driving ? currentCar.x : person.position.x;
+  const pz = driving ? currentCar.z : person.position.z;
+  const heading = driving ? currentCar.angle : (person.rotation.y || 0);
+  const spot = cardVehicleSpot(px, pz, sh.radius, heading);
+  g.position.set(spot.x, spot.y, spot.z);
+  g.rotation.y = spot.angle;
+  scene.add(g);
+  const v = {
+    group: g, x: spot.x, z: spot.z, angle: spot.angle,
+    radius: sh.radius, rideH: sh.rideH, topSpeed: def.topSpeed, accel: def.accel,
+    durability: def.durability, carKey: key, saveId: nextSaveId('card-car'),
+    saveKind: def.kind, saveColor: def.color, owned: false,
+    isTaxi: !!def.taxi, isCrane: def.kind === 'crane'
+  };
+  cars.push(v);
+  registerDynamicObject(g);
+  if (v.isTaxi) { decorateTaxi(g); v.passengers = []; }
+  if (v.isCrane) initCraneLoad(v);
+  return v;
+}
+function useVehicleCard() {
+  if (gold < VEHICLE_CARD.price) { setHint('金币不够，还差 ' + (VEHICLE_CARD.price - gold) + ' 金币'); return; }
+  gold -= VEHICLE_CARD.price; sfx('coin');
+  const v = spawnCardVehicleNearPlayer();
+  const nm = (CAR_SHOP[v.carKey] && CAR_SHOP[v.carKey].name) || v.carKey;
+  showOverlay('获得载具卡　随机刷出：' + nm, 2.0);
+  floatText('🚙 ' + nm + ' 已刷出', '#9fe6b0');
+  spawnBurst(v.x, v.z, 0x9fe6b0, 18, v.group.position.y + 1.2);
+  setHint('身边已刷出：' + nm + '（可上车驾驶）');
+  renderShop();
+}
+function useRepairCard() {
+  if (gold < REPAIR_CARD.price) { setHint('金币不够，还差 ' + (REPAIR_CARD.price - gold) + ' 金币'); return; }
+  const v = (state === 'drive' && currentCar && !currentCar.exploded) ? currentCar : null;
+  if (!v || isBicycle(v)) { setHint('请先坐进一辆可损坏的载具，再使用修补载具卡'); return; }
+  gold -= REPAIR_CARD.price; sfx('coin');
+  // damage 是"已受损伤"，清零即满耐久；同时清燃烧/计时器，旧烟火花会自然淡出，不会立刻复发。
+  v.damage = 0; v.dmgAge = 0; v._dmgT = 0;
+  v.burn = 0; v.burnT = 0; v._fireT = 0;
+  showOverlay('修补载具卡　耐久 100%', 1.8);
+  floatText('耐久 100%', '#8fd6ff');
+  spawnBurst(v.x, v.z, 0x8fd6ff, 16, v.group.position.y + 1);
+  setHint('车辆已修补到 100%');
+  renderShop();
 }
 let shopCat = 'weapons';
 let shopSel = null;
@@ -16401,6 +16489,30 @@ function buildShopData() {
     ],
     desc: '一次性道具，刷卡瞬间生效：把通缉星级全部清零，并抹掉所有人（警察、居民、帮派）对你的仇恨，'
       + '围上来的警车会掉头离场。适合被满城追捕时脱身。刷完继续犯罪还会重新涨星。'
+  });
+  // 【fix504】获得载具卡：随机刷新全部 CAR_SHOP 车型中的一种到玩家身边
+  SHOP_CATS[4].items.push({
+    key: VEHICLE_CARD.key, icon: VEHICLE_CARD.icon, name: VEHICLE_CARD.name, price: VEHICLE_CARD.price,
+    owned: false, equipped: false, consumable: true,
+    stats: [
+      { label: '效果', val: '身边随机刷出一辆车', cls: 'pos' },
+      { label: '车型', val: '全部载具均有可能' },
+      { label: '价格', val: VEHICLE_CARD.price + ' 💰' }
+    ],
+    desc: '一次性道具，买下瞬间在你身边刷出一辆随机载具：自行车、摩托、轿车、跑车、越野车、货车、吊车、出租车等全部车型都有可能。'
+      + '会优先找空地，避免叠在已有车辆或建筑上；刷出的车可以正常上车驾驶、损坏和爆炸。'
+  });
+  // 【fix504】修补载具卡：当前驾驶车辆耐久直接拉满
+  SHOP_CATS[4].items.push({
+    key: REPAIR_CARD.key, icon: REPAIR_CARD.icon, name: REPAIR_CARD.name, price: REPAIR_CARD.price,
+    owned: false, equipped: false, consumable: true,
+    stats: [
+      { label: '效果', val: '耐久恢复 100%', cls: 'pos' },
+      { label: '用法', val: '必须先坐进车里' },
+      { label: '价格', val: REPAIR_CARD.price + ' 💰' }
+    ],
+    desc: '一次性道具，买下瞬间把当前正在驾驶的车辆耐久修到 100%，同时清掉燃烧和受损计时，旧烟火花会自然散去。'
+      + '没在车上或骑的是自行车时不会扣钱；修好的车可以继续开，不需要回修理厂。'
   });
   // 【fix303】传送卷轴 ×3（800 元一次，买下即传）
   for (const sc of TP_SCROLLS) {
@@ -16818,7 +16930,10 @@ function renderShopDetail(item) {
       else if (shopCat === 'ammo') buyAmmo(item.key);
       else if (shopCat === 'cars') buyCar(item.key);
       else if (shopCat === 'items') {   // 【fix303】道具栏按 key 分发
-        if (item.key === 'wantedcard') useWantedCard();
+        // 【fix504】新增两张载具卡：买下即生效，扣钱/提示都在各自函数里
+        if (item.key === 'vehiclecard') useVehicleCard();
+        else if (item.key === 'repaircard') useRepairCard();
+        else if (item.key === 'wantedcard') useWantedCard();
         else if (item.key === 'nitro') buyClothes('nitro');
         else useTpScroll(item.key);
       }      // 【2026-10-13】消星卡：买下即用
