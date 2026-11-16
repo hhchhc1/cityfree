@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix500-newcity-vehicle-collision">
+<meta name="cf-build" content="20261116-fix501-yamen-vehicle-floor">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -17047,6 +17047,24 @@ function platformTopAt(x, z, y) {
   for (const ci of _gridCellsPlatform) for (const b of _gridBld[ci]) if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && b.top <= yy + 1.3) t = Math.max(t, b.top);
   return t;
 }
+// ===== 【fix501】载具地面：荷芷署 / 霍州署院内高程 =====
+// 用户反馈："车子到霍州署里也是被埋没了"。根因和 fix499 的山顶祠堂台基同类：
+//   · 署院整体 2.6m 台基在 fix376 已补进 terrainHeight，车能上到大台地；
+//   · 但 fix461/fix477/fix478 又把中轴甬道抬到 5.17、亲民堂月台 4.20、殿内 3.80，
+//     这些只登记进 window.__FLOORS 给 personGroundY 用，车仍然只读 terrainHeight →
+//     在青石甬道上按 2.6m 贴地，整车沉进砖面 2.57m。
+// 这里只取“脚下附近、比基础地面高一点点”的室内地坪，不碰楼顶/墙顶/桥面：
+// 上限 3m 保证车不会被瞬移到高楼屋顶，也让 2.6→5.17 的署内落差能被吃进来。
+function vehicleFloorY(x, z, groundY) {
+  if (!(x > 900) || !window.__FLOORS) return groundY;
+  let best = groundY;
+  for (let i = 0; i < window.__FLOORS.length; i++) {
+    const f = window.__FLOORS[i];
+    if (!f || x <= f.x0 || x >= f.x1 || z <= f.z0 || z >= f.z1) continue;
+    if (f.top > best && f.top <= groundY + 3.0) best = f.top;
+  }
+  return best;
+}
 // NPC（居民/警察）碰撞：建筑 + 台阶平台 + 停放车辆 + 来往车流（含摩托），让它们也是实体
 function pushCircle(p, r1, o, r2) {
   const dx = p.x - o.x, dz = p.z - o.z, d2 = dx * dx + dz * dz, rr = r1 + r2;
@@ -24825,6 +24843,18 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       const _terr = window.__zzTerraceY(currentCar.x, currentCar.z);
       if (_terr > _carGround) _carGround = _terr;
     }
+    // 【fix501】荷芷署 / 霍州署：院内甬道、月台、殿内地坪只登记在 __FLOORS（给人物用），
+    // 车原来只读上面的 2.6m 台基 → 开进青石路面就整辆埋进砖里。这里补最高可达地坪，
+    // 并按每帧 8m/s 平滑抬升，避免刚压上甬道时车瞬间弹起 2.57m。
+    const _floorTarget = vehicleFloorY(currentCar.x, currentCar.z, _carGround);
+    const _floorPrev = (typeof currentCar._floorY === 'number' && isFinite(currentCar._floorY))
+      ? currentCar._floorY : _carGround;
+    let _floorNow = (_floorTarget > _floorPrev)
+      ? Math.min(_floorTarget, _floorPrev + 8 * dt)
+      : Math.max(_floorTarget, _floorPrev - 8 * dt);
+    if (_floorNow < _carGround) _floorNow = _carGround;   // 坡地/桥面仍以真实地形为准，绝不让车浮空或掉下去
+    currentCar._floorY = _floorNow;
+    _carGround = _floorNow;
     const _carInWater = _carGround < WATER_Y - 0.01;
     currentCar.group.position.y = _carGround + (currentCar.air || 0) + (_carInWater ? -1.5 : 0);
     // 撞到 NPC 车辆：对方减速（接触时持续慢下来）
