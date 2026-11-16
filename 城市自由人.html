@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix502-driving-damage-fx">
+<meta name="cf-build" content="20261116-fix503-drumtower-sign-distance">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -27264,13 +27264,33 @@ try {
       c2.font = 'bold 104px "KaiTi","STKaiti","SimSun",serif';
       c2.textAlign = 'center'; c2.textBaseline = 'middle';
       c2.shadowColor = 'rgba(255,215,110,0.85)'; c2.shadowBlur = 16;
+      // 【fix503】远距离金字被 mipmap 平均进蓝底、再被雾冲淡 → 远看只剩一块空匾。
+      // 先给金字加一圈深棕描边，缩小到十几个像素时仍保留字形轮廓。
+      c2.lineJoin = 'round';
+      c2.lineWidth = 9;
+      c2.strokeStyle = '#241603';
+      c2.strokeText(BIAN[q], 256, 92);
       c2.fillText(BIAN[q], 256, 92);
       const tex = new THREE.CanvasTexture(cv);
+      // 【fix503】★ 核心：关掉 mipmap。默认 LinearMipmapLinearFilter 会在远距把 512px 画布
+      // 逐级压到几十像素，四个金字和蓝底被平均成一片；关掉后始终按原始像素采样，走近走远一样清楚。
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
       tex.anisotropy = 4;
-      const board = new THREE.Mesh(new THREE.PlaneGeometry(8.6, 2.6), new THREE.MeshBasicMaterial({ map: tex }));
+      const boardMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        fog: false,                    // 【fix503】匾额是标识文字，不该被雾吃掉对比度
+        polygonOffset: true,           // 【fix503】再兜一层深度偏移，杜绝远距和蓝底板/z-fighting
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4
+      });
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(8.6, 2.6), boardMat);
+      board.renderOrder = 3;
       // 必须贴在蓝底**前面**：蓝底中心在 baseW/2+0.5、厚 0.42（半厚 0.21），
-      // 原来只放到 +0.74，等于藏在蓝底肚子里，所以匾上一直是空白的。
-      board.position.set(px + Math.sin(rot) * (baseW / 2 + 0.5 + 0.21 + 0.06), 15.6, pz + Math.cos(rot) * (baseW / 2 + 0.5 + 0.21 + 0.06));
+      // 原来只放到 +0.74（即离蓝底前表面 0.06），远距深度精度不足时会和底板打架；
+      // 这里拉到 0.20m，48m 宽的城台上看不出凸出，但足够稳住远景深度。
+      board.position.set(px + Math.sin(rot) * (baseW / 2 + 0.5 + 0.21 + 0.20), 15.6, pz + Math.cos(rot) * (baseW / 2 + 0.5 + 0.21 + 0.20));
       board.rotation.y = rot;
       add(board);
     }    // ---- 三层楼阁（逐层收分）----
