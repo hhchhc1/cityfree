@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261114-fix497-soccer-sprint-trail-goal-shield">
+<meta name="cf-build" content="20261116-fix498-car-ground-no-sink-central-park-invisible-wall">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -16967,9 +16967,16 @@ function buildSpatialGrid() {
   rebuildNpcGrid();
 }
 // 快速建筑碰撞：只检查附近格子的建筑
-function collideBuildingsFast(p, r) {
+function collideBuildingsFast(p, r, feetY) {
   _gridAround(p.x, p.z, r + GRID_CELL, _gridCellsBld);
-  for (const ci of _gridCellsBld) for (const b of _gridBld[ci]) circleVsAABB(p, r, b);
+  // 【fix498】和玩家步行路径一致的高度双界过滤，仅当调用点传入 feetY 时启用：
+  // 盒底高于『脚 + 1.8m』的悬空装饰盒（楼顶尖顶/天线/天桥）不再在地面挡路。
+  // 省略 feetY 的旧调用点保持纯 2D 行为，零回归风险。
+  const _fy = (typeof feetY === 'number') ? feetY : null;
+  for (const ci of _gridCellsBld) for (const b of _gridBld[ci]) {
+    if (_fy !== null && !(_fy < b.top - 0.3 && _fy > (b.bottom || 0) - 1.8)) continue;
+    circleVsAABB(p, r, b);
+  }
 }
 // 快速车辆碰撞：只检查附近格子的车辆。skipCops=true 时忽略警车（警车之间由 resolveVehicleCollisions 统一处理，避免同一帧被推两次造成抖动/穿插）
 function collideCarsFast(p, r, skipCops) {
@@ -24314,7 +24321,12 @@ function update(dt) {
       }
       const p = { x: person.position.x, z: person.position.z };
       const nearCells = []; _gridAround(p.x, p.z, 0.4 + GRID_CELL, nearCells);
-      for (const ci of nearCells) for (const b of _gridBld[ci]) if (person.position.y < b.top - 0.3) circleVsAABB(p, 0.4, b);
+      // 【fix498】原来只判 y < b.top-0.3（盒顶在人脚之上就挡），从不看盒底 ——
+      // 于是楼顶的尖顶/天线/水箱/天桥这些 bottom 在几十米高空的装饰碰撞盒，会在地面把人挡住，
+      // 就是用户报的『中心公园很多看不到的空气墙』（那一圈高楼的楼顶盒全在地面生效）。
+      // 补下界：只有盒底低于『人脚 + 1.8m 身高』才算挡路；人站在盒顶(跳过)则自然不挡。
+      for (const ci of nearCells) for (const b of _gridBld[ci])
+        if (person.position.y < b.top - 0.3 && person.position.y > (b.bottom || 0) - 1.8) circleVsAABB(p, 0.4, b);
       // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
       // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
       // 这里单独再查一份荷芷市碰撞盒。
@@ -24377,7 +24389,12 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       if (canSprint && moving) { const u = person.userData; if (u.hip) u.hip.rotation.x = 0.4; }   // 快跑前倾（仅移动时）
       const p = { x: person.position.x, z: person.position.z };
       const nearCells = []; _gridAround(p.x, p.z, 0.4 + GRID_CELL, nearCells);
-      for (const ci of nearCells) for (const b of _gridBld[ci]) if (person.position.y < b.top - 0.3) circleVsAABB(p, 0.4, b);
+      // 【fix498】原来只判 y < b.top-0.3（盒顶在人脚之上就挡），从不看盒底 ——
+      // 于是楼顶的尖顶/天线/水箱/天桥这些 bottom 在几十米高空的装饰碰撞盒，会在地面把人挡住，
+      // 就是用户报的『中心公园很多看不到的空气墙』（那一圈高楼的楼顶盒全在地面生效）。
+      // 补下界：只有盒底低于『人脚 + 1.8m 身高』才算挡路；人站在盒顶(跳过)则自然不挡。
+      for (const ci of nearCells) for (const b of _gridBld[ci])
+        if (person.position.y < b.top - 0.3 && person.position.y > (b.bottom || 0) - 1.8) circleVsAABB(p, 0.4, b);
       // 【fix64】荷芷市：楼/城墙是程序化生成的，坐标不在主城网格里（_gridAround 只会返回
       // 主城边缘格子，那些盒子与荷芷市根本不相交），所以之前能直接走进楼里=穿模。
       // 这里单独再查一份荷芷市碰撞盒。
@@ -24757,7 +24774,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     }
     if (!currentCar) return;   // 玩家车已爆炸被移除，本帧跳过剩余驾驶逻辑
     const _pbx = p.x, _pbz = p.z;
-    collideBuildingsFast(p, currentCar.radius);
+    // 【fix498】传车辆底盘高度，过滤掉楼顶装饰盒在地面形成的空气墙（和玩家步行一致）
+    collideBuildingsFast(p, currentCar.radius, currentCar.group ? currentCar.group.position.y : terrainHeight(p.x, p.z));
     const _impact = Math.hypot(p.x - _pbx, p.z - _pbz);
     if (_impact > 0.05 && Math.abs(speed.v) > 5) { const _dmg = Math.min(5, Math.floor(_impact * 10 + Math.abs(speed.v) * 0.1)); if (_dmg >= 1 && carHitCooldown(currentCar, 0.4)) { damageCar(currentCar, _dmg); collisionSfx('scrape'); if (currentCar && !currentCar.exploded) spawnBurst(currentCar.x, currentCar.z, 0xffaa33, 8); } }
      _gridAround(p.x, p.z, currentCar.radius + GRID_CELL, _gridCellsCarNear);
@@ -24766,10 +24784,17 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     collideTreesFast(p, currentCar.radius);
     clampCity(p); currentCar.x = p.x; currentCar.z = p.z;
     currentCar.group.position.x = currentCar.x; currentCar.group.position.z = currentCar.z;
-    const _carOcean = Math.max(Math.abs(currentCar.x), Math.abs(currentCar.z)) > HALF - 100
-      && !(Math.abs(currentCar.x) <= BRIDGE_HALF_WIDTH && currentCar.z >= BRIDGE_START_Z && currentCar.z <= BRIDGE_LIMIT_Z)
-      && Math.hypot(currentCar.x - ISLAND_X, currentCar.z - ISLAND_Z) >= ISLAND_WALK_R;  // 桥区域和新岛不算海洋
-    currentCar.group.position.y = terrainHeight(currentCar.x, currentCar.z) + (currentCar.air || 0) + (_carOcean ? -1.5 : 0);
+    // 【fix498】载具"沉 1.5m 造半沉效果"原来用『出 ±400 即海』判定，那是 fix60 时代的旧地图：
+    // 后来 fix429 把 x500~882 抬成 150m 中镇山、fix50 把 x>880 变成荷芷市陆地、南岛也是陆地，
+    // 但这段判定一直没同步 —— 于是开车上山顶 / 进新城，明明站在陆地上，整辆车却被强行沉 1.5m：
+    //   · 山顶截图 HUD「高度 Z 148.5」= 山顶地形 150 − 1.5
+    //   · 新城截图 HUD「高度 Z -1.5」= 新城地面 0 − 1.5
+    // 表现就是用户报的『摩托车/汽车看不见、像埋在地下、连行人和建筑都撞不到』（车沉地下、镜头盯着地面）。
+    // 真正需要半沉的只有水面以下（海床 -9 / 河道 -2.6），而桥面(5.1)、岛面、山顶(150)、新城(≥0) 的
+    // terrainHeight 一律高于 WATER_Y(-0.6)，用『地面低于水面』一判即可自动区分，旧的桥/岛豁免也不再需要。
+    const _carGround = terrainHeight(currentCar.x, currentCar.z);
+    const _carInWater = _carGround < WATER_Y - 0.01;
+    currentCar.group.position.y = _carGround + (currentCar.air || 0) + (_carInWater ? -1.5 : 0);
     // 撞到 NPC 车辆：对方减速（接触时持续慢下来）
     for (const t of traffic) {
       if (t.exploded) continue;
@@ -35914,11 +35939,14 @@ window.focus();
   } catch (eZZ7) {}
 })();
 
-// 【fix445】清掉老城 (-237,-182) 附近那团贴在草上的黑色破面
-// 判据收紧到三条同时满足才删：① 包围盒中心在 16 米内 ② 高度 < 1.6 米（贴地薄片）③ 材质接近纯黑。
-// 尺寸超过 26 米的整体网格不动，避免误删合并几何。
+// 【fix445 / fix498 增强】清掉老城 (-237,-182) 附近那团贴在草上的黑色破面
+// 【fix498】用户 11-14 截图报『这个坐标这里有一团黑黑的东西』——仍是它。fix445 的判据
+// sz.y>1.6 太紧：截图里那团尖刺状黑面高度明显超过 1.6m（约到人物腰部），正好卡在阈值外而漏删。
+// 这版放宽：① 半径 16→22（截图玩家在 -231,-181，离中心约 6m，但尖刺可能铺开）② 高度 1.6→4.0
+// ③ 颜色阈值 0.42→0.60（深夜近黑的多边形 RGB 和会略高于 0.42）。仍保留：尺寸 >26 的整体网格
+// 不碰（防误删合批地面/建筑）、只隐藏不删除、近距离限定。清不掉整块合并网格是可接受的（不误伤）。
 (function purgeBlackBlob() {
-  var TX = -237, TZ = -182, R = 16;
+  var TX = -237, TZ = -182, R = 22;
   function sweep() {
     try {
       window.__zzPurgeRuns = (window.__zzPurgeRuns || 0) + 1;
@@ -35936,7 +35964,7 @@ window.focus();
           box.getCenter(c); box.getSize(sz);
           var dx = c.x - TX, dz = c.z - TZ;
           if (dx * dx + dz * dz > R * R) continue;
-          if (sz.y > 1.6) continue;
+          if (sz.y > 4.0) continue;                       // 【fix498】1.6→4.0：尖刺黑团比预想高
           if (sz.x > 26 || sz.z > 26) continue;
           var mat = m.material;
           var mats = Array.isArray(mat) ? mat : [mat];
@@ -35947,7 +35975,7 @@ window.focus();
             any = true;
             if (mm.color) {
               var col = mm.color;
-              if (col.r + col.g + col.b > 0.42) dark = false;
+              if (col.r + col.g + col.b > 0.60) dark = false;   // 【fix498】0.42→0.60
             } else { dark = false; }
           }
           if (!any || !dark) continue;
