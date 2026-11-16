@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix499-sanctuary-terrace-car-ground">
+<meta name="cf-build" content="20261116-fix500-newcity-vehicle-collision">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -24774,14 +24774,38 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     }
     if (!currentCar) return;   // 玩家车已爆炸被移除，本帧跳过剩余驾驶逻辑
     const _pbx = p.x, _pbz = p.z;
+    // 【fix500】新城（x>900）车辆碰撞兜底：空间网格 GRID_MAX_X=900，新城对象全被 _gridIdx
+    // 塞进"空槽"，而查询走 _gridAround(真实坐标)→边缘格子，两者错位 → 新城开车撞不到任何东西。
+    // 新城对象总量不多（几十辆/几十人/一份 LH_BLD），像步行路径已有的 LH_BLD 兜底那样线性扫描即可。
+    const _ncDrive = p.x > 900;
+    const _carFeetY = currentCar.group ? currentCar.group.position.y : terrainHeight(p.x, p.z);
     // 【fix498】传车辆底盘高度，过滤掉楼顶装饰盒在地面形成的空气墙（和玩家步行一致）
-    collideBuildingsFast(p, currentCar.radius, currentCar.group ? currentCar.group.position.y : terrainHeight(p.x, p.z));
+    collideBuildingsFast(p, currentCar.radius, _carFeetY);
+    if (_ncDrive) {
+      // 新城建筑：复用步行路径的 LH_BLD 线性兜底，并沿用它对高度的过滤（门楣/屋檐不挡地面车）
+      for (const b of LH_BLD) {
+        if (_carFeetY >= b.top - 0.3 || _carFeetY <= (b.minY || 0) - 0.6) continue;
+        circleVsAABB(p, currentCar.radius, { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
+      }
+    }
     const _impact = Math.hypot(p.x - _pbx, p.z - _pbz);
     if (_impact > 0.05 && Math.abs(speed.v) > 5) { const _dmg = Math.min(5, Math.floor(_impact * 10 + Math.abs(speed.v) * 0.1)); if (_dmg >= 1 && carHitCooldown(currentCar, 0.4)) { damageCar(currentCar, _dmg); collisionSfx('scrape'); if (currentCar && !currentCar.exploded) spawnBurst(currentCar.x, currentCar.z, 0xffaa33, 8); } }
-     _gridAround(p.x, p.z, currentCar.radius + GRID_CELL, _gridCellsCarNear);
-     for (const ci of _gridCellsCarNear) for (const c of _gridCar[ci]) if (c !== currentCar && !carsVerticallySeparated(currentCar, c)) circleVsCircle(p, currentCar.radius, { x: c.x, z: c.z }, c.radius);
+    if (_ncDrive) {
+      // 新城车 / 残骸：线性扫描所有车辆（cars + traffic + policeCars），距离+垂直双重过滤
+      const _allVeh = [cars, traffic, policeCars];
+      for (const arr of _allVeh) for (const c of arr) {
+        if (c === currentCar || c.exploded) continue;
+        if (!carsVerticallySeparated(currentCar, c)) circleVsCircle(p, currentCar.radius, { x: c.x, z: c.z }, c.radius);
+      }
+    } else {
+      _gridAround(p.x, p.z, currentCar.radius + GRID_CELL, _gridCellsCarNear);
+      for (const ci of _gridCellsCarNear) for (const c of _gridCar[ci]) if (c !== currentCar && !carsVerticallySeparated(currentCar, c)) circleVsCircle(p, currentCar.radius, { x: c.x, z: c.z }, c.radius);
+    }
     for (const w of wrecks) if (!carsVerticallySeparated(currentCar, w)) circleVsCircle(p, currentCar.radius, { x: w.x, z: w.z }, w.radius);
-    collideTreesFast(p, currentCar.radius);
+    if (_ncDrive) {
+      // 新城树：_gridTree 空槽同样查不到，线性扫描
+      for (const tr of treeObstacles) pushCircle(p, currentCar.radius, tr, tr.r);
+    } else collideTreesFast(p, currentCar.radius);
     clampCity(p); currentCar.x = p.x; currentCar.z = p.z;
     currentCar.group.position.x = currentCar.x; currentCar.group.position.z = currentCar.z;
     // 【fix498】载具"沉 1.5m 造半沉效果"原来用『出 ±400 即海』判定，那是 fix60 时代的旧地图：
@@ -24823,33 +24847,42 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 现在冷却改成"按人记"：每个人 0.5 秒内只结算一次，既不漏人、也不会同一人被反复秒杀。
     if (Math.abs(speed.v) > 5) {
       const hitNow = performance.now();
-      _gridAround(currentCar.x, currentCar.z, currentCar.radius + 2.2, _gridCellsHit);
-      for (const ci of _gridCellsHit) {
-        for (const r of _gridNpc[ci]) {
-          if (!r || !r.alive || r.group.userData.isCop) continue;
-          const dx = r.x - currentCar.x, dz = r.z - currentCar.z;
-          if (dx * dx + dz * dz >= 2.2 * 2.2) continue;
-          if (r._carHitT && hitNow - r._carHitT < 500) continue;
-          r._carHitT = hitNow;
-          // 已经倒地的人再被碾一次 = 撞死：算"打死人"，走击杀阶梯（不是撞人的半星）
-          if (r.down) { r.alive = false; r.respawn = 8; spawnBurst(r.x, r.z, 0xff3333, 6); dropReward(r.x, r.z, r); addXp(5); addKillBounty('car'); }
-          else runOverResident(r, currentCar.radius < 1.2, 'car');
-        }
+      // 【fix500】新城（x>900）用线性候选列表替代空的 NPC 网格（见上方 _ncDrive 说明）。
+      // 主城仍走原来的网格查询，性能不变。
+      let _hitNpcs = null;
+      if (_ncDrive) {
+        _hitNpcs = [];
+        const R2 = (currentCar.radius + 2.2) * (currentCar.radius + 2.2);
+        for (const r of residents) if (r.alive && (r.x - currentCar.x) ** 2 + (r.z - currentCar.z) ** 2 < R2) _hitNpcs.push(r);
+        for (const c of cops) if (c.alive && (c.x - currentCar.x) ** 2 + (c.z - currentCar.z) ** 2 < R2) _hitNpcs.push(c);
       }
+      const _forEachHitNpc = function (fn) {
+        if (_hitNpcs) { for (const o of _hitNpcs) fn(o); return; }
+        _gridAround(currentCar.x, currentCar.z, currentCar.radius + 2.2, _gridCellsHit);
+        for (const ci of _gridCellsHit) for (const o of _gridNpc[ci]) fn(o);
+      };
+      _forEachHitNpc(function (r) {
+        if (!r || !r.alive || r.group.userData.isCop) return;
+        const dx = r.x - currentCar.x, dz = r.z - currentCar.z;
+        if (dx * dx + dz * dz >= 2.2 * 2.2) return;
+        if (r._carHitT && hitNow - r._carHitT < 500) return;
+        r._carHitT = hitNow;
+        // 已经倒地的人再被碾一次 = 撞死：算"打死人"，走击杀阶梯（不是撞人的半星）
+        if (r.down) { r.alive = false; r.respawn = 8; spawnBurst(r.x, r.z, 0xff3333, 6); dropReward(r.x, r.z, r); addXp(5); addKillBounty('car'); }
+        else runOverResident(r, currentCar.radius < 1.2, 'car');
+      });
       // 警察同样一次全处理（safeT > 0 = 刚从警车下来，无敌期内不算被碾）
-      for (const ci of _gridCellsHit) {
-        for (const c of _gridNpc[ci]) {
-          if (!c || !c.alive || !c.group.userData.isCop || (c.safeT || 0) > 0) continue;
-          const dx = c.x - currentCar.x, dz = c.z - currentCar.z;
-          // 用「真的压在身上」判定，而不是固定 2.0 米：2.0 比警车半径还大，
-          // 玩家车只是停在旁边就把刚下车的警察算成被碾了
-          const rr = currentCar.radius + 0.5;
-          if (dx * dx + dz * dz >= rr * rr) continue;
-          if (c._carHitT && hitNow - c._carHitT < 500) continue;
-          c._carHitT = hitNow;
-          runOverCop(c, 'car');
-        }
-      }
+      _forEachHitNpc(function (c) {
+        if (!c || !c.alive || !c.group.userData.isCop || (c.safeT || 0) > 0) return;
+        const dx = c.x - currentCar.x, dz = c.z - currentCar.z;
+        // 用「真的压在身上」判定，而不是固定 2.0 米：2.0 比警车半径还大，
+        // 玩家车只是停在旁边就把刚下车的警察算成被碾了
+        const rr = currentCar.radius + 0.5;
+        if (dx * dx + dz * dz >= rr * rr) return;
+        if (c._carHitT && hitNow - c._carHitT < 500) return;
+        c._carHitT = hitNow;
+        runOverCop(c, 'car');
+      });
     }
     }
   }
