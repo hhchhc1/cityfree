@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix501-yamen-vehicle-floor">
+<meta name="cf-build" content="20261116-fix502-driving-damage-fx">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -17700,7 +17700,13 @@ function updateBurningVehicles(dt) {
     const openingCar = (state === 'drive' && currentCar === v);
     const stAge = damageStageOf(v);
     if (openingCar) {
-      v.dmgAge = 0; v._dmgT = 0;
+      // 【fix502】用户反馈："车受损后人站在外面看是浓烟+火花，一上车就只剩零星火花，特效不一样"。
+      // 根因就在这一行原来的 `v._dmgT = 0`：本函数每帧先调用 damageStageFx(v,dt) 累加 _dmgT，
+      // 按损坏档位要攒够 0.40/0.20/0.09 秒才发一颗烟+火花；但紧接着玩家正在开的车又被
+      // 清零回 0，而帧间隔只有 0.016 秒 —— 计时器永远攒不满，驾驶中几乎不再产生新的
+      // 受损粒子。车外不受这段影响，所以两边表现截然不同。
+      // 这里只清 dmgAge（它的职责是"没人开多久后自动修好/拖走"），绝不能动 _dmgT。
+      v.dmgAge = 0;
     } else if (stAge >= 2) {
       v.dmgAge = (v.dmgAge || 0) + dt;
       if (v.dmgAge >= DMG_TOW_T) {
