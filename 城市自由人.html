@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix519-first-person-muzzle-sparks">
+<meta name="cf-build" content="20261117-fix520-first-person-left-hand-support">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -25678,8 +25678,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     fpViewArmR.rotation.set(0.10, -0.12, -0.10);
     fpViewArmL.position.set(-0.27, -0.33, -0.50);
     fpViewArmL.rotation.set(0.06, 0.14, 0.12);
-    fpViewArmR.userData.base = { x: 0.10, z: -0.10, py: -0.30 };
-    fpViewArmL.userData.base = { x: 0.06, z: 0.12, py: -0.33 };
+    fpViewArmR.userData.base = { x: 0.10, z: -0.10, py: -0.30, px: 0.27, pz: -0.46 };
+    fpViewArmL.userData.base = { x: 0.06, z: 0.12, py: -0.33, px: -0.27, pz: -0.50 };
     rig.add(fpViewArmR); rig.add(fpViewArmL);
     rig.visible = true;   // 首次切到第一人称时才懒创建，第三人称启动时完全不占场景
     scene.add(rig);
@@ -25716,19 +25716,37 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     const bob = moving ? Math.sin(walkPhase * 2) * 0.018 : Math.sin(t * 1.6) * 0.003;
     const sw = (typeof punchAnim === 'number') ? punchAnim : 0;
     const bR = fpViewArmR.userData.base, bL = fpViewArmL.userData.base;
+    // 【fix520·2026-11-17·用户：『射击时左手托住枪托；近战武器左手顺势摆动；开枪时左手往枪底下挠两下』】
+    // 枪（type:'gun'）= 双手持枪：左手抬到枪底下托着，随步伐小幅起伏；
+    // 近战/空手 = 左手回到自然位，顺着步伐一前一后大幅摆动（fix518 的摆臂）。
+    // 开枪瞬间（punchAnim 从 1 衰减）左手在枪底做两次短促托举脉冲，不再僵在原地。
+    const wdef = (typeof WEAPONS !== 'undefined' && WEAPONS[key]) ? WEAPONS[key] : null;
+    const isGun = !!(wdef && wdef.type === 'gun');
+    const kSmooth = 1 - Math.pow(0.002, Math.min(0.05, dt || 0.016));
+    const ampR = fpViewWeapon ? 0.28 : 0.42, ampL = 0.42;
+    // 左手目标位：持枪→枪底(靠右、略低、稍前)，近战→自然下垂位
+    const ltx = isGun ? 0.04 : bL.px;
+    const lty = isGun ? -0.44 : bL.py;
+    const ltz = isGun ? -0.48 : bL.pz;
+    fpViewArmL.position.x += (ltx - fpViewArmL.position.x) * kSmooth;
+    fpViewArmL.position.z += (ltz - fpViewArmL.position.z) * kSmooth;
+    fpViewArmL.position.y += (lty + bob - fpViewArmL.position.y) * kSmooth;
     fpViewArmR.position.y = bR.py + bob;
-    fpViewArmL.position.y = bL.py + bob;
-    if (sw > 0.01) {
-      // 攻击瞬间：挥动压过走路摆动
-      fpViewArmR.rotation.x = bR.x - sw * 0.85;
-      fpViewArmR.rotation.z = bR.z + sw * 0.40;
-      fpViewArmL.rotation.x = bL.x - sw * 0.25;
+    // 开枪脉冲：sw 从 1→0 期间 sin 走完两个波峰，就是"托两下"
+    const pulse = (sw > 0.01 && isGun) ? Math.sin((1 - sw) * Math.PI * 4) * sw : 0;
+    if (pulse) { fpViewArmL.position.y += pulse * 0.06; fpViewArmL.position.z -= pulse * 0.05; }
+
+    fpViewArmR.rotation.x = (sw > 0.01) ? (bR.x - sw * 0.85) : (bR.x + stepR * ampR);
+    fpViewArmR.rotation.z = (sw > 0.01) ? (bR.z + sw * 0.40) : (bR.z - stepR * 0.06);
+    if (isGun) {
+      // 托枪待机：小臂伸向枪底，随步伐极轻晃动；开枪时往上托两下
+      fpViewArmL.rotation.x = 0.15 + stepL * 0.05 + pulse * 0.30;
+      fpViewArmL.rotation.z = -0.28 + stepL * 0.04 + pulse * 0.14;
+    } else if (sw > 0.01) {
+      // 近战挥击：左手顺势跟一下，不僵
+      fpViewArmL.rotation.x = bL.x - sw * 0.55;
+      fpViewArmL.rotation.z = bL.z - sw * 0.20;
     } else {
-      // 持武器那只手摆幅略小（武器跟着晃太狠会看不准），另一只手正常大幅摆臂
-      const ampR = fpViewWeapon ? 0.28 : 0.42;
-      const ampL = 0.42;
-      fpViewArmR.rotation.x = bR.x + stepR * ampR;
-      fpViewArmR.rotation.z = bR.z - stepR * 0.06;
       fpViewArmL.rotation.x = bL.x + stepL * ampL;
       fpViewArmL.rotation.z = bL.z - stepL * 0.06;
     }
