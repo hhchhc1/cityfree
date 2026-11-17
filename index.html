@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix522-first-person-arms-connected-swing">
+<meta name="cf-build" content="20261117-fix523-base-lights-guard-rifle-alert">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -6922,6 +6922,9 @@ var AIRLINER = null;
 })();
 
 // ========== 军事基地（西北偏北，直升机+坦克+机枪塔） ==========
+// 【fix523】基地高杆灯只new了自发光灯头，没进 STREET_LAMPS，所以夜里"灯头亮、地面全黑"。
+// 这里先收集坐标，等 batchStaticScene() 后再统一补地面光斑/灯晕并登记，和新城区 fix493 同一套路。
+var BASE_LAMPS = [];
 // ========== 【fix143】军事基地：围墙 + 岗楼 + 标识（原来只有两根门柱，完全不像基地） ==========
 (function militaryBaseBuild() {
   const bx = -280, bz = 120, gy = 2.5, baseW = 80, baseD = 70;
@@ -7010,6 +7013,7 @@ var AIRLINER = null;
     post.position.set(lx, gy + 4.5, lz); scene.add(post);
     const head = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.24, 0.7), new THREE.MeshBasicMaterial({ color: 0xfff0c0 }));
     head.position.set(lx, gy + 9.05, lz); scene.add(head);
+    BASE_LAMPS.push({ x: lx, y: gy + 9.05, z: lz, groundY: gy + 0.12 });
     treeObstacles.push({ x: lx, z: lz, r: 0.6 });
   }  // 四角墙顶岗亭（带探照灯）——注意：院内已经有四座机枪塔，这里改成"骑在墙顶"的小岗亭，
   // 不再另立腿架，避免和机枪塔位置重叠。
@@ -11874,11 +11878,16 @@ const NPC_RELOAD_STEP = 0.45;    // 每 STEP 秒补一发
 function npcReload(r, dt, firing) {
   const maxAmmo = r.maxAmmo || 0;
   if (!r.ranged || r.ranged === 'fist' || maxAmmo <= 0) return;
+  // 【fix523】警报中的基地守卫要能持续连发：普通 NPC 1 发/0.45s、停火 1s 才装填，
+  // 180 发打空要补 80 多秒，根本撑不了一场基地攻坚。警报期间改成 0.35s 开始、0.06s 一发。
+  const _baseFast = !!(r.isBaseGuard && r.baseAlertUntil && performance.now() < r.baseAlertUntil);
+  const _delay = _baseFast ? 0.35 : NPC_RELOAD_DELAY;
+  const _step = _baseFast ? 0.06 : NPC_RELOAD_STEP;
   if (firing) { r.noShotT = 0; return; }
   r.noShotT = (r.noShotT || 0) + dt;
-  if (r.ammo < maxAmmo && r.noShotT > NPC_RELOAD_DELAY) {
+  if (r.ammo < maxAmmo && r.noShotT > _delay) {
     r.reloadT = (r.reloadT || 0) + dt;
-    if (r.reloadT >= NPC_RELOAD_STEP) { r.reloadT = 0; r.ammo = Math.min(maxAmmo, r.ammo + 1); }
+    if (r.reloadT >= _step) { r.reloadT = 0; r.ammo = Math.min(maxAmmo, r.ammo + 1); }
   } else {
     r.reloadT = 0;
   }
@@ -13008,13 +13017,15 @@ spawnFixedLimo(1);
   (function addBaseGuards() {
     const bx = -280, bz = 120;
     const UNI = 0x4a5a3a;   // 军绿制服
+    // 【fix523】用户要求基地守卫统一用步枪连发：原来 4 号位还是 smg，弹药也只有 60 发。
+    // 全部换成 rifle（WEAPONS.rifle.auto=true），并把备弹提到 180 发支撑长时间交火。
     const posts = [
       { dx: -11.5, dz: 37.5, angle: 0,          ranged: 'rifle', name: 'baseGateL' },
       { dx:  11.5, dz: 37.5, angle: 0,          ranged: 'rifle', name: 'baseGateR' },
-      { dx: -20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardL' },
-      { dx:  20,  dz: 22,  angle: Math.PI,      ranged: 'smg',   name: 'baseYardR' },
+      { dx: -20,  dz: 22,  angle: Math.PI,      ranged: 'rifle', name: 'baseYardL' },
+      { dx:  20,  dz: 22,  angle: Math.PI,      ranged: 'rifle', name: 'baseYardR' },
       { dx: -31,  dz: -2,  angle: Math.PI / 2,  ranged: 'rifle', name: 'baseCmd' },
-      { dx:  26,  dz: -12, angle: -Math.PI / 2, ranged: 'smg',   name: 'baseHangar' },
+      { dx:  26,  dz: -12, angle: -Math.PI / 2, ranged: 'rifle', name: 'baseHangar' },
       { dx:  -6,  dz: -26, angle: 0,            ranged: 'rifle', name: 'baseNorth' }
     ];
     posts.forEach((post, i) => {
@@ -13031,7 +13042,7 @@ spawnFixedLimo(1);
         hp: 140, maxHp: 140, melee: 'fist', ranged: post.ranged,
         faction: 0, flee: false, hate: null, down: false, downT: 0,
         attackCd: 0, phase: i * 0.7, punchAnim: 0, punchHand: 0,
-        armed: true, ammo: 60, maxAmmo: 60, chaseMode: 'run',
+        armed: true, ammo: 180, maxAmmo: 180, chaseMode: 'run',
         post: true, postX: nx, postZ: nz, postAngle: post.angle, postName: post.name,
         hqFlatY: ny, isBaseGuard: true, noRespawn: false
       });
@@ -20454,6 +20465,11 @@ function updateHospitalPacks(dt) {
 }
 function killResident(r, by) {
   r.alive = false; r.respawn = 6;
+  // 【fix523】爆炸/撞车直接击杀基地守卫不走 damageResident，这里补一次全员警报；
+  // 普通枪伤/近战会先在 damageResident 触发，重复调用只是续时间，不会多弹提示。
+  if (r.isBaseGuard && by !== 'npc' && by !== 'cop' && by !== 'stealth') {
+    try { alertBaseGuards(45); } catch (e) {}
+  }
   // 【fix507】击杀累计（第一滴雪/惩恶扬善/屠龙少年）：只算玩家造成的击杀，
   // 排除 NPC 互殴(by='npc') 和警察执法(by='cop')；暗杀 stealth/撞车 car/枪 gun/近战都算玩家。
   if (by !== 'npc' && by !== 'cop') achCount('kills', 1);
@@ -20499,6 +20515,12 @@ function killCop(c, by) {
 function damageResident(r, dmg, by, fromNpc) {
   if (!r.alive) return;
   r.hp -= dmg;
+  // 【fix523】用户："只要在军事基地里伤害守卫，守卫就都会群起而攻之"。
+  // 原来只有 shoot() 里开枪才 alertBaseGuards，近战、爆炸、撞人打伤守卫都不会全员响应。
+  // 这里在受伤源头统一触发；fromNpc（NPC 互殴）和 stealth（暗杀）不惊动基地。
+  if (r.isBaseGuard && !fromNpc && by !== 'stealth') {
+    try { alertBaseGuards(45); } catch (e) {}
+  }
   // 被打后立即反击 —— 但暗杀（狙击镜）不惊动对方：他连"被谁打的"都不知道（2026-10-13）
   if (fromNpc) { r.hate = fromNpc; r.attackCd = Math.min(r.attackCd, 0.3); }
   else if (by !== 'stealth') { r.hate = 'player'; r.attackCd = Math.min(r.attackCd, 0.3); }
@@ -21002,7 +21024,7 @@ function alertBaseGuards(sec) {
   let n = 0;
   for (const r of residents) {
     if (!r.isBaseGuard || !r.alive) continue;
-    r.hate = 'player'; r.armed = true; r.flee = false; r.attackCd = Math.random() * 1.4;   // 【fix230】不同时齐射，错开开火（原来全员 0 冷却 → 一瞬间吃满 6 个人的子弹）
+    r.hate = 'player'; r.armed = true; r.flee = false; r.attackCd = Math.random() * 0.4;   // 【fix523】0→0.4s：警报后全员快速开火，只保留极短错峰避免齐射轰顶
     r.baseAlertUntil = until;
     n++;
   }
@@ -21754,9 +21776,9 @@ function npcFriendlyFire(shooter, victim) {
 }
 function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
-  // 【fix490】警报期间守卫的追击半径放宽到 90m：原来一律 22m，基地这么大，
-  // 远处的守卫一看"超过 22 米"就直接放弃仇恨，所以只有离玩家最近的那个会来打。
-  const _chaseCap = (r.baseAlertUntil && performance.now() < r.baseAlertUntil) ? 90 : 22;
+  // 【fix523】警报中的基地守卫：连发步枪 + 90m 追击半径。普通 NPC 完全不受影响。
+  const _baseAlert = !!(r.isBaseGuard && r.baseAlertUntil && performance.now() < r.baseAlertUntil);
+  const _chaseCap = _baseAlert ? 90 : 22;
   if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
   // 以前这里完全不看高度：目标 y 一律写死成 1.3/1.05，于是弹道是一条贴地的水平线，
@@ -21777,11 +21799,16 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   if (!r.chaseMode) r.chaseMode = ranged ? 'shoot' : 'run';
 
   // 模式切换逻辑（够不着的目标不切近战，保持射击，否则会站在楼下空挥）
-  if (r.chaseMode === 'shoot' && (!ranged || r.ammo <= 0 || (d <= meleeRange + 1 && !unreachable))) {
-    r.chaseMode = 'run';
-  }
-  if (r.chaseMode === 'run' && ranged && r.ammo > 0 && (d > runRange || unreachable)) {
+  // 【fix523】警报中的基地守卫强制留在射击模式：贴脸也继续步枪连发，不收枪挥拳。
+  if (_baseAlert && ranged && r.ammo > 0) {
     r.chaseMode = 'shoot';
+  } else {
+    if (r.chaseMode === 'shoot' && (!ranged || r.ammo <= 0 || (d <= meleeRange + 1 && !unreachable))) {
+      r.chaseMode = 'run';
+    }
+    if (r.chaseMode === 'run' && ranged && r.ammo > 0 && (d > runRange || unreachable)) {
+      r.chaseMode = 'shoot';
+    }
   }
 
   if (r.chaseMode === 'shoot' && ranged && r.ammo > 0) {
@@ -21794,7 +21821,8 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     }
     r.phase = (r.phase || 0) + dt * 5;
     if (r.attackCd <= 0) {
-        r.attackCd = 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
+        // 【fix523】警报中的基地守卫 0.16 秒一发（约 6 发/秒），普通 NPC 仍是原来的 1.2 秒一发
+        r.attackCd = _baseAlert ? 0.16 : 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
       // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
       spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
       let hitChance = THREE.MathUtils.clamp(0.88 - d * 0.018, 0.1, 0.88);
@@ -24638,7 +24666,8 @@ function updateStreetLights() {
     pl.position.set(e.L.x, e.L.y, e.L.z);
     // 强度砍半（6 -> 3）：原来灯下过曝一片白，看不清路面
     // 距离衰减改成平方根式：远处 54m 处的灯仍有微弱余光，近处不至于刺眼
-    pl.intensity = 3 * nightF * (1 - 0.55 * Math.min(1, e.d / LAMP_LIT_RADIUS));
+    // 【fix523】基地泛光灯比普通街灯亮 70%：高杆灯离地面 11.55m，灯头下移后仍要压得住整片操场
+    pl.intensity = 3 * (e.L.base ? 1.7 : 1) * nightF * (1 - 0.55 * Math.min(1, e.d / LAMP_LIT_RADIUS));
   }
 }
 
@@ -33687,6 +33716,32 @@ function ncSpawnResidents(count) {
   // ② ③ 数量按端位收敛，手机减半（车流每帧全量 AI，行人有 LOD 但仍占 draw call）。
   ncSpawnTrafficCar(isMobile ? 8 : 14);
   ncSpawnResidents(isMobile ? 12 : 20);
+})();
+// 【fix523】军事基地高杆灯接入主城路灯 updater：和新城 fix493 一样放在 batchStaticScene 之后，
+// 否则新建的 pool/halo 会被静态合批摘掉，逐帧 visible 控制失效。
+(function registerMilitaryBaseLamps() {
+  if (!BASE_LAMPS.length || !STREET_LAMPS) return;
+  const poolGeo = new THREE.CircleGeometry(16, 24);   // 基地泛光灯照得比街灯宽
+  for (const p of BASE_LAMPS) {
+    let pool = null, halo = null;
+    if (lampPoolMat) {
+      pool = new THREE.Mesh(poolGeo, lampPoolMat);
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(p.x, p.groundY + 0.07, p.z);
+      pool.renderOrder = 2;
+      scene.add(pool);
+      if (typeof registerDynamicObject === 'function') registerDynamicObject(pool);
+    }
+    if (lampHaloMat) {
+      halo = new THREE.Sprite(lampHaloMat);
+      halo.scale.set(14, 14, 1);
+      halo.position.set(p.x, p.y, p.z);
+      halo.renderOrder = 3;
+      scene.add(halo);
+    }
+    // 灯头在 11.55m，PointLight 压到 7.05m（和新城区同样下移 4.5m），地面照度才够
+    STREET_LAMPS.push({ x: p.x, y: p.y - 4.5, z: p.z, pool: pool, halo: halo, base: true });
+  }
 })();
 // 【fix129】新城建筑已全部登记进 buildings，这里把它们的可站立面网格建起来
 try { ncBuildGrid(); } catch (e) { console.error('[nc grid]', e); }
