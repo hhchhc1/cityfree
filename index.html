@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix525-first-person-left-hand-three-state">
+<meta name="cf-build" content="20261117-fix526-central-park-wood-bars-removed">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -27150,6 +27150,45 @@ camYaw = personAngle.v; camPitch = 0;   // 视角初始对齐角色朝向
 // 外围路面必须等所有 buildings 登记完再铺，否则随机位置的商业区/工业区/乡村房子会被路穿过。
 // 放在 batchStaticScene() 之前，让路面能被静态合批。
 try { buildOuterRoadMeshes(); } catch (error) { console.error('[Outer road mesh error]', error); }
+// 【fix526·2026-11-17·用户：『中心公园这里有很多木条阻挡，把这些木条去掉』】
+// 中心公园上空出现一组长条棕色木梁（截图里横在坐标轴前方）。它们不是长椅/亭柱/坐标轴本身：
+//   · 长椅最大边只有 2.2m，亭柱是竖直圆柱，坐标轴是红/绿/蓝 MeshBasicMaterial；
+//   · 这些木梁是 10m 以上的长条、离地 1~16m、棕色 Lambert 材质。
+// 代码里没有单独命名的建造函数（可能是某个局部坐标组直接挂到场景），所以这里在静态合批**之前**
+// 按「中心公园 55m 内 + 长边≥10m + 短边≤0.9m + 高度≤1m + 棕色 + 离地」精确移除，
+// 不碰长椅、花坛、亭柱、喷泉、纪念碑和坐标轴；必须在合批前跑，否则会被并进大网格无法单独删。
+function purgeCentralParkWoodBars() {
+  scene.updateMatrixWorld(true);
+  const doomed = [];
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), axis = new THREE.Vector3();
+  scene.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.geometry || Array.isArray(o.material)) return;
+    const mat = o.material, c = mat && mat.color;
+    if (!c) return;
+    // 棕色：R 明显大于 G，G 明显大于 B（排除红/绿坐标轴、灰色建筑、白色长椅）
+    if (!(c.r > c.g * 1.08 && c.g > c.b * 1.08 && c.r > 0.12 && c.r < 0.85)) return;
+    const p = o.geometry.parameters || {};
+    let long = 0, thin = 0, high = 0;
+    if (o.geometry.type === 'BoxGeometry') {
+      const a = p.width || 0, b = p.height || 0, d = p.depth || 0;
+      long = Math.max(a, d); thin = Math.min(a, d); high = b;
+    } else if (o.geometry.type === 'CylinderGeometry') {
+      const r = Math.max(p.radiusTop || 0, p.radiusBottom || 0);
+      long = p.height || 0; thin = r * 2; high = r * 2;
+      o.getWorldQuaternion(quat);
+      axis.set(0, 1, 0).applyQuaternion(quat);
+      if (Math.abs(axis.y) > 0.6) return;   // 竖直柱子（亭柱/灯杆）不删
+    } else return;
+    if (long < 10 || thin > 0.9 || high > 1.0) return;
+    o.getWorldPosition(pos);
+    if (Math.hypot(pos.x, pos.z) > 55) return;   // 只在中心公园范围
+    if (pos.y < 0.8 || pos.y > 16) return;       // 地面长椅/花坛不删
+    doomed.push(o);
+  });
+  for (const o of doomed) if (o.parent) o.parent.remove(o);
+  if (doomed.length) console.log('[fix526] central park wood bars removed:', doomed.length);
+}
+try { purgeCentralParkWoodBars(); } catch (e) { console.error('[fix526]', e); }
 try { batchStaticScene(); } catch (error) { console.error('[Static batch error]', error); }
 updateDynamicVisibility();
 // 出租车场 + 建筑工地（先建场景，再让 buildSpatialGrid 把建筑碰撞管理进去）
