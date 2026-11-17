@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix524-bullets-blocked-by-buildings">
+<meta name="cf-build" content="20261117-fix525-first-person-left-hand-three-state">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -23366,6 +23366,8 @@ const camPos = new THREE.Vector3(0, 6, -10), camLook = new THREE.Vector3(0, 1, 0
 // 相机放到眼睛高度时它们还在脚下，怎么转都进不了画面。这里单独造一套只给第一人称看的模型。
 var fpViewRig = null, fpViewArmR = null, fpViewArmL = null;
 var fpViewWeaponKey = null, fpViewWeapon = null;
+// 【fix525】复用的临时向量：每帧把右手手腕世界坐标转到 rig 本地，供左手贴腕用，避免每帧 new Vector3。
+var fpViewHandWorld = null, fpViewHandLocal = null;
 const _camTmp = new THREE.Vector3(), _camLookA = new THREE.Vector3();
 const _camForward = new THREE.Vector3(), _camRight = new THREE.Vector3();
 function cameraForward() { camera.getWorldDirection(_camForward); _camForward.y = 0; _camForward.normalize(); return _camForward; }
@@ -25838,40 +25840,68 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     const bob = moving ? Math.sin(walkPhase * 2) * 0.018 : Math.sin(t * 1.6) * 0.003;
     const sw = (typeof punchAnim === 'number') ? punchAnim : 0;
     const bR = fpViewArmR.userData.base, bL = fpViewArmL.userData.base;
-    // 【fix520 → fix522·2026-11-17·用户：『左胳膊和死了一样…拿枪的时候左胳膊动的幅度太小了，
-    //  我看不清楚，你就弄得和拿刀的一样就行』】
-    // fix520 只把左手挪到枪底，却把持枪摆臂压成 stepL*0.05（约 3°），肉眼几乎看不出来。
-    // fix522 保留"手在枪底托枪"的位置，但摆动幅度、方向完全改用近战同款 stepL*ampL（约 24°），
-    // 位置也跟着步频前后推，开枪脉冲加大到能看清；只有近战挥击瞬间仍走原来的顺势跟手。
+    // 【fix520 → fix522 → fix525·2026-11-17·用户：『拿枪的时候就跟拿刀子一样就行；
+    //  射击的时候左手放在右手手腕就行；换弹的时候左手在右手手腕那里前后动2/3下』】
+    // 三态：
+    //   ① 持枪待机/走路：左臂完全回到近战自然位，用 stepL*ampL 大幅摆动（不再伸到枪底托枪）；
+    //   ② 射击（punchAnim>0.01）：左手贴到右手手腕，跟着右臂后坐一起动；
+    //   ③ 换弹（reloadAnim 0→1）：左手留在右腕，沿前后方向做 3 个完整来回。
     const wdef = (typeof WEAPONS !== 'undefined' && WEAPONS[key]) ? WEAPONS[key] : null;
     const isGun = !!(wdef && wdef.type === 'gun');
     const kSmooth = 1 - Math.pow(0.002, Math.min(0.05, dt || 0.016));
     const ampR = fpViewWeapon ? 0.28 : 0.42, ampL = 0.42;
-    // 左手目标位：持枪仍在枪底，但叠加和近战一样明显的前后摆动；近战回自然下垂位
-    const ltx = isGun ? 0.04 + stepL * 0.06 : bL.px + stepL * 0.06;
-    const lty = isGun ? -0.44 + Math.abs(stepL) * 0.05 : bL.py;
-    const ltz = isGun ? -0.48 + stepL * 0.10 : bL.pz + stepL * 0.08;
-    fpViewArmL.position.x += (ltx - fpViewArmL.position.x) * kSmooth;
-    fpViewArmL.position.z += (ltz - fpViewArmL.position.z) * kSmooth;
-    fpViewArmL.position.y += (lty + bob - fpViewArmL.position.y) * kSmooth;
-    fpViewArmR.position.y = bR.py + bob;
-    // 开枪脉冲：sw 从 1→0 期间 sin 走完两个波峰，就是"托两下"（幅度加大到看得清）
-    const pulse = (sw > 0.01 && isGun) ? Math.sin((1 - sw) * Math.PI * 4) * sw : 0;
-    if (pulse) { fpViewArmL.position.y += pulse * 0.10; fpViewArmL.position.z -= pulse * 0.08; }
+    const shooting = isGun && sw > 0.01;
+    const reloading = isGun && (typeof isReloading === 'function') && isReloading(key);
+    const rp = reloading ? Math.max(0, Math.min(1, (typeof reloadAnim === 'number') ? reloadAnim : 0)) : 0;
+    const reloadCycle = reloading ? Math.sin(rp * Math.PI * 6) : 0;   // 0→1 三个完整来回
 
+    // 右臂先定姿，再取右手手腕位置（左手要贴过去，必须知道右臂这一帧转到哪）
+    fpViewArmR.position.y = bR.py + bob;
     fpViewArmR.rotation.x = (sw > 0.01) ? (bR.x - sw * 0.85) : (bR.x + stepR * ampR);
     fpViewArmR.rotation.z = (sw > 0.01) ? (bR.z + sw * 0.40) : (bR.z - stepR * 0.06);
-    if (!isGun && sw > 0.01) {
-      // 近战挥击：左手顺势跟一下，不僵
-      fpViewArmL.rotation.x = bL.x - sw * 0.55;
-      fpViewArmL.rotation.z = bL.z - sw * 0.20;
+
+    let ltx, lty, ltz, lrx, lrz;
+    if (shooting || reloading) {
+      // 贴腕：把右手 hand 节点转到 rig 本地坐标；左手 hand 在自身 local z=-0.38，
+      // 所以左臂 group 的 z 要补回 +0.36，手才落在右腕上而不是陷进右臂里。
+      if (!fpViewHandWorld) { fpViewHandWorld = new THREE.Vector3(); fpViewHandLocal = new THREE.Vector3(); }
+      rig.updateMatrixWorld(true);
+      fpViewArmR.userData.hand.getWorldPosition(fpViewHandWorld);
+      fpViewHandLocal.copy(fpViewHandWorld);
+      rig.worldToLocal(fpViewHandLocal);
+      ltx = fpViewHandLocal.x - 0.045;
+      lty = fpViewHandLocal.y + 0.005;
+      ltz = fpViewHandLocal.z + 0.36;
+      lrx = 0.04;
+      lrz = -0.10;
+      if (reloading) {
+        // 换弹：左手在右腕前后推拉 3 下（前后位移 + 轻微俯仰）
+        ltz += reloadCycle * 0.045;
+        lty += Math.abs(reloadCycle) * 0.012;
+        lrx += reloadCycle * 0.16;
+        lrz += reloadCycle * 0.04;
+      }
     } else {
-      // 持枪/空手/近战待机：统一用大幅反相摆臂，持枪只换一个托枪基角 + 开枪脉冲
-      const baseX = isGun ? 0.15 : bL.x;
-      const baseZ = isGun ? -0.28 : bL.z;
-      fpViewArmL.rotation.x = baseX + stepL * ampL + pulse * 0.34;
-      fpViewArmL.rotation.z = baseZ - stepL * 0.10 + pulse * 0.16;
+      // 持枪待机/走路 + 近战待机：和拿刀完全同一套自然摆动
+      ltx = bL.px + stepL * 0.06;
+      lty = bL.py;
+      ltz = bL.pz + stepL * 0.08;
+      lrx = bL.x + stepL * ampL;
+      lrz = bL.z - stepL * 0.10;
+      if (!isGun && sw > 0.01) {
+        // 近战挥击：左手顺势跟一下
+        lrx = bL.x - sw * 0.55;
+        lrz = bL.z - sw * 0.20;
+      }
     }
+
+    fpViewArmL.position.x += (ltx - fpViewArmL.position.x) * kSmooth;
+    fpViewArmL.position.z += (ltz - fpViewArmL.position.z) * kSmooth;
+    // 贴腕时 lty 已经包含右臂的 bob，不能再加一次，否则左手会比右腕高出一截
+    const ltyBob = (shooting || reloading) ? 0 : bob;
+    fpViewArmL.position.y += (lty + ltyBob - fpViewArmL.position.y) * kSmooth;
+    fpViewArmL.rotation.x = lrx;
+    fpViewArmL.rotation.z = lrz;
   }
   // 相机（复用 Vector3 避免每帧分配）
   try {
