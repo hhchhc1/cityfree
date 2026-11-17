@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix511-sign-theme-button">
+<meta name="cf-build" content="20261117-fix512-return-flight-disembark">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -33040,6 +33040,9 @@ function retFinish() {
   try { flightAudioStop(); } catch (e) {}
   try { stopRainSnd(); } catch (e) {}
   const R = RET; RET = null;
+  // 【fix512】飞机停稳后才让玩家现身下车。无论正常结束还是 20 秒兜底结束，
+  // 这里都保证人物可见，绝不把玩家留在"隐身乘机"状态。
+  person.visible = true;
   if (!R || !R.home) return;
   // 镜头一帧到位：站在飞机旁边，面朝飞机和航站楼
   const px = person.position.x, pz = person.position.z;
@@ -33086,17 +33089,22 @@ function retTick(dt) {
     R.home = hp.clone();
     R.fromX = hp.x - 150;
     if (AIRLINER) { AIRLINER.position.set(R.fromX, hp.y, hp.z); AIRLINER.rotation.set(0, Math.PI / 2, 0); }
-    person.visible = true;
+    // 【fix512·2026-11-17·用户：『坐返程飞机人直接就站到这了，不等飞机到了再下来』】
+    // 原来这里在黑场结束、飞机还没从跑道滑回来时就把 person.visible=true 放到停机位，
+    // 于是玩家一淡入就看到自己已经站在地面上，飞机还在远处滑行，像"提前下车"。
+    // 现在人先藏在舱内（只记录最终下车点），等飞机停稳、retFinish() 再现身。
+    person.visible = false;
     person.position.set(hp.x - 10, 2, hp.z + 20);
     vy = 0; onGround = false;
-    // 【fix469】不再把镜头架到跑道侧面的固定点（那里会钻进航站楼/雨幕，用户看到整屏全白）。
-    // 改成：人站在停机位旁边，镜头就在人背后一点，朝着跑道方向看飞机滑回来。
-    camYaw = Math.atan2(hp.x - person.position.x, hp.z - person.position.z);
+    // 阶段 2 的镜头改挂在飞机停机位周围，不再以"可见的人"为锚点。
+    const _camAnchorX = hp.x - 10, _camAnchorZ = hp.z + 20;
+    camYaw = Math.atan2(hp.x - _camAnchorX, hp.z - _camAnchorZ);
     camPitch = 0.12;
-    camPos.set(person.position.x - Math.sin(camYaw) * 9, person.position.y + 4.6, person.position.z - Math.cos(camYaw) * 9);
+    camPos.set(_camAnchorX - Math.sin(camYaw) * 9, 6.6, _camAnchorZ - Math.cos(camYaw) * 9);
     camera.position.copy(camPos);
     camera.lookAt(hp.x, hp.y + 3, hp.z);
     if (hintTextEl) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
+    if (hudLine1) hudText(hudLine1, 'line1', '返程航班 · 乘机中');
   } else {
     // 阶段 2：1.2s 之后淡出黑场，飞机从跑道滑回来停稳
     const fade = Math.max(0, 1 - (t - 1.2) / 0.7);
@@ -33108,8 +33116,10 @@ function retTick(dt) {
       // 滑行时轻微摆头，看起来像在转弯对正
       AIRLINER.rotation.y = Math.PI / 2 + Math.sin(ease * Math.PI) * 0.06;
     }
-    // 【fix469】镜头不再跟着飞机飞，交给玩家自己的第三人称镜头（人就在停机位旁边）
+    // 【fix469/fix512】镜头挂在停机位旁固定点看飞机滑回来；人此时仍在舱内（不可见），
+    // 不再出现"刚淡入就站在跑道边等飞机"的穿帮。
     if (hintTextEl && R.t < 2.2) hudText(hintTextEl, 'hint', '返程航班 · 飞机正在滑进停机位…');
+    if (hintTextEl && R.t >= 6.6 && R.t < 7.4) hudText(hintTextEl, 'hint', '返程航班 · 飞机已停稳，正在下机…');
     if (t >= 7.4) retFinish();
   }
 }
