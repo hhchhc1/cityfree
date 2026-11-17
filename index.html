@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix526-central-park-wood-bars-removed">
+<meta name="cf-build" content="20261117-fix527-base-guard-military-caps-hp">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -10279,6 +10279,31 @@ function makeHuman(clothes, isCop, opts = {}) {
     brim.position.set(0, 0.17, 0.13); head.add(brim);
     const badge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.01), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
     badge.position.set(0, 0.07, 0.25); head.add(badge);
+  } else if (opts.militaryCap) {
+    // 【fix527·2026-11-17·用户：『给军事基地的每一个守卫戴一顶带有红色五角星的军绿色军帽』】
+    // 军绿色大檐帽：帽筒 + 顶盘 + 深色帽墙 + 帽檐；红五角星用 Shape 画标准 5 角星再 Extrude 成薄片。
+    // 全部挂在 head 组下，头部扫视/受击/死亡时帽子跟着一起动。
+    const capMat = new THREE.MeshLambertMaterial({ color: 0x4a5a3a });
+    const capDark = new THREE.MeshLambertMaterial({ color: 0x33402a });
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.285, 0.305, 0.11, 12), capMat);
+    crown.position.y = 0.225; head.add(crown);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.035, 12), capMat);
+    top.position.y = 0.295; head.add(top);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.307, 0.307, 0.035, 12), capDark);
+    band.position.y = 0.178; head.add(band);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.035, 0.22), capDark);
+    brim.position.set(0, 0.165, 0.14); head.add(brim);
+    const starShape = new THREE.Shape();
+    for (let si = 0; si < 10; si++) {
+      const rr = (si % 2 === 0) ? 0.070 : 0.030;
+      const aa = -Math.PI / 2 + si * Math.PI / 5;
+      const sx = Math.cos(aa) * rr, sy = Math.sin(aa) * rr;
+      if (si === 0) starShape.moveTo(sx, sy); else starShape.lineTo(sx, sy);
+    }
+    starShape.closePath();
+    const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.012, bevelEnabled: false });
+    const star = new THREE.Mesh(starGeo, new THREE.MeshLambertMaterial({ color: 0xd21f1f, emissive: 0x3a0000 }));
+    star.position.set(0, 0.205, 0.292); head.add(star);
   } else if (Math.random() < 0.25) {
   // 便帽：颜色跟随阵营主色（同阵营同色，不能每个NPC随机一个帽子色）
   const hatMat = new THREE.MeshLambertMaterial({ color: clothColor });
@@ -13030,7 +13055,7 @@ spawnFixedLimo(1);
     ];
     posts.forEach((post, i) => {
       const nx = bx + post.dx, nz = bz + post.dz;
-      const g = makeHuman(UNI, false, { uniformColor: UNI });
+      const g = makeHuman(UNI, false, { uniformColor: UNI, militaryCap: true });
       addWeaponMesh(g, post.ranged);
       const ny = terrainHeight(nx, nz);
       g.position.set(nx, ny, nz);
@@ -13039,7 +13064,7 @@ spawnFixedLimo(1);
       residents.push({
         group: g, x: nx, z: nz, angle: post.angle,
         alive: true, walking: false, timer: 0, walkTime: 0, respawn: 0,
-        hp: 140, maxHp: 140, melee: 'fist', ranged: post.ranged,
+        hp: 210, maxHp: 210, melee: 'fist', ranged: post.ranged,   // 【fix527】140 × 1.5 = 210
         faction: 0, flee: false, hate: null, down: false, downT: 0,
         attackCd: 0, phase: i * 0.7, punchAnim: 0, punchHand: 0,
         armed: true, ammo: 180, maxAmmo: 180, chaseMode: 'run',
