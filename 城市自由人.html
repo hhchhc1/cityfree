@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix512-return-flight-disembark">
+<meta name="cf-build" content="20261117-fix513-bridge-boxes-removed">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7571,20 +7571,13 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   // 补一条连续的箱梁（实心），桥底从任何角度看都是实的。
   const girder = new THREE.Mesh(new THREE.BoxGeometry(9.6, 1.5, bridgeLen), bridgeMat);
   girder.position.set(0, bridgeY - 1.05, (bridgeStartZ + bridgeEndZ) / 2); scene.add(girder);
-  // 城市端引桥下面的路堤（填满地面到桥面之间的空隙，消除侧向洞口）
-  {
-    const embMat = new THREE.MeshLambertMaterial({ color: 0x6f6a60 });
-    const e1 = new THREE.Mesh(new THREE.BoxGeometry(13, 3.0, 30), embMat);
-    e1.position.set(0, 1.4, BRIDGE_START_Z + 16); scene.add(e1);
-    const e2 = new THREE.Mesh(new THREE.BoxGeometry(12.4, 2.6, 26), embMat);
-    e2.position.set(0, 3.5, BRIDGE_DECK_START_Z - 16); scene.add(e2);
-    // 【fix496·2026-11-14】南岛这头原来还有一个 13×3.4×34 的深灰路堤 e3
-    // （BRIDGE_END_Z+18，即 z≈403，正好在南岛北岸、公路接岛的位置）。
-    // 用户：『把南岛这里连接的公路这里放的灰色的盒子去掉』——它和下面 fix264 的
-    // 桥头堡 abutS 叠在一起，从岛上斜看就是一堵突兀的大灰块/楔形块。
-    // 两者都删掉；岛面本身是逐顶点贴合 terrainHeight 的实体圆盘，南引桥 35 段
-    // 路面也逐段贴地，删掉这两块填充盒不会露出黑洞。桥面、箱梁、栏杆、北岸路堤全不动。
-  }
+  // 【fix496】南岛端 13×3.4×34 路堤 e3 + 桥头堡 abutS 已删除。
+  // 【fix513·2026-11-17·用户：『跨海大桥这两边的褐色方盒子去掉，露出原有的坡度』】
+  // 城市端原来还有 e1（13×3×30，0x6f6a60）、e2（12.4×2.6×26）两块褐色路堤填充盒，
+  // 加上下面 13×9×30 的 abutN 桥头堡，三块从 z≈161 一路叠到 213，顶到 5.1m 桥面。
+  // terrainHeight 本身在 |x|<=BRIDGE_HALF_WIDTH、z=160~210 已经做了 0→5.1 的引桥坡度，
+  // 35 段引桥路面也逐段贴地；这些填充盒只是早期怕露洞加的，现在反而把原有坡度盖住了。
+  // 三块全删，桥面、箱梁、栏杆、斜拉索、引桥路面全部保留。
   // 桥面中线（黄色虚线）
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xddaa00 });
   for (let i = -bridgeLen / 2 + 5; i < bridgeLen / 2 - 5; i += 6) {
@@ -7665,18 +7658,11 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     const southRailCenter = (southRampStart + southRampEnd) / 2;
     railS.position.set(side, terrainHeight(0, southRailCenter) + 0.5, southRailCenter); scene.add(railS);
   }
-  // 【fix264】桥头堡：桥面南端原本悬在沙滩上方，下面是个黑洞，沙子和桥面对不上。
-// 这里补一段实心石砌堤岸，从海底一路填到桥面高度，宽度比桥面略宽，彻底盖住接缝。
-const abutMat = new THREE.MeshLambertMaterial({ color: 0x9a938a });
-// 【fix496·2026-11-14】南端桥头堡 abutS（13×9×30，0x9a938a，z=BRIDGE_END_Z+12≈397）
-// 整块删除：它就横在南岛公路接岛处，是用户截图右侧那个"灰色盒子"的主体。
-// 当年 fix264 加它是为了补桥面与沙滩之间的黑洞，但后来南岛改成了随地形起伏的
-// 实体圆盘（addSouthIsland 的 48×96 极坐标网格）+ 35 段贴地引桥，接缝早已不存在，
-// 反倒是这个从 y=-3.9 顶到 y=5.1 的方盒子从草地里冒出一大截。
-// ⚠️ 只删南端（岛这头）；北端 abutN 在城市侧、压在引桥下面，用户没提，保持原样。
-const abutN = new THREE.Mesh(new THREE.BoxGeometry(13, 9, 30), abutMat);
-abutN.position.set(0, bridgeY - 4.5, BRIDGE_DECK_START_Z - 12);
-scene.add(abutN);
+  // 【fix264/fix496/fix513】桥头堡已全部移除。
+  // 当年 fix264 为补"桥面与沙滩之间的黑洞"加了南北两块实心石砌堤岸；后来岛面和引桥
+  // 都改成逐顶点贴 terrainHeight，接缝早已不存在。fix496 删除南端 abutS，
+  // fix513 再删除北端 abutN（13×9×30，z≈198，顶到桥面 5.1m）——它和上面 e1/e2
+  // 叠在一起，正是用户截图里跨海大桥两端的褐色方盒子。现在两端都露出原有坡度。
 // 桥头引道：从桥面高度平铺到岸上，避免桥面尽头直接断掉
 for (const [cz2, dir] of [[BRIDGE_END_Z, 1], [BRIDGE_DECK_START_Z, -1]]) {
   for (let i = 0; i < 10; i++) {
