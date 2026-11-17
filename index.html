@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix517-first-person-arms-weapon">
+<meta name="cf-build" content="20261117-fix518-first-person-arm-swing">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -25702,20 +25702,30 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       }
     }
     const t = performance.now() * 0.001;
-    const moving = (typeof speed !== 'undefined' && speed && speed.v > 0.5);
-    const bob = moving ? Math.sin(walkPhase * 2) * 0.010 : Math.sin(t * 1.6) * 0.003;
+    // 【fix518】必须拿 walkPhase 判断步行移动：原来的 speed.v 只在驾驶时变化，
+    // 步行时恒为 0，所以下面的摆动永远走"待机"分支，胳膊像僵尸一样僵住。
+    // walkPhase 只在步行移动时递增、停下立刻归零，正好当步频时钟用。
+    const moving = walkPhase > 0.0001;
+    const stepR = moving ? Math.sin(walkPhase) : 0;
+    const stepL = -stepR;                       // 左右反相，一前一后交替
+    const bob = moving ? Math.sin(walkPhase * 2) * 0.018 : Math.sin(t * 1.6) * 0.003;
     const sw = (typeof punchAnim === 'number') ? punchAnim : 0;
     const bR = fpViewArmR.userData.base, bL = fpViewArmL.userData.base;
     fpViewArmR.position.y = bR.py + bob;
-    fpViewArmL.position.y = bL.py + bob * 0.8;
+    fpViewArmL.position.y = bL.py + bob;
     if (sw > 0.01) {
+      // 攻击瞬间：挥动压过走路摆动
       fpViewArmR.rotation.x = bR.x - sw * 0.85;
       fpViewArmR.rotation.z = bR.z + sw * 0.40;
       fpViewArmL.rotation.x = bL.x - sw * 0.25;
     } else {
-      fpViewArmR.rotation.x = bR.x + Math.sin(t * 1.4) * 0.006;
-      fpViewArmR.rotation.z = bR.z;
-      fpViewArmL.rotation.x = bL.x + Math.sin(t * 1.1 + 1) * 0.005;
+      // 持武器那只手摆幅略小（武器跟着晃太狠会看不准），另一只手正常大幅摆臂
+      const ampR = fpViewWeapon ? 0.28 : 0.42;
+      const ampL = 0.42;
+      fpViewArmR.rotation.x = bR.x + stepR * ampR;
+      fpViewArmR.rotation.z = bR.z - stepR * 0.06;
+      fpViewArmL.rotation.x = bL.x + stepL * ampL;
+      fpViewArmL.rotation.z = bL.z - stepL * 0.06;
     }
   }
   // 相机（复用 Vector3 避免每帧分配）
