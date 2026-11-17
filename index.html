@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix518-first-person-arm-swing">
+<meta name="cf-build" content="20261117-fix519-first-person-muzzle-sparks">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -20928,7 +20928,12 @@ function attack() {
     atkCd = w.fireCd || 0.3;
     punchAnim = 1;   // 触发射击后坐力姿态（仅射击瞬间）
     sfx('shoot');
-    spawnBurst(px + fx * 1.2, pz + fz * 1.2, 0xffff88, 3, (person.position.y || 0) + 1.35);   // 枪口闪光（枪口真实高度）
+    // 【fix519·2026-11-17·用户：『第一人称下开枪爆出的火花，从三个直接减少到一个』】
+    // 枪口闪光原来是固定 3 颗粒子；第一人称下相机就在枪口旁边，3 颗黄色方块糊在准星周围
+    // 特别挡视线（截图里连发时还堆成一片）。这里只在第一人称步行开枪时改成 1 颗，
+    // 第三人称仍保留原来的 3 颗，避免把原有手感一起改掉。
+    const _muzzleN = (PROGRESS.firstPerson && state === 'walk') ? 1 : 3;
+    spawnBurst(px + fx * 1.2, pz + fz * 1.2, 0xffff88, _muzzleN, (person.position.y || 0) + 1.35);   // 枪口闪光（枪口真实高度）
     // 【2026-10-13 用户要求】四联火箭筒齐发：一次最多打出去 4 发（弹匣有几发打几发）。
     // 连发模式（salvoMode=false）每次只打 1 发；齐发模式（salvoMode=true）一次 4 发齐射。
     const salvoWant = (w.salvo && salvoMode) ? Math.max(1, Math.min(4, magOf(currentWeapon))) : 1;
