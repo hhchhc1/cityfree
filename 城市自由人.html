@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix523-base-lights-guard-rifle-alert">
+<meta name="cf-build" content="20261117-fix524-bullets-blocked-by-buildings">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -21092,6 +21092,40 @@ function shoot(w, count) {
     }
     return null;
   };
+  // 【fix524·2026-11-17·用户：『为什么子弹会直接穿过这些建筑？建筑不应该是实体的吗』】
+  // 根因：ray() 原本只检查人/车/汽油桶，groundHit() 只查地形，从不查 buildings，
+  //       所以墙面完全不挡子弹。这里做真正的三维射线-AABB 求交（slab 法），
+  //       弹道起点是枪口 (px, muzzleY, pz)，方向 (dx, slope, dz)，slope 由准星俯仰给出。
+  // 兼容老盒子的 bottom 和新盒子的 minY；上/下界都参与判断，所以天上飞的子弹不会撞墙、贴近地面的会先撞墙。
+  const buildingHit = (dx, dz, maxDist) => {
+    let bestT = maxDist, bestB = null, bestY = 0;
+    for (const b of buildings) {
+      const by0 = (typeof b.minY === 'number') ? b.minY : (b.bottom || 0);
+      const by1 = (typeof b.top === 'number') ? b.top : by0 + 1;
+      if (!(by1 > by0)) continue;
+      let tmin = -Infinity, tmax = Infinity, ok = true;
+      const axes = [[px, dx, b.minX, b.maxX], [pz, dz, b.minZ, b.maxZ], [muzzleY, slope, by0, by1]];
+      for (const ax of axes) {
+        const o = ax[0], d = ax[1], lo = ax[2], hi = ax[3];
+        if (Math.abs(d) < 1e-6) {
+          if (o < lo || o > hi) { ok = false; break; }
+        } else {
+          let t1 = (lo - o) / d, t2 = (hi - o) / d;
+          if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+          if (t1 > tmin) tmin = t1;
+          if (t2 < tmax) tmax = t2;
+          if (tmin > tmax) { ok = false; break; }
+        }
+      }
+      if (!ok || tmax <= 0) continue;
+      const tEnter = Math.max(0, tmin);
+      // tEnter≈0 说明枪口就在盒子里（门洞/室内），不能把自己脚下这栋楼当成墙；0.15m 避免贴脸自挡。
+      if (tEnter <= 0.15 || tEnter >= bestT) continue;
+      bestT = tEnter; bestB = b; bestY = muzzleY + slope * tEnter;
+    }
+    if (!bestB) return null;
+    return { x: px + dx * bestT, z: pz + dz * bestT, dist: bestT, y: bestY, b: bestB };
+  };
   const zoneOf = o => {
     const rr = raycaster.ray;
     const ox = o.x - rr.origin.x, oy = 1.0 - rr.origin.y, oz = o.z - rr.origin.z;
@@ -21151,16 +21185,21 @@ function shoot(w, count) {
     for (const v of cars) if (!v.exploded) testV(v);
     for (const t of traffic) if (!t.exploded) testV(t);
     for (const pc of policeCars) if (!pc.exploded) testV(pc);
+    // 【fix524】建筑是实体：如果墙比人/车更近，这发子弹先打在墙上，墙后目标不受伤。
+    const bh = buildingHit(dx, dz, Math.min(bd, w.range));
+    if (bh && bh.dist < bd) { bd = bh.dist; best = { k: 'bld', o: { x: bh.x, z: bh.z }, hy: bh.y, b: bh.b }; hs = false; }
     return { best, hs };
   };
   // 【2026-10-13 用户要求】狙击枪穿透：把这条弹道上**所有**命中目标都收集起来（按距离从近到远），
   // 而不是像 ray() 那样只挑最近的一个。判定宽度与 ray() 一致，人身略放宽一点（手感更好）。
-  const rayPierce = (dx, dz) => {
+  const rayPierce = (dx, dz, blockDist) => {
     const arr = [];
+    // 【fix524】狙击枪能穿人但不能穿墙：墙后的目标直接排除在命中列表外
+    const limit = Math.min(w.range, (typeof blockDist === 'number' && blockDist > 0) ? blockDist : w.range);
     const put = (o, k, width) => {
       const ox = o.x - px, oz = o.z - pz;
       const t = ox * dx + oz * dz;
-      if (t < 0 || t > w.range) return;
+      if (t < 0 || t > limit) return;
       const perp = Math.abs(ox * dz - oz * dx);
       if (perp < width) arr.push({ k, o, t });
     };
@@ -21188,6 +21227,8 @@ function shoot(w, count) {
     // 爆不爆仍然只看 burn 计数（FIRE_BOOM_AT=15 次命中才炸），外观阶段照旧 2s 烟 / 4s 火苗 / 8s 明火。
     else if (hit.k === 'car') { damageCar(hit.o, CAR_HIT_DMG, true); hitCarPassenger(hit.o, dmg); igniteVehicle(hit.o, 1); }
     else if (hit.k === 'gas') explodeGasBarrel(hit.o);
+    // 【fix524】建筑挡子弹：不扣血、不点燃、不触发爆炸，火花由 shoot() 的落点统一生成
+    else if (hit.k === 'bld') { /* solid wall: 弹头留在墙上 */ }
   };
   if (w.pellets) {
     // 霰弹枪：多颗弹丸散射
@@ -21210,8 +21251,9 @@ function shoot(w, count) {
         if (ptt > 0) queueBullet(hx, hy, hz, ptt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy); applyBulletHit(hit, dmg); });
         else applyBulletHit(hit, dmg);
       } else {
-        if (ptt > 0) queueBullet(hx, hy, hz, ptt, () => spawnBurst(hx, hz, 0xaaaaaa, 3, hy));
-        else spawnBurst(hx, hz, 0xaaaaaa, 3, hy);
+        const mcol = (r.best && r.best.k === 'bld') ? 0xffcc55 : 0xaaaaaa;
+        if (ptt > 0) queueBullet(hx, hy, hz, ptt, () => spawnBurst(hx, hz, mcol, 3, hy));
+        else spawnBurst(hx, hz, mcol, 3, hy);
       }
     }
     return;
@@ -21250,12 +21292,14 @@ function shoot(w, count) {
   // 【2026-10-13 用户要求】狙击枪：一发打穿一条线上的所有目标。
   // 伤害走 zoneDamage（狙击 oneShot 时恒为 9999 → 打中哪个部位都是一枪毙命）。
   if (w.pierce) {
-    const hits = rayPierce(fx, fz);
+    // 【fix524】先求墙的位置：狙击枪穿人不穿墙，弹道最终停在墙上
+    const bhit = buildingHit(fx, fz, w.range);
+    const hits = rayPierce(fx, fz, bhit ? bhit.dist : w.range);
     const lastO = hits.length ? hits[hits.length - 1].o : null;
-    let farX = lastO ? lastO.x : px + fx * w.range;
-    let farZ = lastO ? lastO.z : pz + fz * w.range;
-    let pdFar = Math.hypot(farX - px, farZ - pz);
-    _skyShot = !lastO;
+    let farX = bhit ? bhit.x : (lastO ? lastO.x : px + fx * w.range);
+    let farZ = bhit ? bhit.z : (lastO ? lastO.z : pz + fz * w.range);
+    let pdFar = bhit ? bhit.dist : (lastO ? Math.hypot(lastO.x - px, lastO.z - pz) : w.range);
+    _skyShot = !bhit && !lastO;
     if (!lastO) { const gh = groundHit(fx, fz, pdFar); if (gh) { _skyShot = false; farX = gh.x; farZ = gh.z; pdFar = gh.dist; } }
     const ttl = bulletTravelTime(w, pdFar);
     spawnTracer(px + fx * 0.5, muzzleY, pz + fz * 0.5, farX, shotY(farX, farZ, pdFar), farZ, currentWeapon, ttl || undefined);
@@ -21267,10 +21311,11 @@ function shoot(w, count) {
       if (tt > 0) queueBullet(hit.o.x, hy2, hit.o.z, tt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy2); applyBulletHit(hit, dmg); });
       else applyBulletHit(hit, dmg);
     }
-    if (!hits.length) {
+    if (!hits.length || bhit) {
       const hyFar = shotY(farX, farZ, pdFar);
-      if (ttl > 0) queueBullet(farX, hyFar, farZ, ttl, () => spawnBurst(farX, farZ, 0xaaaaaa, 4, hyFar));
-      else spawnBurst(farX, farZ, 0xaaaaaa, 4, hyFar);
+      const col = bhit ? 0xffcc55 : 0xaaaaaa;
+      if (ttl > 0) queueBullet(farX, hyFar, farZ, ttl, () => spawnBurst(farX, farZ, col, bhit ? 5 : 4, hyFar));
+      else spawnBurst(farX, farZ, col, bhit ? 5 : 4, hyFar);
     }
     return;
   }
@@ -21290,8 +21335,9 @@ function shoot(w, count) {
     if (stt > 0) queueBullet(hx, hy, hz, stt, () => { spawnBurst(hit.o.x, hit.o.z, 0xffcc55, 5, hy); applyBulletHit(hit, dmg); });
     else applyBulletHit(hit, dmg);
   } else {
-    if (stt > 0) queueBullet(hx, hy, hz, stt, () => spawnBurst(hx, hz, 0xaaaaaa, 4, hy));
-    else spawnBurst(hx, hz, 0xaaaaaa, 4, hy);
+    const mcol = (r.best && r.best.k === 'bld') ? 0xffcc55 : 0xaaaaaa;
+    if (stt > 0) queueBullet(hx, hy, hz, stt, () => spawnBurst(hx, hz, mcol, 4, hy));
+    else spawnBurst(hx, hz, mcol, 4, hy);
   }
 }
 function rocketImpact(w, shotBest, hx, hz, hy) {
