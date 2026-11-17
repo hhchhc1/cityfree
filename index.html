@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix507-achievements">
+<meta name="cf-build" content="20261116-fix508-achievement-music">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -14369,10 +14369,11 @@ var ACH_DEFS = [
   { id:'weaponLover', name:'武器爱好者',      desc:'成功解锁全部武器',                   gold:2500, xp:600 },
   { id:'fashion',     name:'时尚达人',        desc:'成功解锁所有服饰',                   gold:2500, xp:600 },
   { id:'dragon',      name:'屠龙少年',        desc:'累计成功击败 1000 个敌人（包括 NPC 和城管）', gold:5000, xp:1200 },
-  { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 }
+  { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 },
+  { id:'grapple1000', name:'我离不掉你了',    desc:'累计使用钩爪 1000 次',               gold:5000, xp:1200 }
 ];
 // 运行时状态（存档字段 achv）：done=已达成；count=累计计数（击杀/图鉴）；tpFree=免费传送卷库存
-var ACHY = { done:{}, count:{ kills:0, folk:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
+var ACHY = { done:{}, count:{ kills:0, folk:0, grapples:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
 var _achvToastTimer = 0;
 function achvShowToast(name, rewText) {
   var box = document.getElementById('achvToast');
@@ -14383,6 +14384,69 @@ function achvShowToast(name, rewText) {
   box.classList.add('show');
   clearTimeout(_achvToastTimer);
   _achvToastTimer = setTimeout(function () { box.classList.remove('show'); }, 3600);
+  try { playAchievementMusic(); } catch (eM) {}   // 【fix508】成就完成播放 7 秒欢快音乐
+}
+// ===== 【fix508】成就完成音乐：Web Audio 合成一段约 7 秒的欢快 upbeat 旋律 =====
+// 用户选了「内置合成旋律占位」：原曲（YouTube vEZmxsaKXAg）当前环境下载不到，
+// 故用代码合成一段明快的大调旋律，完全离线、无需外部文件。以后若拿到原曲 mp3，
+// 只需把本函数换成 new Audio(dataURI) 播放 7 秒即可，调用点不用改。
+// 设计：C 大调欢快琶音 + 低音伴奏，每个音符按 audioCtx.currentTime 绝对调度，互不依赖 setTimeout。
+var _achvMusicLast = 0;   // 节流：连续解锁多个成就时别叠着放
+function playAchievementMusic() {
+  if (typeof gameActive !== 'undefined' && !gameActive) return;
+  if (typeof musicMuted !== 'undefined' && musicMuted) return;   // 背景音乐静音时不放
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    // audioCtx 在后面(18330)用 let 定义；函数运行时已初始化，但用 typeof 守卫避免任何执行顺序意外。
+    if (typeof audioCtx === 'undefined') return;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    var now = audioCtx.currentTime;
+    if (now - _achvMusicLast < 1.0) return;   // 1 秒内不重复触发（防连弹刷屏）
+    _achvMusicLast = now;
+    var t0 = now + 0.02;
+    var master = audioCtx.createGain();
+    master.gain.setValueAtTime(0.0001, t0);
+    master.gain.linearRampToValueAtTime(0.22, t0 + 0.12);   // 快速淡入
+    master.gain.setValueAtTime(0.22, t0 + 6.4);
+    master.gain.linearRampToValueAtTime(0.0001, t0 + 7.0);  // 7 秒收尾
+    master.connect(audioCtx.destination);
+    // C 大调音符频率（Hz）。主旋律 4/4 拍，每拍 0.28s，25 拍 ≈ 7s。
+    var C4=261.63, D4=293.66, E4=329.63, F4=349.23, G4=392.00, A4=440.00, B4=493.88, C5=523.25, D5=587.33, E5=659.25, G5=783.99;
+    // 一段朗朗上口的欢快旋律（音高, 时值拍数）
+    var mel = [
+      [C5,0.5],[E5,0.5],[G5,1],[E5,0.5],[D5,0.5],[E5,0.5],[C5,0.5],[D5,1],
+      [E5,0.5],[G5,0.5],[C5,1],[G4,0.5],[A4,0.5],[B4,0.5],[C5,0.5],[E5,1],
+      [D5,0.5],[C5,0.5],[B4,0.5],[A4,0.5],[G4,0.5],[A4,0.5],[B4,0.5],[C5,0.5],[C5,1]
+    ];
+    var beat = 0.275, t = t0;
+    for (var i = 0; i < mel.length; i++) {
+      var hz = mel[i][0], len = mel[i][1] * beat;
+      playNote(hz, t, len * 0.92, 'triangle', 0.55, master);   // 主旋律：三角波明亮柔和
+      t += len;
+    }
+    // 低音伴奏：每两拍一个根音，走 C-Am-F-G 的欢快走向
+    var bass = [C4/2, A4/2, F4/2, G4/2, C4/2, A4/2, F4/2, G4/2, C4/2];
+    for (var b = 0; b < bass.length; b++) {
+      playNote(bass[b], t0 + b * beat * 2.6, beat * 2.2, 'sine', 0.32, master);
+    }
+    // 轻快的八分音符“叮”点缀
+    for (var k = 0; k < 14; k++) {
+      playNote(k % 2 ? E5 : C5, t0 + 0.14 + k * beat, 0.06, 'square', 0.10, master);
+    }
+  } catch (e) { try { console.warn('[achv music]', e); } catch (e2) {} }
+}
+// 单个音符：绝对时间调度到 master
+function playNote(hz, at, dur, type, vol, master) {
+  var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'triangle';
+  o.frequency.setValueAtTime(hz, at);
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g); g.connect(master);
+  o.start(at); o.stop(at + dur + 0.02);
 }
 // 发放特殊奖励，返回要并进横幅的文字。called only inside achUnlock.
 function achvSpecialReward(def) {
@@ -14442,6 +14506,8 @@ function achCount(id, n) {
     if (ACHY.count.kills >= 1000) achUnlock('dragon');
   } else if (id === 'folk') {
     if (ACHY.count.folk >= 20) achUnlock('folk');
+  } else if (id === 'grapples') {
+    if (ACHY.count.grapples >= 1000) achUnlock('grapple1000');
   }
 }
 // 古建筑之旅：记录玩家查看过的光柱词条（按名字去重），看满 20 根即达成
@@ -14484,6 +14550,7 @@ function renderAchievements() {
     else if (d.id === 'punish') tail = '进度 ' + Math.min(100, ACHY.count.kills || 0) + '/100';
     else if (d.id === 'dragon') tail = '进度 ' + Math.min(1000, ACHY.count.kills || 0) + '/1000';
     else if (d.id === 'folk') tail = '进度 ' + Math.min(20, ACHY.count.folk || 0) + '/20';
+    else if (d.id === 'grapple1000') tail = '进度 ' + Math.min(1000, ACHY.count.grapples || 0) + '/1000';   // 【fix508】
     else tail = '+' + d.gold + ' 金币 · +' + d.xp + ' 经验' + (d.reward ? ' · ' + d.reward : '');
     html += '<div class="achv-card ' + (done ? 'done' : 'lock') + '">' +
       '<div class="achv-t">' + (done ? '🏆 ' : '🔒 ') + d.name + '</div>' +
@@ -15646,6 +15713,7 @@ function fireGrapple() {
   if (person.position.x > 1876 && person.position.x < 2174 && person.position.z < -80 && person.position.z > -844) { setHint('衙署里不能用钩爪'); return; }
   if (!tgt) { setHint('准心没有可勾的目标'); return; }
   achUnlock('spiderman');      // 【fix507】我是蜘蛛人？：第一次成功使用钩爪
+  achCount('grapples', 1);     // 【fix508】我离不掉你了：累计使用钩爪 1000 次
   const px = person.position.x, py = person.position.y, pz = person.position.z;
   if (tgt.type === 'entity') {
     const o = tgt.o;
@@ -26002,6 +26070,7 @@ function restoreSaveGame() {
       if (data.achv.count && typeof data.achv.count === 'object') {
         ACHY.count.kills = saveNumber(data.achv.count.kills, 0, 0, 1000000);
         ACHY.count.folk  = saveNumber(data.achv.count.folk, 0, 0, 1000);
+        ACHY.count.grapples = saveNumber(data.achv.count.grapples, 0, 0, 1000000);   // 【fix508】
       }
       if (data.achv.folkSeen && typeof data.achv.folkSeen === 'object') ACHY.folkSeen = data.achv.folkSeen;
       if (data.achv.tpFree && typeof data.achv.tpFree === 'object') {
