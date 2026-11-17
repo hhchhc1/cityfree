@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix527-base-guard-military-caps-hp">
+<meta name="cf-build" content="20261117-fix528-clothing-polish-bridge-map">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -14225,36 +14225,91 @@ function buildClothesAttachments(target, store) {
   // target/store 可传：商店预览要用独立的人物副本，不能污染真人的 clothesAttach
   const CA = (store || clothesAttach);
   const helmet = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.25, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2f5d3a }));
+  const helmMat = new THREE.MeshLambertMaterial({ color: 0x2f5d3a });
+  const helmDark = new THREE.MeshLambertMaterial({ color: 0x1a3a24 });
+  const helmMetal = new THREE.MeshLambertMaterial({ color: 0x6a7078 });
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.25, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), helmMat);
   shell.position.y = 0.02; helmet.add(shell);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.015, 6, 16), new THREE.MeshLambertMaterial({ color: 0x1a3a24 }));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.016, 6, 18), helmDark);
   rim.rotation.x = Math.PI / 2; rim.position.y = 0.02; helmet.add(rim);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.12), new THREE.MeshLambertMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
-  visor.position.set(0, 0.02, 0.18); helmet.add(visor);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.3), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
-  stripe.position.y = 0.18; helmet.add(stripe);
+  // 前额护板 + 夜视仪座
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.06), helmDark);
+  brow.position.set(0, 0.085, 0.18); helmet.add(brow);
+  const mount = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.05), helmMetal);
+  mount.position.set(0, 0.1, 0.225); helmet.add(mount);
+  // 护目镜（深色半透明）
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.035),
+    new THREE.MeshLambertMaterial({ color: 0x0b1418, transparent: true, opacity: 0.78, emissive: 0x001018 }));
+  visor.position.set(0, 0.02, 0.225); helmet.add(visor);
+  // 顶部加强筋
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.045, 0.34), new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
+  stripe.position.y = 0.2; helmet.add(stripe);
+  // 两侧导轨 + 耳罩 + 下颌带
+  for (const sx of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.05, 0.2), helmMetal);
+    rail.position.set(sx * 0.235, 0.06, 0.0); helmet.add(rail);
+    const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.045, 10), helmDark);
+    ear.rotation.z = Math.PI / 2; ear.position.set(sx * 0.245, 0.0, 0.0); helmet.add(ear);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.16, 0.018), helmDark);
+    strap.position.set(sx * 0.15, -0.11, 0.02); strap.rotation.z = sx * 0.18; helmet.add(strap);
+  }
   helmet.position.y = 0.16; u.head.add(helmet);
   CA.helmet = helmet;
-  // 防弹背心（迷彩+弹匣袋）
+  // 防弹背心（迷彩 + 前后插板 + 肩带 + 弹匣袋 + 侧扣）
   const vest = new THREE.Group();
-  const vestBody = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.38, 10), new THREE.MeshLambertMaterial({ map: makeCamoTexture('#4a5d3a', '#2e3a24') }));
+  const vestCamo = new THREE.MeshLambertMaterial({ map: makeCamoTexture('#4a5d3a', '#2e3a24') });
+  const vestDark = new THREE.MeshLambertMaterial({ color: 0x2b3822 });
+  const vestBody = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.38, 12), vestCamo);
   vestBody.position.y = 0.38; vest.add(vestBody);
-  for (let i = 0; i < 3; i++) {
-    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.04), new THREE.MeshLambertMaterial({ color: 0x3a4a2a }));
-    pouch.position.set(-0.08 + i * 0.08, 0.34, 0.17); vest.add(pouch);
+  const frontPlate = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.035), vestDark);
+  frontPlate.position.set(0, 0.41, 0.175); vest.add(frontPlate);
+  const backPlate = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.035), vestDark);
+  backPlate.position.set(0, 0.41, -0.175); vest.add(backPlate);
+  for (const sx of [-0.1, 0.1]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.035, 0.24), vestDark);
+    strap.position.set(sx, 0.58, 0); vest.add(strap);
   }
+  for (let i = 0; i < 3; i++) {
+    const px = -0.08 + i * 0.08;
+    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.045), new THREE.MeshLambertMaterial({ color: 0x3a4a2a }));
+    pouch.position.set(px, 0.33, 0.19); vest.add(pouch);
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.025, 0.05), new THREE.MeshLambertMaterial({ color: 0x4f6338 }));
+    flap.position.set(px, 0.378, 0.19); vest.add(flap);
+  }
+  for (const sx of [-1, 1]) {
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.05, 0.06), vestDark);
+    buckle.position.set(sx * 0.185, 0.38, 0); vest.add(buckle);
+  }
+  const vestCollar = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.018, 6, 12), vestDark);
+  vestCollar.rotation.x = Math.PI / 2; vestCollar.position.y = 0.58; vest.add(vestCollar);
   u.hip.add(vest);
   CA.vest = vest;
-  // 重装护甲（金属板+肩甲）
+  // 重装护甲（分层金属板 + 肩甲 + 颈护 + 腰甲 + 铆钉）
   const armor = new THREE.Group();
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.42, 10), new THREE.MeshLambertMaterial({ map: makeCamoTexture('#5a5a62', '#2e2e34') }));
+  const armorCamo = new THREE.MeshLambertMaterial({ map: makeCamoTexture('#5a5a62', '#2e2e34') });
+  const armorDark = new THREE.MeshLambertMaterial({ color: 0x34343a });
+  const armorSteel = new THREE.MeshLambertMaterial({ color: 0x777d86 });
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.42, 12), armorCamo);
   plate.position.y = 0.38; armor.add(plate);
-  const shoulderL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.14), new THREE.MeshLambertMaterial({ color: 0x44444a }));
-  shoulderL.position.set(-0.2, 0.58, 0); armor.add(shoulderL);
-  const shoulderR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.14), new THREE.MeshLambertMaterial({ color: 0x44444a }));
-  shoulderR.position.set(0.2, 0.58, 0); armor.add(shoulderR);
-  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.04), new THREE.MeshLambertMaterial({ color: 0x5a5a62 }));
-  chestPlate.position.set(0, 0.42, 0.17); armor.add(chestPlate);
+  const chest1 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.05), armorSteel);
+  chest1.position.set(0, 0.45, 0.18); armor.add(chest1);
+  const chest2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.045), armorDark);
+  chest2.position.set(0, 0.33, 0.19); armor.add(chest2);
+  const neckGuard = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.11, 0.06, 10), armorDark);
+  neckGuard.position.y = 0.6; armor.add(neckGuard);
+  for (const sx of [-1, 1]) {
+    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), armorSteel);
+    pauldron.scale.set(1.2, 0.7, 1.2);
+    pauldron.position.set(sx * 0.2, 0.57, 0); armor.add(pauldron);
+    const pauldronTrim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.16), armorDark);
+    pauldronTrim.position.set(sx * 0.2, 0.535, 0); armor.add(pauldronTrim);
+    const waistPlate = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.04), armorSteel);
+    waistPlate.position.set(sx * 0.12, 0.2, 0.16); armor.add(waistPlate);
+  }
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), armorDark);
+    rivet.position.set(sx * 0.09, 0.45 + sy * 0.055, 0.207); armor.add(rivet);
+  }
   u.hip.add(armor);
   CA.armor = armor;
   // 暗影披风的外观模型：2026-10-12 服饰下架后一并删除（不再生成，省一个 group + 2 个 mesh）
@@ -14302,9 +14357,28 @@ function buildClothesAttachments(target, store) {
   }
   u.hip.add(belt2);
   CA.belt2 = belt2;
-  // 夹克（棕色皮衣覆盖蓝色夹克）
-  const jacketVis = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.175, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0x8b5a2a }));
-  jacketVis.position.y = 0.38; u.hip.add(jacketVis);
+  // 皮夹克（立体翻领 + 拉链 + 下摆 + 口袋）
+  const jacketVis = new THREE.Group();
+  const leather = new THREE.MeshLambertMaterial({ color: 0x6b3f1d });
+  const leatherDark = new THREE.MeshLambertMaterial({ color: 0x3f2410 });
+  const jacketZip = new THREE.MeshLambertMaterial({ color: 0xc0c0c0 });
+  const jacketBody = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.175, 0.4, 14), leather);
+  jacketBody.position.y = 0.38; jacketVis.add(jacketBody);
+  const jacketCollar = new THREE.Mesh(new THREE.TorusGeometry(0.145, 0.02, 6, 14), leatherDark);
+  jacketCollar.rotation.x = Math.PI / 2; jacketCollar.position.y = 0.585; jacketVis.add(jacketCollar);
+  for (const sx of [-1, 1]) {
+    const lapel = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.2, 0.022), leatherDark);
+    lapel.position.set(sx * 0.06, 0.46, 0.17); lapel.rotation.z = sx * 0.25; jacketVis.add(lapel);
+    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.022), leatherDark);
+    pocket.position.set(sx * 0.1, 0.3, 0.17); jacketVis.add(pocket);
+    const pocketFlap = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.018, 0.026), leather);
+    pocketFlap.position.set(sx * 0.1, 0.33, 0.17); jacketVis.add(pocketFlap);
+  }
+  const jacketZipMesh = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.34, 0.012), jacketZip);
+  jacketZipMesh.position.set(0, 0.38, 0.176); jacketVis.add(jacketZipMesh);
+  const jacketHem = new THREE.Mesh(new THREE.CylinderGeometry(0.176, 0.176, 0.035, 14), leatherDark);
+  jacketHem.position.y = 0.19; jacketVis.add(jacketHem);
+  u.hip.add(jacketVis);
   CA.jacket = jacketVis;
   // 卫衣（灰色连帽衫覆盖）
   const hoodieVis = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.175, 0.42, 12), new THREE.MeshLambertMaterial({ color: 0x666666 }));
@@ -14312,22 +14386,64 @@ function buildClothesAttachments(target, store) {
   const hood = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x666666 }));
   hood.position.set(0, 0.58, -0.08); hood.rotation.x = 0.5; u.hip.add(hood);
   CA.hoodie = hoodieVis;
-  // 跑鞋（橙色）
+  // 疾风跑鞋（分层鞋底 + 鞋面 + 鞋头 + 后跟 + 鞋带 + 侧条纹）
   const shoesVis = new THREE.Group();
-  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0xff6600 }));
-  shoeL.position.set(-0.09, -0.33, 0.04); shoesVis.add(shoeL);
-  const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0xff6600 }));
-  shoeR.position.set(0.09, -0.33, 0.04); shoesVis.add(shoeR);
+  const shoeSoleM = new THREE.MeshLambertMaterial({ color: 0x1b1b1b });
+  const shoeMidM = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 });
+  const shoeUpperM = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+  const shoeAccentM = new THREE.MeshLambertMaterial({ color: 0xffd166 });
+  function makeRunningShoe(x) {
+    const g = new THREE.Group();
+    g.position.set(x, -0.33, 0.04);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.035, 0.2), shoeSoleM);
+    sole.position.y = -0.035; g.add(sole);
+    const mid = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.02, 0.19), shoeMidM);
+    mid.position.y = -0.008; g.add(mid);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.15), shoeUpperM);
+    upper.position.set(0, 0.035, -0.005); g.add(upper);
+    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.06), shoeAccentM);
+    toe.position.set(0, 0.025, 0.075); g.add(toe);
+    const heel = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.04), shoeSoleM);
+    heel.position.set(0, 0.03, -0.075); g.add(heel);
+    for (let i = 0; i < 3; i++) {
+      const lace = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.008, 0.015), shoeMidM);
+      lace.position.set(0, 0.068, -0.02 + i * 0.025); g.add(lace);
+    }
+    for (const sx of [-1, 1]) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.1), shoeMidM);
+      stripe.position.set(sx * 0.052, 0.035, 0.0); g.add(stripe);
+    }
+    return g;
+  }
+  shoesVis.add(makeRunningShoe(-0.09));
+  shoesVis.add(makeRunningShoe(0.09));
   u.hip.add(shoesVis);
   CA.shoes = shoesVis;
-  // 拳套（红色）
-  const glovesVis = new THREE.Group();
-  const gloveL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshLambertMaterial({ color: 0xcc2222 }));
-  gloveL.position.set(-0.2, 0.25, 0); glovesVis.add(gloveL);
-  const gloveR = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshLambertMaterial({ color: 0xcc2222 }));
-  gloveR.position.set(0.2, 0.25, 0); glovesVis.add(gloveR);
-  u.hip.add(glovesVis);
-  CA.gloves = glovesVis;
+  // 铁拳手套（拳套主体 + 护腕 + 拇指 + 指节护板 + 绑带），直接挂在左右肘关节上，
+  // 这样走路摆臂、出拳、换弹时手套都会跟着手走，不会像旧版那样固定在腰侧。
+  const gloveMainM = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
+  const gloveDarkM = new THREE.MeshLambertMaterial({ color: 0x7a1010 });
+  const glovePadM = new THREE.MeshLambertMaterial({ color: 0xf0e6d2 });
+  function buildBoxingGlove(side) {
+    const g = new THREE.Group();
+    const main = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), gloveMainM);
+    main.scale.set(1, 1.15, 1.1); main.position.set(0, -0.27, 0.01); g.add(main);
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.07, 10), gloveDarkM);
+    cuff.position.set(0, -0.2, 0); g.add(cuff);
+    const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), gloveMainM);
+    thumb.position.set(side * 0.055, -0.27, 0.04); g.add(thumb);
+    const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.02), glovePadM);
+    knuckle.position.set(0, -0.24, 0.078); g.add(knuckle);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.08), gloveDarkM);
+    strap.position.set(side * 0.06, -0.2, 0); g.add(strap);
+    return g;
+  }
+  const glovesL = buildBoxingGlove(1);
+  const glovesR = buildBoxingGlove(-1);
+  u.elbowL.add(glovesL);
+  u.elbowR.add(glovesR);
+  CA.glovesL = glovesL;
+  CA.glovesR = glovesR;
 
   // 战术面罩
   const mask = new THREE.Group();
@@ -16305,6 +16421,23 @@ function buyWeapon(key) {
   achUnlock('truth');          // 【fix507】真理在手：第一次成功购买武器
   achCheckCollections();       // 【fix507】武器爱好者：集齐全部武器
 }
+// 【fix528】只给"当前这个部件"克隆材质再改色。
+// 旧版 applyClothing 直接改 u.torso / u.handL 的 material.color，而玩家模型里手、头、四肢
+// 共用同一份黑色材质（makePlayer 的 `black`），于是戴铁拳手套时整条手臂甚至整个身体都变红。
+// 这里逐 Mesh 克隆并打标记，既只染目标部件，又不会每次换装都重复克隆。
+function tintClonedPart(root, hex) {
+  if (!root) return;
+  root.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (o.material.vertexColors) return;   // 已按顶点色合并的整块网格不整体染色
+    if (!o.material.userData || !o.material.userData.__cfTintClone) {
+      o.material = o.material.clone();
+      o.material.userData = o.material.userData || {};
+      o.material.userData.__cfTintClone = true;
+    }
+    o.material.color.setHex(hex);
+  });
+}
 function applyClothing() {
   const u = person.userData;
   if (!clothesAttach.helmet) buildClothesAttachments();
@@ -16313,13 +16446,12 @@ function applyClothing() {
   else if (isEquipped('hoodie')) torsoColor = 0x2e7d32; // 卫衣：深绿
   else if (isEquipped('armor')) torsoColor = 0x55555c;  // 护甲：深灰
   else if (isEquipped('vest')) torsoColor = 0x424242;   // 防弹衣：深灰
-  if (u.torso?.material?.color) u.torso.material.color.setHex(torsoColor);
-  const shoeColor = isEquipped('shoes') ? 0xffffff : 0x111111;   // 跑鞋：白鞋
-  if (u.shoeL?.material?.color) u.shoeL.material.color.setHex(shoeColor);
-  if (u.shoeR?.material?.color) u.shoeR.material.color.setHex(shoeColor);
-  const handColor = isEquipped('gloves') ? 0xd32f2f : 0xffcc99;   // 拳套：红手
-  if (u.handL) u.handL.material.color.setHex(handColor);
-  if (u.handR) u.handR.material.color.setHex(handColor);
+  tintClonedPart(u.torso, torsoColor);
+  // 手套只染双手；没戴手套保持黑色，不要再把整身染成肤色/红色
+  const handColor = isEquipped('gloves') ? 0xd32f2f : 0x1a1a1a;
+  tintClonedPart(u.handL, handColor);
+  tintClonedPart(u.handR, handColor);
+  // 鞋子不再直接改基础鞋材质（会把白底/蓝面/红鞋带一起染平），改由精细的 shoes 附件表现
   // 独立外观附件（头盔/防弹衣/护甲/披风，带图案）
   clothesAttach.helmet.visible = isEquipped('helmet');
   clothesAttach.vest.visible = isEquipped('vest');
@@ -16332,7 +16464,8 @@ function applyClothing() {
   clothesAttach.jacket.visible = isEquipped('jacket');
   clothesAttach.hoodie.visible = isEquipped('hoodie');
   clothesAttach.shoes.visible = isEquipped('shoes');
-  clothesAttach.gloves.visible = isEquipped('gloves');
+  if (clothesAttach.glovesL) clothesAttach.glovesL.visible = isEquipped('gloves');
+  if (clothesAttach.glovesR) clothesAttach.glovesR.visible = isEquipped('gloves');
   clothesAttach.mask.visible = isEquipped('mask');
   clothesAttach.scarf2.visible = isEquipped('scarf2');
   clothesAttach.wrist.visible = isEquipped('wrist');
@@ -17086,6 +17219,12 @@ function makeClothesPreviewModel(key) {
     if (!vis) continue;
     vis.visible = false;
     if (k === cl.visual) { vis.visible = true; shown++; }
+  }
+  // 【fix528】铁拳手套现在是左右两个独立附件（分别挂在左右肘关节上），
+  // 预览里没有单一的 store.gloves，必须把两只一起显示。
+  if (cl.visual === 'gloves') {
+    if (store.glovesL) { store.glovesL.visible = true; shown++; }
+    if (store.glovesR) { store.glovesR.visible = true; shown++; }
   }
   // jacket/hoodie/vest/armor 在游戏里还额外改躯干颜色，预览里同步改
   const u = man.userData;
@@ -23762,6 +23901,21 @@ function drawMinimap() {
       mctx.fillStyle = 'rgba(220,232,245,0.92)'; mctx.fillText(z.name, cx, cy);
     }
   }
+  // 【fix528】跨海大桥：主城小地图也画出连接南岛的那条桥，别再让岛和城市看起来断开
+  if (typeof BRIDGE_HALF_WIDTH !== 'undefined' && typeof BRIDGE_START_Z !== 'undefined' && typeof BRIDGE_END_Z !== 'undefined') {
+    const bx0 = w2m(-BRIDGE_HALF_WIDTH), bx1 = w2m(BRIDGE_HALF_WIDTH);
+    const bz0 = w2n(BRIDGE_START_Z), bz1 = w2n(BRIDGE_END_Z);
+    if (bx1 > -20 && bx0 < S + 20 && bz1 > -20 && bz0 < S + 20) {
+      mctx.fillStyle = 'rgba(160,150,135,0.95)';
+      mctx.fillRect(bx0, bz0, bx1 - bx0, bz1 - bz0);
+      mctx.strokeStyle = 'rgba(240,230,205,0.85)'; mctx.lineWidth = 1;
+      mctx.strokeRect(bx0, bz0, bx1 - bx0, bz1 - bz0);
+      mctx.strokeStyle = 'rgba(255,215,100,0.85)'; mctx.lineWidth = 1;
+      mctx.setLineDash([3, 3]);
+      mctx.beginPath(); mctx.moveTo((bx0 + bx1) / 2, bz0); mctx.lineTo((bx0 + bx1) / 2, bz1); mctx.stroke();
+      mctx.setLineDash([]);
+    }
+  }
   // 道路
   // 【fix178】新城区（临海市）：小地图上画出城墙、护城河、木桥、园林、跑道。
   // 原来小地图只用主城的 roads 数组绘制，走到新城区就是一片空黑。
@@ -23985,6 +24139,22 @@ function drawFullMap() {
   for (const z of zones) {
     ctx.fillStyle = z.color + '44';
     ctx.beginPath(); ctx.arc(X(z.x), Y(z.z), z.r * s, 0, 7); ctx.fill();
+  }
+  // 【fix528】跨海大桥：从主城南侧一路连到南岛北缘，地图上必须能看出两片陆地是通的
+  if (typeof BRIDGE_HALF_WIDTH !== 'undefined' && typeof BRIDGE_START_Z !== 'undefined' && typeof BRIDGE_END_Z !== 'undefined') {
+    const bx0 = X(-BRIDGE_HALF_WIDTH), bx1 = X(BRIDGE_HALF_WIDTH);
+    const bz0 = Y(BRIDGE_START_Z), bz1 = Y(BRIDGE_END_Z);
+    ctx.fillStyle = 'rgba(160,150,135,0.98)';
+    ctx.fillRect(bx0, bz0, bx1 - bx0, bz1 - bz0);
+    ctx.strokeStyle = 'rgba(240,230,205,0.95)';
+    ctx.lineWidth = Math.max(1, 1.2 * s);
+    ctx.strokeRect(bx0, bz0, bx1 - bx0, bz1 - bz0);
+    // 桥面中央黄色虚线
+    ctx.strokeStyle = 'rgba(255,215,100,0.9)';
+    ctx.lineWidth = Math.max(1, 1.5 * s);
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo((bx0 + bx1) / 2, bz0); ctx.lineTo((bx0 + bx1) / 2, bz1); ctx.stroke();
+    ctx.setLineDash([]);
   }
   // 【fix290】名字改到最后统一画（见函数末尾）：先画必被楼块/城墙盖住。
   // 【fix274】南岸新区（科技城 / 霓虹楼群）：x 965~1518，z -80~318，两纵三横路网 + 楼块
