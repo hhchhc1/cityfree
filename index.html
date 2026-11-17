@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix520-first-person-left-hand-support">
+<meta name="cf-build" content="20261117-fix521-person-npc-solid-collision">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -17573,6 +17573,41 @@ function pushCircle(p, r1, o, r2) {
   if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2), push = rr - d; p.x += dx / d * push; p.z += dz / d * push; }
   else if (d2 <= 1e-6) { p.x += rr; }
 }
+// ===== 【fix521·2026-11-17】玩家与 NPC 互为实体（双向碰撞） =====
+// 用户反馈：「玩家和对 NPC 的都必须是实体的，NPC 遇到玩家在前面就和一小块墙一样挡着」。
+// 根因：玩家步行碰撞只查建筑/车/树/杂物，从不查 residents/cops；NPC 的 collideNpc()
+//       也只查别的 NPC，不查玩家。于是双方都能直接穿过去，截图里人已经叠在一起。
+// 修复：① NPC 移动末尾加 collidePlayerBody() —— 玩家站着不动也是一堵小墙；
+//       ② 玩家步行/钩爪两条分支加 collideNpcBodies() —— NPC 同样挡玩家；
+//       ③ 用 entityFootY() 做同层判断（高度差 >1.6m 不互相挡），避免楼上的人挡楼下的人；
+//       ④ 对玩家侧用线性扫描 residents/cops（不是只靠 _gridNpc），这样新城区 x>900
+//          和网格每 6 帧才重建带来的滞后都不会漏掉眼前的人。
+var PERSON_BODY_R = 0.42;        // 人物躯干碰撞半径（两人合计 0.84m，刚好不穿模又能贴身走）
+var PERSON_BODY_SAME_FLOOR_DY = 1.6;  // 超过这个高度差视为不同楼层，不产生人体阻挡
+
+// NPC 侧：把玩家当作一堵会移动的小墙。self 必须是正在移动的 NPC 对象。
+function collidePlayerBody(p, r, self) {
+  if (!self || state !== 'walk' || !person) return;
+  const py = person.position.y, oy = entityFootY(self);
+  if (!isFinite(py) || !isFinite(oy) || Math.abs(py - oy) > PERSON_BODY_SAME_FLOOR_DY) return;
+  pushCircle(p, r, { x: person.position.x, z: person.position.z }, PERSON_BODY_R);
+}
+
+// 玩家侧：眼前所有活着的 NPC/警察都是实体。倒地尸体不挡路。
+function collideNpcBodies(p, r) {
+  if (state !== 'walk' || !person) return;
+  const py = person.position.y;
+  if (!isFinite(py)) return;
+  const test = o => {
+    if (!o || !o.alive || o.down) return;
+    const oy = entityFootY(o);
+    if (!isFinite(oy) || Math.abs(py - oy) > PERSON_BODY_SAME_FLOOR_DY) return;
+    pushCircle(p, r, o, PERSON_BODY_R);
+  };
+  for (const o of residents) test(o);
+  for (const o of cops) test(o);
+}
+
 function collideTrees(p, r) { for (const tr of treeObstacles) pushCircle(p, r, tr, tr.r); }
 function collideGasBarrels(p, r) { for (const gb of gasBarrels) if (gb.alive) pushCircle(p, r, gb, gb.radius); }
 function collideNpc(p, r, self) {
@@ -17584,6 +17619,7 @@ function collideNpc(p, r, self) {
   collideGasBarrels(p, r);
   collideTreesFast(p, r);
   if (self) collideNpcsFast(p, r, self);
+  collidePlayerBody(p, r, self);   // 【fix521】玩家也是实体
 }
 
 // ========== 特效（命中火花 / 枪口闪光） ==========
@@ -24890,6 +24926,7 @@ function update(dt) {
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
        collideGasBarrels(p, 0.4);
        collideTreesFast(p, 0.4);
+      collideNpcBodies(p, 0.4);   // 【fix521】钩爪/游泳时眼前的 NPC 同样是实体
       clampCity(p); zzGateClamp('walk', p); person.position.x = p.x; person.position.z = p.z;   // 【fix506】中镇山门禁（含钩爪/游泳）
     } else {
       // mx / mz 已在 walk 分支开头算好（游泳要用），这里直接复用，不要重复声明
@@ -24959,6 +24996,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
        for (const tc of trashCans) if (!tc.fly) circleVsCircle(p, 0.4, { x: tc.x, z: tc.z }, tc.radius);
        collideGasBarrels(p, 0.4);
        collideTreesFast(p, 0.4);
+      collideNpcBodies(p, 0.4);   // 【fix521】NPC 对玩家也像小墙一样挡路
       clampCity(p); zzGateClamp('walk', p); person.position.x = p.x; person.position.z = p.z;   // 【fix506】中镇山门禁
       // 斜坡碰撞：玩家站在斜坡上时升高
       let onRamp = false;
