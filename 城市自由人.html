@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261116-fix508-achievement-music">
+<meta name="cf-build" content="20261117-fix509-bike-rider">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -15977,8 +15977,17 @@ function drawGrappleRope() {
     ropeCyl.visible = false;
   }
 }
-function poseRider() {   // 骑摩托坐姿
-  const u = person.userData;
+// 【fix509·2026-11-17·用户：『怎么人物骑上摩托中就自动消失了？有时候是这样的』】
+// 根因：老逻辑把主角模型（person）既当"步行人格"又当"摩托骑手"用。
+// 上车时只在 tryToggle 里设置一次 person.visible=true，之后每帧 updateDrive 再同步坐标；
+// 但 person 同时还会被坠落/翻滚/飞机/上下车等流程改 visible / rotation / 姿态，
+// 于是偶发出现"HUD 显示驾驶中、摩托在跑，但车上没人"的状态。
+// 修法：两轮车单独挂一个"玩家骑手"模型在车 group 下，随车一起移动/转向；
+// 原 person 继续保留世界坐标供相机、碰撞和下车落点使用，但视觉上由独立骑手显示。
+var playerBikeRider = null;
+var playerBikeRiderCar = null;
+function poseRider(fig) {   // 骑摩托坐姿
+  const u = (fig && fig.userData) ? fig.userData : person.userData;
   u.legL.rotation.x = -1.2; u.legR.rotation.x = -1.2;
   u.legL.rotation.z = 0.12; u.legR.rotation.z = -0.12;
   if (u.kneeL) { u.kneeL.rotation.x = 1.0; u.kneeR.rotation.x = 1.0; }   // 屈膝踩踏板
@@ -15986,6 +15995,35 @@ function poseRider() {   // 骑摩托坐姿
   u.armL.rotation.x = -1.25; u.armR.rotation.x = -1.25;
   u.armL.rotation.z = -0.3; u.armR.rotation.z = 0.3;
   if (u.elbowL) { u.elbowL.rotation.x = -0.7; u.elbowR.rotation.x = -0.7; }   // 肘微屈抓把
+}
+function clearPlayerBikeRider() {
+  if (playerBikeRider && playerBikeRider.parent) playerBikeRider.parent.remove(playerBikeRider);
+  playerBikeRider = null;
+  playerBikeRiderCar = null;
+}
+function ensurePlayerBikeRider(v) {
+  if (!v || !v.group) return null;
+  if (!playerBikeRider || playerBikeRiderCar !== v || !playerBikeRider.parent) {
+    clearPlayerBikeRider();
+    try {
+      const fig = makePlayer();   // 与主角的蓝夹克/大头像一致，避免"换了一个人"
+      // 车模自己有 0.85 倍缩放；骑手是它的子物体，必须反向抵消，
+      // 否则骑手会跟着车一起变小、座位高度也一起缩水（看起来像"人缩没了"）。
+      const _vs = (v.group.scale && v.group.scale.x) ? v.group.scale.x : 1;
+      fig.position.set(0, (v.rideH || 0.55) / _vs, -0.3 / _vs);   // 本地坐标：绑定到车，随车旋转/起跳
+      fig.scale.setScalar(1 / _vs);
+      fig.rotation.set(0, 0, 0);
+      poseRider(fig);
+      v.group.add(fig);
+      playerBikeRider = fig;
+      playerBikeRiderCar = v;
+    } catch (e) {
+      clearPlayerBikeRider();
+      return null;
+    }
+  }
+  playerBikeRider.visible = true;
+  return playerBikeRider;
 }
 
 // ========== 上车/下车 ==========
@@ -16126,13 +16164,17 @@ function tryToggle() {
       }
       if (c.isHelicopter || c.isTank) {
         // 直升机/坦克：直接进入
+        clearPlayerBikeRider();
         person.visible = false;
       } else if (c.radius < 1.2) {
         // 摩托车：第一次上车摘掉骑手，之后不再刷人
         if (!c.driverEjected) { ejectDriver(c); c.driverEjected = true; }
-        person.visible = true;
+        // 【fix509】用独立骑手模型绑定在车上；person 只保留逻辑坐标，避免偶发被其他流程隐藏。
+        if (!ensurePlayerBikeRider(c)) person.visible = true;
+        else person.visible = false;
       } else {
         // 汽车：拉开车门上车，司机摘下/隐藏
+        clearPlayerBikeRider();
         c.doorT = 0.7;
         if (c.group.userData.driver) c.group.userData.driver.visible = false;
         person.visible = false;
@@ -16153,6 +16195,7 @@ function tryToggle() {
   } else {
     state = 'walk';
     stopCarMusic();
+    clearPlayerBikeRider();   // 【fix509】二轮车独立骑手随下车一起移除，恢复主角本体显示
     // 直升机/坦克下车：放下到地面
     if (currentCar && (currentCar.isHelicopter || currentCar.isTank)) {
       person.position.set(currentCar.x - Math.cos(currentCar.angle) * 3, terrainHeight(currentCar.x, currentCar.z) + 1, currentCar.z - Math.sin(currentCar.angle) * 3);
@@ -24682,6 +24725,11 @@ function update(dt) {
     try { retTick(dt); } catch (errRet) { console.warn('[ret] 演出出错，强制结束', errRet); try { retFinish(); } catch (e2) { RET = null; } }
     return;
   }
+  // 【fix509】状态兜底：只要不再是"正骑着这辆两轮车"，就摘掉独立骑手模型。
+  // 车辆爆炸/被拖走/任务强制下车等路径不会漏掉，杜绝旧骑手模型残留在车壳上。
+  if (!(state === 'drive' && currentCar && currentCar === playerBikeRiderCar && currentCar.radius < 1.2)) {
+    if (playerBikeRider) clearPlayerBikeRider();
+  }
   // 没在过场：先跑光柱（走近自动弹机票对话），再更新舱门提示
   updateFlightPillar(dt);
   updateBoardPrompt();
@@ -25323,14 +25371,19 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       if (t.exploded) continue;
       if (!carsVerticallySeparated(currentCar, t) && Math.hypot(currentCar.x - t.x, currentCar.z - t.z) < currentCar.radius + t.radius + 0.4) t.speed *= (1 - Math.min(1, 4 * dt));
     }
-    // 摩托车：主角骑上去可见；汽车：主角隐藏
+    // 摩托车/自行车：独立骑手绑定在车上，主角本体保留逻辑坐标（相机/碰撞/下车落点仍要用）
+    // 【fix509】这里不能再简单 person.visible=true：坠落翻滚、飞机、上下车等流程都会改主角可见性，
+    // 原表现就是"HUD 驾驶中、车在跑，但车上的主角有时整个人没了"。独立骑手随车 group 渲染，最稳。
     if (currentCar.radius < 1.2) {
-      person.visible = true;
+      const _bikeRiderOk = !!ensurePlayerBikeRider(currentCar);
+      person.visible = !_bikeRiderOk;   // 骑手模型创建失败时才退回老逻辑
       person.position.x = currentCar.x - fx * 0.3;
       person.position.z = currentCar.z - fz * 0.3;
       person.position.y = currentCar.group.position.y + (currentCar.rideH || 0.55);
-      person.rotation.y = currentCar.angle;
-      poseRider();
+      person.rotation.set(0, currentCar.angle, 0);
+      if (!_bikeRiderOk) poseRider(person);
+    } else if (playerBikeRiderCar && playerBikeRiderCar !== currentCar) {
+      clearPlayerBikeRider();
     }
     // 车辆撞击：**一次检测把当前压在车下的所有人全部撞倒**，不再"撞到一个就 break"。
     // 原来是撞到第一个就 break + 进入 0.8 秒整车冷却 —— 车速 20m/s 时 0.8 秒能跑 16 米，
