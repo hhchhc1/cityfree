@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix510-hezhi-photo">
+<meta name="cf-build" content="20261117-fix511-sign-theme-button">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -767,7 +767,7 @@
     </div>
   </div>
   <div id="devBtn">开发者模式</div>
-<div id="signThemeBtn" onclick="cycleSignTheme()" style="display:none;position:fixed;left:12px;top:206px;z-index:60;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.82);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none">🎨 路牌配色</div>
+<div id="signThemeBtn" onclick="cycleSignTheme()" style="display:none;position:fixed;left:12px;top:206px;z-index:85;padding:6px 12px;border-radius:8px;background:rgba(20,26,34,.92);color:#eaf4ff;font-size:14px;cursor:pointer;user-select:none;touch-action:manipulation;pointer-events:auto">🎨 路牌配色</div>
 <!-- 【fix119】一键切白天/夜晚：专门用来看新城区的夜间灯光 -->
 <!-- 【fix128】用户要求去掉一键切昼夜按钮：让昼夜自然循环（updateDayNight 本来每帧都在跑） -->
 <!-- ==================== 【fix47】机票对话面板 ====================
@@ -15091,7 +15091,7 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   // 【2026-10-15】足球开赛面板开着时，鼠标左键不再触发攻击（否则点「开赛」会同时开枪）
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
-  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
+  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #signThemeBtn, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
   atkHeld = true; atkPointerType = 'mouse'; atkPointerId = e.pointerId;
   attack();
 });
@@ -27011,7 +27011,40 @@ function cycleSignTheme() {
   try { if (window.__cfSignApply) window.__cfSignApply(); } catch (e) {}
   try { saveGame(); } catch (e) {}
   try { setHint('路牌配色 ' + (PROGRESS.signTheme + 1) + '/5：' + SIGN_THEME_NAMES[PROGRESS.signTheme]); } catch (e) {}
+  try { updateSignThemeBtnLabel(); } catch (e) {}
 }
+// 【fix511·2026-11-17·用户：『这个路牌配色怎么无法点击了？』】
+// 根因：这个按钮只有 inline onclick。手机上全局 touchstart / window 捕获层会先吃掉事件，
+// 或者有透明层盖在按钮上方，导致"看得到、点不到"。截图中提示文字出现过一次配色序号，
+// 说明函数本身没坏，坏的是输入命中路径。
+// 修法：在 window 捕获阶段按按钮矩形做命中，命中就直接切换；不依赖 DOM 层级、不依赖 click 合成。
+(function installSignThemeTap() {
+  var _last = 0;
+  function hitAndRun(e) {
+    var b = document.getElementById('signThemeBtn');
+    if (!b || b.style.display === 'none') return;
+    var r = b.getBoundingClientRect();
+    var t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    if (t.clientX === undefined || t.clientY === undefined) return;
+    if (t.clientX < r.left - 4 || t.clientX > r.right + 4 || t.clientY < r.top - 4 || t.clientY > r.bottom + 4) return;
+    try { e.stopImmediatePropagation(); } catch (e1) {}
+    try { e.preventDefault(); } catch (e2) {}
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (now - _last < 250) return;   // touchstart/pointerdown/mousedown 可能同一次落点连发，去重
+    _last = now;
+    cycleSignTheme();
+  }
+  addEventListener('touchstart', hitAndRun, true);
+  addEventListener('pointerdown', hitAndRun, true);
+  addEventListener('mousedown', hitAndRun, true);
+})();
+function updateSignThemeBtnLabel() {
+  var b = document.getElementById('signThemeBtn');
+  if (!b) return;
+  var lab = '🎨 路牌配色 ' + ((PROGRESS.signTheme || 0) + 1) + '/5';
+  if (b.textContent !== lab) b.textContent = lab;
+}
+try { updateSignThemeBtnLabel(); } catch (e) {}
 function buildLinhaiCity(g) {
   const Z0 = LH.z0, Z1 = LH.z1, ZC = (Z0 + Z1) / 2, ZLEN = Z1 - Z0;
   const add = (m) => { g.add(m); return m; };
@@ -33964,9 +33997,14 @@ const frameLoop = () => {
   try {
     const _sb = document.getElementById('signThemeBtn');
     if (_sb) {
-      const _nearSign = !FLIGHT && Math.hypot(person.position.x - (LH.rivX0 - 44), person.position.z - (DEST.z + 130)) < 22;
+      // 【fix511】开车时 person.position 不再跟随车辆，必须用玩家真实世界坐标判断，
+      // 否则按钮会"人早开走了还挂着"或"人到了却不显示"，看起来像失灵。
+      const _px = (typeof playerWorldX === 'function') ? playerWorldX() : person.position.x;
+      const _pz = (typeof playerWorldZ === 'function') ? playerWorldZ() : person.position.z;
+      const _nearSign = !FLIGHT && !RET && Math.hypot(_px - (LH.rivX0 - 44), _pz - (DEST.z + 130)) < 22;
       const _want = _nearSign ? 'block' : 'none';
       if (_sb.style.display !== _want) _sb.style.display = _want;
+      if (_nearSign) { try { updateSignThemeBtnLabel(); } catch (e) {} }
     }
   } catch (e) {}
   updateAutoQuality();   // 自适应分辨率：连续掉帧就把像素比压下去（见函数注释）
