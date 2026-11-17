@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix521-person-npc-solid-collision">
+<meta name="cf-build" content="20261117-fix522-first-person-arms-connected-swing">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -25694,6 +25694,15 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     const sleeve = new THREE.MeshLambertMaterial({ color: 0x2980b9, emissive: 0x10263a });
     const glove  = new THREE.MeshLambertMaterial({ color: 0x1a1a1a, emissive: 0x0a0a0a });
     const band   = new THREE.MeshLambertMaterial({ color: 0x00d4ff, emissive: 0x004455 });
+    // 【fix522·2026-11-17·用户：『右胳膊看着好像就是断的』】
+    // 原来只做了前臂（local z=0→-0.34），arm group 又放在相机前 0.46m，
+    // 于是画面里只剩一截悬空的蓝袖子，靠近镜头的上臂完全缺失，看起来就是断肢。
+    // 补一段 local z=0→+0.40 的上臂，近端伸到相机近平面外（屏幕下沿），
+    // 再加一个肘部球把两段接顺；它随 fpViewArm 一起转，走路时自然整条手臂摆动。
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.070, 0.40, 10), sleeve);
+    upper.rotation.x = Math.PI / 2; upper.position.set(0, -0.012, 0.20); g.add(upper);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.060, 10, 8), sleeve);
+    elbow.position.set(0, -0.008, 0.005); g.add(elbow);
     // 前臂：圆柱默认沿 Y，旋转 90° 后沿 Z，从肩端伸向画面前方
     const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.043, 0.052, 0.34, 10), sleeve);
     fore.rotation.x = Math.PI / 2; fore.position.z = -0.17; g.add(fore);
@@ -25754,39 +25763,39 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     const bob = moving ? Math.sin(walkPhase * 2) * 0.018 : Math.sin(t * 1.6) * 0.003;
     const sw = (typeof punchAnim === 'number') ? punchAnim : 0;
     const bR = fpViewArmR.userData.base, bL = fpViewArmL.userData.base;
-    // 【fix520·2026-11-17·用户：『射击时左手托住枪托；近战武器左手顺势摆动；开枪时左手往枪底下挠两下』】
-    // 枪（type:'gun'）= 双手持枪：左手抬到枪底下托着，随步伐小幅起伏；
-    // 近战/空手 = 左手回到自然位，顺着步伐一前一后大幅摆动（fix518 的摆臂）。
-    // 开枪瞬间（punchAnim 从 1 衰减）左手在枪底做两次短促托举脉冲，不再僵在原地。
+    // 【fix520 → fix522·2026-11-17·用户：『左胳膊和死了一样…拿枪的时候左胳膊动的幅度太小了，
+    //  我看不清楚，你就弄得和拿刀的一样就行』】
+    // fix520 只把左手挪到枪底，却把持枪摆臂压成 stepL*0.05（约 3°），肉眼几乎看不出来。
+    // fix522 保留"手在枪底托枪"的位置，但摆动幅度、方向完全改用近战同款 stepL*ampL（约 24°），
+    // 位置也跟着步频前后推，开枪脉冲加大到能看清；只有近战挥击瞬间仍走原来的顺势跟手。
     const wdef = (typeof WEAPONS !== 'undefined' && WEAPONS[key]) ? WEAPONS[key] : null;
     const isGun = !!(wdef && wdef.type === 'gun');
     const kSmooth = 1 - Math.pow(0.002, Math.min(0.05, dt || 0.016));
     const ampR = fpViewWeapon ? 0.28 : 0.42, ampL = 0.42;
-    // 左手目标位：持枪→枪底(靠右、略低、稍前)，近战→自然下垂位
-    const ltx = isGun ? 0.04 : bL.px;
-    const lty = isGun ? -0.44 : bL.py;
-    const ltz = isGun ? -0.48 : bL.pz;
+    // 左手目标位：持枪仍在枪底，但叠加和近战一样明显的前后摆动；近战回自然下垂位
+    const ltx = isGun ? 0.04 + stepL * 0.06 : bL.px + stepL * 0.06;
+    const lty = isGun ? -0.44 + Math.abs(stepL) * 0.05 : bL.py;
+    const ltz = isGun ? -0.48 + stepL * 0.10 : bL.pz + stepL * 0.08;
     fpViewArmL.position.x += (ltx - fpViewArmL.position.x) * kSmooth;
     fpViewArmL.position.z += (ltz - fpViewArmL.position.z) * kSmooth;
     fpViewArmL.position.y += (lty + bob - fpViewArmL.position.y) * kSmooth;
     fpViewArmR.position.y = bR.py + bob;
-    // 开枪脉冲：sw 从 1→0 期间 sin 走完两个波峰，就是"托两下"
+    // 开枪脉冲：sw 从 1→0 期间 sin 走完两个波峰，就是"托两下"（幅度加大到看得清）
     const pulse = (sw > 0.01 && isGun) ? Math.sin((1 - sw) * Math.PI * 4) * sw : 0;
-    if (pulse) { fpViewArmL.position.y += pulse * 0.06; fpViewArmL.position.z -= pulse * 0.05; }
+    if (pulse) { fpViewArmL.position.y += pulse * 0.10; fpViewArmL.position.z -= pulse * 0.08; }
 
     fpViewArmR.rotation.x = (sw > 0.01) ? (bR.x - sw * 0.85) : (bR.x + stepR * ampR);
     fpViewArmR.rotation.z = (sw > 0.01) ? (bR.z + sw * 0.40) : (bR.z - stepR * 0.06);
-    if (isGun) {
-      // 托枪待机：小臂伸向枪底，随步伐极轻晃动；开枪时往上托两下
-      fpViewArmL.rotation.x = 0.15 + stepL * 0.05 + pulse * 0.30;
-      fpViewArmL.rotation.z = -0.28 + stepL * 0.04 + pulse * 0.14;
-    } else if (sw > 0.01) {
+    if (!isGun && sw > 0.01) {
       // 近战挥击：左手顺势跟一下，不僵
       fpViewArmL.rotation.x = bL.x - sw * 0.55;
       fpViewArmL.rotation.z = bL.z - sw * 0.20;
     } else {
-      fpViewArmL.rotation.x = bL.x + stepL * ampL;
-      fpViewArmL.rotation.z = bL.z - stepL * 0.06;
+      // 持枪/空手/近战待机：统一用大幅反相摆臂，持枪只换一个托枪基角 + 开枪脉冲
+      const baseX = isGun ? 0.15 : bL.x;
+      const baseZ = isGun ? -0.28 : bL.z;
+      fpViewArmL.rotation.x = baseX + stepL * ampL + pulse * 0.34;
+      fpViewArmL.rotation.z = baseZ - stepL * 0.10 + pulse * 0.16;
     }
   }
   // 相机（复用 Vector3 避免每帧分配）
