@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix515-bridge-island-seam-only">
+<meta name="cf-build" content="20261117-fix516-first-person-view">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -876,6 +876,15 @@
     <div class="map-btn" id="setCoordBtn" style="background:#1f5f7a">📍 显示坐标：关</div>
   </div>
 </div>
+    <div class="set-sec">
+      <h4>👁 视角模式</h4>
+      <p class="set-desc">切换第一人称后，镜头放在<b>人物眼睛</b>的高度，只看得见人物正前方的世界，人物本身不再挡住画面。驾驶/过场仍沿用原来的镜头。</p>
+      <div class="set-row" id="viewModeRow">
+        <div class="mode-tab active" id="viewThirdBtn">🧍 第三人称</div>
+        <div class="mode-tab" id="viewFirstBtn">👁 第一人称</div>
+      </div>
+      <p class="set-desc set-dim">选择会随存档一起保存；第三人称是默认背后的跟随视角。</p>
+    </div>
     <div class="set-sec">
       <h4>🎮 手机按钮布局</h4>
       <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
@@ -11833,7 +11842,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0 };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -15099,7 +15108,7 @@ addEventListener('pointerdown', e => {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   // 【2026-10-15】足球开赛面板开着时，鼠标左键不再触发攻击（否则点「开赛」会同时开枪）
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
-  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #signThemeBtn, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint')) return;
+  if (e.target.closest && e.target.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #joy, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #signThemeBtn, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #viewFirstBtn, #viewThirdBtn')) return;
   atkHeld = true; atkPointerType = 'mouse'; atkPointerId = e.pointerId;
   attack();
 });
@@ -15391,7 +15400,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel, #achvPanel, #achvClose'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #viewFirstBtn, #viewThirdBtn, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel, #achvPanel, #achvClose'));
 }
 addEventListener('touchstart', e => {
   // 【fix53】机票面板必须在这里让位！
@@ -25632,6 +25641,27 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   try {
     if (ferrisRide.active) { ferrisCamera(dt); }
     else {
+    // 【fix516·2026-11-17·用户：『设置里加一个切换到第一人称和第三人称，第一人称就只能显示人物面前的东西，
+    //  和真实的人的眼睛一样的视角』】
+    // 第一人称只在步行状态生效：镜头放到人物眼睛高度(1.62m)，方向沿用玩家正在控制的视角
+    // (camYaw/camPitch)，并隐藏人物模型本身，否则会看到自己的后脑勺/肩膀挡在屏幕中央。
+    // 驾驶、摩天轮、返程航班等演出有各自专用镜头，一律不碰，避免把之前修好的相机问题带回来。
+    // person 仍保留世界坐标，碰撞/交互/上车落点全部照旧，只是视觉上不可见。
+    if (PROGRESS.firstPerson && state === 'walk') {
+      const _fpPitch = THREE.MathUtils.clamp(camPitch, -0.7, 1.2);
+      const _fpCP = Math.cos(_fpPitch), _fpSP = -Math.sin(_fpPitch);   // 上滑抬头：pitch 为负时 y 分量为正
+      const _eyeX = person.position.x, _eyeY = person.position.y + 1.62, _eyeZ = person.position.z;
+      _camTmp.set(_eyeX, _eyeY, _eyeZ);
+      camPos.copy(_camTmp);
+      camera.position.copy(_camTmp);
+      camLook.set(_eyeX + Math.sin(camYaw) * _fpCP * 12,
+                  _eyeY + _fpSP * 12,
+                  _eyeZ + Math.cos(camYaw) * _fpCP * 12);
+      camera.lookAt(camLook);
+      if (Math.abs(camera.fov - 60) > 0.05) { camera.fov = 60; camera.updateProjectionMatrix(); }
+      camDistSmooth = 0;   // 下次切回第三人称时从正确距离重新起算，避免残留平滑值把镜头甩飞
+      if (person && person.visible) person.visible = false;
+    } else {
     const isHeli = state === 'drive' && currentCar && currentCar.isHelicopter;
     const isTank = state === 'drive' && currentCar && currentCar.isTank;
     const camTarget = state === 'walk' ? person : (currentCar ? currentCar.group : person);
@@ -25789,6 +25819,7 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       camLook.copy(_camLookA);
     }
     camera.lookAt(camLook);
+    }
     }
   } catch(e) { console.error('[Camera update error]', e); }
   try { taxiCamTick(dt); } catch (eTC) { console.error('[taxiCam]', eTC); }
@@ -26009,7 +26040,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
@@ -26123,7 +26154,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留
   // 【fix507】成就进度恢复（静默，不重复发奖）
   try {
     if (data.achv) {
@@ -34344,12 +34375,36 @@ function resizeLayoutBtn(delta) {
   }
 })();
 // ---- 设置面板 / 工具条 接线 ----
+// 【fix516】第一人称 / 第三人称切换按钮
+function syncViewModeButtons() {
+  const _f = document.getElementById('viewFirstBtn'), _t = document.getElementById('viewThirdBtn');
+  if (_f) _f.classList.toggle('active', !!PROGRESS.firstPerson);
+  if (_t) _t.classList.toggle('active', !PROGRESS.firstPerson);
+}
+function setViewMode(first) {
+  const want = !!first;
+  if (!!PROGRESS.firstPerson === want) return;
+  PROGRESS.firstPerson = want;
+  // 切回第三人称时立刻把人物显示出来；切到第一人称由相机每帧兜底隐藏，
+  // 因为死亡/复活/上下车等流程也会改 person.visible，不能只在按钮点击那一刻处理。
+  if (!want && state === 'walk' && person) person.visible = true;
+  camDistSmooth = 0;
+  syncViewModeButtons();
+  try { saveGame(); } catch (e) {}
+  try { setHint(want ? '第一人称：镜头已放到人物眼睛前方' : '第三人称：背后跟随视角'); } catch (e) {}
+}
+{
+  const _f = document.getElementById('viewFirstBtn'), _t = document.getElementById('viewThirdBtn');
+  if (_f) _f.addEventListener('click', () => setViewMode(true));
+  if (_t) _t.addEventListener('click', () => setViewMode(false));
+}
+syncViewModeButtons();
 // 打开设置时：把模式标签同步到当前游戏模式（没在编辑时），高亮对应 tab
 function syncLayoutModeTabs() {
   if (!layoutEditing) layoutEditMode = getCurMode();
   document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
 }
-document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); });
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); });
 // 【fix180】设置面板里的开发者入口
 const _setDevBtn = document.getElementById('setDevBtn');
 if (_setDevBtn) _setDevBtn.addEventListener('click', () => { try { openDevPanel(); } catch (e) {} });
