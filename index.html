@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix513-bridge-boxes-removed">
+<meta name="cf-build" content="20261117-fix514-south-island-bridge-apron">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1419,6 +1419,28 @@ function terrainHeight(x, z) {
     ip -= bump(58, 448, 15, 0.7);            // 东南低地
     if (bt < 0.05) ip = WATER_Y + (ip - WATER_Y) * (bt / 0.05);   // 岛缘平滑入水
     h = Math.max(h, ip);
+  }
+  // 【fix514·2026-11-17·用户：『南岛和桥连接的这块有的贴图没贴上，露出底下的海洋了』】
+  // 根因：跨海大桥实际铺装只有 x∈[-5,5] 约 10m 宽；南岛视觉圆盘半径 R=88，
+  // 在桥头 z≈BRIDGE_END_Z(385) 处，x 越大圆盘北缘越往南退（x=50 时北缘 z≈397）。
+  // 于是桥头两侧 x>6 且 z≈385~405 的楔形区域，既不在桥面上，也不在岛面盘内；
+  // 主地形又因南侧海滩公式 h += -beach²*2.5 掉到 WATER_Y 以下，海面就露出来了。
+  // 修法：在这里给桥头补一块**随 x/z 平滑衰减的引道土坡**高度。
+  // 只改 terrainHeight，不改 ISLAND_X/Z/R、不改桥面/岛面网格 —— 所有已经采样
+  // terrainHeight 的网格（主地形、岛面盘、道路）会自动一起抬起来，不会出现贴图悬空。
+  // 土坡在桥边 |x|<=6 处接近桥面 5.1m，往两边逐渐降到 0；从桥头往南/往岛内也衰减，
+  // 因此看上去就是桥头自然接地的土质引道，而不是方盒子。
+  {
+    const ax = Math.abs(x - ISLAND_X);
+    const dz = z - BRIDGE_END_Z;
+    if (ax < 96 && dz > -23 && dz < 56) {
+      const fx = 1 - THREE.MathUtils.clamp((ax - BRIDGE_HALF_WIDTH) / (96 - BRIDGE_HALF_WIDTH), 0, 1);
+      const fz = dz < 0
+        ? 1 - (-dz) / 23
+        : 1 - dz / 56;
+      const apron = 5.1 * fx * Math.max(0, fz);
+      if (apron > 0) h = Math.max(h, apron);
+    }
   }
   // 足球场地形压平：把 PITCH 那块矩形整平到固定高度，球场才不会一边高一边低
   {
