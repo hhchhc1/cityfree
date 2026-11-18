@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix536-blue-star-remove-curb">
+<meta name="cf-build" content="20261118-fix537-crosswalk-flat">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -31186,12 +31186,17 @@ m4a.position.set(AX, BASE + 0.18, -141);
     // （斑马线保留：那是路口必需的，且只出现在路口，不沿路分布。）
     // 车道虚线：主干道中央 + 两侧，街道同理 —— 已按用户要求删除
     // 斑马线（每个路口四个方向）
+    // 【fix537·2026-11-18·用户："斑马线取消碰撞逻辑可以吗"】
+    // 斑马线本来就没有碰撞盒（det() 只加视觉网格，不进 buildings），
+    // 但原来厚 0.1、抬到 y=0.17，顶面 0.22，比路面 0.14 高 8cm —— 人物走过去模型会穿过凸块，
+    // 看起来就是"被挡了一下"。这里压成 2cm 厚的贴地薄片（顶面 0.161，只高 2.1cm），
+    // 视觉上就是刷在路面上的白漆，不再有任何台阶感；同时保留 2cm 高差避免与路面共面闪烁。
     for (const rx of AVX) for (const rz of STZ) {
       for (let k = -3; k <= 3; k++) {
-        det(BX(1.1, 0.1, 4.4), 0xe9ecf0, rx + k * 2.0, 0.17, rz + 12);
-        det(BX(1.1, 0.1, 4.4), 0xe9ecf0, rx + k * 2.0, 0.17, rz - 12);
-        det(BX(4.4, 0.1, 1.1), 0xe9ecf0, rx + 14, 0.17, rz + k * 2.0);
-        det(BX(4.4, 0.1, 1.1), 0xe9ecf0, rx - 14, 0.17, rz + k * 2.0);
+        det(BX(1.1, 0.02, 4.4), 0xe9ecf0, rx + k * 2.0, 0.151, rz + 12);
+        det(BX(1.1, 0.02, 4.4), 0xe9ecf0, rx + k * 2.0, 0.151, rz - 12);
+        det(BX(4.4, 0.02, 1.1), 0xe9ecf0, rx + 14, 0.151, rz + k * 2.0);
+        det(BX(4.4, 0.02, 1.1), 0xe9ecf0, rx - 14, 0.151, rz + k * 2.0);
       }
     }
     // 路灯（沿两条主干道，两侧交错）
