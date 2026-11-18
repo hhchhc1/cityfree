@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix529-civilian-chase-40m">
+<meta name="cf-build" content="20261118-fix530-gang-global-hate-guard-alert">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -15886,6 +15886,10 @@ function fireGrapple() {
   const px = person.position.x, py = person.position.y, pz = person.position.z;
   if (tgt.type === 'entity') {
     const o = tgt.o;
+    // 【fix530·2026-11-18·用户："用钩爪勾里边的守卫，其他守卫都要共享仇恨"】
+    // 钩爪只做牵引、不造成伤害，原来勾住守卫完全没反应（既不报警也不仇恨）。
+    // 这里只要勾到基地守卫，立刻按"动了基地的人"处理，全员警报 45 秒。
+    if (o.isBaseGuard) { try { alertBaseGuards(45); } catch (e) {} }
     // 如果是交通车辆，从车流中移除避免位置冲突
     const ti = traffic.indexOf(o);
     if (ti >= 0) traffic.splice(ti, 1);
@@ -20650,12 +20654,17 @@ function killResident(r, by) {
   //   不能又把全城同伙的仇恨塞到玩家头上（原来硬写 'player'，警察在街上打人，
   //   整条街的 NPC 都会莫名跑来围攻玩家）。'stealth'（狙击暗杀）则完全不扩散。
   if (by === 'stealth') return;
+  // 【fix530】基地守卫不参与帮派连锁（faction 0 会误连黄帮），警报已在上面单独拉过。
+  if (r.isBaseGuard) return;
   const _tgt = (by === 'cop') ? 'cop' : 'player';
+  // 【fix530】黑帮（FACTIONS[3]，含大本营站岗/外围游荡的黑衣人）击杀扩散不限距离；
+  // 其他帮派与便服路人仍按 120m 同阵营。
+  const _gangSpread = (r.faction === 3);
   for (const o of residents) {
-    if (o === r || !o.alive) continue;
-    if (sameClan(o, r) && Math.hypot(o.x - r.x, o.z - r.z) < 120) {
-      o.hate = _tgt; o.armed = true; o.attackCd = Math.min(o.attackCd, 0.3);
-    }
+    if (o === r || !o.alive || o.isBaseGuard) continue;
+    if (!sameClan(o, r)) continue;
+    if (!_gangSpread && Math.hypot(o.x - r.x, o.z - r.z) >= 120) continue;
+    o.hate = _tgt; o.armed = true; o.attackCd = Math.min(o.attackCd, 0.3);
   }
 }
 function killCop(c, by) {
@@ -20694,10 +20703,19 @@ function damageResident(r, dmg, by, fromNpc) {
   // 同阵营合力：附近同颜色路人一起攻击**同一个目标**
   // 【2026-10-13】原来是硬写 'player'：警察打了某人，他的同伙也会跑去仇恨玩家（打错了人）。
   // 现在跟着同一个目标传播：警察打 → 同伙一起打警察。
+  // 【fix530·2026-11-18·用户："黑社会大本营的那些黑人共享仇恨的范围必须非常大，
+  //  只要一个黑人受伤了，其他黑人都来攻击玩家"】
+  // 原来不分身份统一 120m。现在**黑帮**（FACTIONS[3]，含大本营站岗与外围游荡的黑衣人）
+  // 取消距离限制 —— 全城黑帮一起上；其他帮派与便服路人仍按 120m 共享。
+  // ⚠️ 基地守卫的 faction 是 0，恰好等于「黄帮」的编号。若不排除，打一个守卫会让全城黄帮
+  // 都来打玩家（守卫自己有 alertBaseGuards 的全员警报，不需要帮派连锁）。
   const tgt = fromNpc || (by !== 'stealth' ? 'player' : null);
-  if (tgt) for (const o of residents) {
-    if (o === r || !o.alive) continue;
-    if (sameClan(o, r) && Math.hypot(o.x - r.x, o.z - r.z) < 120) {
+  if (tgt && !r.isBaseGuard) {
+    const gangSpread = (r.faction === 3);   // 3 = 黑帮（FACTIONS[3]）
+    for (const o of residents) {
+      if (o === r || !o.alive || o.isBaseGuard) continue;
+      if (!sameClan(o, r)) continue;
+      if (!gangSpread && Math.hypot(o.x - r.x, o.z - r.z) >= 120) continue;
       o.hate = tgt; o.attackCd = Math.min(o.attackCd, 0.5);
       o.armed = !o.flee;
     }
@@ -20719,12 +20737,18 @@ function hitCop(c, dmg, by) {
 // 撞倒：倒地 + 掉血 + 起身后仇恨攻击者；同色路人同仇；血量归零则直接击杀
 function knockDownResident(r, who, dmg, by) {
   if (!r.alive || r.down) return;
+  // 【fix530】撞倒也算"动了基地的人"：守卫被车撞飞同样要全员警报。
+  if (r.isBaseGuard && by !== 'npc' && by !== 'stealth') { try { alertBaseGuards(45); } catch (e) {} }
   r.hp -= (dmg || 30);
   r.hate = who;
   if (who) r.flee = false;   // 被车撞倒后起身攻击撞他的人，白色路人也不再逃跑
-  for (const o of residents) {
-    if (o === r || !o.alive || o.down) continue;
-    if (sameClan(o, r) && Math.hypot(o.x - r.x, o.z - r.z) < 120) o.hate = who;
+  // 【fix530】守卫不参与帮派连锁（faction 0 会误连黄帮），它走 alertBaseGuards 那套。
+  if (!r.isBaseGuard) for (const o of residents) {
+    if (o === r || !o.alive || o.down || o.isBaseGuard) continue;
+    if (!sameClan(o, r)) continue;
+    // 【fix530】黑帮成员撞倒同伙：全城黑帮一起上；其他帮派/便服路人仍 120m 同阵营。
+    if (r.faction !== 3 && Math.hypot(o.x - r.x, o.z - r.z) >= 120) continue;
+    o.hate = who;
   }
   spawnBurst(r.x, r.z, 0xffdd55, 8); sfx('hit');
   if (r.hp <= 0) { killResident(r, by); return; }
@@ -20746,6 +20770,8 @@ function runOverResident(r, isMotorcycle, by) {
     collisionSfx('splat');
     return;
   }
+  // 【fix530】开车撞守卫也算"动了基地的人"：和踢飞/钩爪一样拉全员警报。
+  if (r.isBaseGuard && by !== 'npc' && by !== 'stealth') { try { alertBaseGuards(45); } catch (e) {} }
   // 第一次撞：保1血 + 倒地
   r.vehicleHits = (r.vehicleHits || 0) + 1;
   if (r.vehicleHits >= 2) {
@@ -20755,9 +20781,13 @@ function runOverResident(r, isMotorcycle, by) {
     spawnBurst(r.x, r.z, 0xff3333, 10); sfx('splat');
     dropReward(r.x, r.z, r); addXp(5); addHeat(25); addKillBounty(by);   // 撞死路人＝打死人，但开车碾死不计入通缉阶梯（by='car'）
     // 同阵营仇恨扩散
+    // 【fix530】黑帮（FACTIONS[3]）不限距离；守卫不参与帮派连锁。
+    const _gangSpreadCar = (r.faction === 3);
     for (const o of residents) {
-      if (o === r || !o.alive || o.down) continue;
-      if (sameClan(o, r) && Math.hypot(o.x - r.x, o.z - r.z) < 120) { o.hate = 'player'; o.armed = true; o.flee = false; }
+      if (o === r || !o.alive || o.down || o.isBaseGuard) continue;
+      if (!sameClan(o, r)) continue;
+      if (!_gangSpreadCar && Math.hypot(o.x - r.x, o.z - r.z) >= 120) continue;
+      o.hate = 'player'; o.armed = true; o.flee = false;
     }
     return;
   }
@@ -21029,16 +21059,25 @@ function kickTarget() {
   spawnBurst(t.o.x, t.o.z, 0xffffff, 10);
   if (t.kind === 'resident') {
     const r = t.o;
+    // 【fix530·2026-11-18·用户："不只是开枪，只要踢飞……里边的守卫，其他守卫都要共享仇恨"】
+    // 踢飞走的是 r.alive=false 这条独立路径，**完全不经过 damageResident()**，
+    // 所以 fix523 加在 damageResident 里的基地警报在这里一次都不会触发。
+    // 必须在踢死之前先拉警报，才能让"被踢死的这个守卫"也算进这一轮警报。
+    if (r.isBaseGuard) { try { alertBaseGuards(45); } catch (e) {} }
     r.alive = false; r.respawn = 6;      // 一脚踢死
     spawnBurst(r.x, r.z, 0xffdd55, 12);
     dropReward(r.x, r.z, r); addKillBounty('gun'); addXp(15);   // 踢死路人：玩家正当击杀，按击杀阶梯计入
     launchFly(r, dx * 13, 10, dz * 13, true);
     // 踢死仇恨扩散：同阵营成员全部仇恨
+    // 【fix530】黑帮成员（FACTIONS[3]）取消距离限制：黑社会大本营踢死一个，全城黑帮一起上。
+    // 其他帮派与便服路人仍保持 120m，避免"踢一个普通路人 = 全城围殴"。
+    // 守卫（faction 0 = 黄帮编号）不参与帮派连锁，只走上面的 alertBaseGuards。
+    const gangSpread = (r.faction === 3 && !r.isBaseGuard);
     for (const o of residents) {
-      if (o === r || !o.alive) continue;
-      if (sameClan(o, r) && Math.hypot(o.x - r.x, o.z - r.z) < 120) {
-        o.hate = 'player'; o.armed = true; o.attackCd = Math.min(o.attackCd, 0.3);
-      }
+      if (o === r || !o.alive || o.isBaseGuard) continue;
+      if (!sameClan(o, r)) continue;
+      if (!gangSpread && Math.hypot(o.x - r.x, o.z - r.z) >= 120) continue;
+      o.hate = 'player'; o.armed = true; o.attackCd = Math.min(o.attackCd, 0.3);
     }
     setHint('踢飞了！');
   } else if (t.kind === 'cop') {
@@ -21992,7 +22031,11 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   // 原来所有目标一律 22m：玩家跑开 22 米仇恨立刻清零，普通路人太容易甩掉。
   // 现在只把"追玩家"放宽到 40m；NPC 追警察 / NPC 互殴（帮派火拼、误伤反打）
   // 仍保持 22m，避免帮派一开打就拖着整条街的人满城跑。
-  const _chaseCap = _baseAlert ? 90 : (r.hate === 'player' ? 40 : 22);
+  // 【fix530·2026-11-18】黑帮成员（FACTIONS[3]）追玩家放到 2000m（≈全图）：
+  // 共享仇恨已经把全城黑帮都拉进来了，如果这里还卡 40m，远处的人一帧就会被判"太远"清掉仇恨，
+  // 等于白共享。守卫走上面的 _baseAlert 分支，其他帮派/路人仍按 40m。
+  const _chaseCap = _baseAlert ? 90
+    : (r.hate === 'player' ? ((r.faction === 3 && !r.isBaseGuard) ? 2000 : 40) : 22);
   if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
   // 以前这里完全不看高度：目标 y 一律写死成 1.3/1.05，于是弹道是一条贴地的水平线，
