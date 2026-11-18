@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix539-moto-jump-toggle">
+<meta name="cf-build" content="20261118-fix540-moto-jump-hint">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -15242,7 +15242,18 @@ addEventListener('keydown', e => {
   // 手机端没有 E 键也没关系：走到光柱旁边会自动弹出同一个面板（面板就是 HTML，可直接点）。
   if (k === 'e' && flightPillarDist() < 12) { openFlightPanel(); return; }
   if (k === 'e') tryToggle();
-  if (k === ' ') { jump(); _carJumpReq = true; }
+  // 【fix540·2026-11-18·用户："骑摩托按空格没有反应"】
+  // 摩托车跳跃默认是关的，但原来按了空格完全没有反馈，看起来像 bug。
+  // 这里在开关关闭时明确提示去哪里开，同时不再设置跳跃请求（避免开关关着还偷偷跳）。
+  if (k === ' ') {
+    jump();
+    if (state === 'drive' && currentCar && currentCar.carKey === 'motorcycle' && !PROGRESS.motoJump) {
+      const _nowM = performance.now();
+      if (_nowM - (window.__motoHintT || 0) > 2500) { window.__motoHintT = _nowM; try { setHint('摩托车跳跃未开启：设置 → 🏍 摩托车跳跃'); } catch (e) {} }
+    } else {
+      _carJumpReq = true;
+    }
+  }
   if (k === 'r') reloadWeapon();
   if (k === 'f') {
     // 【fix471】用户要求：电脑上开出租车时，接客/下客用 F 键。
