@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix534-folk-beam-collected-green">
+<meta name="cf-build" content="20261118-fix535-nc-lamp-soft-road-line-car-collide">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -17685,6 +17685,28 @@ function collideCarsFast(p, r, skipCops) {
     if (skipCops && c._isCop) continue;
     circleVsCircle(p, r, { x: c.x, z: c.z }, c.radius);
   }
+  // 【fix535·2026-11-18·用户："新城市人物对于汽车不是实体的，没有碰撞"】
+  // 主城空间网格 _gridIdx() 对 x>900 直接返回空槽（fix57 防"新城撞隐形墙"的副作用），
+  // 于是步行在新城根本不查车流，人直接从车身里穿过去。
+  // 这里对新城做一次线性扫描兜底：车辆数量很少（十几辆），每帧开销可以忽略。
+  if (p.x > 900) {
+    try {
+      const _scanNC = (list) => {
+        if (!list) return;
+        for (const c of list) {
+          if (!c || c.exploded) continue;
+          const dx = c.x - p.x, dz = c.z - p.z;
+          const rad = (c.radius || 1.6);
+          const rr = r + rad + 2;
+          if (dx * dx + dz * dz > rr * rr) continue;
+          circleVsCircle(p, r, { x: c.x, z: c.z }, rad);
+        }
+      };
+      _scanNC(typeof traffic !== 'undefined' ? traffic : null);
+      _scanNC(typeof cars !== 'undefined' ? cars : null);
+      if (!skipCops) _scanNC(typeof policeCars !== 'undefined' ? policeCars : null);
+    } catch (e) {}
+  }
 }
 // 快速NPC碰撞：只检查附近格子的NPC
 function collideNpcsFast(p, r, self) {
@@ -24932,6 +24954,13 @@ function updateStreetLights() {
   // 灯晕：远处唯一能看见"这盏灯亮着"的东西，所以要比原来明显；
   // 但整体压暗（0.3 上限），避免夜里一片亮黄发腻。
   if (lampHaloMat) lampHaloMat.opacity = 0.30 * nightF;
+  // 【fix535·2026-11-18·用户："新城市路灯照映的效果随视角移动不停变化，非常刺眼"】
+  // 新城区灯更密（约 150 盏），用主城同一套 9×9 halo + 10m 光斑叠在夜空/路面上，
+  // 转视角时一片白光在扫。这里给新城单独一套更小更暗的材质。
+  if (window.__ncLampMats) {
+    if (window.__ncLampMats.pool) window.__ncLampMats.pool.opacity = 0.020 * nightF;
+    if (window.__ncLampMats.halo) window.__ncLampMats.halo.opacity = 0.16 * nightF;
+  }
   // 【2026-10-20·fix29 手机性能】白天 nightF=0 时这些发光体的 opacity 被置成 0，
   // 但**置 0 ≠ 不画** —— 透明的片元依然会跑完整套片元着色，draw call 一次不少。
   // 全城摩天楼的发光盒 + 楼脚光斑共 60 多个 mesh（每栋楼一盒一圈），白天完全是白画：
@@ -31147,19 +31176,11 @@ m4a.position.set(AX, BASE + 0.18, -141);
     // 白色路缘石：参考图里人行道边上那一圈白边，街景立刻就"立"起来了
     for (const rx of AVX) for (const s of [-1, 1]) det(BX(0.36, 0.34, DZ1 - DZ0), 0xd9d7cf, rx + s * (AVW / 2 + 0.18), 0.17, (DZ0 + DZ1) / 2);
     for (const rz of STZ) for (const s of [-1, 1]) det(BX(DX1 - DX0, 0.34, 0.36), 0xd9d7cf, (DX0 + DX1) / 2, 0.17, rz + s * (STW / 2 + 0.18));
-    // 车道虚线：主干道中央 + 两侧，街道同理
-    for (const rx of AVX) {
-      for (let z = DZ0 + 10; z < DZ1 - 10; z += 12) {
-        det(BX(0.45, 0.1, 5.5), 0xe9ecf0, rx, 0.16, z);
-        for (const s of [-1, 1]) det(BX(0.35, 0.1, 3.0), 0xe9ecf0, rx + s * 6.4, 0.16, z + 6);
-      }
-    }
-    for (const rz of STZ) {
-      for (let x = DX0 + 10; x < DX1 - 10; x += 12) {
-        det(BX(5.5, 0.1, 0.45), 0xe9ecf0, x, 0.16, rz);
-        for (const s of [-1, 1]) det(BX(3.0, 0.1, 0.35), 0xe9ecf0, x + 6, 0.16, rz + s * 5.2);
-      }
-    }
+    // 【fix535·2026-11-18·用户："新城市的道路每条道路的隔间这个分割的小棱去掉"】
+    // 原来是每 12m 一段的白色虚线块（BX 厚 0.1、抬到 0.16，比路面 0.14 高 2cm），
+    // 从低视角看就是一排凸起的小棱，把整条路切成一格一格。这里整段移除，路面保持完整。
+    // （斑马线保留：那是路口必需的，且只出现在路口，不沿路分布。）
+    // 车道虚线：主干道中央 + 两侧，街道同理 —— 已按用户要求删除
     // 斑马线（每个路口四个方向）
     for (const rx of AVX) for (const rz of STZ) {
       for (let k = -3; k <= 3; k++) {
@@ -34121,21 +34142,31 @@ function ncSpawnResidents(count) {
 (function newCityLife() {
   // ① 路灯三件套：主城每盏灯是「灯杆 + 灯泡 + 地面光斑 pool + 灯头光晕 halo + STREET_LAMPS 登记」，
   //    新城区只有前两件，所以夜里灯头亮着、地面却是全黑（用户截图）。
-  const poolGeo = new THREE.CircleGeometry(10, 24);
+  // 【fix535·2026-11-18·用户："新城市路灯照映的效果随视角移动不停变化，非常刺眼"】
+  // 新城灯密度是主城两倍多（约 150 盏），共用主城的 10m 光斑 + 9×9 光晕时，
+  // 夜里整片发白、转视角还在扫动。这里给新城单独一套更小更暗的材质：
+  //   光斑半径 7（主城 10）、光晕 6×6（主城 9×9），透明度由 updateStreetLights 单独压到 0.020/0.16。
+  const ncPoolMat = lampPoolMat ? lampPoolMat.clone() : null;
+  const ncHaloMat = lampHaloMat ? lampHaloMat.clone() : null;
+  if (ncPoolMat) ncPoolMat.opacity = 0;
+  if (ncHaloMat) ncHaloMat.opacity = 0;
+  window.__ncLampMats = { pool: ncPoolMat, halo: ncHaloMat };
+  const poolGeo = new THREE.CircleGeometry(7, 22);
   for (const p of NEW_CITY_LAMPS) {
     let pool = null, halo = null;
-    if (lampPoolMat) {
-      pool = new THREE.Mesh(poolGeo, lampPoolMat);
+    if (ncPoolMat) {
+      pool = new THREE.Mesh(poolGeo, ncPoolMat);
       pool.rotation.x = -Math.PI / 2;
-      // 新城区铺装顶面约 0.045~0.175，比主城裸地形高；光斑抬到 +0.24 才不会被铺装盖住。
-      pool.position.set(p.x, terrainHeight(p.x, p.z) + 0.24, p.z);
+      // 新城区铺装顶面约 0.045~0.175。光斑只抬到 +0.19 —— 原来 +0.24 悬空 10cm，
+      // 斜视角下和路面有明显视差，看起来就像光斑"浮在空中一直变"。
+      pool.position.set(p.x, terrainHeight(p.x, p.z) + 0.19, p.z);
       pool.renderOrder = 2;
       scene.add(pool);
       if (typeof registerDynamicObject === 'function') registerDynamicObject(pool);
     }
-    if (lampHaloMat) {
-      halo = new THREE.Sprite(lampHaloMat);
-      halo.scale.set(9, 9, 1);
+    if (ncHaloMat) {
+      halo = new THREE.Sprite(ncHaloMat);
+      halo.scale.set(6, 6, 1);
       halo.position.set(p.x, p.y, p.z);
       halo.renderOrder = 3;
       scene.add(halo);
