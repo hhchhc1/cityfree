@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix535-nc-lamp-soft-road-line-car-collide">
+<meta name="cf-build" content="20261118-fix536-blue-star-remove-curb">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -10302,7 +10302,9 @@ function makeHuman(clothes, isCop, opts = {}) {
     }
     starShape.closePath();
     const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.012, bevelEnabled: false });
-    const star = new THREE.Mesh(starGeo, new THREE.MeshLambertMaterial({ color: 0xd21f1f, emissive: 0x3a0000 }));
+    // 【fix536·2026-11-18·用户："为了避敏感，把军事基地守卫帽子上的红星换成蓝星"】
+    // 颜色从 0xd21f1f(红) 改成 0x2f6bff(蓝)，自发光也换成暗蓝，夜里仍能看清星形。
+    const star = new THREE.Mesh(starGeo, new THREE.MeshLambertMaterial({ color: 0x2f6bff, emissive: 0x001a3a }));
     star.position.set(0, 0.205, 0.292); head.add(star);
   } else if (Math.random() < 0.25) {
   // 便帽：颜色跟随阵营主色（同阵营同色，不能每个NPC随机一个帽子色）
@@ -31173,9 +31175,11 @@ m4a.position.set(AX, BASE + 0.18, -141);
     // 深度值一样 → 显卡每帧随机选一个画，就是用户看到的"十字路口一直在闪"。
     // 给路口单独补一块 top=0.175 的沥青，比两块路面都高、又低于标线（0.21），闪烁消失。
     for (const rx of AVX) for (const rz of STZ) pbox(AVW + 0.8, 0.1, STW + 0.8, 'asphalt', rx, 0.125, rz, 8);
-    // 白色路缘石：参考图里人行道边上那一圈白边，街景立刻就"立"起来了
-    for (const rx of AVX) for (const s of [-1, 1]) det(BX(0.36, 0.34, DZ1 - DZ0), 0xd9d7cf, rx + s * (AVW / 2 + 0.18), 0.17, (DZ0 + DZ1) / 2);
-    for (const rz of STZ) for (const s of [-1, 1]) det(BX(DX1 - DX0, 0.34, 0.36), 0xd9d7cf, (DX0 + DX1) / 2, 0.17, rz + s * (STW / 2 + 0.18));
+    // 【fix536·2026-11-18·用户："道路上的分割小棱还没移除，碰撞逻辑还在"】
+    // 上次删的是每 12m 一块的车道虚线，用户指的其实是这圈**白色路缘石**：
+    // BX(0.36, 0.34, 全长) 高 0.34m，沿主干道/街道两侧立起一圈凸条，路口处纵横交叉成十字，
+    // 走过去像被"小棱"挡一下。这里整圈移除（人行道与路面本身仍有 4cm 高差，边界照样看得出来）。
+    // 白色路缘石：已按用户要求移除
     // 【fix535·2026-11-18·用户："新城市的道路每条道路的隔间这个分割的小棱去掉"】
     // 原来是每 12m 一段的白色虚线块（BX 厚 0.1、抬到 0.16，比路面 0.14 高 2cm），
     // 从低视角看就是一排凸起的小棱，把整条路切成一格一格。这里整段移除，路面保持完整。
