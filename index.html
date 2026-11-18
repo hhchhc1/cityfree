@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix541-npc-bullets-blocked">
+<meta name="cf-build" content="20261118-fix542-gang-hate-memory-30s">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -20789,7 +20789,7 @@ function damageResident(r, dmg, by, fromNpc) {
   }
   // 被打后立即反击 —— 但暗杀（狙击镜）不惊动对方：他连"被谁打的"都不知道（2026-10-13）
   if (fromNpc) { r.hate = fromNpc; r.attackCd = Math.min(r.attackCd, 0.3); }
-  else if (by !== 'stealth') { r.hate = 'player'; r.attackCd = Math.min(r.attackCd, 0.3); }
+  else if (by !== 'stealth') { r.hate = 'player'; r.attackCd = Math.min(r.attackCd, 0.3); r._hateT0 = performance.now(); }   // 【fix542】受伤续期黑帮记忆
   // 和 runOverResident 保持一致：会反击的帮派成员要真的掏枪（armed），
   // 否则枪模型一直隐藏 —— 之前只有撞车才设 armed，枪伤/近战不会。
   if (!r.flee) r.armed = true; else r.armed = false;
@@ -20834,6 +20834,7 @@ function knockDownResident(r, who, dmg, by) {
   if (r.isBaseGuard && by !== 'npc' && by !== 'stealth') { try { alertBaseGuards(45); } catch (e) {} }
   r.hp -= (dmg || 30);
   r.hate = who;
+  if (who === 'player') r._hateT0 = performance.now();   // 【fix542】被撞倒也算"刚被打过"，续期
   if (who) r.flee = false;   // 被车撞倒后起身攻击撞他的人，白色路人也不再逃跑
   // 【fix530】守卫不参与帮派连锁（faction 0 会误连黄帮），它走 alertBaseGuards 那套。
   if (!r.isBaseGuard) for (const o of residents) {
@@ -22403,6 +22404,17 @@ function updateResident(r, dt) {
   if (wm && !rWpn && !mWpn) wm.visible = !!r.hate;   // 只有单武器的 NPC：有仇恨才亮
   if (r.down) { r.downT -= dt; if (r.downT <= 0) { r.down = false; if (r.alive) r.group.rotation.x = 0; } return; }   // 倒地后起身
   r.attackCd -= dt;
+  // 【fix542·2026-11-18·用户："不要让这个黑人有太久的记忆，不然每次路过那里黑人都会打玩家"】
+  // 黑帮（FACTIONS[3]）对玩家的仇恨原本是**永久的**（只受 2000m 距离上限约束），
+  // 打过一次之后，每次经过大本营都会被追着打。这里给黑帮仇恨加 30 秒记忆上限：
+  // 停手满 30 秒就忘记玩家；玩家继续攻击时由 damageResident / knockDownResident 重置计时续期。
+  if (r.hate === 'player' && r.faction === 3) {
+    const _nowHate = performance.now();
+    if (!r._hateT0) r._hateT0 = _nowHate;
+    if (_nowHate - r._hateT0 > 30000) { r.hate = null; r._hateT0 = 0; }
+  } else {
+    r._hateT0 = 0;
+  }
   // 白色普通居民：遇到危险只会逃跑，没有攻击手段
   if (r.flee) {
     let dx = 0, dz = 0, danger = false;
