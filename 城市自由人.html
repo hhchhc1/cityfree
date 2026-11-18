@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix531-gang-hq-hill-zfight">
+<meta name="cf-build" content="20261118-fix532-heli-aim-invert-tank-sens">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -15479,8 +15479,13 @@ function applyAimDrag(dx, dy) {
   //    垂直方向：向上拖（dy<0）要让 pitch 变大 = 抬高枪口，所以用减号。
   if (typeof canVehicleAim === 'function' && canVehicleAim()) {
     // 载具：直接用现成的炮塔/机头偏移
-    vehAimYaw = THREE.MathUtils.clamp(vehAimYaw + dx * AIM_DRAG_SENS, -0.85, 0.85);
-    vehAimPitch = THREE.MathUtils.clamp(vehAimPitch - dy * AIM_DRAG_SENS, VEH_AIM_PITCH_MIN, VEH_AIM_PITCH_MAX);
+    // 【fix532·2026-11-18·用户："手机版直升机按住机枪键左右调整准星是反的"】
+    // 相机挂在车后、视线朝 (sin,cos)，屏幕右向量 = (-cos, 0, sin)；而 vehAimYaw 用加号时
+    // 炮口朝 (cos,-sin) 偏 —— 正好落在屏幕左边。所以手指右拖必须用**减号**才是"往右瞄"。
+    // 【fix532】坦克灵敏度减半：用户"坦克的准星灵敏度太高"，炮塔比手指快一截。
+    const _vAimSens = (typeof currentCar !== 'undefined' && currentCar && currentCar.isTank) ? 0.5 : 1;
+    vehAimYaw = THREE.MathUtils.clamp(vehAimYaw - dx * AIM_DRAG_SENS * _vAimSens, -0.85, 0.85);
+    vehAimPitch = THREE.MathUtils.clamp(vehAimPitch - dy * AIM_DRAG_SENS * _vAimSens, VEH_AIM_PITCH_MIN, VEH_AIM_PITCH_MAX);
   } else if (state === 'walk') {
     // 【2026-10-13】长按开火键拖动 = **直接移动屏幕上的准星光标**（aimCurX/Y）。
     // 不再走 walkAimYaw/walkAimPitch 那套"角度偏移"，因为现在准星是屏幕空间的实体光标，
@@ -15603,12 +15608,15 @@ addEventListener('touchmove', e => {
     else if (t.identifier === lookId) {
       if (canVehicleAim()) {
         // 坦克/直升机：滑动 = 转动炮塔/机头去瞄准（上下左右都能动），相机本身不动
-        // 【fix417】载具（直升机机枪）按住开火拖动时，准星左右是反的：符号反过来。
-        // 手指右拖 → 准星右移（原来这里用了减号，正好反相）。
-        vehAimYaw += (t.clientX - lookLX) * LOOK_SENS;
+        // 【fix532·2026-11-18·用户："手机版直升机按住机枪键左右调整准星是反的"】
+        // fix417 当年把这里从减号改成加号，方向其实是错的：相机在车后朝 (sin,cos) 看时
+        // 屏幕右向量是 (-cos,0,sin)，vehAimYaw 加号会让炮口往屏幕左边偏。这里改回减号。
+        // 坦克再乘 0.5：用户反馈"坦克准星灵敏度太高"。
+        const _vAimSens = (currentCar && currentCar.isTank) ? 0.5 : 1;
+        vehAimYaw -= (t.clientX - lookLX) * LOOK_SENS * _vAimSens;
         vehAimYaw = Math.max(-VEH_AIM_YAW_MAX, Math.min(VEH_AIM_YAW_MAX, vehAimYaw));
         vehAimPitch = Math.max(VEH_AIM_PITCH_MIN, Math.min(VEH_AIM_PITCH_MAX,
-          vehAimPitch - (t.clientY - lookLY) * LOOK_SENS));   // 上滑 = 往上瞄
+          vehAimPitch - (t.clientY - lookLY) * LOOK_SENS * _vAimSens));   // 上滑 = 往上瞄
       } else {
         camYaw -= (t.clientX - lookLX) * LOOK_SENS;          // 左右滑动：水平转视角
         camPitch = Math.max(-0.7, Math.min(1.2, camPitch + (t.clientY - lookLY) * LOOK_SENS));   // 上下滑动：俯仰（上滑抬头）
