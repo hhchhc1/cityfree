@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix532-heli-aim-invert-tank-sens">
+<meta name="cf-build" content="20261118-fix533-gun-dmg-down-rpg4-cd">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13921,22 +13921,25 @@ const WEAPONS = {
   chainsaw:{ name: '电锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
-  pistol:  { name: '手枪',   type: 'gun',   dmg: 20, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
-  smg:    { name: '冲锋枪', type: 'gun',   dmg: 11, range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
-  rifle:  { name: '步枪',   type: 'gun',   dmg: 16, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
-  ak47:   { name: 'AK47',   type: 'gun',   dmg: 18, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
+  pistol:  { name: '手枪',   type: 'gun',   dmg: 15, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
+  smg:    { name: '冲锋枪', type: 'gun',   dmg: 8,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 12, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
+  rifle:  { name: '步枪',   type: 'gun',   dmg: 12, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
+  ak47:   { name: 'AK47',   type: 'gun',   dmg: 14, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
   // desc 单独挂在武器对象上，商店简介会把它拼在通用说明后面（这样探针也能直接读来验证）
-  sniper: { name: '狙击枪', type: 'gun',   dmg: 90, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
+  sniper: { name: '狙击枪', type: 'gun',   dmg: 68, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
     desc: '🎯 点击「瞄准」进入狙击镜：时间放慢到 0.5 倍，打中任何部位都是一枪毙命，一发子弹能穿透一排目标。再点一次「瞄准」退出。\n👻 瞄准状态下击杀不会升星、不会惊动同伙、也不会增加通缉 —— 杀人于无形。\n🔇 用它开枪本身也不会涨星（零颗星时随便打也不会被通缉）。' },
-  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 90, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
+  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 68, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
   // 【2026-10-13】四联火箭筒：装备后可「连发」（点一下发 1 发）或「齐发」（一次 4 发齐射）。
   // salvo 标记表示这把武器支持齐发模式，由 salvoMode 切换；连发时每次消耗 1 发火箭弹，齐发时一次消耗 4 发。
-  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 90, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
+  // 【fix533·2026-11-18·用户："四联火箭筒连发模式下每一发间隔缩短"】
+  // fireCd 仍是齐发模式的冷却（2.2s，一次 4 发，太快会瞬间清空弹匣）；
+  // 连发模式单独用 singleFireCd = 1.1s，点一下打一发，节奏顺得多。
+  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 68, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, singleFireCd: 1.1, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
     desc: '🚀 四联装填，双击「齐发」按钮切换：连发模式点一下打出去 1 发，齐发模式一次 4 发齐射、覆盖一片。每一发都是范围爆炸，适合清场。' },
   // 【2026-10-13】加特林：高射速转管机枪，弹链 100 发（7.62mm），靠持续泼洒火力压制。
-  minigun:{ name: '加特林',   type: 'gun',   dmg: 12, range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
+  minigun:{ name: '加特林',   type: 'gun',   dmg: 9,  range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
 };
 // 命中部位倍率：头 2.5 / 身 1.0 / 腿 0.6（狙击枪 oneShot 时忽略倍率，见 shoot()）
 const ZONE_MULT = { head: 2.5, body: 1.0, leg: 0.6 };
@@ -21202,7 +21205,10 @@ function attack() {
     if (isReloading(currentWeapon)) { atkHintOnce('正在换弹...'); return; }
     if (w.ammo && magSizeOf(w) && magOf(currentWeapon) <= 0) { autoReloadIfEmpty(); return; }
     if (w.ammo && (ammoCount[w.ammo] || 0) <= 0 && magOf(currentWeapon) <= 0) { atkHintOnce('没有 ' + (AMMO[w.ammo] ? AMMO[w.ammo].name : '子弹') + ' 了，去商店买'); return; }
-    atkCd = w.fireCd || 0.3;
+    // 【fix533·2026-11-18·用户："四联火箭筒连发模式下每一发间隔缩短"】
+    // 四联的 fireCd=2.2s 原本是给"齐发 4 发"留的节奏；连发模式一次只打 1 发，
+    // 用 2.2s 太拖。这里按模式取冷却：连发用 singleFireCd(1.1s)，齐发仍用 fireCd(2.2s)。
+    atkCd = (w.salvo && !salvoMode && w.singleFireCd) ? w.singleFireCd : (w.fireCd || 0.3);
     punchAnim = 1;   // 触发射击后坐力姿态（仅射击瞬间）
     sfx('shoot');
     // 【fix519·2026-11-17·用户：『第一人称下开枪爆出的火花，从三个直接减少到一个』】
