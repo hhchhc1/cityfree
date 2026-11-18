@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix540-moto-jump-hint">
+<meta name="cf-build" content="20261118-fix541-npc-bullets-blocked">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -22031,6 +22031,8 @@ function fireNpcShot(r, dx, dz) {
     if (Math.abs(vx * dz - vz * dx) > 0.8) continue;   // 垂直偏差过大 = 没打中
     bestT = t2; best = o;
   }
+  // 【fix541】隔着墙不能打中：帮派互射也要过视线判定
+  if (best && !hasLineOfSight(r.x, r.z, best.x, best.z, null)) best = null;
   if (best) {
     best.hp -= dmg;
     if (best.hp <= 0) killResident(best, r);
@@ -22057,6 +22059,18 @@ function hasLineOfSight(x1, z1, x2, z2, ignoreVeh) {
   // 条件单独筛进来 —— 否则钩爪勾不到荷芷市的墙面，也就无法像主城那样攀爬
   //（用户：「楼房虽然是实体的，但是逻辑和主城式的不一样，都不能用钩爪上去攀爬」）。
   if (rayMaxX > 900) for (const _lb of LH_BLD) if (_lb.maxX > rayMinX - margin && _lb.minX < rayMaxX + margin && _lb.maxZ > rayMinZ - margin && _lb.minZ < rayMaxZ + margin) nearBlds.push(_lb);
+  // 【fix541·2026-11-18·用户："让 NPC 的子弹也和玩家的子弹一样不能穿墙"】
+  // 新城区（x>900）在主城空间网格里是空槽，建筑不在 _gridBld 里 → NPC 能隔着新城大楼打人。
+  // 这里对新城做一次线性预筛（只挑射线包围盒附近的楼）补进 nearBlds。
+  // 只在开火瞬间调用（1.2s 一次），不是每帧，开销可以接受。
+  if (rayMaxX > 900) {
+    for (const _nb of buildings) {
+      if (_nb.minX < 900) continue;
+      if (_nb.maxX < rayMinX - margin || _nb.minX > rayMaxX + margin) continue;
+      if (_nb.maxZ < rayMinZ - margin || _nb.minZ > rayMaxZ + margin) continue;
+      nearBlds.push(_nb);
+    }
+  }
   const steps = Math.max(1, Math.ceil(d / 0.5));   // 加大步长到0.5（有预筛选不会漏薄墙）
   for (let i = 1; i < steps; i++) {
     const x = x1 + dx * i / steps, z = z1 + dz * i / steps;
@@ -22176,12 +22190,23 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     if (r.attackCd <= 0) {
         // 【fix523】警报中的基地守卫 0.16 秒一发（约 6 发/秒），普通 NPC 仍是原来的 1.2 秒一发
         r.attackCd = _baseAlert ? 0.16 : 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
-      // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
-      spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
+      // 【fix541·2026-11-18·用户："让 NPC 的子弹也和玩家的子弹一样不能穿墙"】
+      // 先算视线：有墙时曳光弹只画到身前一小段（打在墙上），命中判定也只在有视线时进行。
+      // 原来曳光弹无条件画到目标身上，看起来就是"子弹穿墙飞过去"。
+      const _los = hasLineOfSight(r.x, r.z, tx, tz, ignoreVeh);
+      if (_los) {
+        // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
+        spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
+      } else {
+        const _sl = Math.min(d, 9);
+        spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7,
+                    r.x + dx / d * _sl, myY + 1.3, r.z + dz / d * _sl, r.ranged);
+        spawnBurst(r.x + dx / d * _sl, r.z + dz / d * _sl, 0xffdd88, 3, myY + 1.3);
+      }
       let hitChance = THREE.MathUtils.clamp(0.88 - d * 0.018, 0.1, 0.88);
       // 仰射/俯射都要吃亏：高度差越大命中率越低（最高只砍到 45%，不至于完全打不着）
       if (Math.abs(dy) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dy) - 3) * 0.06, 0.45, 1);
-      if (Math.random() < hitChance && hasLineOfSight(r.x, r.z, tx, tz, ignoreVeh)) {
+      if (_los && Math.random() < hitChance) {
         // 【perf18】帮派与玩家枪战，如果枪线中间有警察，优先击中警察并引发警匪冲突
         if (npcShotCopCheck(r, tx, tz, ignoreVeh)) { /* 已打中警察 */ }
         else {
