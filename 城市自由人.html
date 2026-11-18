@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix538-vehicle-free-look">
+<meta name="cf-build" content="20261118-fix539-moto-jump-toggle">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -892,6 +892,15 @@
       <p class="set-desc set-dim">默认关闭，关闭时镜头固定在车头。坦克/直升机的炮塔瞄准仍用「长按攻击键拖动」。选择会随存档保存。</p>
       <div class="set-row">
         <div class="map-btn" id="setVehLookBtn" style="background:#1f5f7a">🚗 车辆视角拖动：关</div>
+      </div>
+    </div>
+    <!-- 【fix539·2026-11-18·用户："设置里加一个是否开启摩托车可跳跃，默认关闭"】 -->
+    <div class="set-sec">
+      <h4>🏍 摩托车跳跃</h4>
+      <p class="set-desc">开启后骑摩托车时按 <b>空格</b>（手机点「跳」键）可以原地起跳；关闭时按了也不跳。自行车不受影响。</p>
+      <p class="set-desc set-dim">默认关闭，选择会随存档保存。</p>
+      <div class="set-row">
+        <div class="map-btn" id="setMotoJumpBtn" style="background:#1f5f7a">🏍 摩托车跳跃：关</div>
       </div>
     </div>
     <div class="set-sec">
@@ -11882,7 +11891,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false, motoJump: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）   // 【fix539】motoJump=摩托车能否按空格跳跃（默认关）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -15767,8 +15776,10 @@ const weaponBtnEl = document.getElementById('weaponBtn');
 weaponBtnEl.addEventListener('touchstart', e => { nextWeapon(); e.preventDefault(); });
 weaponBtnEl.addEventListener('mousedown', () => nextWeapon());
 const jumpEl = document.getElementById('jump');
-jumpEl.addEventListener('touchstart', e => { jump(); e.preventDefault(); });
-jumpEl.addEventListener('mousedown', () => jump());
+// 【fix539】手机端没有空格：跳跃按钮在驾驶两轮车时也兼作"车辆跳跃"，
+// 是否真的起跳由 updateDrive 里的 PROGRESS.motoJump 开关决定。
+jumpEl.addEventListener('touchstart', e => { jump(); if (state === 'drive') _carJumpReq = true; e.preventDefault(); });
+jumpEl.addEventListener('mousedown', () => { jump(); if (state === 'drive') _carJumpReq = true; });
 const grappleEl = document.getElementById('grappleBtn');
 grappleEl.addEventListener('touchstart', e => { if (grapple) releaseGrapple(); else fireGrapple(); e.preventDefault(); });
 grappleEl.addEventListener('mousedown', () => { if (grapple) releaseGrapple(); else fireGrapple(); });
@@ -25688,10 +25699,13 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     } else {
       const _ck = currentCar.carKey;
       const _twoWheel = _ck === 'bike' || _ck === 'bicycle' || _ck === 'motorcycle';
+      // 【fix539·2026-11-18·用户："设置里加一个是否开启摩托车可跳跃，默认关闭，开启后按空格也能跳"】
+      // 摩托车原本默认就能跳（_twoWheel 分支），现在改成受设置开关控制；自行车/单车不受影响。
+      const _motoJumpOk = (_ck !== 'motorcycle') || !!PROGRESS.motoJump;
       // 自行车/摩托车：地面上按一次空格垂直起跳（按住不会连跳）
-      if (_twoWheel && _carJumpReq) { _carJumpReq = false; currentCar.vy = 9.2; currentCar.air = 0.35; speed.v *= 1.05; sfx('jump'); }
+      if (_twoWheel && _motoJumpOk && _carJumpReq) { _carJumpReq = false; currentCar.vy = 9.2; currentCar.air = 0.35; speed.v *= 1.05; sfx('jump'); }
       else {
-        if (!_twoWheel) _carJumpReq = false;
+        if (!_twoWheel || !_motoJumpOk) _carJumpReq = false;
         // 所有车辆（含四轮）冲上斜坡都会被弹飞，不再只有两轮车能起飞
         if (Math.abs(speed.v) > 3) {
         for (const rp of ramps) {
@@ -26643,7 +26657,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
@@ -26757,7 +26771,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; if (data.progress.motoJump !== undefined) PROGRESS.motoJump = !!data.progress.motoJump; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
   // 【fix507】成就进度恢复（静默，不重复发奖）
   try {
     if (data.achv) {
@@ -35146,12 +35160,28 @@ function setVehLook(on) {
   if (_vb) _vb.addEventListener('click', () => setVehLook(!PROGRESS.vehicleFreeLook));
 }
 syncVehLookBtn();
+// 【fix539】摩托车跳跃开关（默认关，随存档保存）
+function syncMotoJumpBtn() {
+  const b = document.getElementById('setMotoJumpBtn');
+  if (b) b.textContent = '🏍 摩托车跳跃：' + (PROGRESS.motoJump ? '开' : '关');
+}
+function setMotoJump(on) {
+  PROGRESS.motoJump = !!on;
+  syncMotoJumpBtn();
+  try { saveGame(); } catch (e) {}
+  try { setHint(PROGRESS.motoJump ? '摩托车：按空格/跳跃键可以起跳' : '摩托车：跳跃已关闭'); } catch (e) {}
+}
+{
+  const _mb = document.getElementById('setMotoJumpBtn');
+  if (_mb) _mb.addEventListener('click', () => setMotoJump(!PROGRESS.motoJump));
+}
+syncMotoJumpBtn();
 // 打开设置时：把模式标签同步到当前游戏模式（没在编辑时），高亮对应 tab
 function syncLayoutModeTabs() {
   if (!layoutEditing) layoutEditMode = getCurMode();
   document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
 }
-document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); try { syncVehLookBtn(); } catch (e) {} });
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); try { syncVehLookBtn(); } catch (e) {} try { syncMotoJumpBtn(); } catch (e) {} });
 // 【fix180】设置面板里的开发者入口
 const _setDevBtn = document.getElementById('setDevBtn');
 if (_setDevBtn) _setDevBtn.addEventListener('click', () => { try { openDevPanel(); } catch (e) {} });
