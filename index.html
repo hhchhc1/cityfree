@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261117-fix528-clothing-polish-bridge-map">
+<meta name="cf-build" content="20261118-fix529-civilian-chase-40m">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -21988,7 +21988,11 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
   // 【fix523】警报中的基地守卫：连发步枪 + 90m 追击半径。普通 NPC 完全不受影响。
   const _baseAlert = !!(r.isBaseGuard && r.baseAlertUntil && performance.now() < r.baseAlertUntil);
-  const _chaseCap = _baseAlert ? 90 : 22;
+  // 【fix529·2026-11-18·用户："普通路人、市民追玩家，这个弄成 40 米"】
+  // 原来所有目标一律 22m：玩家跑开 22 米仇恨立刻清零，普通路人太容易甩掉。
+  // 现在只把"追玩家"放宽到 40m；NPC 追警察 / NPC 互殴（帮派火拼、误伤反打）
+  // 仍保持 22m，避免帮派一开打就拖着整条街的人满城跑。
+  const _chaseCap = _baseAlert ? 90 : (r.hate === 'player' ? 40 : 22);
   if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
   // 以前这里完全不看高度：目标 y 一律写死成 1.3/1.05，于是弹道是一条贴地的水平线，
