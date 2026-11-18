@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix530-gang-global-hate-guard-alert">
+<meta name="cf-build" content="20261118-fix531-gang-hq-hill-zfight">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -12784,7 +12784,13 @@ function updateHqLights() {
   // （bhd 48→55 从 10.5 降到 0）对不上 —— 在半径 48~55 环带，锥壁比真实地形高出 0~3.5m。
   // 玩家踩在真实地形上，却被更高的"虚体"山壁埋住、且能穿过去（用户："沙滩色的东西、人穿进去、身体被埋"）。
   // 改成顶半径48/底半径55/高10.5，使锥壁正好贴合地形斜坡（(48,10.5)→(55,0)）：玩家站在斜坡上即贴合锥壁，不再被埋/穿透。
-  const hill = new THREE.Mesh(new THREE.CylinderGeometry(48, 55, 10.5, 24), new THREE.MeshLambertMaterial({ color: 0x3a3a32 }));
+  // 【fix531·2026-11-18·用户："黑社会大本营这里上边的一直有绿色的东西在闪"】
+  // 根因：山体视觉锥顶面半径 48、高 10.5，顶面正好在 y=10.5；而 terrainHeight 把
+  // 半径 <=48 的平台也抬到 10.5 —— 两者**完全共面**。围墙（半径 45）恰好立在这圈环带上，
+  // 于是深灰锥面与绿色/沙色地形在深度缓冲里逐像素抢胜负，墙根出现一直在抖的绿色斜纹。
+  // 修法：给锥面加 polygonOffset（比 stoneFloor 的 -1 略弱，让庭院石板仍然优先），
+  // 让锥面稳定压在地形之上，不再抢深度。几何高度与碰撞完全不动。
+  const hill = new THREE.Mesh(new THREE.CylinderGeometry(48, 55, 10.5, 24), new THREE.MeshLambertMaterial({ color: 0x3a3a32, polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1 }));
   hill.position.set(hx, 10.5 / 2, hz); scene.add(hill);
   const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(48, 48, 0.3, 24), new THREE.MeshLambertMaterial({ color: 0x2a2a22 }));
   topPlate.position.set(hx, hillTop + 0.15, hz); scene.add(topPlate);
@@ -12805,9 +12811,11 @@ function updateHqLights() {
     }
   }
   // 坡道底部与山体交接处：用绿色地形片盖住灰色山体
+  // 【fix531】这块绿色薄片顶面只比地形高 5cm，远处同样会和地形/坡道抢深度（绿纹闪烁），
+  // 一并加 polygonOffset 让它稳定盖在地形上。
   const rampBottomZ = rampEndZ;   // z=320，坡道最底部
   const rampBottomY = terrainHeight(hx, rampBottomZ);
-  const rampBlend = new THREE.Mesh(new THREE.BoxGeometry(rampW + 4, 0.2, 12), new THREE.MeshLambertMaterial({ color: 0x4a7a2e }));
+  const rampBlend = new THREE.Mesh(new THREE.BoxGeometry(rampW + 4, 0.2, 12), new THREE.MeshLambertMaterial({ color: 0x4a7a2e, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
   rampBlend.position.set(hx, rampBottomY - 0.05, rampBottomZ - 4); scene.add(rampBlend);
   // 坡道路灯
   for (let i = 0; i < 8; i++) {
