@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix533-gun-dmg-down-rpg4-cd">
+<meta name="cf-build" content="20261118-fix534-folk-beam-collected-green">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -32013,6 +32013,17 @@ window.__bindTap = __bindTap;
     det(BX(11, 0.42, 190), TILE, 2020, 3.55, 153, 0, 0, 0.06);
 
 
+// 【fix534·2026-11-18·用户："古建筑的光束，玩家走过去触发过就弄成绿色的，然后显示已收集"】
+// 收集状态必须存起来：光柱会被巡检/硬重置反复重建（__folkHardReset → __folkAddSpot），
+// 只改一次材质颜色，下一次重建就变回金色了。所以颜色由"名字是否已收集"决定。
+var FOLK_COLLECT_KEY = 'cf_folk_collected_v1';
+try { window.__folkCollected = JSON.parse(localStorage.getItem(FOLK_COLLECT_KEY) || '{}') || {}; }
+catch (e) { window.__folkCollected = {}; }
+var FOLK_COLOR_GOT = 0x54ff8a;     // 已收集：亮绿色
+function folkIsCollected(name) { return !!(window.__folkCollected && window.__folkCollected[name]); }
+function folkSaveCollected() {
+  try { localStorage.setItem(FOLK_COLLECT_KEY, JSON.stringify(window.__folkCollected || {})); } catch (e) {}
+}
 // 【fix249】给"原有的"民居/古建加光柱的统一入口：谁建的房子，谁自己报坐标，避免我手写坐标对不上
 window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
   try {
@@ -32026,8 +32037,10 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
     if (!window.__folkResetting && window.__folkMarkers.some(function (m) { return m.name === name; })) return;
     const px = x, pz = z + (dz === undefined ? -9 : dz);
     const col = color || 0xffd08a;
+    // 【fix534】已收集过的光柱直接用绿色（重建时也能保持）
+    const colUse = folkIsCollected(name) ? FOLK_COLOR_GOT : col;
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 7.0, 14, 1, true),
-      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: colUse, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
     beam.position.set(px, 3.5, pz); scene.add(beam);
     // 【fix279】给三块网格打上身份标记：name@x,z。
     // 去重时按标记扫场景清理，不再依赖 marker 数组是否还持有这些网格。
@@ -32035,10 +32048,10 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
     const _fk = name + '@' + Math.round(px) + ',' + Math.round(pz);
     beam.userData.folkKey = _fk;
     const core = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 7.0, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: colUse, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
     core.position.set(px, 3.5, pz); scene.add(core); core.userData.folkKey = _fk;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.15, 8, 22),
-      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75 }));
+      new THREE.MeshBasicMaterial({ color: colUse, transparent: true, opacity: 0.75 }));
     ring.rotation.x = -Math.PI / 2; ring.position.set(px, 0.12, pz); scene.add(ring); ring.userData.folkKey = _fk;
     window.__folkMarkers.push({ name: name, x: px, z: pz, obj: [beam, core, ring] });
   } catch (e) { window.__folkSpotErr = String(e); }
@@ -32056,10 +32069,12 @@ window.__folkAddSpot = function (name, x, z, color, dz, allowDup) {
 // 不会再出现"立在那儿不知道干嘛"的无意义光柱。
 window.__folkLabel = function (name) {
   try {
+    // 【fix534】已收集的名字牌改成绿底绿字 + "✔ 已收集 · 名字"
+    const got = folkIsCollected(name);
     const cv = document.createElement('canvas');
     cv.width = 256; cv.height = 72;
     const g = cv.getContext('2d');
-    g.fillStyle = 'rgba(18,26,20,0.72)';
+    g.fillStyle = got ? 'rgba(14,44,24,0.84)' : 'rgba(18,26,20,0.72)';
     g.beginPath();
     const r = 16, w = 256, h = 72;
     g.moveTo(r, 0); g.lineTo(w - r, 0); g.quadraticCurveTo(w, 0, w, r);
@@ -32067,11 +32082,15 @@ window.__folkLabel = function (name) {
     g.lineTo(r, h); g.quadraticCurveTo(0, h, 0, h - r);
     g.lineTo(0, r); g.quadraticCurveTo(0, 0, r, 0);
     g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(255,220,150,0.85)'; g.lineWidth = 3; g.stroke();
-    g.fillStyle = '#ffeec0';
-    g.font = 'bold 34px sans-serif';
+    g.strokeStyle = got ? 'rgba(120,255,160,0.95)' : 'rgba(255,220,150,0.85)'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = got ? '#b8ffcb' : '#ffeec0';
+    const txt = got ? '✔ 已收集 · ' + name : name;
+    // 字号自适应：名字长的（如"陕北窑洞"加上前缀）别撑出画布
+    let fs = 34;
+    g.font = 'bold ' + fs + 'px sans-serif';
+    while (g.measureText(txt).width > 238 && fs > 15) { fs -= 2; g.font = 'bold ' + fs + 'px sans-serif'; }
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(name, 128, 38);
+    g.fillText(txt, 128, 38);
     const tex = new THREE.CanvasTexture(cv);
     tex.minFilter = THREE.LinearFilter;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
@@ -32081,6 +32100,31 @@ window.__folkLabel = function (name) {
     return sp;
   } catch (e) { return null; }
 };
+// 【fix534】走近光柱 = 收集：三块网格（外束/内芯/地环）一起变绿，名字牌换成"✔ 已收集 · 名字"。
+// 状态写进 localStorage，重建光柱时由 __folkAddSpot / __folkLabel 读回来。
+function folkCollectSpot(m) {
+  try {
+    if (!m || !m.name) return;
+    if (folkIsCollected(m.name)) return;
+    window.__folkCollected = window.__folkCollected || {};
+    window.__folkCollected[m.name] = 1;
+    folkSaveCollected();
+    const objs = Array.isArray(m.obj) ? m.obj : (m.obj ? [m.obj] : []);
+    for (const o of objs) {
+      try { if (o.material && o.material.color) o.material.color.setHex(FOLK_COLOR_GOT); } catch (e) {}
+    }
+    // 名字牌还是旧的金色文字，必须重建（直接改 Sprite 贴图没有现成接口）
+    try {
+      if (window.__folkScene) {
+        if (m.label) { window.__folkScene.remove(m.label); m.label = null; }
+        m.label = window.__folkLabel(m.name);
+        if (m.label) { m.label.position.set(m.x, 8.8, m.z); window.__folkScene.add(m.label); }
+      }
+    } catch (e) {}
+    try { setHint('📗 已收集：' + m.name); } catch (e) {}
+    try { floatText('已收集 · ' + m.name, '#7dffa8'); } catch (e) {}
+  } catch (e) {}
+}
 // 【fix247】民居/古建图鉴：常驻按钮 + 走近光柱自动显示简介
 (function folkWikiAll() {
   const INFO = [
@@ -32183,10 +32227,15 @@ const byName = {};
   function renderList() {
     if (!listPanel) return;
     const body = listPanel.querySelector('#dexBody');
-    let h = '<div style="font-size:19px;font-weight:700;color:#5a3a1a;margin-bottom:10px">🏛 传统民居与古建图鉴</div>';
+    // 【fix534】图鉴列表也标出收集进度：已收集的条目换成绿底 + "✔ 已收集"
+    const _gotN = INFO.filter(function (d) { return folkIsCollected(d.name); }).length;
+    let h = '<div style="font-size:19px;font-weight:700;color:#5a3a1a;margin-bottom:6px">🏛 传统民居与古建图鉴</div>' +
+            '<div style="font-size:12.5px;color:#2e8b57;font-weight:700;margin-bottom:10px">已收集 ' + _gotN + ' / ' + INFO.length + '</div>';
     for (let i = 0; i < INFO.length; i++) {
-      h += '<div class="dexRow" data-n="' + i + '" style="padding:11px;margin-bottom:7px;border-radius:10px;background:#fffaf0;border:1px solid #d8c49a">' +
-           '<div style="font-size:15.5px;font-weight:700;color:#3a2a12">' + INFO[i].name + '</div>' +
+      const _got = folkIsCollected(INFO[i].name);
+      h += '<div class="dexRow" data-n="' + i + '" style="padding:11px;margin-bottom:7px;border-radius:10px;background:' + (_got ? '#eefaf0' : '#fffaf0') + ';border:1px solid ' + (_got ? '#8fd6a4' : '#d8c49a') + '">' +
+           '<div style="font-size:15.5px;font-weight:700;color:#3a2a12">' + INFO[i].name +
+             (_got ? ' <span style="color:#2e8b57;font-size:12px;font-weight:700">✔ 已收集</span>' : '') + '</div>' +
            '<div style="font-size:12.5px;color:#8a6b42;margin-top:2px">' + INFO[i].tag + '</div></div>';
     }
     h += '<div id="dexClose" style="margin-top:8px;text-align:center;padding:12px;border-radius:10px;background:#5a3a1a;color:#f7f1e0;font-size:15px;font-weight:700">关闭</div>';
@@ -32255,6 +32304,9 @@ function tick() {
         const dd = Math.hypot(person.position.x - m.x, person.position.z - m.z);
         if (dd < bd) { bd = dd; best = m; }
       }
+      // 【fix534】走近光柱（5 米内）就算"触发过"：变绿 + 名字牌显示已收集。
+      // 放在自动弹百科之前，保证玩家第一次走进去的那一帧就变色。
+      if (best && bd < 5.0) folkCollectSpot(best);
       if (open && bd > 10.5 && performance.now() > (window.__wikiKeep || 0)) { if (panel) panel.style.display = 'none'; open = false; window.__wikiCd = performance.now() + 2500; }
       if (!open && bd < 5.0 && best && performance.now() > (window.__wikiCd || 0)) { cur = byName[best.name] || null; if (cur) { show(cur); return; } }
       if (open) { btn.style.display = 'none'; return; }
