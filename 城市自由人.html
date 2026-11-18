@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix537-crosswalk-flat">
+<meta name="cf-build" content="20261118-fix538-vehicle-free-look">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -884,6 +884,15 @@
         <div class="mode-tab" id="viewFirstBtn">👁 第一人称</div>
       </div>
       <p class="set-desc set-dim">选择会随存档一起保存；第三人称是默认背后的跟随视角。</p>
+    </div>
+    <!-- 【fix538·2026-11-18·用户："设置里加一个是否开启车辆视角可拖动，默认不开"】 -->
+    <div class="set-sec">
+      <h4>🚗 车辆视角拖动</h4>
+      <p class="set-desc">开启后开车时可以自由转视角：电脑<b>按住鼠标右键拖动</b>，手机<b>滑动屏幕空白处</b>（和走路时一样）。左右环视、上下微调俯仰，视角会跟着车走。</p>
+      <p class="set-desc set-dim">默认关闭，关闭时镜头固定在车头。坦克/直升机的炮塔瞄准仍用「长按攻击键拖动」。选择会随存档保存。</p>
+      <div class="set-row">
+        <div class="map-btn" id="setVehLookBtn" style="background:#1f5f7a">🚗 车辆视角拖动：关</div>
+      </div>
     </div>
     <div class="set-sec">
       <h4>🎮 手机按钮布局</h4>
@@ -11873,7 +11882,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -15506,6 +15515,12 @@ function applyAimDrag(dx, dy) {
 }
 var VEH_AIM_YAW_MAX = 2.2;             // ±126°，炮塔转不过去的角度就别给
 var VEH_AIM_PITCH_MIN = -0.9, VEH_AIM_PITCH_MAX = 1.15;   // 【2026-10-21·fix31 移植】俯仰范围加大（原来 -0.5~0.9 太小，直升机俯射/仰射不够用）
+// 【fix538·2026-11-18·用户："设置里加一个是否开启车辆视角可拖动，默认不开；开启后鼠标右键能拖动
+//  开车时的视角（左右旋转、上下微调），手机上滑动屏幕中间也能调视角"】
+// 驾驶时相机原本每帧被强制锁在车头（camYaw=车头角、camPitch=0），这里存"相对车头的偏移"，
+// 开关打开后由右键拖动 / 手机滑动改写，相机 = 车头角 + 偏移，仍然跟着车走。
+var vehCamYaw = 0, vehCamPitch = 0;
+var VEH_CAM_PITCH_MIN = -0.55, VEH_CAM_PITCH_MAX = 0.95;   // 上下微调范围（不让人钻到车底/翻到天上）
 var aimNDC = { x: 0, y: 0 };           // 手机端载具瞄准等效的屏幕 NDC（由准星位置反推）
 function canVehicleAim() {
   return state === 'drive' && currentCar && (currentCar.isTank || currentCar.isHelicopter);
@@ -15611,7 +15626,13 @@ addEventListener('touchmove', e => {
   for (const t of e.changedTouches) {
     if (t.identifier === joyId) { updateJoy(t.clientX, t.clientY); e.preventDefault(); }
     else if (t.identifier === lookId) {
-      if (canVehicleAim()) {
+      // 【fix538】开关打开时，驾驶中滑动屏幕空白处 = 自由看四周（和步行同手感）。
+      // 炮塔/机头瞄准仍然走"长按攻击键拖动"（applyAimDrag），两套手势不冲突。
+      if (state === 'drive' && currentCar && PROGRESS.vehicleFreeLook) {
+        vehCamYaw = normAngle(vehCamYaw - (t.clientX - lookLX) * LOOK_SENS);
+        vehCamPitch = Math.max(VEH_CAM_PITCH_MIN, Math.min(VEH_CAM_PITCH_MAX,
+          vehCamPitch + (t.clientY - lookLY) * LOOK_SENS));
+      } else if (canVehicleAim()) {
         // 坦克/直升机：滑动 = 转动炮塔/机头去瞄准（上下左右都能动），相机本身不动
         // 【fix532·2026-11-18·用户："手机版直升机按住机枪键左右调整准星是反的"】
         // fix417 当年把这里从减号改成加号，方向其实是错的：相机在车后朝 (sin,cos) 看时
@@ -15672,9 +15693,16 @@ addEventListener('mousedown', e => {
 addEventListener('mousemove', e => {
   if (!pcLookActive) return;
   const dx = e.clientX - pcLookLX, dy = e.clientY - pcLookLY;
-  // 【旧分支 fix33】左右翻转：用户实测右键拖动"上下对、左右反"，改用加号（向右拖 → 视角向右转）。
-  camYaw  += dx * LOOK_SENS;                                   // 左右拖动：水平转视角
-  camPitch = THREE.MathUtils.clamp(camPitch + dy * LOOK_SENS, -0.7, 1.2);  // 上下拖动：俯仰（上拖抬头）
+  // 【fix538】开车 + 开了"车辆视角可拖动"：改写相对车头的偏移。
+  // 不能直接改 camYaw —— 相机每帧都会用 currentCar.angle + vehCamYaw 覆盖它。
+  if (state === 'drive' && currentCar && PROGRESS.vehicleFreeLook) {
+    vehCamYaw = normAngle(vehCamYaw + dx * LOOK_SENS);
+    vehCamPitch = THREE.MathUtils.clamp(vehCamPitch + dy * LOOK_SENS, VEH_CAM_PITCH_MIN, VEH_CAM_PITCH_MAX);
+  } else {
+    // 【旧分支 fix33】左右翻转：用户实测右键拖动"上下对、左右反"，改用加号（向右拖 → 视角向右转）。
+    camYaw  += dx * LOOK_SENS;                                   // 左右拖动：水平转视角
+    camPitch = THREE.MathUtils.clamp(camPitch + dy * LOOK_SENS, -0.7, 1.2);  // 上下拖动：俯仰（上拖抬头）
+  }
   pcLookLX = e.clientX; pcLookLY = e.clientY;
 });
 addEventListener('mouseup', e => { if (e.button === 2) pcLookActive = false; });
@@ -26231,14 +26259,25 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     const camTarget = state === 'walk' ? person : (currentCar ? currentCar.group : person);
     // 步行：相机绕角色自由旋转（camYaw/camPitch 由右手滑动调整，与角色朝向解耦）
     // 驾驶：相机跟随载具朝向，同时把 camYaw 同步到车头，下车后视角自然接上
-    if (state === 'drive' && currentCar) { camYaw = currentCar.angle; camPitch = 0; }
+    // 【fix538】驾驶相机：开关打开时保留相对车头的自由视角偏移；关闭时恢复死锁车头
+    if (state === 'drive' && currentCar) {
+      if (PROGRESS.vehicleFreeLook) {
+        camYaw = currentCar.angle + vehCamYaw;
+        camPitch = vehCamPitch;
+      } else {
+        camYaw = currentCar.angle; camPitch = 0;
+        vehCamYaw = 0; vehCamPitch = 0;
+      }
+    }
     // 【fix15】相机角度只由"滑动转视角 / 驾驶朝向"决定，后退不再自动翻转镜头
     // 【2026-10-21·fix31 移植·可调视角】驾驶直升机/坦克时，让相机**部分跟随准星瞄准方向**：
     // 瞄准左右时视角也跟着转（原来死死锁在车头上，坦克转得慢就完全没法看四周）。
     // 只跟 40%，既让"视角可调"，又保证准星相对相机仍有余量（不会像全跟随时准星焊死在屏幕中心）。
     const _vehAimCam = (state === 'drive' && currentCar && (isHeli || isTank)) ? 1 : 0;
-    const camYawNow = state === 'walk' ? camYaw : (currentCar ? currentCar.angle + (_vehAimCam ? vehAimYaw * 0.4 : 0) : camYaw);
-    const camPitchNow = state === 'walk' ? camPitch : 0;
+    // 【fix538】开关打开：驾驶视角完全由 vehCamYaw/vehCamPitch 决定（不再跟炮塔 0.4 偏转）
+    const _freeVehCam = !!(state === 'drive' && currentCar && PROGRESS.vehicleFreeLook);
+    const camYawNow = state === 'walk' ? camYaw : (currentCar ? (_freeVehCam ? currentCar.angle + vehCamYaw : currentCar.angle + (_vehAimCam ? vehAimYaw * 0.4 : 0)) : camYaw);
+    const camPitchNow = state === 'walk' ? camPitch : (_freeVehCam ? vehCamPitch : 0);
     const cp = Math.cos(camPitchNow), sp = Math.sin(camPitchNow);
     const tfx = Math.sin(camYawNow) * cp, tfz = Math.cos(camYawNow) * cp;
     // 直升机/坦克视角更大更远
@@ -26604,7 +26643,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
@@ -26718,7 +26757,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
   // 【fix507】成就进度恢复（静默，不重复发奖）
   try {
     if (data.achv) {
@@ -35090,12 +35129,29 @@ function setViewMode(first) {
   if (_t) _t.addEventListener('click', () => setViewMode(false));
 }
 syncViewModeButtons();
+// 【fix538】车辆视角拖动开关（默认关，随存档保存）
+function syncVehLookBtn() {
+  const b = document.getElementById('setVehLookBtn');
+  if (b) b.textContent = '🚗 车辆视角拖动：' + (PROGRESS.vehicleFreeLook ? '开' : '关');
+}
+function setVehLook(on) {
+  PROGRESS.vehicleFreeLook = !!on;
+  if (!PROGRESS.vehicleFreeLook) { vehCamYaw = 0; vehCamPitch = 0; }
+  syncVehLookBtn();
+  try { saveGame(); } catch (e) {}
+  try { setHint(PROGRESS.vehicleFreeLook ? '车辆视角：右键/滑动屏幕可自由转视角' : '车辆视角：已固定跟随车头'); } catch (e) {}
+}
+{
+  const _vb = document.getElementById('setVehLookBtn');
+  if (_vb) _vb.addEventListener('click', () => setVehLook(!PROGRESS.vehicleFreeLook));
+}
+syncVehLookBtn();
 // 打开设置时：把模式标签同步到当前游戏模式（没在编辑时），高亮对应 tab
 function syncLayoutModeTabs() {
   if (!layoutEditing) layoutEditMode = getCurMode();
   document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
 }
-document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); });
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); try { syncVehLookBtn(); } catch (e) {} });
 // 【fix180】设置面板里的开发者入口
 const _setDevBtn = document.getElementById('setDevBtn');
 if (_setDevBtn) _setDevBtn.addEventListener('click', () => { try { openDevPanel(); } catch (e) {} });
