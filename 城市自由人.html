@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261118-fix542-gang-hate-memory-30s">
+<meta name="cf-build" content="20261119-fix543-wanted5-military-heli-stats-nerf">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7344,6 +7344,8 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   // 所以挂到 window 上给自动归位逻辑用（没有它就没法判断"直升机不在坪上"）。
   window.MIL_HELIPAD = { x: padX, z: padZ, y: baseGy };
   window.spawnMilitaryHeli = spawnMilitaryHeli;
+  // 【fix543】五星通缉要另起一架"敌方"直升机，复用同一套模型，避免再写一遍几百行几何体
+  window.__buildHeliModel = buildHeliModel;
   spawnMilitaryHeli();
 
   // ========== 坦克模型（大型主战坦克，~8m长） ==========
@@ -13941,25 +13943,25 @@ const WEAPONS = {
   chainsaw:{ name: '电锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
-  pistol:  { name: '手枪',   type: 'gun',   dmg: 15, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
-  smg:    { name: '冲锋枪', type: 'gun',   dmg: 8,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 12, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
-  rifle:  { name: '步枪',   type: 'gun',   dmg: 12, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
-  ak47:   { name: 'AK47',   type: 'gun',   dmg: 14, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
+  pistol:  { name: '手枪',   type: 'gun',   dmg: 13, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
+  smg:    { name: '冲锋枪', type: 'gun',   dmg: 7,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 10, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
+  rifle:  { name: '步枪',   type: 'gun',   dmg: 10, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
+  ak47:   { name: 'AK47',   type: 'gun',   dmg: 12, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
   // desc 单独挂在武器对象上，商店简介会把它拼在通用说明后面（这样探针也能直接读来验证）
-  sniper: { name: '狙击枪', type: 'gun',   dmg: 68, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
+  sniper: { name: '狙击枪', type: 'gun',   dmg: 58, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
     desc: '🎯 点击「瞄准」进入狙击镜：时间放慢到 0.5 倍，打中任何部位都是一枪毙命，一发子弹能穿透一排目标。再点一次「瞄准」退出。\n👻 瞄准状态下击杀不会升星、不会惊动同伙、也不会增加通缉 —— 杀人于无形。\n🔇 用它开枪本身也不会涨星（零颗星时随便打也不会被通缉）。' },
-  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 68, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
+  rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 58, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
   // 【2026-10-13】四联火箭筒：装备后可「连发」（点一下发 1 发）或「齐发」（一次 4 发齐射）。
   // salvo 标记表示这把武器支持齐发模式，由 salvoMode 切换；连发时每次消耗 1 发火箭弹，齐发时一次消耗 4 发。
   // 【fix533·2026-11-18·用户："四联火箭筒连发模式下每一发间隔缩短"】
   // fireCd 仍是齐发模式的冷却（2.2s，一次 4 发，太快会瞬间清空弹匣）；
   // 连发模式单独用 singleFireCd = 1.1s，点一下打一发，节奏顺得多。
-  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 68, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, singleFireCd: 1.1, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
+  rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 58, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, singleFireCd: 1.1, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
     desc: '🚀 四联装填，双击「齐发」按钮切换：连发模式点一下打出去 1 发，齐发模式一次 4 发齐射、覆盖一片。每一发都是范围爆炸，适合清场。' },
   // 【2026-10-13】加特林：高射速转管机枪，弹链 100 发（7.62mm），靠持续泼洒火力压制。
-  minigun:{ name: '加特林',   type: 'gun',   dmg: 9,  range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
+  minigun:{ name: '加特林',   type: 'gun',   dmg: 8,  range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
 };
 // 命中部位倍率：头 2.5 / 身 1.0 / 腿 0.6（狙击枪 oneShot 时忽略倍率，见 shoot()）
 const ZONE_MULT = { head: 2.5, body: 1.0, leg: 0.6 };
@@ -13985,25 +13987,25 @@ const speed = { v: 0 };
 
 // 服饰 / 防具（购买即永久提升属性；部分带独立外观模型/图案，不只换色）
 const CLOTHES = {
-  jacket:  { name: '皮夹克',    def: 15, runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 400,   icon: '🧥', visual: 'jacket' },
-  hoodie:  { name: '防刺卫衣',  def: 0,  runSpeed: 0,    maxHp: 40, driveSpeed: 0,  atk: 0,    price: 900,   icon: '👕', visual: 'hoodie' },
+  jacket:  { name: '皮夹克',    def: 11, runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 400,   icon: '🧥', visual: 'jacket' },
+  hoodie:  { name: '防刺卫衣',  def: 0,  runSpeed: 0,    maxHp: 28, driveSpeed: 0,  atk: 0,    price: 900,   icon: '👕', visual: 'hoodie' },
   shoes:   { name: '疾风跑鞋',  def: 0,  runSpeed: 0.5,  maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 800,   icon: '👟', visual: 'shoes' },
   gloves:  { name: '铁拳手套',  def: 0,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.15, price: 1800,  icon: '🥊', visual: 'gloves' },   // 2026-10-12 用户要求：攻击加成 50% → 15%
-  vest:    { name: '防弹背心',  def: 35, runSpeed: 0,    maxHp: 20, driveSpeed: 0,  atk: 0,    price: 1500,  icon: '🦺', visual: 'vest' },
-  helmet:  { name: '战术头盔',  def: 40, runSpeed: 0,    maxHp: 30, driveSpeed: 0,  atk: 0,    price: 2200,  icon: '⛑️', visual: 'helmet' },
-  armor:   { name: '重装护甲',  def: 60, runSpeed: -0.15,maxHp: 60, driveSpeed: 0,  atk: 0,    price: 4000,  icon: '🛡️', visual: 'armor' },
+  vest:    { name: '防弹背心',  def: 25, runSpeed: 0,    maxHp: 14, driveSpeed: 0,  atk: 0,    price: 1500,  icon: '🦺', visual: 'vest' },
+  helmet:  { name: '战术头盔',  def: 28, runSpeed: 0,    maxHp: 21, driveSpeed: 0,  atk: 0,    price: 2200,  icon: '⛑️', visual: 'helmet' },
+  armor:   { name: '重装护甲',  def: 42, runSpeed: -0.15,maxHp: 42, driveSpeed: 0,  atk: 0,    price: 4000,  icon: '🛡️', visual: 'armor' },
   // 暗影披风（cape）2026-10-12 已按用户要求彻底下架：不再出现在商店，
   // 已经买了的会在读档时按原价 3000 金币回收（见 RETIRED_CLOTHES）。
-  glasses: { name: '战术墨镜',  def: 5,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 600,   icon: '🕶️', visual: 'glasses' },
-  bandana: { name: '忍者头巾',  def: 8,  runSpeed: 0.1,  maxHp: 10, driveSpeed: 0,  atk: 0,    price: 1200,  icon: '🎀', visual: 'bandana' },
-  backpack:{ name: '战术背包',  def: 0,  runSpeed: -0.05,maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 1500,  icon: '🎒', visual: 'backpack', extraHp: 30 },
-  belt:    { name: '武装腰带',  def: 10, runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.2,  price: 1000,  icon: '👔', visual: 'belt2' },
-  mask:    { name: '战术面罩',  def: 12, runSpeed: 0,    maxHp: 15, driveSpeed: 0,  atk: 0,    price: 1400,  icon: '🎭', visual: 'mask' },
-  scarf2:  { name: '暗夜围巾',  def: 5,  runSpeed: 0.05, maxHp: 0,  driveSpeed: 0,  atk: 0.05, price: 800,   icon: '🧣', visual: 'scarf2' },
-  wrist:   { name: '护腕',      def: 8,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.15, price: 900,   icon: '⌚', visual: 'wrist' },
-  boots:   { name: '战术靴',    def: 15, runSpeed: 0.15, maxHp: 10, driveSpeed: 0,  atk: 0,    price: 1600,  icon: '🥾', visual: 'boots' },
-  knee:    { name: '护膝',      def: 10, runSpeed: 0,    maxHp: 5,  driveSpeed: 0,  atk: 0,    price: 700,   icon: '🦿', visual: 'knee' },
-  glasses2:{ name: '夜视仪',    def: 3,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.1,  price: 2800,  icon: '🥽', visual: 'glasses2' },
+  glasses: { name: '战术墨镜',  def: 4,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 600,   icon: '🕶️', visual: 'glasses' },
+  bandana: { name: '忍者头巾',  def: 6,  runSpeed: 0.1,  maxHp: 7, driveSpeed: 0,  atk: 0,    price: 1200,  icon: '🎀', visual: 'bandana' },
+  backpack:{ name: '战术背包',  def: 0,  runSpeed: -0.05,maxHp: 0,  driveSpeed: 0,  atk: 0,    price: 1500,  icon: '🎒', visual: 'backpack', extraHp: 21 },
+  belt:    { name: '武装腰带',  def: 7, runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.2,  price: 1000,  icon: '👔', visual: 'belt2' },
+  mask:    { name: '战术面罩',  def: 8, runSpeed: 0,    maxHp: 11, driveSpeed: 0,  atk: 0,    price: 1400,  icon: '🎭', visual: 'mask' },
+  scarf2:  { name: '暗夜围巾',  def: 4,  runSpeed: 0.05, maxHp: 0,  driveSpeed: 0,  atk: 0.05, price: 800,   icon: '🧣', visual: 'scarf2' },
+  wrist:   { name: '护腕',      def: 6,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.15, price: 900,   icon: '⌚', visual: 'wrist' },
+  boots:   { name: '战术靴',    def: 11, runSpeed: 0.15, maxHp: 7, driveSpeed: 0,  atk: 0,    price: 1600,  icon: '🥾', visual: 'boots' },
+  knee:    { name: '护膝',      def: 7, runSpeed: 0,    maxHp: 4,  driveSpeed: 0,  atk: 0,    price: 700,   icon: '🦿', visual: 'knee' },
+  glasses2:{ name: '夜视仪',    def: 2,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0,  atk: 0.1,  price: 2800,  icon: '🥽', visual: 'glasses2' },
   nitro:   { name: '氮气引擎',  def: 0,  runSpeed: 0,    maxHp: 0,  driveSpeed: 0.6,atk: 0,    price: 2500,  icon: '⚙️' }
 };
 // 【2026-10-13 用户要求】服饰拆成两层：
@@ -21883,7 +21885,8 @@ if ((v.shootCd || 0) > 0) return;
     const inBlastV = o => Math.abs(terrainHeight(o.x, o.z) + 0.9 - tankBlastY) <= RY;
     for (const t of cars) if (!t.exploded && t !== v) { const d = Math.hypot(t.x - hx, t.z - hz); if (d < R && inBlastV(t)) { explodeCar(t); } }
     for (const tt of traffic) if (!tt.exploded) { const d = Math.hypot(tt.x - hx, tt.z - hz); if (d < R && inBlastV(tt)) explodeCar(tt); }
-    for (const pp of policeCars) if (!pp.exploded && pp !== v) { const d = Math.hypot(pp.x - hx, pp.z - hz); if (d < R && inBlastV(pp)) explodeCar(pp); }    };
+    for (const pp of policeCars) if (!pp.exploded && pp !== v) { const d = Math.hypot(pp.x - hx, pp.z - hz); if (d < R && inBlastV(pp)) explodeCar(pp); }
+    };
     if (_tFly > 0.05) queueBullet(hx, hY, hz, _tFly, tankBoom);
     else tankBoom();
   }
@@ -25239,6 +25242,99 @@ function updateDayNight(dt) {
   // 这两种情况 update() 都会提前 return，本函数不跑，但 frameLoop 尾部的 updateWeather 照跑。
   window.__dnFrame = _frameCnt;
 }
+// ========== 【fix543】五星通缉：军方直升机 ==========
+// 用户要求：「5 星的时候军方出动，直接从军事基地起飞直升飞机，追的过程中星级不会下降，
+// 直到飞到玩家身边开始攻击玩家的时候，才开始计时星级下降的时间。」
+//
+// 所以这里的关键不是"多一架会飞的东西"，而是**把掉星倒计时绑在直升机的状态上**：
+//   ① incoming（还在飞）→ 冻结 wantedDecay，星级钉死不动
+//   ② engaged（已到位、已开火）→ 恢复正常倒计时，10 秒掉一星
+// 一旦 engaged 就不再退回 incoming，否则玩家一直跑、直升机一直追不上，
+// 星级就永远掉不下来（比"跑 10 秒就掉星"更难受）。
+var milHeli = null;
+function milHeliPlayerPos() {
+  if (state === 'drive' && currentCar) return { x: currentCar.x, y: currentCar.y, z: currentCar.z };
+  return { x: person.position.x, y: person.position.y, z: person.position.z };
+}
+function spawnMilHeli() {
+  if (typeof window.__buildHeliModel !== 'function' || !window.MIL_HELIPAD) return null;
+  const pad = window.MIL_HELIPAD;
+  let g;
+  try { g = window.__buildHeliModel(); } catch (e) { return null; }
+  if (!g) return null;
+  g.position.set(pad.x, pad.y + 3, pad.z);
+  scene.add(g);
+  milHeli = { group: g, x: pad.x, y: pad.y + 3, z: pad.z, angle: 0, state: 'incoming', shootCd: 2.4, rotor: 0, orbit: 0 };
+  setHint('军方直升机已从军事基地起飞！');
+  try { floatText('军方出动', '#ff5544'); } catch (e) {}
+  try { sfx('siren'); } catch (e) {}
+  return milHeli;
+}
+function clearMilHeli() {
+  if (!milHeli) return;
+  try { scene.remove(milHeli.group); } catch (e) {}
+  milHeli = null;
+}
+// 调试用：控制台输入 __milHeliInfo() 可看直升机状态与当前星级（只读，不改任何状态）
+window.__milHeliInfo = function () {
+  if (!milHeli) return { heli: null, wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10 };
+  return {
+    heli: { state: milHeli.state, x: Math.round(milHeli.x), y: Math.round(milHeli.y), z: Math.round(milHeli.z) },
+    wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10
+  };
+};
+function updateMilHeli(dt) {
+  if (wanted < 5 - 1e-6) { if (milHeli) clearMilHeli(); return; }
+  if (!milHeli) spawnMilHeli();
+  if (!milHeli) return;
+  const pp = milHeliPlayerPos();
+  const dx = pp.x - milHeli.x, dz = pp.z - milHeli.z;
+  const d = Math.hypot(dx, dz) || 1;
+  // 高度：压在玩家上方约 24m，既不挡视线，也够不到近战
+  const wantY = pp.y + 24;
+  milHeli.y += (wantY - milHeli.y) * Math.min(1, dt * 1.2);
+  if (milHeli.state === 'incoming') {
+    // 追击速度给到 34m/s：比玩家跑步快、和多数载具持平，避免永远追不上
+    if (d > 30) {
+      const spd = 34;
+      milHeli.x += dx / d * spd * dt;
+      milHeli.z += dz / d * spd * dt;
+    } else {
+      milHeli.state = 'engaged';
+      setHint('军方直升机已锁定你，开始攻击！');
+    }
+  } else {
+    // 已交火：绕着玩家盘旋，保持 27m 左右，像真的在咬人
+    milHeli.orbit += dt * 0.55;
+    const keep = 27;
+    const tx = pp.x + Math.cos(milHeli.orbit) * keep;
+    const tz = pp.z + Math.sin(milHeli.orbit) * keep;
+    milHeli.x += (tx - milHeli.x) * Math.min(1, dt * 1.1);
+    milHeli.z += (tz - milHeli.z) * Math.min(1, dt * 1.1);
+  }
+  milHeli.angle = Math.atan2(dx, dz);
+  milHeli.group.position.set(milHeli.x, milHeli.y, milHeli.z);
+  milHeli.group.rotation.y = milHeli.angle;
+  milHeli.rotor += dt * 22;
+  if (milHeli.state === 'engaged') {
+    milHeli.shootCd -= dt;
+    if (milHeli.shootCd <= 0) {
+      milHeli.shootCd = 1.15;
+      const fy = milHeli.y - 1.2;
+      const ty = pp.y + 1.0;
+      spawnTracer(milHeli.x, fy, milHeli.z, pp.x, ty, pp.z, 'rifle');
+      sfxNear('shoot', milHeli.x, milHeli.z, 140);
+      // 有掩体就打不中：楼里、桥下都能躲
+      if (hasLineOfSight(milHeli.x, milHeli.z, pp.x, pp.z, false)) {
+        const hitChance = Math.max(0.28, 0.78 - d * 0.012);
+        if (Math.random() < hitChance) {
+          hurtPlayer(9, true);
+          try { floatText('-9', '#ff5544'); } catch (e) {}
+        }
+      }
+    }
+  }
+}
 function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
   // 常规世界逻辑整段跳过 —— 这样完全不必去碰那 179 处 state 判断，风险最低。
@@ -26044,6 +26140,9 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   // 都会连带把这两个 updater 一起跳过，表现就是「直升机飞到新城市放下后永远不归位」。
   try { updateFixedVehicleRecall(dt); updatePlayerUsedCarDespawn(); }
   catch(e) { console.error('[Recall/Despawn error]', e); }
+  // 【fix543】五星军方直升机：放在载具大 try 之外，避免前面任何一辆车抛异常时
+  // 连它一起跳过 —— 一旦跳过，incoming 状态就永远不推进，星级会被永久冻住。
+  try { updateMilHeli(dt); } catch (e) { console.error('[mil heli]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
   try { updateRagdolls(dt); } catch(e) { console.error('[Ragdolls update error]', e); }
@@ -26124,7 +26223,11 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   // 现在 heat 只负责"两星以下攒够 100 就升一星"，不再拖住降星。
   heat = Math.max(0, heat - 4 * dt);
   if (wanted > 0) {
-    wantedDecay += dt;
+    // 【fix543】五星军方直升机还没飞到、没开火之前，倒计时冻结 —— 用户要求
+    // 「追的过程中星级不会下降，直到飞到玩家身边开始攻击才开始计时」。
+    // 注意判的是 milHeli.state，不是"有没有直升机"：一旦 engaged 就恢复计时。
+    const _heliHold = (wanted >= 5 - 1e-6) && milHeli && milHeli.state !== 'engaged';
+    if (!_heliHold) wantedDecay += dt;
     // 【重做】五星掉到四星只要 10 秒，其余掉星 15 秒（用户要求）。
     const coolStep = (wanted >= 5 - 1e-6) ? 10 : 15;
     if (wantedDecay > coolStep) {
