@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix545-npc-wall-los-melee-enemy-tank">
+<meta name="cf-build" content="20261121-fix546-mil-heli-always-spawn">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -25378,9 +25378,12 @@ function spawnMilHeli() {
   let g;
   try { g = window.__buildHeliModel(); } catch (e) { return null; }
   if (!g) return null;
-  g.position.set(pad.x, pad.y + 3, pad.z);
+  // 【fix546】原来直接生在停机坪正上方，和玩家那架停着的军用直升机几乎完全重合 ——
+  // 玩家站在坪上会以为"根本没派飞机来"。改成往基地内侧偏 16m、并直接抬到 18m 空中。
+  const sx = pad.x - 16, sy = pad.y + 18, sz = pad.z;
+  g.position.set(sx, sy, sz);
   scene.add(g);
-  milHeli = { group: g, x: pad.x, y: pad.y + 3, z: pad.z, angle: 0, state: 'incoming', shootCd: 2.4, rotor: 0, orbit: 0 };
+  milHeli = { group: g, x: sx, y: sy, z: sz, angle: 0, state: 'incoming', shootCd: 2.4, rotor: 0, orbit: 0 };
   setHint('军方直升机已从军事基地起飞！');
   try { floatText('军方出动', '#ff5544'); } catch (e) {}
   try { sfx('siren'); } catch (e) {}
@@ -25544,16 +25547,20 @@ function updateMilTank(dt) {
   milTank._ppx = pp.x; milTank._ppz = pp.z;
 }
 function updateMilHeli(dt) {
-  // 【fix545】玩家正坐在直升机里：直升机追不上同高度的玩家，军方改派地面坦克（见 updateMilTank）
+  // 【fix546·2026-11-21·用户："为什么我都已经五星了，但是还是没有直升机来打我？"】
+  // 根因：fix545 为了"占直升机改派坦克"，写成 `场上只要有军方坦克就不叫直升机`。
+  // 可坦克派出去后只要星级还是五星就一直赖在场上（它又不会自己消失），
+  // 于是玩家从直升机下来、站在基地停机坪五星干等，直升机永远被那辆坦克挡住不生成。
+  // 现在改成互不压制：**直升机永远按五星出**，坦克只是"玩家正坐在直升机里"时的额外手段。
   const _inHeli = playerInHeliNow();
-  if (!milHeli && (_inHeli || (milTank && milTank.state !== 'leaving'))) return;
   if (milHeli && _inHeli && milHeli.state !== 'leaving') {
     milHeli.state = 'leaving'; milHeli.leaveT = 0;
     setHint('军方直升机脱离接触，正在返航。');
   }
   // 只有五星才叫得出来；一旦叫出来就一直跟到"掉星返航"结束
   if (!milHeli) {
-    if (wanted < 5 - 1e-6) return;
+    // 玩家正坐在直升机里：这一轮交给地面坦克，不叫直升机（避免"刚生成就被判返航"的反复起降）
+    if (wanted < 5 - 1e-6 || _inHeli) return;
     spawnMilHeli();
     if (!milHeli) return;
   }
@@ -25565,8 +25572,8 @@ function updateMilHeli(dt) {
     milHeli.leaveT = 0;
     setHint('军方直升机脱离接触，正在返航。');
   }
-  // 返航途中又升回五星：重新咬上来（玩家坐在直升机里时不回来 —— 那局改派坦克）
-  if (isFive && milHeli.state === 'leaving' && !_inHeli && !(milTank && milTank.state !== 'leaving')) {
+  // 返航途中又升回五星：重新咬上来（玩家正坐在直升机里时不回来 —— 那一轮由地面坦克负责）
+  if (isFive && milHeli.state === 'leaving' && !_inHeli) {
     milHeli.state = 'incoming';
     milHeli.leaveT = 0;
     milHeli.shootCd = 2.4;
