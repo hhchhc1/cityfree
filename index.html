@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261119-fix543-wanted5-military-heli-stats-nerf">
+<meta name="cf-build" content="20261121-fix544-mil-heli-clip-rotor-wanted100">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -25252,13 +25252,43 @@ function updateDayNight(dt) {
 // 一旦 engaged 就不再退回 incoming，否则玩家一直跑、直升机一直追不上，
 // 星级就永远掉不下来（比"跑 10 秒就掉星"更难受）。
 var milHeli = null;
+// 【fix544·2026-11-21·用户："军方出动的直升飞机怎么还能穿墙？？还有螺旋桨都不转，
+//   而且刚看见就没了就4星了，大大延长5星到4星的衰减时间"】
+// 三个根因，逐个修：
+//   ① 穿墙 —— 高度只按 player.y + 24 死压着飞，CBD 塔楼普遍 40~90m，机身和旋翼直接从楼里穿过去；
+//      水平位移也是直接加坐标，全程没有任何建筑判定。
+//      修法：每帧算「当前位置 / 目标点 / 目标点再往前 10m」三处净空，需要多高就抬多高
+//      （升降都限速，看起来像真在拉升）；平移前再判一次机身半径内的楼顶，没飞够高就不平移。
+//   ② 螺旋桨不转 —— buildHeliModel 早就把主/尾旋翼挂在 group.userData 上，
+//      但 updateMilHeli 只累加了 rotor 变量，从没写回 rotation。
+//   ③ 刚看见就没了 —— 5→4 只给 10 秒，而且一掉星就 clearMilHeli() 直接 scene.remove。
+//      现在 5→4 给 100 秒，掉星后直升机改成拉升返航，飞远了才移除。
+var HELI_HULL_R = 3.0;    // 机身半径（含短翼挂架），水平避让用
+var HELI_ROTOR_R = 7.6;   // 主旋翼半径 7.2m + 余量，垂直净空用
+// 返回 (x,z) 处半径 r 的圆内最高的建筑顶面；附近没有建筑返回 -1e9。
+// 直接线性扫 buildings（LH_BLD 就是同一个数组）：只在五星时每帧调 3 次，开销可忽略。
+// 不用 _gridBld 是因为新城区(x>900)在网格里是空槽、且会被钳到边缘格子误读成主城边缘的楼。
+function heliBldTop(x, z, r) {
+  let top = -1e9;
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (b.maxX < x - r || b.minX > x + r || b.maxZ < z - r || b.minZ > z + r) continue;
+    if (b.top > top) top = b.top;
+  }
+  return top;
+}
 function milHeliPlayerPos() {
   if (state === 'drive' && currentCar) return { x: currentCar.x, y: currentCar.y, z: currentCar.z };
   return { x: person.position.x, y: person.position.y, z: person.position.z };
 }
 function spawnMilHeli() {
-  if (typeof window.__buildHeliModel !== 'function' || !window.MIL_HELIPAD) return null;
-  const pad = window.MIL_HELIPAD;
+  if (typeof window.__buildHeliModel !== 'function') return null;
+  // 【fix544】停机坪坐标由军事基地那段 IIFE 写到 window 上；万一世界生成时那段没跑到，
+  // 就退化成"从玩家西北方向 420m 的空中飞来"，保证五星一定能叫出直升机。
+  const pad = window.MIL_HELIPAD || (function () {
+    const p = milHeliPlayerPos();
+    return { x: p.x - 420, y: p.y + 60, z: p.z - 420 };
+  })();
   let g;
   try { g = window.__buildHeliModel(); } catch (e) { return null; }
   if (!g) return null;
@@ -25277,63 +25307,129 @@ function clearMilHeli() {
 }
 // 调试用：控制台输入 __milHeliInfo() 可看直升机状态与当前星级（只读，不改任何状态）
 window.__milHeliInfo = function () {
-  if (!milHeli) return { heli: null, wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10 };
+  if (!milHeli) return { heli: null, wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10, bld: buildings.length };
+  const _top = heliBldTop(milHeli.x, milHeli.z, HELI_HULL_R);
   return {
-    heli: { state: milHeli.state, x: Math.round(milHeli.x), y: Math.round(milHeli.y), z: Math.round(milHeli.z) },
-    wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10
+    heli: {
+      state: milHeli.state, x: Math.round(milHeli.x), y: Math.round(milHeli.y), z: Math.round(milHeli.z),
+      rotor: milHeli.group && milHeli.group.userData.mainRotor ? Math.round(milHeli.group.userData.mainRotor.rotation.y * 100) / 100 : null,
+      tail: milHeli.group && milHeli.group.userData.tailRotor ? Math.round(milHeli.group.userData.tailRotor.rotation.x * 100) / 100 : null,
+      bldTop: Math.round(_top), clear: milHeli.y - 1.6 > _top
+    },
+    wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10, bld: buildings.length
   };
 };
 function updateMilHeli(dt) {
-  if (wanted < 5 - 1e-6) { if (milHeli) clearMilHeli(); return; }
-  if (!milHeli) spawnMilHeli();
-  if (!milHeli) return;
+  // 只有五星才叫得出来；一旦叫出来就一直跟到"掉星返航"结束
+  if (!milHeli) {
+    if (wanted < 5 - 1e-6) return;
+    spawnMilHeli();
+    if (!milHeli) return;
+  }
   const pp = milHeliPlayerPos();
+  const isFive = wanted >= 5 - 1e-6;
+  // 掉到四星：不瞬移消失，改成拉升返航
+  if (!isFive && milHeli.state !== 'leaving') {
+    milHeli.state = 'leaving';
+    milHeli.leaveT = 0;
+    setHint('军方直升机脱离接触，正在返航。');
+  }
+  // 返航途中又升回五星：重新咬上来
+  if (isFive && milHeli.state === 'leaving') {
+    milHeli.state = 'incoming';
+    milHeli.leaveT = 0;
+    milHeli.shootCd = 2.4;
+  }
   const dx = pp.x - milHeli.x, dz = pp.z - milHeli.z;
   const d = Math.hypot(dx, dz) || 1;
-  // 高度：压在玩家上方约 24m，既不挡视线，也够不到近战
-  const wantY = pp.y + 24;
-  milHeli.y += (wantY - milHeli.y) * Math.min(1, dt * 1.2);
-  if (milHeli.state === 'incoming') {
-    // 追击速度给到 34m/s：比玩家跑步快、和多数载具持平，避免永远追不上
-    if (d > 30) {
-      const spd = 34;
-      milHeli.x += dx / d * spd * dt;
-      milHeli.z += dz / d * spd * dt;
-    } else {
+
+  if (milHeli.state === 'leaving') {
+    // 朝停机坪方向持续爬升脱离：从玩家头顶飞走，而不是"啪"一下消失
+    milHeli.leaveT += dt;
+    const pad = window.MIL_HELIPAD;
+    const tx = pad ? pad.x : milHeli.x - dx, tz = pad ? pad.z : milHeli.z - dz;
+    const lx = tx - milHeli.x, lz = tz - milHeli.z;
+    const ld = Math.hypot(lx, lz) || 1;
+    const nx = milHeli.x + lx / ld * 46 * dt, nz = milHeli.z + lz / ld * 46 * dt;
+    // 返航同样怕撞楼：没飞过楼顶就只爬升、不横移
+    if (heliBldTop(nx, nz, HELI_HULL_R) < milHeli.y - 1.2) { milHeli.x = nx; milHeli.z = nz; }
+    milHeli.y += 16 * dt;
+    milHeli.angle = Math.atan2(lx, lz);
+    // 飞够 16 秒 / 已回到停机坪上空 / 已远离玩家 700m → 移除
+    if (milHeli.leaveT > 16 || (pad && Math.hypot(pad.x - milHeli.x, pad.z - milHeli.z) < 45) ||
+        Math.hypot(pp.x - milHeli.x, pp.z - milHeli.z) > 700) { clearMilHeli(); return; }
+  } else {
+    // ---- ① 先算这一帧想去哪儿 ----
+    let nx = milHeli.x, nz = milHeli.z;
+    if (milHeli.state === 'incoming' && d > 30) {
+      // 距离越远飞得越快：基地到玩家可能隔着一两公里，死守 34m/s 要飞一分钟，太磨人
+      const spd = d > 400 ? 70 : (d > 150 ? 50 : 34);
+      nx = milHeli.x + dx / d * spd * dt;
+      nz = milHeli.z + dz / d * spd * dt;
+    } else if (milHeli.state === 'incoming') {
       milHeli.state = 'engaged';
+      milHeli.shootCd = 2.6;   // 到位后先盘旋 2.6 秒再开火，给玩家反应时间
       setHint('军方直升机已锁定你，开始攻击！');
     }
-  } else {
-    // 已交火：绕着玩家盘旋，保持 27m 左右，像真的在咬人
-    milHeli.orbit += dt * 0.55;
-    const keep = 27;
-    const tx = pp.x + Math.cos(milHeli.orbit) * keep;
-    const tz = pp.z + Math.sin(milHeli.orbit) * keep;
-    milHeli.x += (tx - milHeli.x) * Math.min(1, dt * 1.1);
-    milHeli.z += (tz - milHeli.z) * Math.min(1, dt * 1.1);
-  }
-  milHeli.angle = Math.atan2(dx, dz);
-  milHeli.group.position.set(milHeli.x, milHeli.y, milHeli.z);
-  milHeli.group.rotation.y = milHeli.angle;
-  milHeli.rotor += dt * 22;
-  if (milHeli.state === 'engaged') {
-    milHeli.shootCd -= dt;
-    if (milHeli.shootCd <= 0) {
-      milHeli.shootCd = 1.15;
-      const fy = milHeli.y - 1.2;
-      const ty = pp.y + 1.0;
-      spawnTracer(milHeli.x, fy, milHeli.z, pp.x, ty, pp.z, 'rifle');
-      sfxNear('shoot', milHeli.x, milHeli.z, 140);
-      // 有掩体就打不中：楼里、桥下都能躲
-      if (hasLineOfSight(milHeli.x, milHeli.z, pp.x, pp.z, false)) {
-        const hitChance = Math.max(0.28, 0.78 - d * 0.012);
-        if (Math.random() < hitChance) {
-          hurtPlayer(9, true);
-          try { floatText('-9', '#ff5544'); } catch (e) {}
+    if (milHeli.state === 'engaged') {
+      // 已交火：绕着玩家盘旋，保持 27m 左右，像真的在咬人
+      milHeli.orbit += dt * 0.55;
+      const keep = 27;
+      const tx = pp.x + Math.cos(milHeli.orbit) * keep;
+      const tz = pp.z + Math.sin(milHeli.orbit) * keep;
+      nx = milHeli.x + (tx - milHeli.x) * Math.min(1, dt * 1.1);
+      nz = milHeli.z + (tz - milHeli.z) * Math.min(1, dt * 1.1);
+    }
+    // ---- ② 净空：当前点 / 目标点 / 目标点再往前 10m ----
+    // 往前多看 10m 是为了提前拉升，避免"贴着楼面才抬头"的顿挫感。
+    const fdx = nx - milHeli.x, fdz = nz - milHeli.z;
+    const fl = Math.hypot(fdx, fdz) || 1;
+    const ax = nx + fdx / fl * 10, az = nz + fdz / fl * 10;
+    const clearNow = Math.max(heliBldTop(milHeli.x, milHeli.z, HELI_ROTOR_R), terrainHeight(milHeli.x, milHeli.z));
+    const clearNext = Math.max(heliBldTop(nx, nz, HELI_ROTOR_R), heliBldTop(ax, az, HELI_ROTOR_R), terrainHeight(nx, nz));
+    // 玩家上方 24m 是"想飞的高度"，但楼比这高时必须让位给楼顶 + 4.5m。
+    // 再压一个"玩家上方 80m"的升限：CBD 有 280m 的塔，真按楼顶爬会飞到看不见的地方，
+    // 那样既打不着也没观赏性 —— 干脆卡在升限上贴着楼面悬停，视线被楼挡住就不开火。
+    const wantY = Math.min(Math.max(pp.y + 24, clearNow + 4.5, clearNext + 4.5), pp.y + 80);
+    const dy = wantY - milHeli.y;
+    const riseRate = 30, sinkRate = 12;   // 爬升比下降快，看起来才像真在拉升避让
+    milHeli.y += Math.max(-sinkRate * dt, Math.min(riseRate * dt, dy));
+    // ---- ③ 平移：整机（机身底约 y-1.6）必须高过目标点的楼顶才允许横移 ----
+    if (heliBldTop(nx, nz, HELI_HULL_R) < milHeli.y - 1.2) { milHeli.x = nx; milHeli.z = nz; }
+    milHeli.angle = Math.atan2(dx, dz);
+    // ---- ④ 开火 ----
+    if (milHeli.state === 'engaged') {
+      milHeli.shootCd -= dt;
+      if (milHeli.shootCd <= 0) {
+        // 【fix544】5→4 的通缉期从 10 秒拉长到 100 秒，滞空时间翻十倍，
+        // 所以单发伤害 9→6、射速 1.15s→1.7s 同步下调，否则玩家撑不到掉星就被打死。
+        milHeli.shootCd = 1.7;
+        const fy = milHeli.y - 1.2;
+        const ty = pp.y + 1.0;
+        spawnTracer(milHeli.x, fy, milHeli.z, pp.x, ty, pp.z, 'rifle');
+        sfxNear('shoot', milHeli.x, milHeli.z, 140);
+        // 有掩体就打不中：楼里、桥下都能躲（hasLineOfSight 是平面判定，
+        // 直升机被楼挡在一侧时同样打不中，躲在楼后是有效的反制手段）
+        if (hasLineOfSight(milHeli.x, milHeli.z, pp.x, pp.z, false)) {
+          const hitChance = Math.max(0.24, 0.62 - d * 0.010);
+          if (Math.random() < hitChance) {
+            hurtPlayer(6, true);
+            try { floatText('-6', '#ff5544'); } catch (e) {}
+          }
         }
       }
     }
   }
+
+  // ---- 收尾：位置 / 朝向 / 旋翼（任何状态都得转）----
+  milHeli.group.position.set(milHeli.x, milHeli.y, milHeli.z);
+  milHeli.group.rotation.y = milHeli.angle;
+  milHeli.rotor += dt * 30;
+  const _mr = milHeli.group.userData.mainRotor, _tr = milHeli.group.userData.tailRotor;
+  if (_mr) _mr.rotation.y = milHeli.rotor;
+  // 尾桨的桨叶是绕 X 轴排布的（见 buildHeliModel），必须转 X 才在桨盘平面内；
+  // 玩家那架直升机写的是 rotation.z，桨叶会甩出桨盘、扫到垂尾上，一并纠正。
+  if (_tr) _tr.rotation.x = milHeli.rotor * 2.2;
 }
 function update(dt) {
   // 【fix43·乘机过场】过场期间由 flightTick 整段接管（相机 / 飞机 / 玩家），
@@ -25662,7 +25758,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
         heli.group.userData.mainRotor.rotation.y = heli.rotorAngle;
       }
       if (heli.group.userData.tailRotor) {
-        heli.group.userData.tailRotor.rotation.z = heli.rotorAngle * 3;
+        // 桨叶绕 X 轴排布，必须在桨盘平面内转 X；写 Z 会把桨叶甩到垂尾外面去
+        heli.group.userData.tailRotor.rotation.x = heli.rotorAngle * 3;
       }
 
       // 水平移动
@@ -26228,8 +26325,10 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 注意判的是 milHeli.state，不是"有没有直升机"：一旦 engaged 就恢复计时。
     const _heliHold = (wanted >= 5 - 1e-6) && milHeli && milHeli.state !== 'engaged';
     if (!_heliHold) wantedDecay += dt;
-    // 【重做】五星掉到四星只要 10 秒，其余掉星 15 秒（用户要求）。
-    const coolStep = (wanted >= 5 - 1e-6) ? 10 : 15;
+    // 【fix544·2026-11-21·用户："刚看见就没了就4星了，大大延长5星到4星的衰减时间"】
+    // 五星 → 四星原来是 10 秒，直升机刚咬上来就掉星、掉星瞬间又被移除，观感就是"闪一下没了"。
+    // 现在给 100 秒；其余星级仍是 15 秒。
+    const coolStep = (wanted >= 5 - 1e-6) ? 100 : 15;
     if (wantedDecay > coolStep) {
       // wanted 现在可能是半星（撞人/开枪 +0.5），必须夹住下界，否则会掉到负数
       wanted = Math.max(0, wanted - 1); wantedDecay = 0;
@@ -26900,7 +26999,8 @@ function restoreSaveGame() {
   recomputeStats(); player.hp = Math.min(player.maxHp, savedHp); player.stamina = Math.min(player.maxStamina, savedStamina);
   gold = Math.floor(saveNumber(data.gold, gold, 0, 1e12)); heat = saveNumber(data.heat, 0, 0, 100);
   // wanted 现在可能是半星（撞人 +0.5），不要再 Math.floor 取整
-  wanted = Math.max(0, Math.min(5, saveNumber(data.wanted, 0, 0, 5))); wantedDecay = saveNumber(data.wantedDecay, 0, 0, 60);
+  // 【fix544】5→4 的冷却拉长到 100 秒，读档上限同步放宽到 200，否则存到一半再读会白送一段冷却
+  wanted = Math.max(0, Math.min(5, saveNumber(data.wanted, 0, 0, 5))); wantedDecay = saveNumber(data.wantedDecay, 0, 0, 200);
   const validWeapons = Array.isArray(data.ownedWeapons) ? data.ownedWeapons.filter(k => WEAPONS[k]) : ['fist'];
   ownedWeapons.splice(0, ownedWeapons.length, ...(validWeapons.includes('fist') ? validWeapons : ['fist', ...validWeapons]));
   // 服饰：先做"互斥清理 + 已下架回收"（2026-10-12 新增规则）。
