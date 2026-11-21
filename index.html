@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix550-fp-climb-clip">
+<meta name="cf-build" content="20261121-fix551-guards-vs-shooters">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -21378,12 +21378,38 @@ function alertBaseGuards(sec) {
     if (!r.isBaseGuard || !r.alive) continue;
     r.hate = 'player'; r.armed = true; r.flee = false; r.attackCd = Math.random() * 0.4;   // 【fix523】0→0.4s：警报后全员快速开火，只保留极短错峰避免齐射轰顶
     r.baseAlertUntil = until;
+    r._baseAlertVs = 'player';   // 【fix551】记住这一轮盯的是玩家，复活时照原样恢复
     n++;
   }
   if (n > 0 && _baseAlarmFresh) { setHint('⚡ 军事基地警报：警卫全员出动！'); floatText('基地警报！', '#ff6b6b'); }
   return n;
 }
 window.alertBaseGuards = alertBaseGuards;
+// 【fix551·2026-11-21·用户："怎么在军事基地有城管进来开枪了，基地的守卫还无济于事"】
+// 原来的"基地开枪"只认**玩家**（shoot() 里判 inMilitaryBase），警察/帮派在院子里对射，
+// 警卫完全不管。这里补一个"谁在基地里开枪就盯谁"的入口：
+//   · 开枪的是警察 → 警卫 hate='cop'（复用 updateResident 里现成的追打警察分支）
+//   · 开枪的是帮派/路人 → 警卫 hate=那个人（复用对象仇恨分支）
+// 已经在打玩家的警卫不会被抢走目标（玩家优先级更高）。
+function alertBaseGuardsVs(who, sec) {
+  if (!who || !who.alive) return 0;
+  const now = performance.now();
+  const until = now + (sec || 30) * 1000;
+  let n = 0;
+  for (const r of residents) {
+    if (!r.isBaseGuard || !r.alive || r.down) continue;
+    if (r.hate === 'player' && (r.baseAlertUntil || 0) > now) continue;   // 正在打玩家，别打断
+    if (who.isCop || who._isCop || (typeof cops !== 'undefined' && cops.indexOf(who) >= 0)) r.hate = 'cop';
+    else r.hate = who;
+    r._baseAlertVs = r.hate;   // 记住这一轮警报盯的是谁，复活时照原样恢复
+    r.armed = true; r.flee = false;
+    r.attackCd = Math.min(r.attackCd === undefined ? 0.4 : r.attackCd, 0.4);
+    r.baseAlertUntil = until;
+    n++;
+  }
+  return n;
+}
+window.alertBaseGuardsVs = alertBaseGuardsVs;
 window.inMilitaryBase = inMilitaryBase;
 // 调试/自测钩子（只在浏览器控制台用，不影响玩法）
 window.__fxRock = function (x, z, y) { try { rocketImpact(WEAPONS.rpg4, null, x, z, typeof y === 'number' ? y : terrainHeight(x, z) + 0.9); return 'ok'; } catch (e) { return String(e); } };
@@ -22095,6 +22121,8 @@ function npcShotCopCheck(r, tx, tz, ignoreVeh) {
 // NPC开枪：射击方向的拖尾 + 音效
 function fireNpcShot(r, dx, dz) {
   sfxNear('shoot', r.x, r.z, 50);
+  // 【fix551】帮派在军事基地里开枪 → 警卫把这个开枪的人当入侵者（原来只有玩家开枪才算）
+  try { if (inMilitaryBase(r.x, r.z)) alertBaseGuardsVs(r, 30); } catch (e) {}
   spawnTracer(r.x + dx * 1.2, 1.3, r.z + dz * 1.2, r.x + dx * 18, 0.8, r.z + dz * 18, 'pistol');
   spawnBurst(r.x + dx * 1.2, r.z + dz * 1.2, 0xffff88, 4);
   // 【fix72】补上伤害判定 —— 原来这个函数**只有视觉效果**（音效 + 曳光弹 + 火花），
@@ -22843,6 +22871,22 @@ function respawnResident(r) {
   r.alive = true; r.hp = hp; r.maxHp = hp; r.hate = null; r.down = false; r.downT = 0; r.attackCd = 0; r.walking = true;
   r.ammo = r.maxAmmo || 0; r.armed = true; r.chaseMode = null; r.vehicleHits = 0;   // 重生补满弹药、重新亮武器、清空撞击计数
   r.group.rotation.x = 0;
+  // 【fix551·2026-11-21·用户："我在里面开枪，只有 2 个守卫开枪，其他的都还是在那里站着"】
+  // 根因：respawnResident 只处理了"路人"和"大本营游荡黑帮"，基地警卫两个都不沾，
+  // 于是复活时落到最后那句"全城随机撒点" —— 死掉的警卫被扔到城里某个角落，
+  // 再慢悠悠走回岗位（走回来之前看着就像没人）。现在让警卫直接回自己的哨位。
+  if (r.isBaseGuard && r.postX !== undefined && r.postZ !== undefined) {
+    r.x = r.postX; r.z = r.postZ;
+    r.angle = r.postAngle || 0;
+    r.group.position.set(r.x, terrainHeight(r.x, r.z), r.z);
+    r.group.rotation.y = r.angle;
+    // 复活时如果警报还在，直接归队继续打（否则要等下一次开枪才会被重新拉进仇恨）
+    if ((r.baseAlertUntil || 0) > performance.now()) {
+      r.hate = (r._baseAlertVs === undefined) ? 'player' : r._baseAlertVs;
+      r.armed = true; r.chaseMode = 'shoot';
+    }
+    return;
+  }
   if (r.sidewalk) {
     // 路人重生也必须落在人行道上：原来统一在城市里随机撒点，复活即站在马路中间
     const s = randomSidewalkSpot();
@@ -22993,6 +23037,8 @@ function updateCop(c, dt) {
             if (r.hp <= 0) { r.alive = false; r.respawn = 8; spawnBurst(r.x, r.z, 0xff3333, 8); dropReward(r.x, r.z, r); }
           }
           c.fightCd = 0.9;
+          // 【fix551】在军事基地里开火（哪怕是打帮派）→ 警卫把这个警察当入侵者
+          try { if (inMilitaryBase(c.x, c.z)) alertBaseGuardsVs(c, 30); } catch (e) {}
           break;
         }
       }
@@ -23032,6 +23078,8 @@ function updateCop(c, dt) {
       // 中距离 / 目标在够不着的高处：边射边靠近
       if (c.fightCd <= 0) {
           c.fightCd = 1.1; sfxNear('shoot', c.x, c.z, 55);
+        // 【fix551】警察在军事基地里开枪（打玩家/打谁都算）→ 警卫全员盯上这个警察
+        try { if (inMilitaryBase(c.x, c.z)) alertBaseGuardsVs(c, 30); } catch (e) {}
         const _losP = hasLineOfSight(c.x, c.z, target.x, target.z, _ignVeh);
         if (_losP) {
           // Task #10：弹道改成真三维（原来起点写死 1.3、终点写死 1.0，等于永远贴地平射）
