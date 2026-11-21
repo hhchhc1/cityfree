@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix551-guards-vs-shooters">
+<meta name="cf-build" content="20261121-fix552-mil-both-civilrage">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13240,7 +13240,7 @@ function updateMilitaryRespawn(dt) {
   if (militaryRespawnIn > 0) return;
   militaryRespawnIn = 0;
   if (window.spawnMilitaryHeli && !cars.some(v => v.isHelicopter && !v.exploded)) { window.spawnMilitaryHeli(); floatText('直升机已重新部署', '#9dffc8'); }
-  if (window.spawnMilitaryTank && !cars.some(v => v.isTank && !v.exploded)) { window.spawnMilitaryTank(); floatText('坦克已重新部署', '#9dffc8'); }
+  if (window.spawnMilitaryTank && !cars.some(v => v.isTank && !v.isEnemyTank && !v.exploded)) { window.spawnMilitaryTank(); floatText('坦克已重新部署', '#9dffc8'); }
 }
 
 // ============================================================
@@ -14577,7 +14577,8 @@ var ACH_DEFS = [
   { id:'fashion',     name:'时尚达人',        desc:'成功解锁所有服饰',                   gold:2500, xp:600 },
   { id:'dragon',      name:'屠龙少年',        desc:'累计成功击败 1000 个敌人（包括 NPC 和城管）', gold:5000, xp:1200 },
   { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 },
-  { id:'grapple1000', name:'我离不掉你了',    desc:'累计使用钩爪 1000 次',               gold:5000, xp:1200 }
+  { id:'grapple1000', name:'我离不掉你了',    desc:'累计使用钩爪 1000 次',               gold:5000, xp:1200 },
+  { id:'publicEnemy', name:'城市公敌',        desc:'第一次激起民愤（五星时打爆军方直升机与坦克）', gold:2500, xp:600 }
 ];
 // 运行时状态（存档字段 achv）：done=已达成；count=累计计数（击杀/图鉴）；tpFree=免费传送卷库存
 var ACHY = { done:{}, count:{ kills:0, folk:0, grapples:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
@@ -16442,7 +16443,7 @@ function tryToggle() {
         c.grappled = false;
         if (!c.driverEjected) { ejectDriver(c); c.driverEjected = true; }
       }
-      if (c.isTank && !PROGRESS.tankUnlocked) {
+      if (c.isTank && !c.isEnemyTank && !PROGRESS.tankUnlocked) {
         // 坦克锁着：必须完成「大本营清剿」任务拿到使用权
         setHint('坦克没有权限启动。完成黑社会大本营的清剿任务后才能开。');
         floatText('坦克已锁', '#ff8844');
@@ -22309,8 +22310,11 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   // 【fix530·2026-11-18】黑帮成员（FACTIONS[3]）追玩家放到 2000m（≈全图）：
   // 共享仇恨已经把全城黑帮都拉进来了，如果这里还卡 40m，远处的人一帧就会被判"太远"清掉仇恨，
   // 等于白共享。守卫走上面的 _baseAlert 分支，其他帮派/路人仍按 40m。
+  // 【fix552】"激起民愤"期间全城追人：普通路人/警察的 40m 追击上限放到 260m，
+  // 否则远处的 NPC 虽然被设了仇恨，一帧就被"太远"判掉，看着还是没人来。
   const _chaseCap = _baseAlert ? 90
-    : (r.hate === 'player' ? ((r.faction === 3 && !r.isBaseGuard) ? 2000 : 40) : 22);
+    : (civilRage ? 260
+    : (r.hate === 'player' ? ((r.faction === 3 && !r.isBaseGuard) ? 2000 : 40) : 22));
   if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
   // 以前这里完全不看高度：目标 y 一律写死成 1.3/1.05，于是弹道是一条贴地的水平线，
@@ -25554,9 +25558,11 @@ function spawnMilTank() {
   scene.add(g);
   milTank = {
     group: g, x: sx, y: pad.y + 0.8, z: sz, angle: 0, turretRel: 0,
-    radius: 3.0, durability: 240, damage: 0, hp: 240,
+    radius: 3.0, durability: 260, damage: 0, hp: 260,
     shootCd: 3.6, state: 'incoming', leaveT: 0,
-    isEnemyTank: true, fixed: true, exploded: false, topSpeed: 16, accel: 6
+    // 【fix552】isTank=true：玩家能像开军用坦克一样驾驶它（主炮/装甲都复用现成逻辑），
+    // isEnemyTank 用来和"玩家那辆军用坦克"区分（补给/重生判定要排除它）。
+    isTank: true, isEnemyTank: true, fixed: true, exploded: false, topSpeed: 16, accel: 6
   };
   cars.push(milTank);   // 进 cars：玩家的子弹/火箭弹才打得到它
   setHint('军方坦克已出动！');
@@ -25572,17 +25578,24 @@ function clearMilTank() {
 }
 function updateMilTank(dt) {
   if (milTankCd > 0) milTankCd = Math.max(0, milTankCd - dt);
-  // 只有"五星 + 玩家正坐在直升机里"才叫坦克
+  // 【fix552】五星就派坦克，不再要求"玩家正坐在直升机里"（飞机坦克一起出）
   if (!milTank) {
-    if (wanted < 5 - 1e-6 || !playerInHeliNow() || milTankCd > 0) return;
+    if (wanted < 5 - 1e-6 || milTankCd > 0) return;
     spawnMilTank();
     if (!milTank) return;
   }
   if (milTank.exploded) {
     // 被打爆：清掉并进入 45 秒补给冷却，别一炸就刷新的
     clearMilTank(); milTankCd = 45;
+    milTankKilled = true;   // 【fix552】双载具都被打爆 → 激起民愤
     setHint('军方坦克已被击毁，短时间内部队不会再派装甲。');
     try { floatText('击毁军方坦克', '#ffd54f'); } catch (e) {}
+    return;
+  }
+  // 【fix552】玩家把它开走了：AI 完全停手，交给通用载具逻辑（主炮/装甲都照常）
+  if (state === 'drive' && currentCar === milTank) {
+    milTank.y = terrainHeight(milTank.x, milTank.z) + 0.8;
+    milTank.group.position.set(milTank.x, milTank.y, milTank.z);
     return;
   }
   const pp = milHeliPlayerPos();
@@ -25613,7 +25626,10 @@ function updateMilTank(dt) {
     clampCity(p);
     const gy = terrainHeight(p.x, p.z);
     const _bx = milTank.x, _bz = milTank.z;
-    if (Math.abs(gy - milTank.y) < 3.5) { milTank.x = p.x; milTank.z = p.z; }
+    // 【fix552·2026-11-21·用户："军方坦克也是要不能穿墙"】
+    // 主城网格之外的建筑（新城 x>900、后加的古建）不在 _gridBld 里，collideBuildingsFast 会漏，
+    // 坦克就直接从楼里开过去。这里再对 buildings 做一次精确的圆-AABB 重叠判定。
+    if (Math.abs(gy - milTank.y) < 3.5 && !tankHitsBuilding(p.x, p.z, 3.0)) { milTank.x = p.x; milTank.z = p.z; }
     // 顶墙了：偏一下车头绕过去（基地围墙只有一个南门，不偏就卡死在墙角）
     if (Math.hypot(milTank.x - _bx, milTank.z - _bz) < spd * dt * 0.35) {
       milTank._stuck = (milTank._stuck || 0) + dt;
@@ -25639,31 +25655,36 @@ function updateMilTank(dt) {
     milTank.leaveT += dt;
     if (milTank.leaveT > 25 || Math.hypot(pad.x - milTank.x, pad.z - milTank.z) < 18) { clearMilTank(); return; }
   }
-  // ---- 主炮 ----
-  if (!leaving && d < 150) {
+  // ---- 火箭弹 ----
+  // 【fix552·2026-11-21·用户："军方坦克也是要……要发射火箭弹"】原来是主炮穿甲弹（细曳光 + 小爆炸），
+  // 现在换成火箭弹：带尾烟的火箭弹道 + 更大的火球与溅射范围。
+  if (!leaving && d < 170) {
     milTank.shootCd -= dt;
     if (milTank.shootCd <= 0) {
-      milTank.shootCd = 3.4;
-      // 预判：按玩家最近一帧的速度外推炮弹飞行时间，站着不动必中、一直走位能躲开
+      milTank.shootCd = 3.6;
+      // 预判：按玩家最近一帧的速度外推飞行时间，站着不动必中、一直走位能躲开
       const fly = Math.min(1.6, d / 110 + 0.35);
       const vx = (pp.x - (milTank._ppx === undefined ? pp.x : milTank._ppx)) / Math.max(dt, 1e-3);
       const vz = (pp.z - (milTank._ppz === undefined ? pp.z : milTank._ppz)) / Math.max(dt, 1e-3);
       const ix = pp.x + vx * fly * 0.75, iz = pp.z + vz * fly * 0.75;
-      const iy = terrainHeight(ix, iz) + 0.4;
+      const iy = terrainHeight(ix, iz) + 0.8;
       const wx = milTank.angle + tRel;
       const bx0 = milTank.x + Math.sin(wx) * 6.5, bz0 = milTank.z + Math.cos(wx) * 6.5;
-      spawnBurst(bx0, bz0, 0xffff88, 8, milTank.y + 2.6);
-      spawnTracer(bx0, milTank.y + 2.6, bz0, ix, iy, iz, 'cannon');
+      spawnBurst(bx0, bz0, 0xffff88, 6, milTank.y + 2.6);
+      spawnTracer(bx0, milTank.y + 2.6, bz0, ix, iy, iz, 'rocket');
       try { sfxNear('shoot', milTank.x, milTank.z, 160); } catch (e) {}
       queueBullet(ix, iy, iz, fly, function () {
         try {
-          spawnBurst(ix, iz, 0xffaa33, 18, iy);
-          try { sfxNear('boom', ix, iz, 130); } catch (e) {}
-          // 溅射：落点 9m 内按距离衰减掉血；飞在高空（直升机）基本打不到
+          spawnFireball(ix, iy + 0.8, iz, 1.2, 5.4, 0.45, 0xffd066);
+          spawnBurst(ix, iz, 0xffaa33, 26, iy);
+          emitSmoke(ix, iy, iz, true);
+          try { sfxNear('boom', ix, iz, 150); } catch (e) {}
+          // 溅射：落点 11m 内按距离衰减掉血；飞在高空（直升机）基本打不到
           const now = milHeliPlayerPos();
           const pd = Math.hypot(now.x - ix, now.z - iz);
           const dy = Math.abs((now.y || 0) - iy);
-          if (pd < 9 && dy < 6) hurtPlayer(Math.round(10 + 22 * (1 - pd / 9)), true);
+          if (pd < 11 && dy < 8) hurtPlayer(Math.round(8 + 24 * (1 - pd / 11)), true);
+          try { blastPeople(ix, iz, 10, dd => Math.round(6 + 16 * (1 - dd / 10)), 3, 0, 0, 'gun'); } catch (e) {}
         } catch (e) {}
       });
     }
@@ -25677,6 +25698,22 @@ function updateMilTank(dt) {
 // 这里给它补三件事：① 独立血量 + 3D 命中判定；② 钩爪可以勾住并强行拽落；③ 打爆后 90 秒补给冷却。
 var MIL_HELI_HP = 260;
 var milHeliCd = 0;   // 被击落后的补给冷却
+// 【fix552·2026-11-21】五星军方双载具 + 民愤
+// 用户要求：五星时**同时**派出直升机与坦克（不论玩家占用哪个），两个都被打爆后
+// 触发"激起民愤"——周围所有 NPC 一起打玩家，直到掉到 4 星；并解锁成就「城市公敌」。
+var milHeliKilled = false, milTankKilled = false;
+var civilRage = false, _civilRageTick = 0;
+// 圆形坦克 vs 建筑 AABB 的精确重叠判定：新城 x>900 不在主城网格里，collideBuildingsFast 会漏
+function tankHitsBuilding(x, z, r) {
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (b.maxX < x - r || b.minX > x + r || b.maxZ < z - r || b.minZ > z + r) continue;
+    const cx = Math.max(b.minX, Math.min(x, b.maxX));
+    const cz = Math.max(b.minZ, Math.min(z, b.maxZ));
+    if (Math.hypot(x - cx, z - cz) < r) return true;
+  }
+  return false;
+}
 function milHeliPose(dt) {
   if (!milHeli) return;
   milHeli.group.position.set(milHeli.x, milHeli.y, milHeli.z);
@@ -25708,8 +25745,10 @@ function crashMilHeli() {
   if (pd < 9) hurtPlayer(Math.round(5 + 15 * (1 - pd / 9)), true);
   clearMilHeli();
   milHeliCd = 90;   // 打下来之后要等 90 秒才会有下一架
+  milHeliKilled = true;   // 【fix552】双载具都被打爆 → 激起民愤
 }
 // 【fix549】军方直升机机腹链炮的单发：带散布、粗曳光、枪口火花
+// 【fix552】连发：单发伤害 2→1、命中率下调，总 DPS 与原来持平（约 3.5/秒），但打起来是连续的
 function fireMilHeliGun(pp, d) {
   if (!milHeli) return;
   const fy = milHeli.y - 1.25;                 // 机腹链炮位置
@@ -25718,30 +25757,21 @@ function fireMilHeliGun(pp, d) {
   const ex = pp.x + (Math.random() - 0.5) * 3.4;   // 落点散布 = 扫射感
   const ez = pp.z + (Math.random() - 0.5) * 3.4;
   spawnTracer(milHeli.x + sx, fy, milHeli.z + sz, ex, ty, ez, 'cannon');
-  spawnBurst(milHeli.x + sx, milHeli.z + sz, 0xffee88, 3, fy);
+  spawnBurst(milHeli.x + sx, milHeli.z + sz, 0xffee88, 2, fy);
   // 有掩体就打不中（hasLineOfSight 是平面判定，直升机被楼挡在一侧时同样打不中）
   if (hasLineOfSight(milHeli.x, milHeli.z, pp.x, pp.z, false)) {
-    const hitChance = Math.max(0.2, 0.6 - d * 0.008);
-    if (Math.random() < hitChance) hurtPlayer(2, true);
+    const hitChance = Math.max(0.12, 0.34 - d * 0.004);
+    if (Math.random() < hitChance) hurtPlayer(1, true);
   }
 }
 function updateMilHeli(dt) {
   if (milHeliCd > 0) milHeliCd = Math.max(0, milHeliCd - dt);
-  // 【fix546·2026-11-21·用户："为什么我都已经五星了，但是还是没有直升机来打我？"】
-  // 根因：fix545 为了"占直升机改派坦克"，写成 `场上只要有军方坦克就不叫直升机`。
-  // 可坦克派出去后只要星级还是五星就一直赖在场上（它又不会自己消失），
-  // 于是玩家从直升机下来、站在基地停机坪五星干等，直升机永远被那辆坦克挡住不生成。
-  // 现在改成互不压制：**直升机永远按五星出**，坦克只是"玩家正坐在直升机里"时的额外手段。
-  const _inHeli = playerInHeliNow();
-  if (milHeli && _inHeli && milHeli.state !== 'leaving') {
-    milHeli.state = 'leaving'; milHeli.leaveT = 0;
-    setHint('军方直升机脱离接触，正在返航。');
-  }
+  // 【fix552·2026-11-21·用户："如果玩家5星了就直接派出飞机坦克，不论是否占用其中一个"】
+  // 现在不再因为"玩家坐在直升机里"就把它召回：五星就是两架一起派（坦克见 updateMilTank）。
   // 只有五星才叫得出来；一旦叫出来就一直跟到"掉星返航"结束
   if (!milHeli) {
-    // 玩家正坐在直升机里：这一轮交给地面坦克，不叫直升机（避免"刚生成就被判返航"的反复起降）
     // 【fix549】被玩家打下来后要等 90 秒补给，别刚炸完又刷一架
-    if (wanted < 5 - 1e-6 || _inHeli || milHeliCd > 0) return;
+    if (wanted < 5 - 1e-6 || milHeliCd > 0) return;
     spawnMilHeli();
     if (!milHeli) return;
   }
@@ -25768,8 +25798,8 @@ function updateMilHeli(dt) {
     milHeli.leaveT = 0;
     setHint('军方直升机脱离接触，正在返航。');
   }
-  // 返航途中又升回五星：重新咬上来（玩家正坐在直升机里时不回来 —— 那一轮由地面坦克负责）
-  if (isFive && milHeli.state === 'leaving' && !_inHeli) {
+  // 返航途中又升回五星：重新咬上来
+  if (isFive && milHeli.state === 'leaving') {
     milHeli.state = 'incoming';
     milHeli.leaveT = 0;
     milHeli.shootCd = 2.4;
@@ -25831,25 +25861,25 @@ function updateMilHeli(dt) {
     // ---- ③ 平移：整机（机身底约 y-1.6）必须高过目标点的楼顶才允许横移 ----
     if (heliBldTop(nx, nz, HELI_HULL_R) < milHeli.y - 1.2) { milHeli.x = nx; milHeli.z = nz; }
     milHeli.angle = Math.atan2(dx, dz);
-    // ---- ④ 开火：机腹链炮连发 ----
-    // 【fix549·2026-11-21·用户："还有攻击方式怎么不是飞机上的机枪"】
-    // 原来是一发一发打 'rifle'（细丝曳光、1.7 秒一发），看着像地上的人拿步枪在打。
-    // 现在改成直升机该有的样子：一轮 8 发、间隔 0.075 秒的连射，用 'cannon' 粗曳光 + 枪口火花，
-    // 每轮之间冷却 2.2 秒；单发伤害 2，靠密度和扫射感，总 DPS 与原来持平。
+    // ---- ④ 开火：机腹链炮持续扫射 ----
+    // 【fix549】原来是一发一发打 'rifle'（细丝曳光、1.7 秒一发），看着像地上的人拿步枪在打。
+    // 【fix552·2026-11-21·用户："军方的直升飞机射击方式怎么不连续呢"】
+    // 上一版是"8 发一轮 + 2.2 秒冷却"，节奏还是一顿一顿的。现在改成真正的连发：
+    // 每 0.085 秒一发（约 12 发/秒）一直打，打满 24 发换弹 1.5 秒再继续。
+    // 单发 1 点伤害、命中率也下调，总 DPS 仍与原来持平（约 3.5/秒），但看上去是持续扫射。
     if (milHeli.state === 'engaged') {
-      milHeli.burstCd = (milHeli.burstCd || 0) - dt;
-      if (milHeli.burstLeft > 0) {
-        milHeli.burstT = (milHeli.burstT || 0) - dt;
-        if (milHeli.burstT <= 0) {
-          milHeli.burstT = 0.075;
-          milHeli.burstLeft--;
+      milHeli.gunCd = (milHeli.gunCd || 0) - dt;
+      if (milHeli.gunAmmo === undefined) milHeli.gunAmmo = 24;
+      if (milHeli.gunCd <= 0) {
+        if (milHeli.gunAmmo <= 0) {
+          milHeli.gunAmmo = 24;
+          milHeli.gunCd = 1.5;   // 换弹
+        } else {
+          milHeli.gunCd = 0.085;
+          milHeli.gunAmmo--;
           fireMilHeliGun(pp, d);
+          if (milHeli.gunAmmo === 24 - 1) { try { sfxNear('shoot', milHeli.x, milHeli.z, 170); } catch (e) {} }
         }
-      } else if (milHeli.burstCd <= 0) {
-        milHeli.burstLeft = 8;
-        milHeli.burstT = 0;
-        milHeli.burstCd = 2.2;
-        try { sfxNear('shoot', milHeli.x, milHeli.z, 170); } catch (e) {}
       }
     }
   }
@@ -26790,6 +26820,41 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
         (currentCar.isHelicopter || currentCar.isTank);
       if (_usingMilVeh) alertBaseGuards(30);
     } catch (e) {}
+  }
+  // 【fix552·2026-11-21·用户："如果玩家都摧毁了，就直接显示你已激起民愤，玩家周围的所有npc都攻击玩家，
+  //   直到玩家不犯错，降到4星"】
+  // 五星派出的直升机 + 坦克都被打爆 → 进入"民愤"状态：附近 260m 内的路人/帮派/警察每 2 秒被
+  // 重新拉进仇恨（不设时限，一直持续到星级掉到 4 星以下）。基地警卫仍按"基地开枪/动载具"那套走。
+  if (wanted >= 5 - 1e-6) {
+    if (milHeliKilled && milTankKilled && !civilRage) {
+      civilRage = true; _civilRageTick = 0;
+      setHint('你已激起民愤！全城的人都盯上你了 —— 撑到掉到 4 星才能平息。');
+      try { floatText('你已激起民愤', '#ff3355'); } catch (e) {}
+      try { sfx('siren'); } catch (e) {}
+      try { achUnlock('publicEnemy'); } catch (e) {}
+    }
+  } else {
+    civilRage = false;
+    milHeliKilled = false; milTankKilled = false;
+  }
+  if (civilRage) {
+    _civilRageTick -= dt;
+    if (_civilRageTick <= 0) {
+      _civilRageTick = 2;
+      const _rpx = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
+      const _rpz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+      for (const r of residents) {
+        if (!r.alive || r.down || r.isBaseGuard) continue;
+        if (Math.hypot(r.x - _rpx, r.z - _rpz) > 260) continue;
+        r.hate = 'player'; r.armed = true; r.flee = false;
+        if (r.faction === 3) r._hateT0 = performance.now();   // 黑帮的 30 秒仇恨记忆要续期
+        if (r.ammo <= 0 && r.maxAmmo > 0) r.ammo = r.maxAmmo;
+      }
+      for (const c of cops) {
+        if (!c.alive) continue;
+        c.huntT = Math.max(c.huntT || 0, 12);
+      }
+    }
   }
 
   // ===== 【fix517】第一人称视图模型：只给第一人称看的双手 + 武器 =====
