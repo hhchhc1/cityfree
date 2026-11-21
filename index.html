@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix549-mil-heli-shootable-grapple">
+<meta name="cf-build" content="20261121-fix550-fp-climb-clip">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -26889,6 +26889,10 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   try {
     // 非第一人称（步行第三人称 / 驾驶 / 摩天轮 / 过场）一律收起视图模型
     if (fpViewRig && !(PROGRESS.firstPerson && state === 'walk' && !ferrisRide.active)) fpViewRig.visible = false;
+    // 【fix550】非第一人称把近裁剪面恢复成 0.5，别让 0.15 长期拖低远处深度精度（容易出闪面）
+    if (!(PROGRESS.firstPerson && state === 'walk' && !ferrisRide.active) && Math.abs(camera.near - 0.5) > 1e-4) {
+      camera.near = 0.5; camera.updateProjectionMatrix();
+    }
     if (ferrisRide.active) { ferrisCamera(dt); }
     else {
     // 【fix516·2026-11-17·用户：『设置里加一个切换到第一人称和第三人称，第一人称就只能显示人物面前的东西，
@@ -26900,7 +26904,17 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     if (PROGRESS.firstPerson && state === 'walk') {
       const _fpPitch = THREE.MathUtils.clamp(camPitch, -0.7, 1.2);
       const _fpCP = Math.cos(_fpPitch), _fpSP = -Math.sin(_fpPitch);   // 上滑抬头：pitch 为负时 y 分量为正
-      const _eyeX = person.position.x, _eyeY = person.position.y + 1.62, _eyeZ = person.position.z;
+      // 【fix550·2026-11-21·用户："第一人称爬到墙上会穿模"】
+      // ① 主相机的近裁剪面是 0.5m，而爬墙时身体离墙面只有 0.55m —— 墙就在裁剪面边缘，
+      //    稍微外扩一点的立面/窗框就会被"切开"，看到墙体内部的深色面。
+      //    第一人称临时把 near 收到 0.2（退出第一人称时恢复 0.5）。
+      // ② 再沿墙面法线把镜头往后拉 1.0m：0.55m 的距离下面整块屏幕都是墙面，观感也像贴图糊脸。
+      if (Math.abs(camera.near - 0.2) > 1e-4) { camera.near = 0.2; camera.updateProjectionMatrix(); }
+      let _eyeX = person.position.x, _eyeY = person.position.y + 1.62, _eyeZ = person.position.z;
+      if (grapple && grapple.mode === 'wall' && (grapple.nx || grapple.nz)) {
+        _eyeX += grapple.nx * 1.0;
+        _eyeZ += grapple.nz * 1.0;
+      }
       _camTmp.set(_eyeX, _eyeY, _eyeZ);
       camPos.copy(_camTmp);
       camera.position.copy(_camTmp);
