@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix546-mil-heli-always-spawn">
+<meta name="cf-build" content="20261121-fix547-guards-shared-alert-cops">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13913,6 +13913,8 @@ function addKillBounty(by) {
 }
 let _frameCnt = 0;   // 帧计数器：降低空间网格重建频率以优化性能
 let policeTimer = 0;   // 通缉时增援警车/警察的计时
+// 【fix547】基地警卫全员警戒的自动续期计时（见 update() 里的 _baseGuardTick）
+var _baseGuardTick = 0;
 // 任务系统
 const missions = { baseIntro: false, tankGate: false };
 // 武器视觉配置：每种武器的详细模型参数（用于商店展示和手持模型）
@@ -20827,7 +20829,17 @@ function hitCop(c, dmg, by) {
   c.aggro = true;   // 受到一次攻击就立即反击，无需等全局通缉
   // 【2026-10-13】"玩家追击记忆"：只有**玩家本人**打的才算（NPC 互殴不该把火引到玩家头上）。
   // 详见 updateCop 里的注释 —— 这是修"零颗星还被巡逻警察袭击"的关键。
-  if (by !== 'npc') c.huntT = 8;
+  if (by !== 'npc') {
+    c.huntT = 8;
+    // 【fix547】一个警察挨打，附近同僚一起上：原来只有被打的那个记仇（huntT），
+    // 旁边的人继续站着看戏，玩家 0 星打警察时尤其明显。
+    try {
+      for (const o of cops) {
+        if (o === c || !o.alive || o.down) continue;
+        if (Math.hypot(o.x - c.x, o.z - c.z) < 60) o.huntT = Math.max(o.huntT || 0, 8);
+      }
+    } catch (e) {}
+  }
   spawnBurst(c.x, c.z, 0xff5533, 8);
   if (by !== 'npc' && by !== 'stealth') addHeat(25);   // 攻击警察会累积通缉热度（非玩家击杀、暗杀不加热度）
   if (c.hp <= 0) killCop(c, by);
@@ -26587,6 +26599,22 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     if (policeTimer <= 0) { policeTimer = 4; syncForces(); }
   } else {
     policeTimer = 0;
+  }
+  // 【fix547·2026-11-21·用户："我不是说军事基地的警卫仇恨共享吗，怎么会出现有一个警卫攻击人，
+  //   其他警卫看戏的情况呢"】
+  // 根因：警卫的"全员仇恨"只靠 alertBaseGuards 的 45 秒窗口续命 —— 玩家一停火、窗口一过期，
+  // updateResident 里那句 `baseAlertUntil 过期就 hate=null` 会把 7 个警卫**同时**清空，
+  // 于是只剩零星还在冷却里的人打他，其余全站着看。
+  // 现在只要玩家还是通缉犯（≥2 星）并且人在基地范围内，每 2 秒自动续一次全员警戒。
+  _baseGuardTick -= dt;
+  if (_baseGuardTick <= 0) {
+    _baseGuardTick = 2;
+    try {
+      const _gpx = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
+      const _gpz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+      // 基地中心 (-280,120)，半径放到 130m：翻墙/在门口也能把里面的人一起叫出来
+      if (wanted >= 2 && Math.hypot(_gpx + 280, _gpz - 120) < 130) alertBaseGuards(30);
+    } catch (e) {}
   }
 
   // ===== 【fix517】第一人称视图模型：只给第一人称看的双手 + 武器 =====
