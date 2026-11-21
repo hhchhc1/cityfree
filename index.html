@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix547-guards-shared-alert-cops">
+<meta name="cf-build" content="20261121-fix548-guards-ignore-wanted">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -26600,20 +26600,19 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   } else {
     policeTimer = 0;
   }
-  // 【fix547·2026-11-21·用户："我不是说军事基地的警卫仇恨共享吗，怎么会出现有一个警卫攻击人，
-  //   其他警卫看戏的情况呢"】
-  // 根因：警卫的"全员仇恨"只靠 alertBaseGuards 的 45 秒窗口续命 —— 玩家一停火、窗口一过期，
-  // updateResident 里那句 `baseAlertUntil 过期就 hate=null` 会把 7 个警卫**同时**清空，
-  // 于是只剩零星还在冷却里的人打他，其余全站着看。
-  // 现在只要玩家还是通缉犯（≥2 星）并且人在基地范围内，每 2 秒自动续一次全员警戒。
+  // 【fix548·2026-11-21·用户："军事基地的守卫不用管星级，只管谁在军事基地开枪和飞机坦克的使用"】
+  // 上一版（fix547）写成了"≥2 星且在基地里就全员警戒"，等于让警卫去抓通缉犯，用户不要这个。
+  // 警卫现在只认两件事：
+  //   ① 有人在基地里开枪 —— 由 shoot() / 坦克主炮 / 直升机机炮各自调 alertBaseGuards(45) 续期；
+  //   ② 有人在动基地的直升机 / 坦克 —— 这里每 2 秒续一次，人下车后自然过期（30 秒）。
+  // 星级完全不参与判断：0 星在基地开枪照样全员打你，5 星老老实实站在门口也不会被追。
   _baseGuardTick -= dt;
   if (_baseGuardTick <= 0) {
     _baseGuardTick = 2;
     try {
-      const _gpx = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
-      const _gpz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
-      // 基地中心 (-280,120)，半径放到 130m：翻墙/在门口也能把里面的人一起叫出来
-      if (wanted >= 2 && Math.hypot(_gpx + 280, _gpz - 120) < 130) alertBaseGuards(30);
+      const _usingMilVeh = state === 'drive' && currentCar && !currentCar.exploded &&
+        (currentCar.isHelicopter || currentCar.isTank);
+      if (_usingMilVeh) alertBaseGuards(30);
     } catch (e) {}
   }
 
