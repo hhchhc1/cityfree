@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261121-fix544-mil-heli-clip-rotor-wanted100">
+<meta name="cf-build" content="20261121-fix545-npc-wall-los-melee-enemy-tank">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7512,6 +7512,9 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
     return window.militaryTank;
   }
   window.spawnMilitaryTank = spawnMilitaryTank;
+  window.MIL_TANKPAD = { x: bx + 25, z: bz + 20, y: baseGy };
+  // 【fix545】五星要另起一辆"敌方"坦克，复用同一套模型
+  window.__buildTankModel = buildTankModel;
   spawnMilitaryTank();
 
   // 机枪塔（基地四个角落，远离中心区域）
@@ -22045,6 +22048,32 @@ function fireNpcShot(r, dx, dz) {
 }
 // ignoreVeh：忽略某辆车（玩家自己开的车），不把它当障碍物。
 // 否则 NPC 朝玩家的车开枪时，车身会把射线挡掉，玩家在车里永远不受伤。
+// 【fix545·2026-11-21】线段 vs 矩形（XZ 平面）精确求交，slab 法。
+// 原来 hasLineOfSight 是按 0.5m 步长逐点采样，0.3~0.4m 厚的薄墙、铁栅栏、道闸杆会被
+// 整段跨过去 —— 表现就是"隔着墙照样打中玩家"。改成解析求交后多薄的墙都漏不掉。
+function _segHitsBox2D(x1, z1, dx, dz, b) {
+  let tmin = 0, tmax = 1;
+  if (Math.abs(dx) < 1e-9) {
+    if (x1 < b.minX || x1 > b.maxX) return false;
+  } else {
+    let t1 = (b.minX - x1) / dx, t2 = (b.maxX - x1) / dx;
+    if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; }
+    if (t1 > tmin) tmin = t1;
+    if (t2 < tmax) tmax = t2;
+    if (tmin > tmax) return false;
+  }
+  if (Math.abs(dz) < 1e-9) {
+    if (z1 < b.minZ || z1 > b.maxZ) return false;
+  } else {
+    let t1 = (b.minZ - z1) / dz, t2 = (b.maxZ - z1) / dz;
+    if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; }
+    if (t1 > tmin) tmin = t1;
+    if (t2 < tmax) tmax = t2;
+    if (tmin > tmax) return false;
+  }
+  // tmax>0.02：墙在身后不算；tmin<0.98：墙贴在目标身上不算（避免目标背靠墙时"永远打不中"）
+  return tmax > 0.02 && tmin < 0.98;
+}
 function hasLineOfSight(x1, z1, x2, z2, ignoreVeh) {
   const dx = x2 - x1, dz = z2 - z1, d = Math.hypot(dx, dz);
   if (d < 0.01) return true;
@@ -22075,10 +22104,11 @@ function hasLineOfSight(x1, z1, x2, z2, ignoreVeh) {
       nearBlds.push(_nb);
     }
   }
-  const steps = Math.max(1, Math.ceil(d / 0.5));   // 加大步长到0.5（有预筛选不会漏薄墙）
+  // 【fix545】建筑：精确求交，多薄的墙都挡得住（原来 0.5m 采样会漏薄墙）
+  for (const b of nearBlds) if (_segHitsBox2D(x1, z1, dx, dz, b)) return false;
+  const steps = Math.max(1, Math.ceil(d / 0.5));   // 车/树/垃圾桶仍按 0.5m 采样
   for (let i = 1; i < steps; i++) {
     const x = x1 + dx * i / steps, z = z1 + dz * i / steps;
-    for (const b of nearBlds) if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ) return false;
     for (const c of nearCars) if (c !== ignoreVeh && Math.hypot(x - c.x, z - c.z) < c.radius + 0.2) return false;
     for (const w of wrecks) if (Math.hypot(x - w.x, z - w.z) < w.radius + 0.2) return false;
     for (const tc of trashCans) if (!tc.fly && Math.hypot(x - tc.x, z - tc.z) < tc.radius + 0.2) return false;
@@ -22137,6 +22167,33 @@ function npcFriendlyFire(shooter, victim) {
   floatText('误伤！', '#ff9d5c');
   if (victim.hp <= 0) killResident(victim, 'npc');    // NPC 打死 NPC：不计入玩家的通缉阶梯
 }
+// 【fix545·2026-11-21·用户："要让 NPC 也知道墙的意识，知道这里不能直接打到玩家，
+//   要绕过墙再打玩家，不然一直在隔墙打玩家，玩家受到伤害"】
+// 返回这个 NPC 这一帧该往哪走（单位向量）+ 是否看得见目标：
+//   · 看得见 → 直冲；
+//   · 看不见（中间隔了楼/墙）→ 主要沿墙侧移、只带一点点前进，贴着墙绕到能看见为止；
+//   · 侧移也走不动（0.6 秒内位移不足 0.25m）→ 换另一边绕。
+// 视线每 0.25 秒复查一次：几十个 NPC 每帧都去扫建筑太浪费，0.25s 的迟滞完全看不出来。
+function npcMoveDir(r, tx, tz, dt, ignoreVeh) {
+  const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz) || 1;
+  const ux = dx / d, uz = dz / d;
+  if (d < 2.4) return { x: ux, z: uz, los: true };   // 已经贴脸了，别再绕
+  r._losChk = (r._losChk || 0) - dt;
+  if (r._losChk <= 0) { r._losChk = 0.25; r._losOk = hasLineOfSight(r.x, r.z, tx, tz, ignoreVeh); }
+  if (r._losOk) { r._avoidDir = 0; return { x: ux, z: uz, los: true }; }
+  if (!r._avoidDir) r._avoidDir = (Math.random() < 0.5 ? 1 : -1);
+  // 卡住检测：一直在原地蹭墙就换边
+  r._stk = (r._stk || 0) + dt;
+  if (r._stk > 0.6) {
+    const moved = Math.hypot(r.x - (r._sx === undefined ? r.x : r._sx), r.z - (r._sz === undefined ? r.z : r._sz));
+    if (moved < 0.25) r._avoidDir = -r._avoidDir;
+    r._sx = r.x; r._sz = r.z; r._stk = 0;
+  }
+  const sx = -uz * r._avoidDir, sz = ux * r._avoidDir;
+  const mx = sx * 0.85 + ux * 0.4, mz = sz * 0.85 + uz * 0.4;
+  const ml = Math.hypot(mx, mz) || 1;
+  return { x: mx / ml, z: mz / ml, los: false };
+}
 function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
   // 【fix523】警报中的基地守卫：连发步枪 + 90m 追击半径。普通 NPC 完全不受影响。
@@ -22186,7 +22243,10 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     // 射击模式：边射边慢慢靠近
     const moveSpd = 1.8;  // 射击时慢速移动
     if (d > meleeRange + 2) {
-      const p = { x: r.x + dx / d * moveSpd * dt, z: r.z + dz / d * moveSpd * dt };
+      // 【fix545】看不见目标就沿墙侧移绕过去，而不是一头顶着墙往前挤
+      const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+      if (!_mv.los) { r.angle = Math.atan2(_mv.x, _mv.z); r.group.rotation.y = r.angle; }
+      const p = { x: r.x + _mv.x * moveSpd * dt, z: r.z + _mv.z * moveSpd * dt };
       collideNpc(p, 0.4, r); clampCity(p); r.x = p.x; r.z = p.z;
       r.group.position.x = r.x; r.group.position.z = r.z;
     }
@@ -22232,7 +22292,10 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     r.chaseMode = 'run';
     if (d > meleeRange) {
       const runSpd = 6.5;  // 奔跑速度
-      const p = { x: r.x + dx / d * runSpd * dt, z: r.z + dz / d * runSpd * dt };
+      // 【fix545】隔墙时沿墙绕行（否则会一直顶着墙原地跑，永远打不到人）
+      const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+      if (!_mv.los) { r.angle = Math.atan2(_mv.x, _mv.z); r.group.rotation.y = r.angle; }
+      const p = { x: r.x + _mv.x * runSpd * dt, z: r.z + _mv.z * runSpd * dt };
       collideNpc(p, 0.4, r); clampCity(p); r.x = p.x; r.z = p.z;
       r.group.position.x = r.x; r.group.position.z = r.z;
       r.phase = (r.phase || 0) + dt * 14;  // 奔跑动画更快
@@ -22240,7 +22303,8 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
       r.attackCd = 0.85; r.punchAnim = 1; r.punchHand = 1 - (r.punchHand || 0);
       const dmg = melee === 'bat' ? 14 : melee === 'knife' ? 12 : melee === 'axe' ? 16 : melee === 'sword' ? 15 : melee === 'hammer' ? 18 : 8;
       // 够不着就打不到：玩家在楼顶/山上、高度差超过阈值时，近战空挥不造成伤害
-      if (!unreachable) {
+      // 【fix545】隔墙也打不到：原来近战完全不查视线，站在墙另一侧能隔墙把玩家打死
+      if (!unreachable && hasLineOfSight(r.x, r.z, tx, tz, ignoreVeh)) {
         // 【2026-10-13】近战也会误伤身边别的颜色的人（3m 内、30% 概率），同样会引发火拼
         const ffMelee = (Math.random() < 0.3) ? firstFriendlyFireTarget(r, tx, tz, 3) : null;
         if (ffMelee) npcFriendlyFire(r, ffMelee);
@@ -22877,9 +22941,14 @@ function updateCop(c, dt) {
     c.aggro = true;   // 追捕中：记在 aggro 上（逃离 55m 外的 else 分支会清零）
     c.angle = Math.atan2(dx, dz); c.group.rotation.y = c.angle;
     // 够不着时不再傻跑/傻挥棍，改为举枪仰射
+    // 【fix545】隔墙意识：看不见玩家就沿墙侧移绕过去（npcMoveDir），不再一头顶着墙；
+    // 看不见时子弹也只画到身前 9m（打在墙上），不会出现"弹道穿墙飞过去"的假象。
+    const _ignVeh = (state === 'drive' ? currentCar : null);
     if (d > 9 && !unreachable) {
       // 远：跑步追
-      const p = { x: c.x + dx / d * 5.5 * dt, z: c.z + dz / d * 5.5 * dt };
+      const _mv = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+      if (!_mv.los) { c.angle = Math.atan2(_mv.x, _mv.z); c.group.rotation.y = c.angle; }
+      const p = { x: c.x + _mv.x * 5.5 * dt, z: c.z + _mv.z * 5.5 * dt };
       collideNpc(p, 0.4, c);
       clampCity(p); c.x = p.x; c.z = p.z; c.group.position.x = c.x; c.group.position.z = c.z;
       c.phase = (c.phase || 0) + dt * 10;
@@ -22887,28 +22956,45 @@ function updateCop(c, dt) {
       // 中距离 / 目标在够不着的高处：边射边靠近
       if (c.fightCd <= 0) {
           c.fightCd = 1.1; sfxNear('shoot', c.x, c.z, 55);
-        // Task #10：弹道改成真三维（原来起点写死 1.3、终点写死 1.0，等于永远贴地平射）
-        spawnTracer(c.x + dx / d * 1.2, copY + 1.3, c.z + dz / d * 1.2, target.x, targetY + 1.0, target.z, 'pistol');
-        spawnBurst(c.x + dx / d * 1.2, c.z + dz / d * 1.2, 0xffff88, 5);
-        let hitChance = THREE.MathUtils.clamp(0.92 - d * 0.022, 0.12, 0.92);
-        // 仰角越大越难打中（最高砍到 45%）
-        if (Math.abs(dyT) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dyT) - 3) * 0.06, 0.45, 1);
-        if (Math.random() < hitChance && hasLineOfSight(c.x, c.z, target.x, target.z, (state === 'drive' ? currentCar : null))) npcShotPlayer(8, c.x, c.z, c.ranged || 'pistol', true);   // true = 警察开的枪
+        const _losP = hasLineOfSight(c.x, c.z, target.x, target.z, _ignVeh);
+        if (_losP) {
+          // Task #10：弹道改成真三维（原来起点写死 1.3、终点写死 1.0，等于永远贴地平射）
+          spawnTracer(c.x + dx / d * 1.2, copY + 1.3, c.z + dz / d * 1.2, target.x, targetY + 1.0, target.z, 'pistol');
+          spawnBurst(c.x + dx / d * 1.2, c.z + dz / d * 1.2, 0xffff88, 5);
+          let hitChance = THREE.MathUtils.clamp(0.92 - d * 0.022, 0.12, 0.92);
+          // 仰角越大越难打中（最高砍到 45%）
+          if (Math.abs(dyT) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dyT) - 3) * 0.06, 0.45, 1);
+          if (Math.random() < hitChance) npcShotPlayer(8, c.x, c.z, c.ranged || 'pistol', true);   // true = 警察开的枪
+        } else {
+          // 隔着墙：只画到墙前，命中判定直接不结算
+          const _sl = Math.min(d, 9);
+          spawnTracer(c.x + dx / d * 1.2, copY + 1.3, c.z + dz / d * 1.2,
+                      c.x + dx / d * _sl, copY + 1.3, c.z + dz / d * _sl, 'pistol');
+          spawnBurst(c.x + dx / d * _sl, c.z + dz / d * _sl, 0xffdd88, 3);
+        }
       }
-      // 射击时慢慢靠近
-      const cp = { x: c.x + dx / d * 2.0 * dt, z: c.z + dz / d * 2.0 * dt };
+      // 射击时慢慢靠近（隔墙就沿墙侧移）
+      const _mv2 = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+      if (!_mv2.los) { c.angle = Math.atan2(_mv2.x, _mv2.z); c.group.rotation.y = c.angle; }
+      const cp = { x: c.x + _mv2.x * 2.0 * dt, z: c.z + _mv2.z * 2.0 * dt };
       collideNpc(cp, 0.4, c); clampCity(cp); c.x = cp.x; c.z = cp.z;
       c.group.position.x = c.x; c.group.position.z = c.z;
       c.phase = (c.phase || 0) + dt * 5;
     } else if (state === 'walk') {
       // 近身：警棍（奔跑靠近后攻击）
       if (d > 1.5) {
-        const rp = { x: c.x + dx / d * 6.0 * dt, z: c.z + dz / d * 6.0 * dt };
+        const _mv3 = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+        if (!_mv3.los) { c.angle = Math.atan2(_mv3.x, _mv3.z); c.group.rotation.y = c.angle; }
+        const rp = { x: c.x + _mv3.x * 6.0 * dt, z: c.z + _mv3.z * 6.0 * dt };
         collideNpc(rp, 0.4, c); clampCity(rp); c.x = rp.x; c.z = rp.z;
         c.group.position.x = c.x; c.group.position.z = c.z;
         c.phase = (c.phase || 0) + dt * 14;
       } else if (c.fightCd <= 0) {
-        c.fightCd = 0.9; c.punchAnim = 1; hurtPlayer(12, true); spawnBurst(person.position.x, person.position.z, 0xff3333, 6);   // true = 警察警棍
+        c.fightCd = 0.9; c.punchAnim = 1;
+        // 【fix545】隔墙挥警棍不算：原来这里完全不查视线，墙那侧也能把玩家打死
+        if (hasLineOfSight(c.x, c.z, target.x, target.z, _ignVeh)) {
+          hurtPlayer(12, true); spawnBurst(person.position.x, person.position.z, 0xff3333, 6);   // true = 警察警棍
+        }
         c.phase = 0;
       } else {
         c.phase = (c.phase || 0) + dt * 6;
@@ -25319,7 +25405,152 @@ window.__milHeliInfo = function () {
     wanted: wanted, wantedDecay: Math.round(wantedDecay * 10) / 10, bld: buildings.length
   };
 };
+// ========== 【fix545·2026-11-21】五星通缉：玩家占了直升机 → 军方改派坦克 ==========
+// 用户要求："如果玩家把直升飞机占了的话，就出动坦克"。
+// 直升机拿一架飞在空中的直升机没办法，军方改成地面装甲：一辆从基地坦克区开出来的
+// 敌方坦克，压到 55m 内用主炮点名（炮弹按玩家速度预判落点，走位可以躲）。
+// 它被 push 进 cars，所以玩家的枪 / 火箭筒走普通载具伤害就能把它打爆。
+var milTank = null;
+var milTankCd = 0;   // 被打爆后的补给冷却：否则一炸就原地刷一辆新的，玩家永远打不完
+function playerInHeliNow() {
+  return state === 'drive' && currentCar && !currentCar.exploded && currentCar.isHelicopter;
+}
+function spawnMilTank() {
+  if (typeof window.__buildTankModel !== 'function') return null;
+  const pad = window.MIL_TANKPAD || { x: -255, y: 2.5, z: 140 };
+  let g;
+  try { g = window.__buildTankModel(); } catch (e) { return null; }
+  if (!g) return null;
+  // 和玩家的坦克错开 9m（原来错开 12m 会顶进基地东南角，两个方向的墙同时把它夹死）
+  const sx = pad.x - 9, sz = pad.z;
+  g.position.set(sx, pad.y + 0.8, sz);
+  scene.add(g);
+  milTank = {
+    group: g, x: sx, y: pad.y + 0.8, z: sz, angle: 0, turretRel: 0,
+    radius: 3.0, durability: 240, damage: 0, hp: 240,
+    shootCd: 3.6, state: 'incoming', leaveT: 0,
+    isEnemyTank: true, fixed: true, exploded: false, topSpeed: 16, accel: 6
+  };
+  cars.push(milTank);   // 进 cars：玩家的子弹/火箭弹才打得到它
+  setHint('军方坦克已出动！');
+  try { floatText('军方出动坦克', '#ff8844'); } catch (e) {}
+  try { sfx('siren'); } catch (e) {}
+  return milTank;
+}
+function clearMilTank() {
+  if (!milTank) return;
+  try { scene.remove(milTank.group); } catch (e) {}
+  const i = cars.indexOf(milTank); if (i >= 0) cars.splice(i, 1);
+  milTank = null;
+}
+function updateMilTank(dt) {
+  if (milTankCd > 0) milTankCd = Math.max(0, milTankCd - dt);
+  // 只有"五星 + 玩家正坐在直升机里"才叫坦克
+  if (!milTank) {
+    if (wanted < 5 - 1e-6 || !playerInHeliNow() || milTankCd > 0) return;
+    spawnMilTank();
+    if (!milTank) return;
+  }
+  if (milTank.exploded) {
+    // 被打爆：清掉并进入 45 秒补给冷却，别一炸就刷新的
+    clearMilTank(); milTankCd = 45;
+    setHint('军方坦克已被击毁，短时间内部队不会再派装甲。');
+    try { floatText('击毁军方坦克', '#ffd54f'); } catch (e) {}
+    return;
+  }
+  const pp = milHeliPlayerPos();
+  const dx = pp.x - milTank.x, dz = pp.z - milTank.z;
+  const d = Math.hypot(dx, dz) || 1;
+  if (wanted < 5 - 1e-6 && milTank.state !== 'leaving') {
+    milTank.state = 'leaving'; milTank.leaveT = 0;
+    setHint('军方坦克脱离接触，正在撤回基地。');
+  }
+  const pad = window.MIL_TANKPAD || { x: -255, z: 140 };
+  const leaving = milTank.state === 'leaving';
+  const tgtX = leaving ? pad.x : pp.x, tgtZ = leaving ? pad.z : pp.z;
+  const tdx = tgtX - milTank.x, tdz = tgtZ - milTank.z;
+  const td = Math.hypot(tdx, tdz) || 1;
+  // 车体转向（限速，别原地打转）；顶墙期间临时偏 50° 绕开
+  milTank._detourT = Math.max(0, (milTank._detourT || 0) - dt);
+  const _des = Math.atan2(tdx, tdz) + (milTank._detourT > 0 ? (milTank._detour || 1) * 0.9 : 0);
+  let da = _des - milTank.angle;
+  while (da > Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  const turn = 1.1 * dt;
+  milTank.angle += Math.max(-turn, Math.min(turn, da));
+  // 行进：撤离时一直开；追击时离得远就压上去，55m 内停车开炮
+  const spd = leaving ? 16 : (td > 140 ? 16 : (td > 55 ? 13 : 0));
+  if (spd > 0 && Math.abs(da) < 2.0) {
+    const p = { x: milTank.x + Math.sin(milTank.angle) * spd * dt, z: milTank.z + Math.cos(milTank.angle) * spd * dt };
+    collideBuildingsFast(p, 3.2);
+    clampCity(p);
+    const gy = terrainHeight(p.x, p.z);
+    const _bx = milTank.x, _bz = milTank.z;
+    if (Math.abs(gy - milTank.y) < 3.5) { milTank.x = p.x; milTank.z = p.z; }
+    // 顶墙了：偏一下车头绕过去（基地围墙只有一个南门，不偏就卡死在墙角）
+    if (Math.hypot(milTank.x - _bx, milTank.z - _bz) < spd * dt * 0.35) {
+      milTank._stuck = (milTank._stuck || 0) + dt;
+      if (milTank._stuck > 0.3) {
+        if (!milTank._detour) milTank._detour = (Math.random() < 0.5 ? 1 : -1);
+        milTank._detourT = 0.8;   // 往这一侧偏 0.8 秒，够它贴着墙滑到门洞
+        milTank._stuck = 0;
+      }
+    } else {
+      milTank._stuck = 0;
+    }
+  }
+  milTank.y += ((terrainHeight(milTank.x, milTank.z) + 0.8) - milTank.y) * Math.min(1, dt * 6);
+  milTank.group.position.set(milTank.x, milTank.y, milTank.z);
+  milTank.group.rotation.y = milTank.angle;
+  // 炮塔始终指着玩家
+  const tRel = Math.atan2(dx, dz) - milTank.angle;
+  milTank.turretRel = tRel;
+  const T = milTank.group.userData.turret;
+  if (T) T.rotation.y = tRel;
+  // 撤离：回到停机位附近 / 25 秒后消失
+  if (leaving) {
+    milTank.leaveT += dt;
+    if (milTank.leaveT > 25 || Math.hypot(pad.x - milTank.x, pad.z - milTank.z) < 18) { clearMilTank(); return; }
+  }
+  // ---- 主炮 ----
+  if (!leaving && d < 150) {
+    milTank.shootCd -= dt;
+    if (milTank.shootCd <= 0) {
+      milTank.shootCd = 3.4;
+      // 预判：按玩家最近一帧的速度外推炮弹飞行时间，站着不动必中、一直走位能躲开
+      const fly = Math.min(1.6, d / 110 + 0.35);
+      const vx = (pp.x - (milTank._ppx === undefined ? pp.x : milTank._ppx)) / Math.max(dt, 1e-3);
+      const vz = (pp.z - (milTank._ppz === undefined ? pp.z : milTank._ppz)) / Math.max(dt, 1e-3);
+      const ix = pp.x + vx * fly * 0.75, iz = pp.z + vz * fly * 0.75;
+      const iy = terrainHeight(ix, iz) + 0.4;
+      const wx = milTank.angle + tRel;
+      const bx0 = milTank.x + Math.sin(wx) * 6.5, bz0 = milTank.z + Math.cos(wx) * 6.5;
+      spawnBurst(bx0, bz0, 0xffff88, 8, milTank.y + 2.6);
+      spawnTracer(bx0, milTank.y + 2.6, bz0, ix, iy, iz, 'cannon');
+      try { sfxNear('shoot', milTank.x, milTank.z, 160); } catch (e) {}
+      queueBullet(ix, iy, iz, fly, function () {
+        try {
+          spawnBurst(ix, iz, 0xffaa33, 18, iy);
+          try { sfxNear('boom', ix, iz, 130); } catch (e) {}
+          // 溅射：落点 9m 内按距离衰减掉血；飞在高空（直升机）基本打不到
+          const now = milHeliPlayerPos();
+          const pd = Math.hypot(now.x - ix, now.z - iz);
+          const dy = Math.abs((now.y || 0) - iy);
+          if (pd < 9 && dy < 6) hurtPlayer(Math.round(10 + 22 * (1 - pd / 9)), true);
+        } catch (e) {}
+      });
+    }
+  }
+  milTank._ppx = pp.x; milTank._ppz = pp.z;
+}
 function updateMilHeli(dt) {
+  // 【fix545】玩家正坐在直升机里：直升机追不上同高度的玩家，军方改派地面坦克（见 updateMilTank）
+  const _inHeli = playerInHeliNow();
+  if (!milHeli && (_inHeli || (milTank && milTank.state !== 'leaving'))) return;
+  if (milHeli && _inHeli && milHeli.state !== 'leaving') {
+    milHeli.state = 'leaving'; milHeli.leaveT = 0;
+    setHint('军方直升机脱离接触，正在返航。');
+  }
   // 只有五星才叫得出来；一旦叫出来就一直跟到"掉星返航"结束
   if (!milHeli) {
     if (wanted < 5 - 1e-6) return;
@@ -25334,8 +25565,8 @@ function updateMilHeli(dt) {
     milHeli.leaveT = 0;
     setHint('军方直升机脱离接触，正在返航。');
   }
-  // 返航途中又升回五星：重新咬上来
-  if (isFive && milHeli.state === 'leaving') {
+  // 返航途中又升回五星：重新咬上来（玩家坐在直升机里时不回来 —— 那局改派坦克）
+  if (isFive && milHeli.state === 'leaving' && !_inHeli && !(milTank && milTank.state !== 'leaving')) {
     milHeli.state = 'incoming';
     milHeli.leaveT = 0;
     milHeli.shootCd = 2.4;
@@ -26240,6 +26471,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   // 【fix543】五星军方直升机：放在载具大 try 之外，避免前面任何一辆车抛异常时
   // 连它一起跳过 —— 一旦跳过，incoming 状态就永远不推进，星级会被永久冻住。
   try { updateMilHeli(dt); } catch (e) { console.error('[mil heli]', e); }
+  // 【fix545】五星 + 玩家占了直升机 → 军方改派坦克（同样放在载具大 try 之外）
+  try { updateMilTank(dt); } catch (e) { console.error('[mil tank]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
   try { updateRagdolls(dt); } catch(e) { console.error('[Ragdolls update error]', e); }
