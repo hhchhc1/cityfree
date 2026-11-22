@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix559-kick-cost-40">
+<meta name="cf-build" content="20261122-fix560-tank-gate-gun-dmg">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7513,6 +7513,9 @@ let gateCollision = [];   // 大门碰撞体引用（任务完成后可移除）
   }
   window.spawnMilitaryTank = spawnMilitaryTank;
   window.MIL_TANKPAD = { x: bx + 25, z: bz + 20, y: baseGy };
+  // 【fix560】基地南门外的集结点：五星军方坦克直接从这里"开出来"，不用再从院内挤门洞
+  // 注意这个 IIFE 里没有 z1，南墙在 bz + baseD/2（=155），门外 9m 就是 164
+  window.MIL_GATE = { x: bx, z: bz + baseD / 2 + 9, y: baseGy };
   // 【fix545】五星要另起一辆"敌方"坦克，复用同一套模型
   window.__buildTankModel = buildTankModel;
   spawnMilitaryTank();
@@ -13965,14 +13968,14 @@ const WEAPONS = {
   chainsaw:{ name: '电锯',  type: 'melee', dmg: 45, range: 2.5, price: 4800,  auto: true,  swing: 0.25, icon: '🪚',  pose: 'chainsaw' },
   katana: { name: '武士刀', type: 'melee', dmg: 55, range: 3.4, price: 6500,  auto: false, swing: 0.38, icon: '⚔️',  pose: 'katana' },
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
-  pistol:  { name: '手枪',   type: 'gun',   dmg: 13, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
-  smg:    { name: '冲锋枪', type: 'gun',   dmg: 7,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 12, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },   // 2026-11-22 用户要求：单颗弹丸 10 → 12（6 颗全中 72）
-  rifle:  { name: '步枪',   type: 'gun',   dmg: 10, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
-  ak47:   { name: 'AK47',   type: 'gun',   dmg: 12, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
+  pistol:  { name: '手枪',   type: 'gun',   dmg: 16, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
+  smg:    { name: '冲锋枪', type: 'gun',   dmg: 9,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 16, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },   // 2026-11-22 用户要求：单颗弹丸 10 → 12（6 颗全中 72）
+  rifle:  { name: '步枪',   type: 'gun',   dmg: 13, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
+  ak47:   { name: 'AK47',   type: 'gun',   dmg: 15, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
   // desc 单独挂在武器对象上，商店简介会把它拼在通用说明后面（这样探针也能直接读来验证）
-  sniper: { name: '狙击枪', type: 'gun',   dmg: 58, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
+  sniper: { name: '狙击枪', type: 'gun',   dmg: 68, range: 270,  price: 9000,  auto: false, oneShot: true, pierce: true, ammo: '762', fireCd: 1.6,  mag: 5,  reload: 2.2,  bulletSpeed: 240, icon: '🎯', pose: 'sniper',
     desc: '🎯 点击「瞄准」进入狙击镜：时间放慢到 0.5 倍，打中任何部位都是一枪毙命，一发子弹能穿透一排目标。再点一次「瞄准」退出。\n👻 瞄准状态下击杀不会升星、不会惊动同伙、也不会增加通缉 —— 杀人于无形。\n🔇 用它开枪本身也不会涨星（零颗星时随便打也不会被通缉）。' },
   rpg:    { name: '单筒火箭筒', type: 'gun',   dmg: 58, range: 200,  price: 12000, auto: false, ammo: 'rocket', fireCd: 2.0, mag: 1, reload: 2.6, bulletSpeed: 55,  aoe: true, icon: '🚀', pose: 'rpg' },
   // 【2026-10-13】四联火箭筒：装备后可「连发」（点一下发 1 发）或「齐发」（一次 4 发齐射）。
@@ -13983,7 +13986,7 @@ const WEAPONS = {
   rpg4:   { name: '四联火箭筒', type: 'gun',   dmg: 58, range: 200,  price: 20000, auto: false, ammo: 'rocket', fireCd: 2.2, singleFireCd: 1.1, mag: 4, reload: 3.2, bulletSpeed: 55,  aoe: true, salvo: true, icon: '🚀', pose: 'rpg',
     desc: '🚀 四联装填，双击「齐发」按钮切换：连发模式点一下打出去 1 发，齐发模式一次 4 发齐射、覆盖一片。每一发都是范围爆炸，适合清场。' },
   // 【2026-10-13】加特林：高射速转管机枪，弹链 100 发（7.62mm），靠持续泼洒火力压制。
-  minigun:{ name: '加特林',   type: 'gun',   dmg: 8,  range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
+  minigun:{ name: '加特林',   type: 'gun',   dmg: 11,  range: 135,  price: 15000, auto: true,  ammo: '762',   fireCd: 0.06, mag: 100, reload: 3.0, bulletSpeed: 220, icon: '🔫', pose: 'rifle' }
 };
 // 命中部位倍率：头 2.5 / 身 1.0 / 腿 0.6（狙击枪 oneShot 时忽略倍率，见 shoot()）
 const ZONE_MULT = { head: 2.5, body: 1.0, leg: 0.6 };
@@ -25663,16 +25666,19 @@ function addTankBlueFlag(g) {
 function spawnMilTank() {
   if (typeof window.__buildTankModel !== 'function') return null;
   const pad = window.MIL_TANKPAD || { x: -255, y: 2.5, z: 140 };
+  // 【fix560·2026-11-22·用户："5星时军方的坦克出不来，你直接让它出到军事基地的门外再去找玩家"】
+  // 原来生在基地院内（坦克区），要自己绕过墙角、再挤 14 米宽的门洞才出得来，
+  // 一路上被围墙和建筑卡住，玩家根本等不到它。现在直接生在**南门外的集结点**，出门就是大路。
+  const gate = window.MIL_GATE || { x: -280, z: 164, y: pad.y };
   let g;
   try { g = window.__buildTankModel(); } catch (e) { return null; }
   if (!g) return null;
-  // 和玩家的坦克错开 9m（原来错开 12m 会顶进基地东南角，两个方向的墙同时把它夹死）
-  const sx = pad.x - 9, sz = pad.z;
-  g.position.set(sx, pad.y + 0.8, sz);
+  const sx = gate.x, sz = gate.z;
+  g.position.set(sx, (gate.y !== undefined ? gate.y : pad.y) + 0.8, sz);
   addTankBlueFlag(g);   // 【fix558】插蓝旗
   scene.add(g);
   milTank = {
-    group: g, x: sx, y: pad.y + 0.8, z: sz, angle: 0, turretRel: 0,
+    group: g, x: sx, y: (gate.y !== undefined ? gate.y : pad.y) + 0.8, z: sz, angle: 0, turretRel: 0,
     radius: 3.0, durability: 360, damage: 0, hp: 360,
     shootCd: 3.6, state: 'incoming', leaveT: 0,
     // 【fix552】isTank=true：玩家能像开军用坦克一样驾驶它（主炮/装甲都复用现成逻辑），
@@ -25754,7 +25760,8 @@ function updateMilTank(dt) {
     milTank.state = 'leaving'; milTank.leaveT = 0;
     setHint('军方坦克脱离接触，正在撤回基地。');
   }
-  const pad = window.MIL_TANKPAD || { x: -255, z: 140 };
+  // 【fix560】撤离目标也改成南门外集结点：不用再挤门洞回院内
+  const pad = window.MIL_GATE || { x: -280, z: 164 };
   const leaving = milTank.state === 'leaving';
   const tgtX = leaving ? pad.x : pp.x, tgtZ = leaving ? pad.z : pp.z;
   const tdx = tgtX - milTank.x, tdz = tgtZ - milTank.z;
