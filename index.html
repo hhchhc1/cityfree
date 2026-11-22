@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix556-fp-arm-jersey">
+<meta name="cf-build" content="20261122-fix557-shotgun-kick-cost">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13967,7 +13967,7 @@ const WEAPONS = {
   nunchaku:{ name: '双截棍',type: 'melee', dmg: 38, range: 2.4, price: 3200,  auto: true,  swing: 0.3,  icon: '🥢',  pose: 'nunchaku' },
   pistol:  { name: '手枪',   type: 'gun',   dmg: 13, range: 100,  price: 2000, auto: false, ammo: '9mm',   fireCd: 0.45, mag: 8, reload: 1.0, bulletSpeed: 105, icon: '🔫', pose: 'pistol' },
   smg:    { name: '冲锋枪', type: 'gun',   dmg: 7,  range: 95,  price: 4500,  auto: true,  ammo: '9mm',   fireCd: 0.08, mag: 30, reload: 1.5,  bulletSpeed: 190, icon: '🔫', pose: 'smg' },
-  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 10, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },
+  shotgun:{ name: '霰弹枪', type: 'gun',   dmg: 12, range: 60,  price: 5500,  auto: false, ammo: 'shell', fireCd: 0.95, mag: 6,  reload: 1.9,  bulletSpeed: 78,  pellets: 6, icon: '💥', pose: 'shotgun' },   // 2026-11-22 用户要求：单颗弹丸 10 → 12（6 颗全中 72）
   rifle:  { name: '步枪',   type: 'gun',   dmg: 10, range: 145,  price: 6000,  auto: true,  ammo: '556',   fireCd: 0.12, mag: 30, reload: 1.7,  bulletSpeed: 200, icon: '🔫', pose: 'rifle' },
   ak47:   { name: 'AK47',   type: 'gun',   dmg: 12, range: 135,  price: 7000,  auto: true,  ammo: '762',   fireCd: 0.1,  mag: 30, reload: 1.7,  bulletSpeed: 195, icon: '🔫', pose: 'rifle' },
   // 【2026-10-13】pierce: 子弹穿透（一发打穿一条线上的多个目标）；oneShot: 打中任何部位一枪毙命
@@ -21210,7 +21210,7 @@ let kickCooldown = 0;
 function kickTarget() {
   if (kickCooldown > 0) return;
   if (gamePaused() || state !== 'walk' || grapple) return;
-  const KICK_COST = 20;   // 踢飞消耗体力（原 30 太耗，下调到 20）
+  const KICK_COST = 70;   // 踢飞消耗体力（2026-11-22 用户要求：当前 20 的 3.5 倍 = 70）
   if (player.stamina < KICK_COST) { setHint('体力不足，无法踢飞'); return; }
   const t = nearestKickable();
   if (!t) return;
