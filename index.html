@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix560-tank-gate-gun-dmg">
+<meta name="cf-build" content="20261122-fix561-no-shoot-through-wall">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -22157,11 +22157,8 @@ function npcShotCopCheck(r, tx, tz, ignoreVeh) {
 }
 // NPC开枪：射击方向的拖尾 + 音效
 function fireNpcShot(r, dx, dz) {
-  sfxNear('shoot', r.x, r.z, 50);
   // 【fix551】帮派在军事基地里开枪 → 警卫把这个开枪的人当入侵者（原来只有玩家开枪才算）
   try { if (inMilitaryBase(r.x, r.z)) alertBaseGuardsVs(r, 30); } catch (e) {}
-  spawnTracer(r.x + dx * 1.2, 1.3, r.z + dz * 1.2, r.x + dx * 18, 0.8, r.z + dz * 18, 'pistol');
-  spawnBurst(r.x + dx * 1.2, r.z + dz * 1.2, 0xffff88, 4);
   // 【fix72】补上伤害判定 —— 原来这个函数**只有视觉效果**（音效 + 曳光弹 + 火花），
   // 完全没有伤害计算，所以帮派之间只会互相"表演"开枪、永远打不死对方
   //（用户实测："帮派争夺的时候，怎么他们互相打不死对方"）。
@@ -22180,7 +22177,12 @@ function fireNpcShot(r, dx, dz) {
     bestT = t2; best = o;
   }
   // 【fix541】隔着墙不能打中：帮派互射也要过视线判定
-  if (best && !hasLineOfSight(r.x, r.z, best.x, best.z, null)) best = null;
+  // 【fix561·2026-11-22】判到被墙挡住就**整枪不打**（连曳光弹和枪声都不出），
+  // 否则画面上就是一群人贴着围墙对着墙开火，看着像隔墙火拼。
+  if (best && !hasLineOfSight(r.x, r.z, best.x, best.z, null)) return;
+  sfxNear('shoot', r.x, r.z, 50);
+  spawnTracer(r.x + dx * 1.2, 1.3, r.z + dz * 1.2, r.x + dx * 18, 0.8, r.z + dz * 18, 'pistol');
+  spawnBurst(r.x + dx * 1.2, r.z + dz * 1.2, 0xffff88, 4);
   if (best) {
     best.hp -= dmg;
     if (best.hp <= 0) killResident(best, r);
@@ -22426,37 +22428,29 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   }
 
   if (r.chaseMode === 'shoot' && ranged && r.ammo > 0) {
-    // 射击模式：边射边慢慢靠近
-    const moveSpd = 1.8;  // 射击时慢速移动
+    // 【fix561·2026-11-22·用户："不要出现这种情况的火拼啊，这都有墙挡着呢……
+    //   如果要打的话就要绕过墙当面对面打"】
+    // 原来看不见目标时仍然"对着墙开枪"：曳光弹画到墙前 9m + 枪声，一群 NPC 贴着围墙排成一列对着墙打，
+    // 观感就是隔着墙火拼。现在：**看不见就完全不开枪**（不画曳光弹、不出枪声、不耗弹药），
+    // 同时用更快的速度沿墙绕行，绕到能看见才开打。
+    const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+    const moveSpd = _mv.los ? 1.8 : 4.6;   // 绕墙时走快一点，别磨磨蹭蹭
     if (d > meleeRange + 2) {
-      // 【fix545】看不见目标就沿墙侧移绕过去，而不是一头顶着墙往前挤
-      const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
       if (!_mv.los) { r.angle = Math.atan2(_mv.x, _mv.z); r.group.rotation.y = r.angle; }
       const p = { x: r.x + _mv.x * moveSpd * dt, z: r.z + _mv.z * moveSpd * dt };
       collideNpc(p, 0.4, r); clampCity(p); r.x = p.x; r.z = p.z;
       r.group.position.x = r.x; r.group.position.z = r.z;
     }
     r.phase = (r.phase || 0) + dt * 5;
-    if (r.attackCd <= 0) {
-        // 【fix523】警报中的基地守卫 0.16 秒一发（约 6 发/秒），普通 NPC 仍是原来的 1.2 秒一发
-        r.attackCd = _baseAlert ? 0.16 : 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
-      // 【fix541·2026-11-18·用户："让 NPC 的子弹也和玩家的子弹一样不能穿墙"】
-      // 先算视线：有墙时曳光弹只画到身前一小段（打在墙上），命中判定也只在有视线时进行。
-      // 原来曳光弹无条件画到目标身上，看起来就是"子弹穿墙飞过去"。
-      const _los = hasLineOfSight(r.x, r.z, tx, tz, ignoreVeh);
-      if (_los) {
-        // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
-        spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
-      } else {
-        const _sl = Math.min(d, 9);
-        spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7,
-                    r.x + dx / d * _sl, myY + 1.3, r.z + dz / d * _sl, r.ranged);
-        spawnBurst(r.x + dx / d * _sl, r.z + dz / d * _sl, 0xffdd88, 3, myY + 1.3);
-      }
+    if (r.attackCd <= 0 && _mv.los) {
+      // 【fix523】警报中的基地守卫 0.16 秒一发（约 6 发/秒），普通 NPC 仍是原来的 1.2 秒一发
+      r.attackCd = _baseAlert ? 0.16 : 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
+      // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
+      spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
       let hitChance = THREE.MathUtils.clamp(0.88 - d * 0.018, 0.1, 0.88);
       // 仰射/俯射都要吃亏：高度差越大命中率越低（最高只砍到 45%，不至于完全打不着）
       if (Math.abs(dy) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dy) - 3) * 0.06, 0.45, 1);
-      if (_los && Math.random() < hitChance) {
+      if (Math.random() < hitChance) {
         // 【perf18】帮派与玩家枪战，如果枪线中间有警察，优先击中警察并引发警匪冲突
         if (npcShotCopCheck(r, tx, tz, ignoreVeh)) { /* 已打中警察 */ }
         else {
@@ -22469,6 +22463,8 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
       }
       r.ammo--;
       if (r.ammo <= 0) { r.armed = false; r.chaseMode = 'run'; }
+    } else if (r.attackCd < -0.6) {
+      r.attackCd = 0;   // 长时间看不见目标时别把冷却攒成负数，一露头就能开枪
     }
     if (r.punchAnim > 0) r.punchAnim = Math.max(0, r.punchAnim - dt * 4);
     animateHuman(r.group, r.phase || 0, r.punchAnim || 0, ranged, true, r.punchHand || 0);
@@ -23117,6 +23113,8 @@ function updateCop(c, dt) {
         if (!r.alive || r.down || r.faction < 0) continue;
         const cd = Math.hypot(r.x - c.x, r.z - c.z);
         if (cd < 18 && c.fightCd <= 0) {
+          // 【fix561】隔着墙不对射：看不见就不打（和玩家那条路径统一）
+          if (!hasLineOfSight(c.x, c.z, r.x, r.z, null)) continue;
           const fdx = (r.x - c.x) / (cd || 1), fdz = (r.z - c.z) / (cd || 1);
             c.angle = Math.atan2(fdx, fdz); c.group.rotation.y = c.angle;
             sfxNear('shoot', c.x, c.z, 45);
@@ -23169,11 +23167,13 @@ function updateCop(c, dt) {
     } else if (d > 3 || unreachable) {
       // 中距离 / 目标在够不着的高处：边射边靠近
       if (c.fightCd <= 0) {
-          c.fightCd = 1.1; sfxNear('shoot', c.x, c.z, 55);
-        // 【fix551】警察在军事基地里开枪（打玩家/打谁都算）→ 警卫全员盯上这个警察
-        try { if (inMilitaryBase(c.x, c.z)) alertBaseGuardsVs(c, 30); } catch (e) {}
+        // 【fix561·2026-11-22·用户："不要出现这种情况的火拼啊，这都有墙挡着呢"】
+        // 看不见目标就完全不开枪：原来这里会对着墙画一段曳光弹 + 出枪声，看着像隔着墙打。
         const _losP = hasLineOfSight(c.x, c.z, target.x, target.z, _ignVeh);
         if (_losP) {
+          c.fightCd = 1.1; sfxNear('shoot', c.x, c.z, 55);
+          // 【fix551】警察在军事基地里开枪（打玩家/打谁都算）→ 警卫全员盯上这个警察
+          try { if (inMilitaryBase(c.x, c.z)) alertBaseGuardsVs(c, 30); } catch (e) {}
           // Task #10：弹道改成真三维（原来起点写死 1.3、终点写死 1.0，等于永远贴地平射）
           spawnTracer(c.x + dx / d * 1.2, copY + 1.3, c.z + dz / d * 1.2, target.x, targetY + 1.0, target.z, 'pistol');
           spawnBurst(c.x + dx / d * 1.2, c.z + dz / d * 1.2, 0xffff88, 5);
@@ -23182,11 +23182,7 @@ function updateCop(c, dt) {
           if (Math.abs(dyT) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dyT) - 3) * 0.06, 0.45, 1);
           if (Math.random() < hitChance) npcShotPlayer(8, c.x, c.z, c.ranged || 'pistol', true);   // true = 警察开的枪
         } else {
-          // 隔着墙：只画到墙前，命中判定直接不结算
-          const _sl = Math.min(d, 9);
-          spawnTracer(c.x + dx / d * 1.2, copY + 1.3, c.z + dz / d * 1.2,
-                      c.x + dx / d * _sl, copY + 1.3, c.z + dz / d * _sl, 'pistol');
-          spawnBurst(c.x + dx / d * _sl, c.z + dz / d * _sl, 0xffdd88, 3);
+          c.fightCd = 0.35;   // 隔着墙：不开枪，稍后再看（绕行由下面的 npcMoveDir 负责）
         }
       }
       // 射击时慢慢靠近（隔墙就沿墙侧移）
