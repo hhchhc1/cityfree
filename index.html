@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix561-no-shoot-through-wall">
+<meta name="cf-build" content="20261122-fix562-xp-need-60pct">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -11882,7 +11882,7 @@ const player = {
   hpRegen: BASE_STATS.hpRegen, stamRegen: BASE_STATS.stamRegen,     // 回血/回耐速度（每秒）
   x: -104, z: -64,
   // 经验 / 等级 / 技能点
-  level: 1, xp: 0, xpNeed: 50, skillPoints: 0,
+  level: 1, xp: 0, xpNeed: 30, skillPoints: 0,
   sHp: 0, sStam: 0, sMelee: 0, sRanged: 0, sHpRegen: 0, sStamRegen: 0, sDrive: 0, sAccel: 0
 };
 let walkPhase = 0, punchAnim = 0, punchHand = 0, kickAnim = 0;   // punchHand: 0右拳 1左拳（拳击交替），kickAnim: 踢飞用腿
@@ -14229,14 +14229,18 @@ function recomputeStats() {
 function normalizeProgress(showHint) {
   player.level = Math.floor(saveNumber(player.level, 1, 1, 999));
   player.xp = saveNumber(player.xp, 0, 0, 1000000);
-  player.xpNeed = saveNumber(player.xpNeed, 50, 1, 1000000);
+  // 【fix562·2026-11-22·用户："把每升一级所需要的经验变为原来的0.6倍，不然后期太难升了"】
+  // 公式基数 50 → 30（其余指数不变），所有等级所需经验正好是原来的 0.6 倍。
+  // 这里不再沿用存档里的旧 xpNeed，而是**按等级用新公式重算** —— 否则老存档会一直卡在旧的高额经验上，
+  // 改了也感觉不到；重算后如果当前经验已经够，下面的 while 会立刻补升（并补发技能点）。
+  player.xpNeed = Math.min(1000000, Math.max(1, Math.round(30 * Math.pow(1.28, player.level - 1))));
   player.skillPoints = Math.floor(saveNumber(player.skillPoints, 0, 0, 100000));
   let guard = 0;
   while (player.xp >= player.xpNeed && player.level < 999 && guard < 1000) {
     player.xp -= player.xpNeed;
     player.level++;
     player.skillPoints++;
-    player.xpNeed = Math.min(1000000, Math.round(50 * Math.pow(1.28, player.level - 1)));
+    player.xpNeed = Math.min(1000000, Math.round(30 * Math.pow(1.28, player.level - 1)));
     if (showHint) {
       setHint('升级了！Lv.' + player.level + '，+1 技能点（左上角地图→人物加点）');
       // 【perf16】每升 1 级在人物身旁升起几圈金光（读档时的静默结算不会触发）
@@ -14248,13 +14252,13 @@ function normalizeProgress(showHint) {
     guard++;
   }
   if (player.level >= 999) {
-    player.xpNeed = Math.min(1000000, Math.round(50 * Math.pow(1.28, player.level - 1)));
+    player.xpNeed = Math.min(1000000, Math.round(30 * Math.pow(1.28, player.level - 1)));
     player.xp = Math.min(player.xp, player.xpNeed - 1);
     player.skillPoints = Math.min(player.skillPoints, 100000);
   } else if (guard >= 1000) {
     player.level = 1;
     player.xp = 0;
-    player.xpNeed = 50;
+    player.xpNeed = 30;
     player.skillPoints = 0;
   }
 }
