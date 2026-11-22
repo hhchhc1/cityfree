@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix558-heli-los3d-base-sortie">
+<meta name="cf-build" content="20261122-fix559-kick-cost-40">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -21210,7 +21210,7 @@ let kickCooldown = 0;
 function kickTarget() {
   if (kickCooldown > 0) return;
   if (gamePaused() || state !== 'walk' || grapple) return;
-  const KICK_COST = 70;   // 踢飞消耗体力（2026-11-22 用户要求：当前 20 的 3.5 倍 = 70）
+  const KICK_COST = 40;   // 踢飞消耗体力（2026-11-22 用户：3.5 倍太耗，改成原来的 2 倍 = 40）
   if (player.stamina < KICK_COST) { setHint('体力不足，无法踢飞'); return; }
   const t = nearestKickable();
   if (!t) return;
