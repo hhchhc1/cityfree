@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix563-death-cam-fine">
+<meta name="cf-build" content="20261122-fix564-packs-bag-weapon-icons">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -329,6 +329,7 @@
   .shop-item:hover { background: rgba(80,120,220,0.12); }
   .shop-item.selected { background: rgba(80,120,220,0.22); }
   .shop-item-icon { font-size: 22px; width: 32px; text-align: center; margin-right: 8px; }
+  .shop-item-icon svg { display: block; margin: 0 auto; }   /* 【fix564】矢量武器图标居中 */
   .shop-item-info { flex: 1; }
   .shop-item-name { font-size: 13px; color: #dde; }
   .shop-item-sub { font-size: 10px; color: #778; margin-top: 1px; }
@@ -14683,6 +14684,15 @@ function playNote(hz, at, dur, type, vol, master) {
 // 发放特殊奖励，返回要并进横幅的文字。called only inside achUnlock.
 function achvSpecialReward(def) {
   var extra = '';
+  // 【fix564】所有成就额外赠送血包 / 体力包（进背包，可随时使用）
+  try {
+    var _pk = ACH_PACK_REWARD[def.id];
+    if (_pk) {
+      for (var _k in _pk) { invAdd(_k, _pk[_k]); }
+      var _txt = achPackText(def.id);
+      if (_txt) extra += ' · 获得' + _txt;
+    }
+  } catch (ePk) {}
   try {
     if (def.id === 'justice') {
       // 坦克使用权：任务本身已解锁；这里确保标记为真并提示
@@ -14783,7 +14793,8 @@ function renderAchievements() {
     else if (d.id === 'dragon') tail = '进度 ' + Math.min(1000, ACHY.count.kills || 0) + '/1000';
     else if (d.id === 'folk') tail = '进度 ' + Math.min(20, ACHY.count.folk || 0) + '/20';
     else if (d.id === 'grapple1000') tail = '进度 ' + Math.min(1000, ACHY.count.grapples || 0) + '/1000';   // 【fix508】
-    else tail = '+' + d.gold + ' 金币 · +' + d.xp + ' 经验' + (d.reward ? ' · ' + d.reward : '');
+    else tail = '+' + d.gold + ' 金币 · +' + d.xp + ' 经验' + (d.reward ? ' · ' + d.reward : '')
+      + (achPackText(d.id) ? ' · ' + achPackText(d.id) : '');   // 【fix564】标注赠送的血包/体力包
     html += '<div class="achv-card ' + (done ? 'done' : 'lock') + '">' +
       '<div class="achv-t">' + (done ? '🏆 ' : '🔒 ') + d.name + '</div>' +
       '<div class="achv-d">' + d.desc + '</div>' +
@@ -16928,8 +16939,118 @@ const SHOP_CATS = [
   { key: 'clothes', icon: '👕', name: '服饰', items: [] },
   // 【2026-10-13 用户要求】"在商店里加一张消星卡" —— 消耗品单独开一栏，
   // 免得塞进武器/弹药里让人误解成能反复装备的东西。
-  { key: 'items',   icon: '🎫', name: '道具', items: [] }
+  { key: 'items',   icon: '🎫', name: '道具', items: [] },
+  // 【fix564】背包：放已经拥有的消耗品（成就奖励发的血包/体力包），可以直接使用
+  { key: 'bag',     icon: '🎒', name: '背包', items: [] }
 ];
+// ===== 【fix564·2026-11-22】血包 / 体力包 + 背包 =====
+// 用户："再在道具里加2个道具，分别是血包和体力包，购买即使用，可以回满血或者体力，
+//   但是额度有限一个昼夜只能买一次，再加一个背包的选项，里面放着已经拥有的道具，可以直接使用"
+var INV = { medkit: 0, stamkit: 0 };     // 背包里的消耗品数量（成就奖励会往里塞）
+var INV_BUY_DAY = {};                    // 每种道具上次购买的 worldDay（一个昼夜限购一次）
+const PACK_DEF = {
+  medkit:  { key: 'medkit',  name: '血包',   price: 600, desc: '立即把生命值回满。购买即使用，一个昼夜只能买一次。' },
+  stamkit: { key: 'stamkit', name: '体力包', price: 500, desc: '立即把体力回满。购买即使用，一个昼夜只能买一次。' }
+};
+function invCount(k) { return (INV && typeof INV[k] === 'number') ? INV[k] : 0; }
+function invAdd(k, n) { if (!INV) INV = {}; INV[k] = Math.max(0, invCount(k) + n); }
+// 从背包里使用一个（不花金币）
+function usePack(k) {
+  if (invCount(k) <= 0) return false;
+  if (k === 'medkit') {
+    if (player.hp >= player.maxHp) { setHint('生命值已经满了，先留着吧'); return false; }
+    player.hp = player.maxHp;
+    try { floatText('生命已回满', '#7dff9b'); } catch (e) {}
+    setHint('使用血包：生命值已回满');
+  } else {
+    if (player.stamina >= player.maxStamina) { setHint('体力已经满了，先留着吧'); return false; }
+    player.stamina = player.maxStamina;
+    try { floatText('体力已回满', '#8fd6ff'); } catch (e) {}
+    setHint('使用体力包：体力已回满');
+  }
+  invAdd(k, -1);
+  try { sfx('coin'); } catch (e) {}
+  try { saveGame(); } catch (e) {}
+  return true;
+}
+// 商店购买（买下即用，一个昼夜一次）
+function buyPack(k) {
+  const def = PACK_DEF[k];
+  if (!def) return;
+  if (INV_BUY_DAY[k] === worldDay) { setHint(def.name + '一个昼夜只能买一次，等明天再来'); return; }
+  if (k === 'medkit' && player.hp >= player.maxHp) { setHint('生命值已经满了，不用买血包'); return; }
+  if (k === 'stamkit' && player.stamina >= player.maxStamina) { setHint('体力已经满了，不用买体力包'); return; }
+  if (gold < def.price) { setHint('金币不够，还差 ' + (def.price - gold) + ' 金币'); return; }
+  gold -= def.price;
+  INV_BUY_DAY[k] = worldDay;
+  if (k === 'medkit') { player.hp = player.maxHp; try { floatText('生命已回满', '#7dff9b'); } catch (e) {} }
+  else { player.stamina = player.maxStamina; try { floatText('体力已回满', '#8fd6ff'); } catch (e) {} }
+  try { sfx('coin'); } catch (e) {}
+  setHint(def.name + '已使用（本昼夜不能再买）');
+  try { saveGame(); } catch (e) {}
+  try { renderShop(); } catch (e) {}
+}
+// ===== 【fix564】商店武器图标：用矢量剪影替代 emoji，外形贴近真实武器 =====
+var WEAPON_ICON_SVG = (function () {
+  // 统一 40×20 画布，渲染成 32×16（正好 2:1），形状都做得粗一点，
+  // 在 32px 的小格子里也能一眼认出是什么枪。
+  const A = '#e8edf4', B = '#a9b2bd', C = '#5a626c', D = '#c08a45', E = '#f0c25a';
+  const wrap = inner => '<svg viewBox="0 0 40 20" width="32" height="16" style="display:block;margin:0 auto">' + inner + '</svg>';
+  return {
+    pistol: wrap('<rect x="3" y="4" width="24" height="5.4" rx="1.2" fill="' + A + '"/><rect x="26" y="5" width="11" height="3.4" rx="1" fill="' + B + '"/><path d="M8 9.4h8.6l-2.6 9.6h-6.2z" fill="' + C + '"/><rect x="17" y="9.4" width="6.4" height="1.8" fill="' + C + '"/>'),
+    smg: wrap('<rect x="5" y="4" width="19" height="6.4" rx="1.4" fill="' + A + '"/><rect x="23" y="5.6" width="14" height="3.2" rx="1" fill="' + B + '"/><rect x="0.5" y="5" width="5.5" height="3.4" rx="1" fill="' + C + '"/><rect x="9" y="10" width="6" height="9" rx="1.2" fill="' + C + '"/><rect x="17" y="10" width="3.4" height="6" rx="1" fill="' + C + '"/>'),
+    shotgun: wrap('<rect x="8" y="3.6" width="30" height="3.4" rx="1" fill="' + B + '"/><rect x="6" y="7.6" width="26" height="2.8" rx="1" fill="' + A + '"/><rect x="16" y="7" width="8" height="4.6" rx="1.2" fill="' + C + '"/><path d="M0.5 3.6h8l-3 6.4h-5z" fill="' + D + '"/><path d="M3 10h6l-1.6 6.6H3z" fill="' + D + '"/>'),
+    rifle: wrap('<rect x="5" y="4.4" width="16" height="6.4" rx="1.4" fill="' + A + '"/><rect x="20" y="6" width="18" height="3" rx="1" fill="' + B + '"/><path d="M11 10.6h6l1.6 7h-6z" fill="' + C + '"/><path d="M0.5 5h6l-3 6h-3z" fill="' + C + '"/><rect x="22" y="3" width="8" height="2.2" rx="0.8" fill="' + C + '"/>'),
+    ak47: wrap('<rect x="5" y="4.4" width="16" height="6.4" rx="1.4" fill="' + A + '"/><rect x="20" y="6" width="17" height="3" rx="1" fill="' + B + '"/><path d="M11 10.6h6q3 4 1 8h-5.6q2-4-1.4-8z" fill="' + C + '"/><path d="M0.5 4.6h6.4l-3 6.6h-3.4z" fill="' + D + '"/><rect x="21" y="7.6" width="8" height="3.4" rx="1" fill="' + D + '"/><rect x="24" y="4.2" width="9" height="1.8" rx="0.8" fill="' + C + '"/>'),
+    sniper: wrap('<rect x="4" y="5" width="15" height="5.4" rx="1.2" fill="' + A + '"/><rect x="18" y="6.6" width="20" height="2.4" rx="1" fill="' + B + '"/><rect x="10" y="1.6" width="11" height="3.4" rx="1.6" fill="' + C + '"/><circle cx="12" cy="3.3" r="1" fill="' + A + '"/><path d="M0.5 5.6h5l-2.6 6.4H-0.4z" fill="' + C + '"/><rect x="12" y="10.4" width="4.6" height="4" rx="1" fill="' + C + '"/><path d="M17 13.4l-3 5.6M17 13.4l3 5.6" stroke="' + C + '" stroke-width="1.2" fill="none"/>'),
+    rpg: wrap('<rect x="2" y="6.6" width="29" height="6.4" rx="2.4" fill="' + A + '"/><path d="M31 9.8l8-4.4v8.8z" fill="' + B + '"/><rect x="13" y="13" width="4" height="6" rx="1" fill="' + C + '"/><rect x="21" y="13" width="3.4" height="4.4" rx="1" fill="' + C + '"/><rect x="8" y="4.2" width="4" height="2.6" rx="0.8" fill="' + C + '"/>'),
+    rpg4: wrap('<rect x="3" y="2.4" width="26" height="4" rx="1.6" fill="' + A + '"/><rect x="3" y="7.6" width="26" height="4" rx="1.6" fill="' + A + '"/><rect x="3" y="12.8" width="26" height="4" rx="1.6" fill="' + A + '"/><circle cx="32.6" cy="4.4" r="3.2" fill="' + B + '"/><circle cx="32.6" cy="9.6" r="3.2" fill="' + B + '"/><circle cx="32.6" cy="14.8" r="3.2" fill="' + B + '"/><rect x="8" y="16.8" width="4" height="3" rx="1" fill="' + C + '"/>'),
+    minigun: wrap('<rect x="3" y="5" width="9" height="9.4" rx="2" fill="' + A + '"/><circle cx="7.5" cy="9.7" r="2.6" fill="' + C + '"/><rect x="11" y="5.2" width="22" height="1.9" rx="0.8" fill="' + B + '"/><rect x="11" y="7.6" width="22" height="1.9" rx="0.8" fill="' + B + '"/><rect x="11" y="10" width="22" height="1.9" rx="0.8" fill="' + B + '"/><rect x="11" y="12.4" width="22" height="1.9" rx="0.8" fill="' + B + '"/><rect x="30" y="3.6" width="3.6" height="12.4" rx="1.4" fill="' + C + '"/><path d="M4 14.4l-2 4h3l2-4z" fill="' + C + '"/>'),
+    knife: wrap('<path d="M3 15L26 4l4 2.4L7 17z" fill="' + A + '"/><rect x="24" y="2.4" width="10" height="3.4" rx="1.4" fill="' + D + '" transform="rotate(-16 24 2.4)"/>'),
+    bat: wrap('<path d="M3 16L26 4l4 2.6L8 18.6z" fill="' + D + '"/><rect x="24" y="1.6" width="11" height="4" rx="1.8" fill="' + E + '" transform="rotate(-18 24 1.6)"/>'),
+    sword: wrap('<path d="M3 16L28 3l5 2.8L8 18z" fill="' + A + '"/><rect x="2" y="14.6" width="9" height="3.4" rx="1.2" fill="' + C + '" transform="rotate(-20 2 14.6)"/><rect x="0" y="16.4" width="5" height="2.8" rx="1" fill="' + D + '"/>'),
+    axe: wrap('<rect x="20" y="2" width="3.4" height="16" rx="1.2" fill="' + D + '"/><path d="M22 2.6c9-1.6 14 2 14 7.4s-6 9-14 6.6z" fill="' + A + '"/><path d="M22 2.6c-5 0-7 3.2-7 7.4s2 7.4 7 7.4z" fill="' + B + '"/>'),
+    hammer: wrap('<rect x="21" y="4" width="3.4" height="14" rx="1.2" fill="' + D + '"/><rect x="10" y="2" width="15" height="6.6" rx="1.6" fill="' + B + '"/><rect x="10" y="2" width="4.4" height="6.6" fill="' + A + '"/>'),
+    chainsaw: wrap('<rect x="4" y="6" width="12" height="8" rx="2" fill="' + E + '"/><rect x="16" y="7.4" width="22" height="4.4" rx="1.6" fill="' + B + '"/><path d="M17 12.2h21v1.4H17z" fill="' + C + '"/><rect x="7" y="13.6" width="7" height="4" rx="1.2" fill="' + C + '"/>'),
+    katana: wrap('<path d="M3 16.4C13 14 28 8 36 2l3 2.6C31 11 16 17 5 19z" fill="' + A + '"/><rect x="0" y="14.4" width="8" height="3.4" rx="1.2" fill="' + C + '" transform="rotate(-18 0 14.4)"/>'),
+    nunchaku: wrap('<rect x="5" y="2" width="3.6" height="12" rx="1.6" fill="' + D + '" transform="rotate(16 5 2)"/><rect x="24" y="2" width="3.6" height="12" rx="1.6" fill="' + D + '" transform="rotate(-16 24 2)"/><path d="M9 14q9 5 16-1" stroke="' + C + '" stroke-width="1.4" fill="none"/>'),
+    fist: wrap('<path d="M8 6h20a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-2a5 5 0 0 1 5-5z" fill="' + A + '"/><rect x="9" y="3" width="4" height="5" rx="2" fill="' + A + '"/><rect x="15" y="2" width="4" height="6" rx="2" fill="' + A + '"/><rect x="21" y="3" width="4" height="5" rx="2" fill="' + A + '"/><rect x="7" y="11" width="21" height="1.8" fill="' + C + '"/>')
+  };
+})();
+
+// 成就额外赠送的消耗品（血包/体力包），见 achvSpecialReward
+var ACH_PACK_REWARD = {
+  firstBlood:  { medkit: 1 },
+  spiderman:   { stamkit: 1 },
+  truth:       { medkit: 1 },
+  dress:       { stamkit: 1 },
+  racer:       { medkit: 2, stamkit: 2 },
+  stronger:    { medkit: 1 },
+  justice:     { medkit: 3, stamkit: 3 },
+  rebirth:     { medkit: 1 },
+  punish:      { medkit: 2 },
+  romance:     { stamkit: 1 },
+  football:    { medkit: 2, stamkit: 1 },
+  driver:      { stamkit: 1 },
+  labor:       { medkit: 1 },
+  newland:     { medkit: 2, stamkit: 2 },
+  folk:        { medkit: 3, stamkit: 3 },
+  pray:        { medkit: 2 },
+  weaponLover: { medkit: 3, stamkit: 1 },
+  fashion:     { medkit: 1, stamkit: 3 },
+  dragon:      { medkit: 5, stamkit: 5 },
+  perfect:     { medkit: 5, stamkit: 5 },
+  grapple1000: { medkit: 3, stamkit: 3 },
+  publicEnemy: { medkit: 3, stamkit: 3 }
+};
+function achPackText(id) {
+  const p = ACH_PACK_REWARD[id];
+  if (!p) return '';
+  const parts = [];
+  if (p.medkit) parts.push('血包×' + p.medkit);
+  if (p.stamkit) parts.push('体力包×' + p.stamkit);
+  return parts.join('、');
+}
 // 消星卡：1000 元，买下**立刻生效**（不用进背包、不用手动使用）
 const WANTED_CARD = { key: 'wantedcard', icon: '🎫', name: '消星卡', price: 1000 };
 // 【fix504】用户要求新增两张载具道具卡：
@@ -17077,7 +17198,7 @@ function buildShopData() {
     if (w.ammo) stats.push({ label: '弹药', val: AMMO[w.ammo].name });
     stats.push({ label: '价格', val: w.price + ' 💰' });
     SHOP_CATS[0].items.push({
-      key, icon: w.icon || '🔫', name: w.name, price: w.price, owned, equipped, stats,
+      key, icon: WEAPON_ICON_SVG[key] || w.icon || '🔫', name: w.name, price: w.price, owned, equipped, stats,
       desc: (w.type === 'gun' ? '远程武器，需要' + (w.ammo ? AMMO[w.ammo].name : '弹药') : '近战武器，无需弹药') + '。伤害 ' + w.dmg + (w.auto ? ' · 全自动' : ' · 半自动') + '，适合' + (w.type === 'gun' ? '中远距离' : '近身') + '战斗。'
         // 【2026-10-13 用户要求】把狙击枪的"杀人于无形"特性写进商店简介（文案挂在 WEAPONS[key].desc 上）
         + (w.desc ? '\n\n' + w.desc : '')
@@ -17201,6 +17322,23 @@ function buildShopData() {
     desc: '一次性道具，买下瞬间把当前正在驾驶的车辆耐久修到 100%，同时清掉燃烧和受损计时，旧烟火花会自然散去。'
       + '没在车上或骑的是自行车时不会扣钱；修好的车可以继续开，不需要回修理厂。'
   });
+  // 【fix564】血包 / 体力包：买下立刻回满，一个昼夜限购一次
+  for (const pk of ['medkit', 'stamkit']) {
+    const pd = PACK_DEF[pk];
+    const boughtToday = (INV_BUY_DAY[pk] === worldDay);
+    const isFull = (pk === 'medkit') ? (player.hp >= player.maxHp) : (player.stamina >= player.maxStamina);
+    SHOP_CATS[4].items.push({
+      key: pk, icon: (pk === 'medkit' ? '🩹' : '🥤'), name: pd.name, price: pd.price,
+      owned: false, equipped: false, consumable: true, daily: true,
+      stats: [
+        { label: '效果', val: (pk === 'medkit' ? '生命值回满' : '体力回满'), cls: 'pos' },
+        { label: '限购', val: boughtToday ? '本昼夜已购买' : '一个昼夜一次', cls: boughtToday ? 'neg' : '' },
+        { label: '背包存量', val: invCount(pk) + ' 个' },
+        { label: '价格', val: pd.price + ' 💰' }
+      ],
+      desc: pd.desc + '另外，完成成就会额外赠送血包 / 体力包，存进「背包」栏随时可以直接使用。'
+    });
+  }
   // 【fix303】传送卷轴 ×3（800 元一次，买下即传）
   for (const sc of TP_SCROLLS) {
     SHOP_CATS[4].items.push({
@@ -17225,6 +17363,32 @@ function buildShopData() {
     ],
     desc: '氮气加速引擎，装上后大幅提升赛车最高速度。买一次永久生效，可随时在车里按氮气键喷射。'
   });
+  // 【fix564】背包：列出身上已有的消耗品（成就奖励发的），可直接使用
+  SHOP_CATS[5].items = [];
+  for (const pk of ['medkit', 'stamkit']) {
+    const n = invCount(pk);
+    if (n <= 0) continue;
+    const pd = PACK_DEF[pk];
+    SHOP_CATS[5].items.push({
+      key: pk, icon: (pk === 'medkit' ? '🩹' : '🥤'), name: pd.name + ' ×' + n, price: 0,
+      owned: true, equipped: false, consumable: true, bag: true, bagCount: n,
+      stats: [
+        { label: '数量', val: n + ' 个', cls: 'pos' },
+        { label: '效果', val: (pk === 'medkit' ? '生命值回满' : '体力回满') },
+        { label: '来源', val: '成就奖励' }
+      ],
+      desc: pd.desc + '背包里的道具不花金币，点下面的「使用」立刻生效。'
+    });
+  }
+  if (!SHOP_CATS[5].items.length) {
+    SHOP_CATS[5].items.push({
+      key: '__bagempty', icon: '🎒', name: '背包是空的', price: 0,
+      owned: true, equipped: false, bagEmpty: true,
+      stats: [{ label: '说明', val: '完成成就会赠送血包 / 体力包' }],
+      desc: '背包里还没有道具。完成任意成就（成就面板里每个成就都标注了赠送的血包 / 体力包数量）就会自动放进这里；'
+        + '也可以在「道具」栏直接购买血包、体力包（买下即用，一个昼夜限购一次）。'
+    });
+  }
 }
 
 // ========== 商店 3D 预览：直接复用游戏里的模型工厂，不用任何图片/emoji ==========
@@ -17597,7 +17761,16 @@ function renderShopDetail(item) {
   }
   // 【2026-10-13】消耗品（消星卡）：按钮写"使用"而不是"购买"，
   // 让玩家一眼看出这是刷卡当场生效的东西，而不是买来放进仓库的装备。
-  if (item.consumable) {
+  // 【fix564】背包栏：显示"使用"（不花金币），满了/空背包给出对应提示
+  if (shopCat === 'bag') {
+    if (item.bagEmpty) { btnClass = 'no-buy'; btnText = '背包是空的'; }
+    else {
+      const _full = (item.key === 'medkit') ? (player.hp >= player.maxHp) : (player.stamina >= player.maxStamina);
+      if (_full) { btnClass = 'no-buy'; btnText = '已经满了，先留着'; }
+      else { btnClass = 'can-buy'; btnText = '使用（背包 ×' + invCount(item.key) + '）'; btnAct = 'usebag'; }
+    }
+  }
+  else if (item.consumable) {
     // 【fix507】免费传送卷（发现新大陆成就奖励）：有库存时按钮显示"免费使用 ×N"，且无视金币不足
     var _achvFree = 0;
     try { if (ACHY.tpFree && typeof ACHY.tpFree[item.key] === 'number') _achvFree = ACHY.tpFree[item.key]; } catch (eF) {}
@@ -17606,15 +17779,16 @@ function renderShopDetail(item) {
     else { btnClass = 'no-buy'; btnText = '金币不足'; }
   }
   el.innerHTML =
-    '<div class="shop-view" id="shopView"><div class="shop-view-tip">3D 实物模型</div></div>' +
+    (shopCat === 'bag' ? '' : '<div class="shop-view" id="shopView"><div class="shop-view-tip">3D 实物模型</div></div>') +
     '<div class="shop-detail-name">' + item.name + '</div>' +
-    '<div class="shop-detail-type">' + (shopCat === 'weapons' ? '武器' : shopCat === 'ammo' ? '弹药' : shopCat === 'cars' ? '车辆' : shopCat === 'items' ? '道具' : '服饰') + '</div>' +
+    '<div class="shop-detail-type">' + (shopCat === 'weapons' ? '武器' : shopCat === 'ammo' ? '弹药' : shopCat === 'cars' ? '车辆' : shopCat === 'items' ? '道具' : shopCat === 'bag' ? '背包' : '服饰') + '</div>' +
     '<div class="shop-detail-stats">' + statsHtml + '</div>' +
     '<div class="shop-detail-desc">' + item.desc + '</div>' +
     (item.conflictNote ? '<div class="shop-detail-desc" style="color:#ffb74d">' + item.conflictNote + '</div>' : '') +
     '<div class="shop-buy-btn ' + btnClass + '" id="shopBuyBtn">' + btnText + '</div>';
-  shopViewShow(shopCat, item.key);
+  if (shopCat === 'bag') { try { shopViewStop(); } catch (e) {} } else shopViewShow(shopCat, item.key);
   document.getElementById('shopBuyBtn').addEventListener('click', () => {
+    if (btnAct === 'usebag') { if (usePack(item.key)) renderShop(); else renderShop(); return; }
     if (btnAct === 'recall') { switchToCar(item.key); renderShop(); return; }
     if (btnAct === 'unequip') { unequipClothes(item.key); return; }
     if (btnAct === 'equip') {
@@ -17631,6 +17805,7 @@ function renderShopDetail(item) {
         if (item.key === 'vehiclecard') useVehicleCard();
         else if (item.key === 'repaircard') useRepairCard();
         else if (item.key === 'wantedcard') useWantedCard();
+        else if (item.key === 'medkit' || item.key === 'stamkit') buyPack(item.key);   // 【fix564】血包/体力包
         else if (item.key === 'nitro') buyClothes('nitro');
         else useTpScroll(item.key);
       }      // 【2026-10-13】消星卡：买下即用
@@ -27707,6 +27882,8 @@ function saveGame() {
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
     progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
+    inventory: { medkit: invCount('medkit'), stamkit: invCount('stamkit') },   // 【fix564】背包消耗品
+    invBuyDay: { medkit: (INV_BUY_DAY.medkit === undefined ? -1 : INV_BUY_DAY.medkit), stamkit: (INV_BUY_DAY.stamkit === undefined ? -1 : INV_BUY_DAY.stamkit) },
     hqGuards: GANG_HQ_GUARDS.map(g => ({ alive: !!g.alive, hp: g.hp })),
     questState: serializeQuestState(),
     islandSign: { text: islandSignState.text, board: islandSignState.board, txt: islandSignState.txt, glow: !!islandSignState.glow },   // 【fix16】南岛立牌自定义内容
@@ -27834,6 +28011,15 @@ function restoreSaveGame() {
       if (data.achv.tpFree && typeof data.achv.tpFree === 'object') {
         for (var _tk in ACHY.tpFree) if (typeof data.achv.tpFree[_tk] === 'number') ACHY.tpFree[_tk] = Math.max(0, Math.floor(data.achv.tpFree[_tk]));
       }
+    }
+    // 【fix564】背包消耗品 + 每昼夜限购记录
+    if (data.inventory && typeof data.inventory === 'object') {
+      INV.medkit = saveNumber(data.inventory.medkit, 0, 0, 9999);
+      INV.stamkit = saveNumber(data.inventory.stamkit, 0, 0, 9999);
+    }
+    if (data.invBuyDay && typeof data.invBuyDay === 'object') {
+      if (typeof data.invBuyDay.medkit === 'number') INV_BUY_DAY.medkit = data.invBuyDay.medkit;
+      if (typeof data.invBuyDay.stamkit === 'number') INV_BUY_DAY.stamkit = data.invBuyDay.stamkit;
     }
   } catch (eA) { try { console.warn('[achv load]', eA); } catch (eA2) {} }
   // 任务状态（接取中的任务要恢复进度，完成的任务不再显示绿色光柱）
