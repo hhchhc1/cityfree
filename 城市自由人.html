@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix555-tank-blast-armor">
+<meta name="cf-build" content="20261122-fix556-fp-arm-jersey">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -9195,6 +9195,15 @@ function setPlayerJersey(team) {
       m.color.copy(target);
     });
     window.__socKitPainted = true;
+    // 【fix556】第一人称手臂的袖子（不在 person 子树里）单独涂成队色
+    try {
+      for (const m of (window.__fpSleeveMats || [])) {
+        if (!m || !m.color) continue;
+        if (m.userData.__socOrig === undefined) m.userData.__socOrig = m.color.getHex();
+        m.color.copy(target);
+        if (m.emissive) m.emissive.setHex(team === 1 ? 0x0b1b3a : 0x3a0b0b);
+      }
+    } catch (e) {}
   } catch (err) {}
 }
 function restoreSocKit() {
@@ -9215,6 +9224,14 @@ function restoreSocKit() {
       o.material.color.setHex(v);
     }
     window.__socKitPainted = false;
+    // 【fix556】第一人称袖子还原成默认蓝色
+    try {
+      for (const m of (window.__fpSleeveMats || [])) {
+        if (!m || !m.color || m.userData.__socOrig === undefined) continue;
+        m.color.setHex(m.userData.__socOrig);
+        if (m.emissive) m.emissive.setHex(0x10263a);
+      }
+    } catch (e) {}
   } catch (err) {}
 }
 // 【fix233】真正离场时兜底调用
@@ -26959,6 +26976,19 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   function makeFpArm() {
     const g = new THREE.Group();
     const sleeve = new THREE.MeshLambertMaterial({ color: 0x2980b9, emissive: 0x10263a });
+    // 【fix556·2026-11-22·用户："踢球红方时，第一人称的胳膊还是蓝色！"】
+    // 第一人称手臂是挂在相机前的**独立 rig**（fpViewRig），不属于 person 子树，
+    // 所以 setPlayerJersey() 遍历 person 换球衣时永远涂不到它。这里把袖子材质登记到全局，
+    // 踢球时由 setPlayerJersey / restoreSocKit 一起换色 / 还原。
+    (window.__fpSleeveMats || (window.__fpSleeveMats = [])).push(sleeve);
+    // 如果此刻正在踢球（第一人称手臂是进比赛后才第一次创建的），直接按当前队色上色
+    try {
+      if (window.__socKitPainted && typeof SOC !== 'undefined' && SOC && SOC.playerTeam) {
+        sleeve.userData.__socOrig = 0x2980b9;
+        sleeve.color.setHex(SOC.playerTeam === 1 ? 0x2f6fe0 : 0xe0433a);
+        sleeve.emissive.setHex(SOC.playerTeam === 1 ? 0x0b1b3a : 0x3a0b0b);
+      }
+    } catch (e) {}
     const glove  = new THREE.MeshLambertMaterial({ color: 0x1a1a1a, emissive: 0x0a0a0a });
     const band   = new THREE.MeshLambertMaterial({ color: 0x00d4ff, emissive: 0x004455 });
     // 【fix522·2026-11-17·用户：『右胳膊看着好像就是断的』】
