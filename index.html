@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix564-packs-bag-weapon-icons">
+<meta name="cf-build" content="20261122-fix565-death-cam-3.3s">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -26305,16 +26305,20 @@ function update(dt) {
   //   让玩家看清人物死亡时的状态"】
   // 死亡瞬间冻结整个世界（NPC/车流/计时全停），镜头从贴地仰视一路抬到约 4.5 米的第三人称俯视，
   // 先快后慢（easeOut），让玩家看清自己是怎么倒下的。1 秒结束后才走 arrest() 的罚款/复活。
+  // 【fix565·2026-11-22·用户："死亡视角要从低到高拉起来，持续时间变为3.3秒"】
+  // 死亡瞬间冻结整个世界（NPC/车流/计时全停），镜头从贴地仰视（约 0.45m）一路匀速抬到约 5.6 米的
+  // 第三人称俯视，全程 3.3 秒；结束才走 arrest() 的罚款/复活。
   if (deathCam) {
     deathCam.t += dt;
-    const k = Math.min(1, deathCam.t / 1.0);
-    const ease = 1 - Math.pow(1 - k, 2.2);
-    const dist = 5.6 - ease * 2.2;                       // 边升边靠近
-    const cy = deathCam.y + 0.55 + ease * 4.0;
+    const DEATH_CAM_DUR = 3.3;
+    const k = Math.min(1, deathCam.t / DEATH_CAM_DUR);
+    const ease = 1 - Math.pow(1 - k, 2.0);               // 起步就抬、越到后面越稳
+    const dist = 6.4 - ease * 3.0;                       // 边升边靠近
+    const cy = deathCam.y + 0.45 + ease * 5.2;           // 0.45m → 5.65m，从下到上
     camera.position.set(deathCam.x + Math.sin(deathCam.ang) * dist, cy, deathCam.z + Math.cos(deathCam.ang) * dist);
-    camera.lookAt(deathCam.x, deathCam.y + 0.45 + ease * 0.25, deathCam.z);
+    camera.lookAt(deathCam.x, deathCam.y + 0.4 + ease * 0.3, deathCam.z);
     if (Math.abs(camera.fov - 55) > 0.05) { camera.fov = 55; camera.updateProjectionMatrix(); }
-    if (deathCam.t >= 1.0) {
+    if (deathCam.t >= DEATH_CAM_DUR) {
       deathCam = null;
       try { person.rotation.x = 0; } catch (e) {}
       if (Math.abs(camera.fov - 60) > 0.05) { camera.fov = 60; camera.updateProjectionMatrix(); }
