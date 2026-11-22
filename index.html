@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix557-shotgun-kick-cost">
+<meta name="cf-build" content="20261122-fix558-heli-los3d-base-sortie">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -12557,12 +12557,12 @@ function updateFixedVehicleRecall(dt) {
   // 【fix493】自愈：早先 fix490 会把玩家开过的 fixed 载具连 mesh 一起删掉，
   // 但 window.militaryHelicopter 引用仍在 —— 归位逻辑照跑、玩家却再也看不见飞机。
   // 这里在归位前把它挂回场景/数组，旧存档里已经"丢"的直升机也能自己回来。
-  if (heli && !heli.exploded) {
+  if (heli && !heli.exploded && !heli._sortie) {
     if (heli.group && !heli.group.parent) scene.add(heli.group);
     if (cars.indexOf(heli) < 0) cars.push(heli);
     heli.playerUsed = false; heli.playerUsedDay = undefined;
   }
-  if (pad && heli && !heli.exploded) {
+  if (pad && heli && !heli.exploded && !heli._sortie) {
     if (state === 'drive' && currentCar === heli) heli.offHomeT = 0;
     else if (Math.hypot(heli.x - pad.x, heli.z - pad.z) < 12) heli.offHomeT = 0;
     else {
@@ -12581,7 +12581,7 @@ heli.offHomeT = (heli.offHomeT || 0) + dt;
   // 坦克和直升机一样是 fixed 任务车：存档会写 x/z，开到别处存档就永远停在那了。
   // 所以和直升机用同一套逻辑，停在基地外面超过阈值就自己回去。
   const tank = window.militaryTank;
-  if (tank && !tank.exploded && tank.homeX !== undefined) {
+  if (tank && !tank.exploded && tank.homeX !== undefined && !tank._sortie) {
     if (state === 'drive' && currentCar === tank) tank.offHomeT = 0;
     else if (Math.hypot(tank.x - tank.homeX, tank.z - tank.homeZ) < 14) tank.offHomeT = 0;
     else {
@@ -22212,6 +22212,48 @@ function _segHitsBox2D(x1, z1, dx, dz, b) {
   // tmax>0.02：墙在身后不算；tmin<0.98：墙贴在目标身上不算（避免目标背靠墙时"永远打不中"）
   return tmax > 0.02 && tmin < 0.98;
 }
+// 【fix558·2026-11-22·用户："这个军方直升机怎么对玩家造不成伤害有时候"】
+// 根因：直升机开火用的是 2D 的 hasLineOfSight —— 只要平面连线上压着任何一栋楼（哪怕楼顶只有 3 米）
+// 就判定"没有视线"，于是悬在 25 米高空俯射的直升机经常被地面的矮墙/护栏/门楼"挡枪"。
+// 这里补一个真正的 3D 线段-AABB 求交：只有当楼体确实穿过弹道（高度也算）时才算被挡。
+function hasLineOfSight3D(x1, z1, y1, x2, z2, y2) {
+  const dx = x2 - x1, dz = z2 - z1, dy = y2 - y1;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.01) return true;
+  const margin = 2;
+  const rayMinX = Math.min(x1, x2), rayMaxX = Math.max(x1, x2);
+  const rayMinZ = Math.min(z1, z2), rayMaxZ = Math.max(z1, z2);
+  const hitBox = (b) => {
+    const by0 = (typeof b.minY === 'number') ? b.minY : (b.bottom || 0);
+    const by1 = (typeof b.top === 'number') ? b.top : by0 + 1;
+    if (!(by1 > by0)) return false;
+    let tmin = 0, tmax = 1;
+    const axes = [[x1, dx, b.minX, b.maxX], [z1, dz, b.minZ, b.maxZ], [y1, dy, by0, by1]];
+    for (const ax of axes) {
+      const o = ax[0], dd = ax[1], lo = ax[2], hi = ax[3];
+      if (Math.abs(dd) < 1e-6) { if (o < lo || o > hi) return false; }
+      else {
+        let t1 = (lo - o) / dd, t2 = (hi - o) / dd;
+        if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; }
+        if (t1 > tmin) tmin = t1;
+        if (t2 < tmax) tmax = t2;
+        if (tmin > tmax) return false;
+      }
+    }
+    return tmax > 0.02 && tmin < 0.98;
+  };
+  const cells = []; _gridAround((x1 + x2) / 2, (z1 + z2) / 2, d / 2 + margin, cells);
+  for (const ci of cells) for (const b of _gridBld[ci]) {
+    if (b.maxX < rayMinX - margin || b.minX > rayMaxX + margin || b.maxZ < rayMinZ - margin || b.minZ > rayMaxZ + margin) continue;
+    if (hitBox(b)) return false;
+  }
+  if (rayMaxX > 900) for (const b of buildings) {   // 新城的楼不在主城网格里
+    if (b.minX < 900) continue;
+    if (b.maxX < rayMinX - margin || b.minX > rayMaxX + margin || b.maxZ < rayMinZ - margin || b.minZ > rayMaxZ + margin) continue;
+    if (hitBox(b)) return false;
+  }
+  return true;
+}
 function hasLineOfSight(x1, z1, x2, z2, ignoreVeh) {
   const dx = x2 - x1, dz = z2 - z1, d = Math.hypot(dx, dz);
   if (d < 0.01) return true;
@@ -25600,6 +25642,24 @@ var milTankCd = 0;   // 被打爆后的补给冷却：否则一炸就原地刷�
 function playerInHeliNow() {
   return state === 'drive' && currentCar && !currentCar.exploded && currentCar.isHelicopter;
 }
+// 【fix558·2026-11-22】五星军方坦克插一面蓝旗（和玩家那辆军用坦克区分开）
+function addTankBlueFlag(g) {
+  try {
+    const T = g.userData.turret || g;
+    const poleM = new THREE.MeshLambertMaterial({ color: 0x9aa0a6 });
+    const clothM = new THREE.MeshLambertMaterial({ color: 0x2f6bff, emissive: 0x0a1a44, side: THREE.DoubleSide });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.7, 6), poleM);
+    pole.position.set(-1.05, 1.35, -1.25);
+    T.add(pole);
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.58), clothM);
+    cloth.position.set(-1.05, 1.85, -1.62);
+    cloth.rotation.y = Math.PI / 2;
+    T.add(cloth);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), poleM);
+    knob.position.set(-1.05, 2.2, -1.25);
+    T.add(knob);
+  } catch (e) {}
+}
 function spawnMilTank() {
   if (typeof window.__buildTankModel !== 'function') return null;
   const pad = window.MIL_TANKPAD || { x: -255, y: 2.5, z: 140 };
@@ -25609,6 +25669,7 @@ function spawnMilTank() {
   // 和玩家的坦克错开 9m（原来错开 12m 会顶进基地东南角，两个方向的墙同时把它夹死）
   const sx = pad.x - 9, sz = pad.z;
   g.position.set(sx, pad.y + 0.8, sz);
+  addTankBlueFlag(g);   // 【fix558】插蓝旗
   scene.add(g);
   milTank = {
     group: g, x: sx, y: pad.y + 0.8, z: sz, angle: 0, turretRel: 0,
@@ -25629,6 +25690,40 @@ function clearMilTank() {
   try { scene.remove(milTank.group); } catch (e) {}
   const i = cars.indexOf(milTank); if (i >= 0) cars.splice(i, 1);
   milTank = null;
+}
+// 【fix558·2026-11-22·用户："如果5星时玩家没有驾驶飞机或坦克，就直接出动基地原有的飞机坦克，
+//   这时候去军事基地看就没有在那里等着的飞机或者坦克了"】
+// 做法：五星期间把停机坪上停着的直升机 / 坦克"派出去" —— 隐藏 + 从 cars 摘掉（不能再上车），
+// 玩家跑到军事基地看就是空的；星级掉回 4 星再把它们放回原位。
+// 玩家正驾驶的那一辆不动（那是他自己抢的，不算"在基地等着"）。
+var _baseSortie = false;
+function syncBaseVehicleSortie() {
+  const inFive = wanted >= 5 - 1e-6;
+  const h = window.militaryHelicopter, t = window.militaryTank;
+  if (inFive && !_baseSortie) {
+    _baseSortie = true;
+    for (const v of [h, t]) {
+      if (!v || v.exploded) continue;
+      if (state === 'drive' && currentCar === v) continue;
+      v._sortie = true;
+      if (v.group) v.group.visible = false;
+      const i = cars.indexOf(v); if (i >= 0) cars.splice(i, 1);
+    }
+  } else if (!inFive && _baseSortie) {
+    _baseSortie = false;
+    for (const v of [h, t]) {
+      if (!v || v.exploded || !v._sortie) continue;
+      v._sortie = false;
+      if (v.group) v.group.visible = true;
+      const pad = (v === h) ? window.MIL_HELIPAD : window.MIL_TANKPAD;
+      if (pad) {
+        v.x = pad.x; v.z = pad.z; v.angle = 0;
+        v.flyHeight = 0; v.flyVy = 0;
+        if (v.group) { v.group.position.set(pad.x, pad.y + (v === h ? 2.5 : 0.8), pad.z); v.group.rotation.set(0, 0, 0); }
+      }
+      if (cars.indexOf(v) < 0) cars.push(v);
+    }
+  }
 }
 function updateMilTank(dt) {
   if (milTankCd > 0) milTankCd = Math.max(0, milTankCd - dt);
@@ -25812,9 +25907,9 @@ function fireMilHeliGun(pp, d) {
   const ez = pp.z + (Math.random() - 0.5) * 3.4;
   spawnTracer(milHeli.x + sx, fy, milHeli.z + sz, ex, ty, ez, 'cannon');
   spawnBurst(milHeli.x + sx, milHeli.z + sz, 0xffee88, 2, fy);
-  // 有掩体就打不中（hasLineOfSight 是平面判定，直升机被楼挡在一侧时同样打不中）
-  if (hasLineOfSight(milHeli.x, milHeli.z, pp.x, pp.z, false)) {
-    const hitChance = Math.max(0.12, 0.34 - d * 0.004);
+  // 【fix558】改成 3D 视线：只有楼体真的穿过弹道才算被挡，地面矮墙不再"挡枪"
+  if (hasLineOfSight3D(milHeli.x, milHeli.z, fy, pp.x, pp.z, pp.y + 1.0)) {
+    const hitChance = Math.max(0.16, 0.42 - d * 0.004);
     if (Math.random() < hitChance) hurtPlayer(1, true);
   }
 }
@@ -25945,9 +26040,9 @@ function updateMilHeli(dt) {
       setHint('军方直升机已锁定你，开始攻击！');
     }
     if (milHeli.state === 'engaged') {
-      // 已交火：绕着玩家盘旋，保持 27m 左右，像真的在咬人
+      // 已交火：绕着玩家盘旋，保持 22m 左右，像真的在咬人（比原来的 27m 更近，视野里更明显）
       milHeli.orbit += dt * 0.55;
-      const keep = 27;
+      const keep = 22;
       const tx = pp.x + Math.cos(milHeli.orbit) * keep;
       const tz = pp.z + Math.sin(milHeli.orbit) * keep;
       nx = milHeli.x + (tx - milHeli.x) * Math.min(1, dt * 1.1);
@@ -25963,7 +26058,10 @@ function updateMilHeli(dt) {
     // 玩家上方 24m 是"想飞的高度"，但楼比这高时必须让位给楼顶 + 4.5m。
     // 再压一个"玩家上方 80m"的升限：CBD 有 280m 的塔，真按楼顶爬会飞到看不见的地方，
     // 那样既打不着也没观赏性 —— 干脆卡在升限上贴着楼面悬停，视线被楼挡住就不开火。
-    let wantY = Math.min(Math.max(pp.y + 24, clearNow + 4.5, clearNext + 4.5), pp.y + 80);
+    // 【fix558·2026-11-22·用户："让直升机的在玩家眼中的视野多一些"】
+    // 悬停高度 24 → 19 米、盘旋半径 27 → 22 米：飞机在画面里明显更大、更容易被看到，
+    // 同时把升限从 80 压到 60，避免在 CBD 贴着 280m 的塔飞到看不见的地方。
+    let wantY = Math.min(Math.max(pp.y + 19, clearNow + 4.5, clearNext + 4.5), pp.y + 60);
     if (!isFinite(wantY)) wantY = terrainHeight(milHeli.x, milHeli.z) + 24;   // 【fix554】NaN 兜底
     const dy = wantY - milHeli.y;
     const riseRate = 30, sinkRate = 12;   // 爬升比下降快，看起来才像真在拉升避让
@@ -26810,6 +26908,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   try { updateMilHeli(dt); } catch (e) { console.error('[mil heli]', e); }
   // 【fix545】五星 + 玩家占了直升机 → 军方改派坦克（同样放在载具大 try 之外）
   try { updateMilTank(dt); } catch (e) { console.error('[mil tank]', e); }
+  // 【fix558】五星期间基地停机坪上的飞机/坦克"已出动"，基地里不再有停着的
+  try { syncBaseVehicleSortie(); } catch (e) { console.error('[base sortie]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
   try { updateFlying(dt); } catch(e) { console.error('[Flying update error]', e); }
   try { updateRagdolls(dt); } catch(e) { console.error('[Ragdolls update error]', e); }
