@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix565-death-cam-3.3s">
+<meta name="cf-build" content="20261122-fix566-euro-villa-garage">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -5221,116 +5221,262 @@ function makeHomeWallTexture() {
   return tex;
 }
 function buildPlayerHome() {
-  const hx = -104, hz = -68, gy = terrainHeight(hx, hz);
-  const hw = 13, hd = 10, wh = 4.2, t = 0.35;   // 内空可进入的房子（四面薄墙 + 门洞，墙稍高以架高高屋顶）
-  const sidingTex = makeHomeWallTexture(); sidingTex.repeat.set(3, 1);
-  const wallM = new THREE.MeshLambertMaterial({ map: sidingTex });
+  // 【fix566·2026-11-22·用户："把玩家的房子改成欧式小二层洋楼的风格，还有车库也和房子一起，
+  //   可以把这块地皮占用大一点，精美一点"】
+  // 重做成欧式二层小洋楼：
+  //   · 米白抹灰外墙 + 白色壁柱/窗套/腰线 + 深灰坡屋顶 + 老虎窗 + 烟囱
+  //   · 二层阳台（带栏杆）+ 门廊立柱 + 门口台阶
+  //   · 车库并入主楼东侧（共用一道墙），前方铺石材前庭与车道
+  //   · 占地从 13×10 扩到 17×12（车库仍是 11×8，位置不动，卷帘门动画/停车位全部照旧）
+  const hx = -104, hz = -69, gy = terrainHeight(hx, hz);
+  const hw = 17, hd = 12, t = 0.4;
+  const floor1H = 3.6, floor2H = 3.2, wh = floor1H + floor2H;   // 总墙高 6.8
+  const wallM = new THREE.MeshLambertMaterial({ color: 0xefe6d5 });   // 米白抹灰
+  const trimM = new THREE.MeshLambertMaterial({ color: 0xfbf7ef });   // 白色线脚
+  const stoneM = new THREE.MeshLambertMaterial({ color: 0xd9d3c5 });  // 石材基座/台阶
   const glassM = new THREE.MeshLambertMaterial({ color: 0x35506b });
-  const frameM = new THREE.MeshLambertMaterial({ color: 0xf6f1e6 });
-  // 木地板
+  const roofM = new THREE.MeshLambertMaterial({ color: 0x4a5560 });   // 深灰石板瓦
+  const ridgeM = new THREE.MeshLambertMaterial({ color: 0x39424b });
+  const doorM = new THREE.MeshLambertMaterial({ color: 0x6d4a30 });
+  const hedgeM = new THREE.MeshLambertMaterial({ color: 0x3f6b34 });
+  // ---- 基座（只做外墙一圈，室内地面保持和地形齐平，否则人会被埋进台基里）----
+  const pbH = 0.45, pbW = 0.55;
+  for (const zz of [hz + hd / 2 + pbW / 2, hz - hd / 2 - pbW / 2]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(hw + pbW * 2, pbH, pbW), stoneM);
+    p.position.set(hx, gy + pbH / 2, zz); scene.add(p);
+  }
+  for (const xx of [hx - hw / 2 - pbW / 2, hx + hw / 2 + pbW / 2]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(pbW, pbH, hd + pbW * 2), stoneM);
+    p.position.set(xx, gy + pbH / 2, hz); scene.add(p);
+  }
   const floor = new THREE.Mesh(new THREE.BoxGeometry(hw - t, 0.12, hd - t), new THREE.MeshLambertMaterial({ color: 0xb08a5a }));
   floor.position.set(hx, gy + 0.06, hz); scene.add(floor);
-  function wMesh(w, h, d, x, y, z) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallM);
+  const fy = gy + 0.06;   // 室内地面高度（贴地，不会把人埋进去）
+  function wMesh(w, h, d, x, y, z, mat) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat || wallM);
     m.position.set(x, y, z); scene.add(m);
-    buildings.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, bottom: gy, top: gy + wh });
+    buildings.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, bottom: gy, top: y + h / 2 });
   }
-  // 后墙（北）+ 左右墙
-  wMesh(hw + 2 * t, wh, t, hx, gy + wh / 2, hz - hd / 2);
-  wMesh(t, wh, hd, hx - hw / 2, gy + wh / 2, hz);
-  wMesh(t, wh, hd, hx + hw / 2, gy + wh / 2, hz);
-  // 前墙（南）分成左右两段，中间留门洞
-  const dw = 2.4, dh = 2.5, segW = (hw - dw) / 2;
-  wMesh(segW, wh, t, hx - dw / 2 - segW / 2, gy + wh / 2, hz + hd / 2);
-  wMesh(segW, wh, t, hx + dw / 2 + segW / 2, gy + wh / 2, hz + hd / 2);
-  // 门楣（门洞上方，仅视觉，悬空不挡路）+ 木门（小门板，铰在西侧门框边，向内半开，不挡出门口）
+  // ---- 四面外墙（前墙留门洞）----
+  wMesh(hw + 2 * t, wh, t, hx, fy + wh / 2, hz - hd / 2);            // 北（后）
+  wMesh(t, wh, hd, hx - hw / 2, fy + wh / 2, hz);                    // 西
+  wMesh(t, wh, hd, hx + hw / 2, fy + wh / 2, hz);                    // 东（与车库共用）
+  const dw = 2.6, dh = 2.9, segW = (hw - dw) / 2;
+  wMesh(segW, wh, t, hx - dw / 2 - segW / 2, fy + wh / 2, hz + hd / 2);   // 前（门西）
+  wMesh(segW, wh, t, hx + dw / 2 + segW / 2, fy + wh / 2, hz + hd / 2);   // 前（门东）
   const lintel = new THREE.Mesh(new THREE.BoxGeometry(dw, wh - dh, t), wallM);
-  lintel.position.set(hx, gy + (wh + dh) / 2, hz + hd / 2); scene.add(lintel);
-  const hingeX = hx - dw / 2;   // 西侧门框边（铰链位置）
-  const doorW = 1.15, doorH = dh - 0.3;
+  lintel.position.set(hx, fy + (wh + dh) / 2, hz + hd / 2); scene.add(lintel);
+  // 白色门套 + 门楣
+  for (const sx of [-1, 1]) {
+    const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.26, dh + 0.2, 0.5), trimM);
+    jamb.position.set(hx + sx * (dw / 2 + 0.1), fy + (dh + 0.2) / 2, hz + hd / 2 + 0.06); scene.add(jamb);
+  }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(dw + 0.7, 0.3, 0.5), trimM);
+  head.position.set(hx, fy + dh + 0.28, hz + hd / 2 + 0.06); scene.add(head);
+  // 木门（铰在西侧，向内半开）
+  const hingeX = hx - dw / 2;
+  const doorW = 1.2, doorH = dh - 0.35;
   const doorPivot = new THREE.Group();
-  doorPivot.position.set(hingeX, gy + 0.05, hz + hd / 2 - t / 2);
-  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 0.08), new THREE.MeshLambertMaterial({ color: 0x7a4a2b }));
-  doorPanel.position.set(doorW / 2, doorH / 2, 0);   // 从铰链向东伸出的门板
+  doorPivot.position.set(hingeX, fy + 0.02, hz + hd / 2 - t / 2);
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 0.09), doorM);
+  doorPanel.position.set(doorW / 2, doorH / 2, 0);
   doorPivot.add(doorPanel);
-  doorPivot.rotation.y = -1.2;   // 向内半开
+  const dKnob = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), new THREE.MeshLambertMaterial({ color: 0xd8b46a }));
+  dKnob.position.set(doorW - 0.15, doorH * 0.5, 0.08); doorPivot.add(dKnob);
+  doorPivot.rotation.y = -1.2;
   scene.add(doorPivot);
   const dBox = new THREE.Box3().setFromObject(doorPivot);
-  buildings.push({ minX: dBox.min.x, maxX: dBox.max.x, minZ: dBox.min.z, maxZ: dBox.max.z, bottom: gy, top: gy + doorH });
-  // 高高的尖顶人字屋顶：屋檐高于第三人称相机（不穿模），尖顶够高让主角感受有房
-  const homeRoofM = new THREE.MeshLambertMaterial({ color: 0xb0523f });
-  const homeRidgeM = new THREE.MeshLambertMaterial({ color: 0x8a3b2f });
-  const eaveY = gy + wh, rise = 4.5, halfW = hw * 0.5 + 0.6, len = hd + 0.6;
-  const pitch = Math.atan2(rise, halfW), hyp = Math.hypot(halfW, rise);
+  buildings.push({ minX: dBox.min.x, maxX: dBox.max.x, minZ: dBox.min.z, maxZ: dBox.max.z, bottom: gy, top: fy + doorH });
+  // ---- 二层楼板 + 腰线 ----
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(hw - 0.1, 0.3, hd - 0.1), new THREE.MeshLambertMaterial({ color: 0xe4dccb }));
+  ceil.position.set(hx, fy + floor1H, hz); scene.add(ceil);
+  for (const zz of [hz + hd / 2 + 0.02, hz - hd / 2 - 0.02]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(hw + 0.9, 0.22, 0.3), trimM);
+    band.position.set(hx, fy + floor1H + 0.02, zz); scene.add(band);
+  }
+  for (const xx of [hx - hw / 2 - 0.02, hx + hw / 2 + 0.02]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, hd + 0.9), trimM);
+    band.position.set(xx, fy + floor1H + 0.02, hz); scene.add(band);
+  }
+  // 檐口（屋顶下的一圈白线脚）
+  for (const zz of [hz + hd / 2 + 0.04, hz - hd / 2 - 0.04]) {
+    const cor = new THREE.Mesh(new THREE.BoxGeometry(hw + 1.1, 0.26, 0.36), trimM);
+    cor.position.set(hx, fy + wh - 0.05, zz); scene.add(cor);
+  }
+  for (const xx of [hx - hw / 2 - 0.04, hx + hw / 2 + 0.04]) {
+    const cor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.26, hd + 1.1), trimM);
+    cor.position.set(xx, fy + wh - 0.05, hz); scene.add(cor);
+  }
+  // ---- 转角壁柱（隅石）----
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const px = hx + sx * (hw / 2 + 0.04), pz = hz + sz * (hd / 2 + 0.04);
+    for (let i = 0; i < 8; i++) {
+      const q = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.5), trimM);
+      q.position.set(px, fy + 0.4 + i * 0.85, pz); scene.add(q);
+    }
+  }
+  // ---- 窗（白色窗套 + 深色玻璃 + 窗台）----
+  function win(x, y, z, ry, w, h) {
+    const g = new THREE.Group();
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.28, h + 0.28, 0.16), trimM); g.add(fr);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), glassM); gl.position.z = 0.03; g.add(gl);
+    const mull = new THREE.Mesh(new THREE.BoxGeometry(0.09, h, 0.24), trimM); mull.position.z = 0.05; g.add(mull);
+    const mull2 = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, 0.24), trimM); mull2.position.z = 0.05; g.add(mull2);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.14, 0.34), trimM); sill.position.set(0, -h / 2 - 0.18, 0.08); g.add(sill);
+    g.position.set(x, y, z); g.rotation.y = ry; scene.add(g);
+  }
+  const frontZ = hz + hd / 2 + 0.1, backZ = hz - hd / 2 - 0.1;
+  // 一层前墙：门两侧各两扇高窗
+  win(hx - 5.4, fy + 1.9, frontZ, 0, 1.7, 2.0);
+  win(hx - 2.7, fy + 1.9, frontZ, 0, 1.7, 2.0);
+  win(hx + 2.7, fy + 1.9, frontZ, 0, 1.7, 2.0);
+  win(hx + 5.4, fy + 1.9, frontZ, 0, 1.7, 2.0);
+  // 二层前墙：中间是阳台落地门，两侧各一扇
+  win(hx, fy + floor1H + 1.75, frontZ, 0, 2.0, 2.1);
+  win(hx - 5.0, fy + floor1H + 1.7, frontZ, 0, 1.5, 1.8);
+  win(hx + 5.0, fy + floor1H + 1.7, frontZ, 0, 1.5, 1.8);
+  // 后墙两层各两扇
+  win(hx - 4.2, fy + 1.9, backZ, Math.PI, 1.6, 1.9);
+  win(hx + 4.2, fy + 1.9, backZ, Math.PI, 1.6, 1.9);
+  win(hx - 4.2, fy + floor1H + 1.7, backZ, Math.PI, 1.5, 1.8);
+  win(hx + 4.2, fy + floor1H + 1.7, backZ, Math.PI, 1.5, 1.8);
+  // 西山墙两层各一扇
+  win(hx - hw / 2 - 0.1, fy + 1.9, hz + 2.0, Math.PI / 2, 1.5, 1.9);
+  win(hx - hw / 2 - 0.1, fy + floor1H + 1.7, hz + 2.0, Math.PI / 2, 1.4, 1.7);
+  win(hx - hw / 2 - 0.1, fy + 1.9, hz - 2.6, Math.PI / 2, 1.5, 1.9);
+  // ---- 二层阳台（正对大门）----
+  const balY = fy + floor1H + 0.16;
+  const bal = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.22, 1.5), stoneM);
+  bal.position.set(hx, balY, hz + hd / 2 + 0.75); scene.add(bal);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.1, 0.12), trimM);
+  rail.position.set(hx, balY + 1.0, hz + hd / 2 + 1.45); scene.add(rail);
+  for (let i = 0; i <= 10; i++) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.95, 6), trimM);
+    post.position.set(hx - 2.5 + i * 0.5, balY + 0.52, hz + hd / 2 + 1.45); scene.add(post);
+  }
+  for (const sx of [-1, 1]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.4), trimM);
+    side.position.set(hx + sx * 2.54, balY + 1.0, hz + hd / 2 + 0.75); scene.add(side);
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.9), trimM);
+    bracket.position.set(hx + sx * 2.3, balY - 0.36, hz + hd / 2 + 0.55); scene.add(bracket);
+  }
+  // ---- 门廊：两根方柱 + 小平台 ----
+  const porchY = fy + floor1H - 0.3;
+  for (const sx of [-1, 1]) {
+    const col = new THREE.Mesh(new THREE.BoxGeometry(0.42, floor1H, 0.42), trimM);
+    col.position.set(hx + sx * 2.1, fy + floor1H / 2, hz + hd / 2 + 1.9); scene.add(col);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.18, 0.58), trimM);
+    cap.position.set(hx + sx * 2.1, fy + floor1H - 0.05, hz + hd / 2 + 1.9); scene.add(cap);
+    buildings.push({ minX: hx + sx * 2.1 - 0.21, maxX: hx + sx * 2.1 + 0.21, minZ: hz + hd / 2 + 1.69, maxZ: hz + hd / 2 + 2.11, bottom: gy, top: fy + floor1H });
+  }
+  const porchRoof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.24, 2.4), stoneM);
+  porchRoof.position.set(hx, porchY + 0.12, hz + hd / 2 + 1.1); scene.add(porchRoof);
+  // 台阶
+  for (let i = 0; i < 2; i++) {
+    const st = new THREE.Mesh(new THREE.BoxGeometry(4.4 - i * 0.5, 0.16, 0.5), stoneM);
+    st.position.set(hx, gy + 0.08 + i * 0.16, hz + hd / 2 + 2.55 - i * 0.5); scene.add(st);
+  }
+  // ---- 屋顶：脊沿 X 的双坡 + 山墙 + 老虎窗 + 烟囱 ----
+  const eaveY = fy + wh;
+  const rise = 3.7, halfD = hd / 2 + 0.9, lenX = hw + 1.8;
+  const pitch = Math.atan2(rise, halfD), hyp = Math.hypot(halfD, rise);
   for (const sgn of [1, -1]) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(hyp * 1.06, 0.14, len), homeRoofM);
-    s.rotation.z = -sgn * pitch;
-    s.position.set(hx + sgn * halfW * 0.5, eaveY + rise * 0.5, hz); scene.add(s);
+    const s = new THREE.Mesh(new THREE.BoxGeometry(lenX, 0.18, hyp * 1.02), roofM);
+    s.rotation.x = sgn * pitch;
+    s.position.set(hx, eaveY + rise / 2, hz + sgn * halfD / 2);
+    scene.add(s);
   }
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, len), homeRidgeM);
-  ridge.position.set(hx, eaveY + rise + 0.05, hz); scene.add(ridge);
-  for (const zs of [-1, 1]) {
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(lenX + 0.2, 0.32, 0.4), ridgeM);
+  ridge.position.set(hx, eaveY + rise + 0.08, hz); scene.add(ridge);
+  for (const sx of [-1, 1]) {
     const tri = new THREE.Shape();
-    tri.moveTo(-halfW, 0); tri.lineTo(halfW, 0); tri.lineTo(0, rise); tri.closePath();
-    const g = new THREE.Mesh(new THREE.ShapeGeometry(tri), new THREE.MeshLambertMaterial({ color: 0xb0523f, side: THREE.DoubleSide }));
-    g.position.set(hx, eaveY, hz + zs * (hd / 2 + 0.3)); scene.add(g);
+    tri.moveTo(-halfD, 0); tri.lineTo(halfD, 0); tri.lineTo(0, rise); tri.closePath();
+    const gable = new THREE.Mesh(new THREE.ShapeGeometry(tri), new THREE.MeshLambertMaterial({ color: 0xefe6d5, side: THREE.DoubleSide }));
+    gable.position.set(hx + sx * (hw / 2 + 0.9), eaveY, hz);
+    gable.rotation.y = sx * Math.PI / 2;
+    scene.add(gable);
   }
-  // 窗（前墙两段 + 后墙 + 左右墙，用 3D 窗框，特别于城市格式化墙）
-  function win(x, z, ry, w, h) {
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), frameM); fr.position.set(x, gy + 1.7, z); fr.rotation.y = ry; scene.add(fr);
-    const gl = new THREE.Mesh(new THREE.BoxGeometry(w - 0.3, h - 0.3, 0.12), glassM); gl.position.set(x, gy + 1.7, z); gl.rotation.y = ry; scene.add(gl);
+  // 老虎窗（南坡两扇）
+  for (const sx of [-1, 1]) {
+    const dx0 = hx + sx * 4.2;
+    const dz0 = hz + halfD * 0.42;
+    const bodyH = 1.5;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, bodyH, 1.5), wallM);
+    body.position.set(dx0, eaveY + 1.15 + bodyH / 2, dz0); scene.add(body);
+    win(dx0, eaveY + 1.15 + bodyH / 2, dz0 + 0.78, 0, 0.95, 1.0);
+    const dr = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 1.3), roofM);
+    dr.rotation.x = 0.6;
+    dr.position.set(dx0, eaveY + 1.15 + bodyH + 0.34, dz0 + 0.15); scene.add(dr);
   }
-  win(hx - dw / 2 - segW / 2, hz + hd / 2 + 0.02, 0, 1.6, 1.3);
-  win(hx + dw / 2 + segW / 2, hz + hd / 2 + 0.02, 0, 1.6, 1.3);
-  win(hx - hw / 2 - 0.02, hz - 1.5, Math.PI / 2, 1.5, 1.2);
-  win(hx + hw / 2 + 0.02, hz + 1.5, -Math.PI / 2, 1.5, 1.2);
-  win(hx - 3, hz - hd / 2 - 0.02, Math.PI, 1.6, 1.3);
-  win(hx + 3, hz - hd / 2 - 0.02, Math.PI, 1.6, 1.3);
-  // 家具（实体，不可穿行）：沙发 / 电视 / 床 / 茶几；地毯平铺地上、吊灯在上方，不参与碰撞
+  // 烟囱
+  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), new THREE.MeshLambertMaterial({ color: 0xc9bfae }));
+  chim.position.set(hx - 5.6, eaveY + rise * 0.55 + 0.9, hz - 2.2); scene.add(chim);
+  const chimCap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.18, 1.1), ridgeM);
+  chimCap.position.set(hx - 5.6, eaveY + rise * 0.55 + 2.15, hz - 2.2); scene.add(chimCap);
+  // ---- 室内家具（沿用原来的布置，按新尺寸摆放）----
   const sofa = new THREE.Group();
   const sofM = new THREE.MeshLambertMaterial({ color: 0x9c4a3a });
   const sb = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 0.9), sofM); sb.position.y = 0.35; sofa.add(sb);
   const sback = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7, 0.25), sofM); sback.position.set(0, 0.85, -0.33); sofa.add(sback);
   for (const sx of [-1.1, 1.1]) { const a = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.9), sofM); a.position.set(sx, 0.6, 0); sofa.add(a); }
   const cush = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.2, 0.85), new THREE.MeshLambertMaterial({ color: 0xd9c9a0 })); cush.position.set(0, 0.72, 0.02); sofa.add(cush);
-  sofa.position.set(hx, gy, hz + 2.2); sofa.rotation.y = Math.PI; scene.add(sofa);
+  sofa.position.set(hx + 1.5, fy, hz + 3.6); sofa.rotation.y = Math.PI; scene.add(sofa);
   const tv = new THREE.Group();
   const tvs = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.5), new THREE.MeshLambertMaterial({ color: 0x3a3228 })); tvs.position.y = 0.3; tv.add(tvs);
   const scr = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.0, 0.12), new THREE.MeshBasicMaterial({ color: 0x66ccff })); scr.position.set(0, 1.1, -0.16); tv.add(scr);
-  tv.position.set(hx, gy, hz - hd / 2 + 0.9); tv.rotation.y = Math.PI; scene.add(tv);
+  tv.position.set(hx + 1.5, fy, hz - hd / 2 + 1.0); tv.rotation.y = Math.PI; scene.add(tv);
   const bed = new THREE.Group();
   const bf = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.4, 1.5), new THREE.MeshLambertMaterial({ color: 0x6a4a2a })); bf.position.y = 0.25; bed.add(bf);
   const mat = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.25, 1.4), new THREE.MeshLambertMaterial({ color: 0xf0ede2 })); mat.position.set(0, 0.5, 0); bed.add(mat);
   const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.8), new THREE.MeshLambertMaterial({ color: 0xffffff })); pillow.position.set(-0.75, 0.65, 0); bed.add(pillow);
   const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.14, 1.3), new THREE.MeshLambertMaterial({ color: 0x3f7d2e })); blanket.position.set(0.45, 0.65, 0); bed.add(blanket);
-  bed.position.set(hx - hw / 2 + 1.6, gy, hz - 0.5); bed.rotation.y = Math.PI / 2; scene.add(bed);
+  bed.position.set(hx - 6.0, fy, hz + 0.4); bed.rotation.y = Math.PI / 2; scene.add(bed);
   const ctab = new THREE.Group();
   const ctop = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.6), new THREE.MeshLambertMaterial({ color: 0x8a6a3b })); ctop.position.y = 0.4; ctab.add(ctop);
   for (const [sx, sz] of [[-0.5, -0.2], [0.5, -0.2], [-0.5, 0.2], [0.5, 0.2]]) { const lg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), new THREE.MeshLambertMaterial({ color: 0x5a4a2a })); lg.position.set(sx, 0.2, sz); ctab.add(lg); }
-  ctab.position.set(hx, gy, hz + 0.3); scene.add(ctab);
+  ctab.position.set(hx + 1.5, fy, hz + 1.6); scene.add(ctab);
   const rug = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshLambertMaterial({ color: 0x7a3a2a }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(hx, gy + 0.02, hz + 1.5); scene.add(rug);
+  rug.rotation.x = -Math.PI / 2; rug.position.set(hx + 1.5, fy + 0.02, hz + 2.6); scene.add(rug);
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), new THREE.MeshLambertMaterial({ color: 0x555555 }));
-  rod.position.set(hx, gy + wh - 0.25, hz); scene.add(rod);
+  rod.position.set(hx + 1.5, fy + floor1H - 0.25, hz + 2.4); scene.add(rod);
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff2cc }));
-  bulb.position.set(hx, gy + wh - 0.6, hz); scene.add(bulb);
-  // 家具实体碰撞：沙发/电视/床/茶几成为可阻挡实体，主角不能穿过去
-  buildings.push({ minX: hx - 1.15, maxX: hx + 1.15, minZ: hz + 1.75, maxZ: hz + 2.65, bottom: gy, top: gy + 1.1 });
-  buildings.push({ minX: hx - 0.9, maxX: hx + 0.9, minZ: hz - 4.35, maxZ: hz - 3.85, bottom: gy, top: gy + 1.6 });
-  buildings.push({ minX: hx - 5.65, maxX: hx - 4.15, minZ: hz - 1.6, maxZ: hz + 0.6, bottom: gy, top: gy + 0.75 });
-  buildings.push({ minX: hx - 0.6, maxX: hx + 0.6, minZ: hz, maxZ: hz + 0.6, bottom: gy, top: gy + 0.46 });
+  bulb.position.set(hx + 1.5, fy + floor1H - 0.6, hz + 2.4); scene.add(bulb);
+  // 家具实体碰撞
+  buildings.push({ minX: hx + 0.35, maxX: hx + 2.65, minZ: hz + 3.15, maxZ: hz + 4.05, bottom: gy, top: fy + 1.1 });
+  buildings.push({ minX: hx + 0.6, maxX: hx + 2.4, minZ: hz - 5.3, maxZ: hz - 4.8, bottom: gy, top: fy + 1.6 });
+  buildings.push({ minX: hx - 7.15, maxX: hx - 4.85, minZ: hz - 0.35, maxZ: hz + 1.15, bottom: gy, top: fy + 0.75 });
+  buildings.push({ minX: hx + 0.9, maxX: hx + 2.1, minZ: hz + 1.3, maxZ: hz + 1.9, bottom: gy, top: fy + 0.46 });
 
-  // 车库：三面墙 + 人字顶，前面开放 + 卷帘门（稍大）
+  // ---- 前庭石材铺装 + 车道 + 绿篱（把地皮做大、做精致）----
+  const terrace = new THREE.Mesh(new THREE.BoxGeometry(17.6, 0.08, 6.6), new THREE.MeshLambertMaterial({ color: 0xcfc9bb }));
+  terrace.position.set(hx, gy + 0.04, -59.6); scene.add(terrace);
+  const drive = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 10.4), new THREE.MeshLambertMaterial({ color: 0xb9bec4 }));
+  drive.position.set(-90, gy + 0.045, -60.8); scene.add(drive);
+  // 西侧绿篱（东侧是车库，不用再摆）
+  {
+    const hedge = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 6.6), hedgeM);
+    hedge.position.set(hx - 9.1, gy + 0.5, -59.6); scene.add(hedge);
+  }
+  // 车道两侧的路灯柱
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x3a3a3a }));
+    post.position.set(-90 + sx * 6.6, gy + 1.6, -56.2); scene.add(post);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff2c2 }));
+    lamp.position.set(-90 + sx * 6.6, gy + 3.25, -56.2); scene.add(lamp);
+    treeObstacles.push({ x: -90 + sx * 6.6, z: -56.2, r: 0.25 });
+  }
+
+  // 车库：三面墙 + 人字顶，前面开放 + 卷帘门（与主楼共用东墙，位置保持不变）
   const gx = -90, gz = -70, gw = 11, gd = 8, gh = 4.0;
   const gwM = new THREE.MeshLambertMaterial({ color: 0x6f7780 });
   const gTrimM = new THREE.MeshLambertMaterial({ color: 0xd8dde2 });
-  const roofM = new THREE.MeshLambertMaterial({ color: 0x3f464d });
+  const gRoofM = new THREE.MeshLambertMaterial({ color: 0x3f464d });
   function gWall(w, h, d, x, y, z) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), gwM);
     m.position.set(x, y, z); scene.add(m);
     buildings.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, bottom: gy, top: gy + gh });
   }
-  // 三面墙（开放式车库）
+  // 三面墙（开放式车库；西墙和主楼东墙重合，视觉上就是连在一起）
   gWall(0.4, gh, gd, gx - gw / 2, gy + gh / 2, gz);
   gWall(0.4, gh, gd, gx + gw / 2, gy + gh / 2, gz);
   gWall(gw + 0.4, gh, 0.4, gx, gy + gh / 2, gz - gd / 2);
@@ -5346,7 +5492,7 @@ function buildPlayerHome() {
   const gEave = gy + gh + 0.2, gRise = 1.6, gHalf = gw / 2 + 0.5, gLen = gd + 0.5;
   const gPitch = Math.atan2(gRise, gHalf), gHyp = Math.hypot(gHalf, gRise);
   for (const sgn of [1, -1]) {
-    const sl = new THREE.Mesh(new THREE.BoxGeometry(gHyp * 1.05, 0.16, gLen), roofM);
+    const sl = new THREE.Mesh(new THREE.BoxGeometry(gHyp * 1.05, 0.16, gLen), gRoofM);
     sl.rotation.z = -sgn * gPitch;
     sl.position.set(gx + sgn * gHalf * 0.5, gEave + gRise * 0.5, gz); scene.add(sl);
   }
@@ -5368,19 +5514,14 @@ function buildPlayerHome() {
   const gHandle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.1), gTrimM);
   gHandle.position.set(0, -gDoorH * 0.32, 0.12); door.add(gHandle);
   scene.add(door);
-  // 入口水泥地坪 + 门头灯
-  const gDrive = new THREE.Mesh(new THREE.BoxGeometry(gw + 2, 0.06, 5), new THREE.MeshLambertMaterial({ color: 0xb9bec4 }));
-  gDrive.position.set(gx, gy + 0.03, gz + gd / 2 + 2.6); scene.add(gDrive);
+  // 门头灯
   for (const sx of [-1, 1]) {
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff2c2 }));
     lamp.position.set(gx + sx * (gw / 2 - 0.4), gy + gh - 0.1, gz + gd / 2 + 0.35); scene.add(lamp);
   }
-  // 车库里的初始车辆 = 自行车
-  // 停在靠门一侧（gz+1.8，离卷帘门约 2m）：原来停在 gz-1（离门 5m）缩在车库最里面，
-  // 站在门口根本看不见，玩家以为车库里没车。
+  // 车库里的初始车辆 = 自行车（停在靠门一侧）
   const bc = makeBicycle(0x2ecc71);
   bc.position.set(gx, gy, gz + 1.8); bc.rotation.y = 0; scene.add(bc);
-  // homeX/homeY/homeZ 是"标准停放位"，自动归位逻辑要把车送回这里
   const car = { group: bc, x: gx, z: gz + 1.8, angle: 0, radius: 0.6, topSpeed: 12, accel: 6, durability: 14, carKey: 'bike', rideH: 0.9, saveId: 'garage-bike', fixed: true, saveKind: 'bicycle', saveColor: 0x2ecc71, homeX: gx, homeY: gy, homeZ: gz + 1.8 };
   cars.push(car);
   garageDoor.mesh = door; garageDoor.baseY = doorY; garageDoor.x = gx; garageDoor.z = gz; garageDoor.car = car; garageDoor.lift = gh + 0.4;
