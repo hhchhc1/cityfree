@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix554-veh-y-nan-heli">
+<meta name="cf-build" content="20261122-fix555-tank-blast-armor">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -21989,11 +21989,25 @@ if ((v.shootCd || 0) > 0) return;
     for (let i = 0; i < 8; i++) emitSmoke(hx + (Math.random() - 0.5) * 4.0, (hY || terrainHeight(hx, hz)) + 0.4, hz + (Math.random() - 0.5) * 4.0, i < 3);
       blastPeople(hx, hz, R, at, 6.0, RY, hY, 'tank');   // 【fix218】致死半径 3.4→6.0，坦克炮弹
     // 被炮弹掀到的车：同样按垂直范围判定（以前只看平面距离）
+    // 【fix555·2026-11-22·用户："军方的坦克怎么一发炮弹就炸了，不像玩家开的一样"】
+    // 根因：这里对范围内**所有**车直接 explodeCar() —— 装甲目标也是一发入魂。
+    // 现在坦克/直升机吃固定伤害（和火箭弹对装甲的限伤同一量级），普通车才直接炸。
     const tankBlastY = hY;
     const inBlastV = o => Math.abs(terrainHeight(o.x, o.z) + 0.9 - tankBlastY) <= RY;
-    for (const t of cars) if (!t.exploded && t !== v) { const d = Math.hypot(t.x - hx, t.z - hz); if (d < R && inBlastV(t)) { explodeCar(t); } }
-    for (const tt of traffic) if (!tt.exploded) { const d = Math.hypot(tt.x - hx, tt.z - hz); if (d < R && inBlastV(tt)) explodeCar(tt); }
-    for (const pp of policeCars) if (!pp.exploded && pp !== v) { const d = Math.hypot(pp.x - hx, pp.z - hz); if (d < R && inBlastV(pp)) explodeCar(pp); }
+    const blastVeh = (t) => {
+      if (!t || t.exploded || t === v) return;
+      const d = Math.hypot(t.x - hx, t.z - hz);
+      if (d >= R || !inBlastV(t)) return;
+      if (t.isTank || t.isHelicopter) {
+        damageCar(t, 60, true);
+        hitCarPassenger(t, Math.round(at(d) * 0.35));
+      } else {
+        explodeCar(t);
+      }
+    };
+    for (const t of cars) blastVeh(t);
+    for (const tt of traffic) blastVeh(tt);
+    for (const pp of policeCars) blastVeh(pp);
     };
     if (_tFly > 0.05) queueBullet(hx, hY, hz, _tFly, tankBoom);
     else tankBoom();
@@ -25581,7 +25595,7 @@ function spawnMilTank() {
   scene.add(g);
   milTank = {
     group: g, x: sx, y: pad.y + 0.8, z: sz, angle: 0, turretRel: 0,
-    radius: 3.0, durability: 260, damage: 0, hp: 260,
+    radius: 3.0, durability: 360, damage: 0, hp: 360,
     shootCd: 3.6, state: 'incoming', leaveT: 0,
     // 【fix552】isTank=true：玩家能像开军用坦克一样驾驶它（主炮/装甲都复用现成逻辑），
     // isEnemyTank 用来和"玩家那辆军用坦克"区分（补给/重生判定要排除它）。
@@ -26398,7 +26412,9 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
           if (!carHitCooldown(o, 0.8)) return;
           if (riders) hitCarPassenger(o, 8);
           spawnBurst(o.x, o.z, 0xff5500, 14, terrainHeight(o.x, o.z) + 0.9);
-          explodeCar(o);                         // 坦克压车 → 车直接爆炸
+          // 【fix555】装甲目标（另一辆坦克/直升机）压一下就爆太离谱，改成吃固定伤害
+          if (o.isTank || o.isHelicopter) damageCar(o, 60, o === currentCar);
+          else explodeCar(o);                    // 普通车：坦克压车 → 直接爆炸
           if (!carHitCooldown(tank, 0.4)) return;
           damageCar(tank, CAR_TANK_SELF_DMG, tank === currentCar);
         };
