@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261122-fix566-euro-villa-garage">
+<meta name="cf-build" content="20261124-fix567-mobile-perf">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -904,6 +904,19 @@
         <div class="map-btn" id="setMotoJumpBtn" style="background:#1f5f7a">🏍 摩托车跳跃：关</div>
       </div>
     </div>
+    <!-- 【fix567·2026-11-24·用户："手机上画质比较低，枪战很卡，有时崩溃自动退出"】 -->
+    <div class="set-sec">
+      <h4>🖼 画质</h4>
+      <p class="set-desc">手机觉得画面糊就选 <b>高</b>；发烫、卡顿、闪退就选 <b>低</b>（渲染分辨率更低但最省电）。
+      <b>自动</b>会按帧率自己升降，卡久了会自动往下调。</p>
+      <p class="set-desc set-dim">「低/中/高」是锁定档位，选定后系统不再自动改动。选择随存档保存。</p>
+      <div class="set-row" id="gfxRow" style="flex-wrap:wrap;gap:7px">
+        <div class="mode-tab" data-gfx="low">低</div>
+        <div class="mode-tab" data-gfx="mid">中</div>
+        <div class="mode-tab" data-gfx="high">高</div>
+        <div class="mode-tab" data-gfx="auto">自动</div>
+      </div>
+    </div>
     <div class="set-sec">
       <h4>🎮 手机按钮布局</h4>
       <p class="set-desc">进入调整后：<b>拖动</b>按钮改位置，点选中后用 <b>－ / ＋</b> 改大小。
@@ -1264,13 +1277,19 @@ try {
     try { setHint("画面丢失，正在自动恢复…"); } catch (e2) {}
     if (!window.__glLostAt) {
       window.__glLostAt = Date.now();
-      setTimeout(function () { try { location.reload(); } catch (e3) {} }, 2000);
+      // 【fix567】重载前先存一次档 —— 手机崩溃/回收上下文时，玩家最怕的是"画面没了还丢了进度"。
+      setTimeout(function () {
+        try { if (typeof saveGame === 'function') saveGame(); } catch (e4) {}
+        if (_ctxLost) { try { location.reload(); } catch (e3) {} }   // 已经恢复了就不用重载
+      }, 2500);
     }
   }, false);
 } catch (eGl) {}
 renderer.setSize(innerWidth, innerHeight);
-// 像素比上下限：手机 0.8~1.25 可动态调整；桌面保持设备原始值（不降质）
-const PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
+// 像素比上下限：手机 0.85~1.25 可动态调整；桌面保持设备原始值（不降质）
+// 【fix567】改成 var：自动档在"持续跑得很流畅"时会把这个上限往上提（1.25 → 1.375 → 1.5），
+// 让性能有余量的机器自动变清晰 —— 这才是"自动"该有的行为，而不是只会往下掉。
+var PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
 const PIXEL_RATIO_MIN = isMobile ? 0.85 : Math.min(devicePixelRatio, 2);
 let pixelRatio = PIXEL_RATIO_MAX;
 renderer.setPixelRatio(pixelRatio);
@@ -12058,7 +12077,10 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // ===== 全局进度 / 解锁开关（会随存档一起保存）=====
 // tankUnlocked 之前根本没有这回事：坦克从一开始就能直接开走，
 // 所谓"任务解锁坦克"实际上只是把基地大门碰撞删掉而已。现在做成真正的锁。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false, motoJump: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）   // 【fix539】motoJump=摩托车能否按空格跳跃（默认关）
+// 【fix567·2026-11-24·用户："手机上画质比较低，枪战的时候会很卡，有时候直接崩溃自动退出"】
+// gfx：画质档位。'auto' = 跟随自动降质（旧行为）；'low'/'mid'/'high' = 玩家手动锁定。
+// 手动锁定后 updateAutoQuality() 不再插手 —— 用户明确选了档位，就不该被系统偷偷改回去。
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false, motoJump: false, gfx: 'auto' };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）   // 【fix539】motoJump=摩托车能否按空格跳跃（默认关）   // 【fix567】gfx=画质档位（auto/low/mid/high）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -18303,13 +18325,65 @@ function collideNpc(p, r, self) {
 }
 
 // ========== 特效（命中火花 / 枪口闪光） ==========
+// 【fix567·2026-11-24·用户："手机上枪战的时候会很卡，有时候直接崩溃自动退出"】
+// 根因：原来每颗粒子都是独立 Mesh，spawnBurst/emitSpark 每次 new Mesh + scene.add，
+// 到期再 scene.remove —— 枪战时每秒几十次命中 × 每命中 4~5 颗，等于每秒上百次场景图增删。
+// 手机上场景图每次变更都要重算包围盒、重建渲染列表，很快就掉到个位数帧；叠加 GC 抖动就是闪退。
+// 现在改成 **一个 InstancedMesh 画全部碎片/火花**：draw call 从「最多 220 个」降到 1 个，
+// 增删只是改实例矩阵，不再碰场景图。
 const effects = [];
-// 【性能】粒子爆发：原来每颗粒子都要 new BoxGeometry + new MeshBasicMaterial。
-// 开车连撞几下就是几百个几何体在创建/销毁，每个几何体还各占一份 GPU buffer ——
-// 这正是"撞一下卡一下"的来源。现在几何体全局共用一份、材质按颜色缓存，并给总量封顶。
-//
-// 注意：这里必须用 var + 惰性初始化，不能用 const —— spawnBurst 可能在本行之前就被调用，
-// 那时 const 处于 TDZ 会抛 ReferenceError，整个游戏脚本直接中断（本项目历史上踩过这个坑）。
+var _fxInst = null, _fxMax = 0, _fxFree = [], _fxMat4 = null, _fxColor = null, _fxBroken = false;
+// 【fix567】上限放宽：以前手机上只给 90 颗，因为每颗都是独立 draw call（90 个已经很贵）。
+// 现在全部走同一个 InstancedMesh = 1 个 draw call，加数量几乎不增加 GPU 状态切换，
+// 只有 160 个 0.09m 小方块的填充率 —— 很便宜。这样枪战时火花不会被"背景粒子"挤掉。
+function effectCap() { return isMobile ? 160 : 320; }   // 同屏粒子上限（超出就回收最老的）
+function fxEnsure() {
+  if (_fxInst || _fxBroken) return;
+  try {
+    _fxMax = effectCap();
+    _fxMat4 = new THREE.Matrix4();
+    _fxColor = new THREE.Color();
+    const geo = new THREE.BoxGeometry(1, 1, 1);           // 单位方块，大小靠实例 scale 表现
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    _fxInst = new THREE.InstancedMesh(geo, mat, _fxMax);
+    _fxInst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    _fxInst.frustumCulled = false;                        // 粒子到处都是，别做视锥剔除
+    _fxMat4.makeScale(0, 0, 0);                           // 初始全部缩到 0 = 不可见
+    for (let i = 0; i < _fxMax; i++) {
+      _fxInst.setMatrixAt(i, _fxMat4);
+      _fxInst.setColorAt(i, _fxColor.setRGB(1, 1, 1));
+    }
+    _fxInst.instanceMatrix.needsUpdate = true;
+    if (_fxInst.instanceColor) _fxInst.instanceColor.needsUpdate = true;
+    try { registerDynamicObject(_fxInst); } catch (e) {}
+    scene.add(_fxInst);
+    for (let i = _fxMax - 1; i >= 0; i--) _fxFree.push(i);
+  } catch (e) {
+    // 极老的设备可能没有实例化绘制（WebGL1 且无 ANGLE_instanced_arrays）：
+    // 这时候宁可"没有火花"，也绝不能让异常把整个渲染循环带崩。
+    console.warn('[fx] InstancedMesh 不可用，粒子已禁用', e);
+    _fxBroken = true; _fxInst = null;
+  }
+}
+// 取一个实例槽位（池满就回收最老的那颗）
+function fxTakeSlot() {
+  fxEnsure();
+  if (_fxFree.length) return _fxFree.pop();
+  const old = effects.shift();
+  return old ? old.idx : 0;
+}
+function fxPush(x, y, z, color, size, vx, vy, vz, life) {
+  fxEnsure();
+  if (!_fxInst) return;                                 // 设备不支持实例化：静默跳过
+  const idx = fxTakeSlot();
+  _fxColor.setHex(color);
+  _fxInst.setColorAt(idx, _fxColor);
+  if (_fxInst.instanceColor) _fxInst.instanceColor.needsUpdate = true;
+  _fxMat4.makeScale(size, size, size); _fxMat4.setPosition(x, y, z);
+  _fxInst.setMatrixAt(idx, _fxMat4);
+  effects.push({ idx: idx, x: x, y: y, z: z, vx: vx, vy: vy, vz: vz, life: life, size: size });
+}
+// 兼容旧接口：别处若还引用 burstGeometry/burstMaterial 也不会报错
 var _burstGeoCache = null;
 var _burstMatCache = null;
 function burstGeometry() {
@@ -18317,28 +18391,16 @@ function burstGeometry() {
   return _burstGeoCache;
 }
 function burstMaterial(color) {
-  if (!_burstMatCache) _burstMatCache = new Map();
-  var m = _burstMatCache.get(color);
-  if (!m) { m = new THREE.MeshBasicMaterial({ color: color }); _burstMatCache.set(color, m); }
-  return m;
+  return new THREE.MeshBasicMaterial({ color: color });   // 已不再被粒子使用（实例色取代）
 }
-function effectCap() { return isMobile ? 90 : 220; }   // 同屏粒子上限（超出就回收最老的）
 function spawnBurst(x, z, color, n, y) {
   // y 可选：不传则贴地面（按地形高度），传入则用真实高度（楼顶/空中命中用）
   const baseY = (typeof y === 'number') ? y : terrainHeight(x, z) + 0.9;
   const cap = effectCap();
-  const mat = burstMaterial(color);
   const count = Math.max(0, Math.min(n || 8, cap));
   for (let i = 0; i < count; i++) {
-    if (effects.length >= cap) {                  // 封顶：回收最老的一颗，避免无限增长
-      const old = effects.shift();
-      if (old) scene.remove(old.m);
-    }
-    const m = new THREE.Mesh(burstGeometry(), mat);
-    m.position.set(x, baseY, z);
-    scene.add(m);
     const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 4;
-    effects.push({ m, vx: Math.cos(a) * sp, vy: 3 + Math.random() * 4, vz: Math.sin(a) * sp, life: 0.45 });
+    fxPush(x, baseY, z, color, 0.09, Math.cos(a) * sp, 3 + Math.random() * 4, Math.sin(a) * sp, 0.45);
   }
 }
 // ==================== 【fix151】爆炸火球 + 冲击波 ====================
@@ -18380,16 +18442,29 @@ f.m.material.opacity = (f.ring ? 0.62 : 0.82) * (1 - k * k);
 }
 
 function updateEffects(dt) {
+  if (!_fxInst) return;
+  let dirty = false;
   for (let i = effects.length - 1; i >= 0; i--) {
     const e = effects[i];
     e.life -= dt;
     e.vy -= 12 * dt;
-    e.m.position.x += e.vx * dt; e.m.position.y += e.vy * dt; e.m.position.z += e.vz * dt;
-    e.m.rotation.x += dt * 8; e.m.rotation.y += dt * 8;
-    const gnd = terrainHeight(e.m.position.x, e.m.position.z) + 0.02;   // 在真实地面上弹跳（坡面/高处都对）
-    if (e.m.position.y < gnd) { e.m.position.y = gnd; e.vy *= -0.3; }
-    if (e.life <= 0) { scene.remove(e.m); effects.splice(i, 1); }
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    const gnd = terrainHeight(e.x, e.z) + 0.02;   // 在真实地面上弹跳（坡面/高处都对）
+    if (e.y < gnd) { e.y = gnd; e.vy *= -0.3; }
+    if (e.life <= 0) {
+      _fxMat4.makeScale(0, 0, 0);                 // 缩到 0 = 归还槽位
+      _fxInst.setMatrixAt(e.idx, _fxMat4);
+      _fxFree.push(e.idx);
+      effects.splice(i, 1);
+      dirty = true;
+    } else {
+      const sz = e.size * Math.max(0.35, Math.min(1, e.life / 0.3));
+      _fxMat4.makeScale(sz, sz, sz); _fxMat4.setPosition(e.x, e.y, e.z);
+      _fxInst.setMatrixAt(e.idx, _fxMat4);
+      dirty = true;
+    }
   }
+  if (dirty) _fxInst.instanceMatrix.needsUpdate = true;
 }
 
 // ========== 升级特效：身边升起几圈金光 ==========
@@ -18435,6 +18510,55 @@ function updateLevelFx(dt) {
 
 // ========== 车辆损毁：冒烟 → 浓烟 → 爆炸（耐久更高） ==========
 const smokes = [];
+// 【fix567】烟雾也改成对象池：原来每颗烟都 new Mesh + new Material（受损车烟还会 .clone()），
+// 到期再 scene.remove + material.dispose()。枪战/烧车时每秒几十颗，材质反复创建销毁 =
+// GPU 程序缓存抖动 + GC 停顿，手机上就是"一打起来就卡一下、久了闪退"。
+// 现在预建固定数量的 mesh 常驻场景（不可见时完全不参与渲染），只改 position/opacity/geometry 引用。
+// 分成「普通混合」和「加色混合」两个子池 —— 切换 material.blending 会触发 shader 重编译，
+// 所以按用途分池，绝不中途改 blending。
+var _smokePoolN = [], _smokePoolA = [];
+function _makeSmokeSlot(additive) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x5a5a5a, transparent: true, opacity: 0.4, depthWrite: false,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending
+  });
+  const m = new THREE.Mesh(smokeGeometry(false), mat);
+  m.visible = false;
+  scene.add(m);
+  return { m: m, busy: false };
+}
+function smokePoolEnsure() {
+  if (_smokePoolN.length) return;
+  const cap = smokeCap();
+  const nAdd = Math.max(4, Math.round(cap * 0.25));
+  for (let i = 0; i < cap - nAdd; i++) _smokePoolN.push(_makeSmokeSlot(false));
+  for (let i = 0; i < nAdd; i++) _smokePoolA.push(_makeSmokeSlot(true));
+}
+// 取一颗空闲粒子；全忙就返回 null（宁可这一帧少画一颗，也绝不新建对象）
+function smokeTake(geo, colorHex, op, additive) {
+  smokePoolEnsure();
+  const pool = additive ? _smokePoolA : _smokePoolN;
+  for (let i = 0; i < pool.length; i++) {
+    const s = pool[i];
+    if (s.busy) continue;
+    s.busy = true;
+    const m = s.m;
+    if (m.geometry !== geo) m.geometry = geo;
+    m.material.color.setHex(colorHex);
+    m.material.opacity = op;
+    m.visible = true;
+    m.scale.setScalar(1);
+    return m;
+  }
+  return null;
+}
+function smokeRelease(s) {
+  if (!s || !s.m) return;
+  s.m.visible = false;
+  s.m.scale.setScalar(1);
+  for (let i = 0; i < _smokePoolN.length; i++) if (_smokePoolN[i].m === s.m) { _smokePoolN[i].busy = false; return; }
+  for (let i = 0; i < _smokePoolA.length; i++) if (_smokePoolA[i].m === s.m) { _smokePoolA[i].busy = false; return; }
+}
 // 【性能】烟雾几何体全局复用（只有大/小两种）；材质必须每颗独立 —— updateSmokes 会逐帧改 opacity。
 // 同样用 var + 惰性初始化，避免 emitSmoke 在声明行之前被调用时踩 TDZ。
 var _smokeGeoHeavyCache = null, _smokeGeoLightCache = null;
@@ -18453,11 +18577,12 @@ function emitSmoke(x, y, z, heavy) {
   const cap = smokeCap();
   if (smokes.length >= cap) {
     const old = smokes.shift();
-    if (old) disposeSmokeParticle(old);   // 【fix40】超上限被挤掉的粒子同样要释放材质
+    if (old) smokeRelease(old);   // 超上限被挤掉的粒子归还池
   }
   // 【fix15 用户要求"烟不要那么浓"】浓烟（heavy）颜色提亮 + 透明度下调，整体更轻薄。
-  const m = new THREE.Mesh(smokeGeometry(heavy), new THREE.MeshBasicMaterial({ color: heavy ? 0x3a3a3a : 0x5a5a5a, transparent: true, opacity: heavy ? 0.33 : 0.42 }));
-  m.position.set(x, y, z); scene.add(m);
+  const m = smokeTake(smokeGeometry(heavy), heavy ? 0x3a3a3a : 0x5a5a5a, heavy ? 0.33 : 0.42, false);
+  if (!m) return;
+  m.position.set(x, y, z);
   smokes.push({ m, vx: (Math.random() - 0.5) * (heavy ? 0.8 : 0.6), vy: (heavy ? 1.8 : 1.2) + Math.random() * 1.0, vz: (Math.random() - 0.5) * (heavy ? 0.8 : 0.6), life: heavy ? 1.7 : 1.1, maxLife: heavy ? 1.7 : 1.1, op: heavy ? 0.33 : 0.42, grow: heavy ? 1.7 : 1.6 });
 }
 // 受损车辆专用特效：原来用的 emitSmoke 粒子只有 0.22 半径、深灰色，基本看不见，
@@ -18475,16 +18600,15 @@ function emitDamageSmoke(x, y, z, stage) {
   const cap = smokeCap();
   const n = stage >= 3 ? 3 : (stage === 2 ? 2 : 1);
   for (let i = 0; i < n; i++) {
-    if (smokes.length >= cap) { const old = smokes.shift(); if (old) disposeSmokeParticle(old); }
+    if (smokes.length >= cap) { const old = smokes.shift(); if (old) smokeRelease(old); }
     // 【fix15 用户要求"冒的烟不要那么浓"】颜色提亮一档 + 透明度下调：烟更薄，但白天依然看得见。
     const col = stage >= 2 ? 0x4a4a4a : 0x7a7a7a;
     const op = stage >= 2 ? 0.52 : 0.38;
     const life = stage >= 2 ? 2.4 : 1.7;
-    const m = new THREE.Mesh(_dmgSmokeGeo, dmgSmokeMaterial(col).clone());
-    m.material.opacity = op;   // 每颗独立材质：透明度各自淡出，不再互相覆盖导致整屏灰闪
+    const m = smokeTake(_dmgSmokeGeo, col, op, false);
+    if (!m) return;
     m.position.set(x + (Math.random() - 0.5) * 0.6, y, z + (Math.random() - 0.5) * 0.6);
     m.scale.setScalar(0.9 + Math.random() * 0.8);
-    scene.add(m);
     smokes.push({ m, vx: (Math.random() - 0.5) * 0.9, vy: 2.2 + Math.random() * 1.6, vz: (Math.random() - 0.5) * 0.9, life: life, maxLife: life, op: op, grow: stage >= 2 ? 1.5 : 1.2 });
   }
 }
@@ -18500,13 +18624,10 @@ function emitSpark(x, y, z, n, hot) {
   // 万一日后有人传个很大的 n（比如 200），这一个调用就会把 effects 里所有旧粒子
   // 全 shift 掉并 scene.remove，等于瞬间清空玩家眼前的特效。现在按上限截断。
   const count = Math.min(Math.max(1, n || 2), cap);
+  const color = hot ? 0xfff2a8 : 0xffa72e;
   for (let i = 0; i < count; i++) {
-    if (effects.length >= cap) { const old = effects.shift(); if (old) scene.remove(old.m); }
-    const m = new THREE.Mesh(sparkGeometry(), sparkMaterial(hot));
-    m.position.set(x, y, z);
-    scene.add(m);
     const a = Math.random() * Math.PI * 2, sp = 1.6 + Math.random() * 3.6;
-    effects.push({ m, vx: Math.cos(a) * sp, vy: 2.6 + Math.random() * 3.4, vz: Math.sin(a) * sp, life: 0.5 + Math.random() * 0.4 });
+    fxPush(x, y, z, color, 0.18, Math.cos(a) * sp, 2.6 + Math.random() * 3.4, Math.sin(a) * sp, 0.5 + Math.random() * 0.4);
   }
 }
 function updateSmokes(dt) {
@@ -18516,21 +18637,13 @@ function updateSmokes(dt) {
     s.m.position.x += s.vx * dt; s.m.position.y += s.vy * dt; s.m.position.z += s.vz * dt;
     s.m.scale.multiplyScalar(1 + s.grow * dt);
     s.m.material.opacity = Math.max(0, s.life / s.maxLife) * s.op;
-    // 【fix40 修复】这里原来只 scene.remove、不释放材质。烟/火/扬尘每颗粒子用的都是
-    // **独立材质**（emitSmoke 每次 new，emitDamageSmoke/emitDamageFire 每次 .clone()），
-    // 而且 updateSmokes 每帧都要改它的 opacity（所以不能共享）。寿命到了却不 dispose，
-    // 长时间开车/烧车会持续堆积材质对象。现在统一走 disposeSmokeParticle。
-    if (s.life <= 0) { disposeSmokeParticle(s); smokes.splice(i, 1); }
+    // 【fix567】到期不再 scene.remove + material.dispose()，只归还池（mesh 常驻场景，visible=false）
+    if (s.life <= 0) { smokeRelease(s); smokes.splice(i, 1); }
   }
 }
 // 【fix40】释放一颗烟/火/扬尘粒子。
-// 注意：几何体是全局缓存的（smokeGeometry / _dmgSmokeGeo / dustGeometry / fireGeometry），
-// **绝对不能 dispose**，否则后面所有粒子都会变成空壳；只有材质是每颗独立的，需要释放。
-function disposeSmokeParticle(s) {
-  if (!s || !s.m) return;
-  try { scene.remove(s.m); } catch (e) {}
-  try { const mat = s.m.material; if (mat && !mat.userData.sharedMat) mat.dispose(); } catch (e) {}
-}
+// 【fix567】现在改为"归还对象池"：几何体与材质都是池里预建好的，不再 dispose（dispose 会把池搞坏）。
+function disposeSmokeParticle(s) { smokeRelease(s); }
 let _stepDustCd = 0;
 var _dustGeoCache = null;   // 脚下扬尘：几何体复用（var + 惰性，避免 TDZ）
 function dustGeometry() {
@@ -18541,10 +18654,11 @@ function emitDust(x, z) {
   const cap = smokeCap();
   if (smokes.length >= cap) {
     const old = smokes.shift();
-    if (old) disposeSmokeParticle(old);   // 【fix40】超上限被挤掉的粒子同样要释放材质
+    if (old) smokeRelease(old);
   }
-  const m = new THREE.Mesh(dustGeometry(), new THREE.MeshBasicMaterial({ color: 0xb9a786, transparent: true, opacity: 0.5 }));
-  m.position.set(x, 0.08, z); scene.add(m);
+  const m = smokeTake(dustGeometry(), 0xb9a786, 0.5, false);
+  if (!m) return;
+  m.position.set(x, 0.08, z);
   const a = Math.random() * Math.PI * 2;
   smokes.push({ m, vx: Math.cos(a) * 0.35, vy: 0.5 + Math.random() * 0.4, vz: Math.sin(a) * 0.35, life: 0.5, maxLife: 0.5, op: 0.5, grow: 2.4 });
 }
@@ -18804,10 +18918,10 @@ function fireMaterial() {
 function emitDamageFire(x, y, z, n) {
   const cap = smokeCap();
   for (let i = 0; i < (n || 2); i++) {
-    if (smokes.length >= cap) { const old = smokes.shift(); if (old) disposeSmokeParticle(old); }
-    const m = new THREE.Mesh(fireGeometry(), fireMaterial().clone());
+    if (smokes.length >= cap) { const old = smokes.shift(); if (old) smokeRelease(old); }
+    const m = smokeTake(fireGeometry(), 0xff6a12, 0.9, true);   // true = 加色混合子池
+    if (!m) return;
     m.position.set(x + (Math.random() - 0.5) * 0.5, y, z + (Math.random() - 0.5) * 0.5);
-    scene.add(m);
     smokes.push({ m, vx: (Math.random() - 0.5) * 0.4, vy: 1.8 + Math.random() * 1.4, vz: (Math.random() - 0.5) * 0.4, life: 0.34, maxLife: 0.34, op: 0.9, grow: 0.25 });
   }
 }
@@ -19189,20 +19303,35 @@ function beep(freq, dur, type, vol, slide) {
     o.start(); o.stop(audioCtx.currentTime + dur);
   } catch (e) {}
 }
+// 【fix567】噪声缓冲复用：原来每声枪响都 createBuffer + 逐样本填随机数（0.04s×44100≈1764 次循环），
+// 枪战时每秒上百次 = 反复分配 AudioBuffer + GC。现在只生成一段 1 秒的白噪声常驻，
+// 每次播放用 start(when, offset, dur) 随机截一段 —— 听感一样，成本几乎为零。
+var _noiseBuf = null;
+function noiseBuffer() {
+  if (_noiseBuf) return _noiseBuf;
+  const sr = audioCtx.sampleRate;
+  const n = Math.floor(sr * 1.0);
+  const buf = audioCtx.createBuffer(1, n, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1);
+  _noiseBuf = buf;
+  return buf;
+}
 function noiseBurst(dur, vol) {
   if (!gameActive) return;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const n = Math.floor(audioCtx.sampleRate * dur);
-    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-    const src = audioCtx.createBufferSource(); src.buffer = buf;
-    const gn = audioCtx.createGain(); gn.gain.value = vol * sfxGain;
+    const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer();
+    const gn = audioCtx.createGain();
+    const t0 = audioCtx.currentTime;
+    gn.gain.setValueAtTime(vol * sfxGain, t0);
+    gn.gain.exponentialRampToValueAtTime(0.001, t0 + dur);   // 用增益包络做衰减（原来是把波形本身衰减）
     const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
     src.connect(f); f.connect(gn); gn.connect(audioCtx.destination);
-    src.start();
+    const off = Math.random() * Math.max(0, 0.9 - dur);       // 随机起点，避免每次听起来一模一样
+    src.start(t0, off, dur);
+    src.stop(t0 + dur + 0.02);
   } catch (e) {}
 }
 function sfx(name) {
@@ -19403,10 +19532,26 @@ function startTankEngine() {
   try { loopAudio = buildLoop({ noiseDur: 1.4, noiseCut: 260, noiseGain: 0.55, engType: 'sawtooth', engFreq: 40, engCut: 150, engGain: 0.3, lfoFreq: 4.5, lfoGain: 0.12, vol: 0.42 }); } catch (e) {}
 }
 
+// 【fix567·2026-11-24·用户："手机上枪战的时候会很卡，有时候直接崩溃自动退出"】
+// 根因之一：sfxNear 完全没有节流。sfx('shoot') 一次要建 4 个振荡器 + 1 段噪声，
+// 而枪战时几十个 NPC 各按 1.2s / 0.16s 的节奏开火 —— 手机上 AudioContext 每秒要建几百个节点，
+// 主线程直接被音频图创建拖垮，严重时浏览器判定页面无响应 / 内存超限，于是"卡死 + 闪退"。
+// 现在两层限制：
+//   ① 同名音效最小间隔（手机 110ms，桌面 45ms）—— 枪声再密也不会叠成一团噪音；
+//   ② 全局预算：每 100ms 最多 4 个（手机）/ 7 个（桌面）音效事件。
+// 注意：只对**远距离/环境音**限流，玩家自己的动作音（换弹、受击、拾取）走 sfx() 不受影响。
+var _sfxLast = {}, _sfxBudget = 0, _sfxWindowT = 0;
 function sfxNear(name, x, z, maxDist) {
   const src = (state === 'drive' && currentCar) ? currentCar : person.position;
   const d = Math.hypot(x - src.x, z - src.z);
   if (d >= maxDist) return;
+  const now = performance.now();
+  const gap = isMobile ? (name === 'shoot' ? 110 : 70) : (name === 'shoot' ? 45 : 30);
+  if (now - (_sfxLast[name] || 0) < gap) return;
+  if (now - _sfxWindowT > 100) { _sfxWindowT = now; _sfxBudget = 0; }
+  if (_sfxBudget >= (isMobile ? 4 : 7)) return;
+  _sfxBudget++;
+  _sfxLast[name] = now;
   sfxGain = Math.max(0.1, 1 - (d / maxDist) * 0.88);
   try { sfx(name); } finally { sfxGain = 1; }
 }
@@ -28025,7 +28170,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump, gfx: PROGRESS.gfx || 'auto' },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     inventory: { medkit: invCount('medkit'), stamkit: invCount('stamkit') },   // 【fix564】背包消耗品
     invBuyDay: { medkit: (INV_BUY_DAY.medkit === undefined ? -1 : INV_BUY_DAY.medkit), stamkit: (INV_BUY_DAY.stamkit === undefined ? -1 : INV_BUY_DAY.stamkit) },
@@ -28142,7 +28287,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; if (data.progress.motoJump !== undefined) PROGRESS.motoJump = !!data.progress.motoJump; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; if (data.progress.motoJump !== undefined) PROGRESS.motoJump = !!data.progress.motoJump; if (typeof data.progress.gfx === 'string' && /^(auto|low|mid|high)$/.test(data.progress.gfx)) PROGRESS.gfx = data.progress.gfx; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
   // 【fix507】成就进度恢复（静默，不重复发奖）
   try {
     if (data.achv) {
@@ -28874,6 +29019,8 @@ function gamePaused() {
   //    点「取消」后也失去了自动恢复的路径，表现为"足球玩不了、也取消不了"。
 }
 restoreSaveGame();
+// 【fix567】按存档里的画质档位落地一次（读档在 applyGfx 定义之前执行，这里显式应用）
+try { if (typeof applyGfx === 'function') applyGfx(PROGRESS.gfx || 'auto', true); } catch (e) { console.warn('[gfx]', e); }
 camYaw = personAngle.v; camPitch = 0;   // 视角初始对齐角色朝向
 // 外围路面必须等所有 buildings 登记完再铺，否则随机位置的商业区/工业区/乡村房子会被路穿过。
 // 放在 batchStaticScene() 之前，让路面能被静态合批。
@@ -28939,12 +29086,17 @@ var _cpuEco = 0;   // 0=正常 / 1=省电（远景 ×0.92）/ 2=省电+（远景
 // 再减去 40m 迟滞 → 人要到 155m 才"凭空出现"，玩家看到的就是"远处的人走到跟前才加载出来"。
 // 现在 0.92/0.86 基本看不出来，只作为最后手段。
 function ecoCullScale() { const e = (_cpuEco | 0); return e >= 2 ? 0.86 : (e === 1 ? 0.92 : 1); }
-// 省电模式下允许像素比再往下探一点（0.85 → 0.78 → 0.71），但**绝不再下探到 0.62**：
+// 省电模式下允许像素比再往下探一点，但**绝不下探到 0.62**：
 // 实测降到 0.62 帧率并没有变好（瓶颈不在填充率），只换来一片模糊。
-function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.71, PIXEL_RATIO_MIN - e * 0.07); }
-let _qFrames = 0, _qWindowStart = 0, _qBad = 0, _qGood = 0, _qCooldownUntil = 0;
+// 【fix567】下限 0.71 → 0.9：用户反馈"手机上画质比较低"。0.71 已经是肉眼可见的糊，
+// 而降到那一步时帧率往往并没有真的变好（瓶颈在 draw call / CPU，不在填充率）。
+// 现在最低只到 0.9，宁可少降一点、也别让玩家看到一片马赛克。
+function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.9, PIXEL_RATIO_MIN - e * 0.05); }
+let _qFrames = 0, _qWindowStart = 0, _qBad = 0, _qGood = 0, _qCooldownUntil = 0, _qSharp = 0;
 function updateAutoQuality() {
   if (!isMobile) return;
+  // 【fix567】玩家手动锁了画质档位 → 系统不再偷偷改
+  if (PROGRESS.gfx && PROGRESS.gfx !== 'auto') return;
   const now = performance.now();
   if (!_qWindowStart) _qWindowStart = now;
   _qFrames++;
@@ -28980,6 +29132,21 @@ function updateAutoQuality() {
     }
   } else if (fps >= 34) {      // 回到 34fps 就升回来（原来要 55fps，机器永远够不到）
     _qGood++; _qBad = 0;
+    // 【fix567】跑得很快（≥50fps）且分辨率已经顶到上限 → 把上限往上抬一档。
+    // 手机上 dpr 普遍 2.5~3，1.25 只相当于物理像素的 40%，看着确实糊；
+    // 但一上来就给高分辨率又会把弱机打趴。所以做成"先稳后清"：证明能跑顺，再逐步加清晰度。
+    if (fps >= 50 && isMobile && PIXEL_RATIO_MAX < 1.5 && pixelRatio >= PIXEL_RATIO_MAX - 0.01) {
+      _qSharp = (_qSharp || 0) + 1;
+      if (_qSharp >= 8) {
+        _qSharp = 0;
+        PIXEL_RATIO_MAX = Math.min(1.5, PIXEL_RATIO_MAX + 0.125);
+        pixelRatio = PIXEL_RATIO_MAX;
+        renderer.setPixelRatio(pixelRatio);
+        _qCooldownUntil = now + 8000;
+        try { setHint('帧率很稳，画质已自动提升到 ' + Math.round(pixelRatio * 100) / 100 + 'x'); } catch (e) {}
+        return;
+      }
+    } else { _qSharp = 0; }
     if (_qGood >= 6 && _cpuEco > 0) {           // 连续 6 秒都够流畅，才收回一档远景
       _cpuEco--;
       _qGood = 0; _qCooldownUntil = now + 6000;
@@ -28989,7 +29156,7 @@ function updateAutoQuality() {
       renderer.setPixelRatio(pixelRatio);
       _qGood = 0; _qCooldownUntil = now + 4000;
     }
-  } else { _qBad = 0; _qGood = 0; }
+  } else { _qBad = 0; _qGood = 0; _qSharp = 0; }
 }
 let _lastFrameMs = 0;
 let _wasPaused = false;   // 上一帧是否处于"弹窗暂停"状态（用于在刚暂停那一帧清一次输入）
@@ -36556,12 +36723,70 @@ function setMotoJump(on) {
   if (_mb) _mb.addEventListener('click', () => setMotoJump(!PROGRESS.motoJump));
 }
 syncMotoJumpBtn();
+// ==================== 【fix567】画质档位 ====================
+// 用户反馈："手机上画质比较低，枪战很卡，有时候直接崩溃自动退出"。
+// 三个抱怨其实是一件事的两面：分辨率越高越清楚，但也越吃 GPU 填充率。
+// 之前只有"自动"一条路，而且降质下限低到 0.71（非常糊），玩家既不能自己调、也不知道为什么变糊。
+// 现在给三档锁定 + 自动：
+//   低：0.8  —— 只给"能跑就行"的机器，填充率约为中的 41%
+//   中：1.25 —— 默认，接近 720p 的观感
+//   高：设备 dpr（封顶 2）—— 旗舰机开，像素量约是中的 2.5 倍
+//   自动：仍按帧率升降，但下限从 0.71 提到 0.9（不会再糊成一片）
+function gfxPreset(level) {
+  if (level === 'low') return { pr: 0.8, eco: 2 };
+  if (level === 'mid') return { pr: 1.25, eco: 0 };
+  if (level === 'high') return { pr: Math.min(devicePixelRatio || 1, 2), eco: 0 };
+  return null;   // auto
+}
+function syncGfxRow() {
+  const row = document.getElementById('gfxRow');
+  if (!row) return;
+  const cur = PROGRESS.gfx || 'auto';
+  const tabs = row.querySelectorAll('.mode-tab');
+  for (let i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].getAttribute('data-gfx') === cur);
+}
+function applyGfx(level, silent) {
+  if (!/^(auto|low|mid|high)$/.test(level)) level = 'auto';
+  PROGRESS.gfx = level;
+  const p = gfxPreset(level);
+  if (p) {
+    _cpuEco = p.eco;                       // 远景档位跟着走
+    pixelRatio = p.pr;
+    try { renderer.setPixelRatio(pixelRatio); } catch (e) {}
+  } else {
+    _cpuEco = 0;
+    pixelRatio = PIXEL_RATIO_MAX;
+    try { renderer.setPixelRatio(pixelRatio); } catch (e) {}
+  }
+  // 手动锁档后把自适应窗口清零，避免旧的"连续掉帧计数"立刻把新档位又压下去
+  try { _qBad = 0; _qGood = 0; _qSharp = 0; _qCooldownUntil = performance.now() + 6000; } catch (e) {}
+  syncGfxRow();
+  if (!silent) {
+    try { saveGame(); } catch (e) {}
+    try {
+      setHint(level === 'low' ? '画质：低（最省电，画面较糊）'
+        : level === 'mid' ? '画质：中'
+        : level === 'high' ? '画质：高（最清晰，也更吃性能）'
+        : '画质：自动（按帧率调整）');
+    } catch (e) {}
+  }
+}
+{
+  const row = document.getElementById('gfxRow');
+  if (row) {
+    const tabs = row.querySelectorAll('.mode-tab');
+    for (let i = 0; i < tabs.length; i++) {
+      tabs[i].addEventListener('click', () => applyGfx(tabs[i].getAttribute('data-gfx')));
+    }
+  }
+}
+syncGfxRow();
 // 打开设置时：把模式标签同步到当前游戏模式（没在编辑时），高亮对应 tab
 function syncLayoutModeTabs() {
   if (!layoutEditing) layoutEditMode = getCurMode();
   document.querySelectorAll('#layoutModeRow .mode-tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-m') === layoutEditMode));
 }
-document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); try { syncVehLookBtn(); } catch (e) {} try { syncMotoJumpBtn(); } catch (e) {} });
+document.getElementById('settingsBtn').addEventListener('click', () => { document.getElementById('setPanel').style.display = 'block'; syncLayoutModeTabs(); syncViewModeButtons(); try { syncVehLookBtn(); } catch (e) {} try { syncMotoJumpBtn(); } catch (e) {} try { syncGfxRow(); } catch (e) {} });
 // 【fix180】设置面板里的开发者入口
 const _setDevBtn = document.getElementById('setDevBtn');
 if (_setDevBtn) _setDevBtn.addEventListener('click', () => { try { openDevPanel(); } catch (e) {} });
