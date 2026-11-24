@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix571-rage-crash-guard">
+<meta name="cf-build" content="20261124-fix572-deathcam-show-body">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -15051,6 +15051,13 @@ function startDeathCam() {
   let gy = terrainHeight(px, pz);
   try { const pt = platformTopAt(px, pz, person.position.y); if (isFinite(pt) && pt > gy) gy = pt; } catch (e) {}
   deathCam = { t: 0, x: px, y: gy, z: pz, ang: camYaw };
+  // 【fix572·2026-11-24】用户："第一人称死亡的时候会出现只有两只胳膊，能让第一人称死亡的时候
+  //   和第三人称一样显示整个身体。" 根因：第一人称的胳膊是挂在相机前的独立 rig（fpViewRig），
+  //   死亡镜头在 update 开头就 return，不再走 syncFirstPersonViewRig 去收它，于是胳膊一直杵在镜头前，
+  //   把倒地的完整人物挡住了。这里主动收起视图模型，并把近裁剪面恢复成第三人称的 0.5。
+  //   person 下面已经被设回可见并摆成倒地姿态，死亡镜头就和第三人称一致了。
+  try { if (fpViewRig) fpViewRig.visible = false; } catch (e) {}
+  try { if (Math.abs(camera.near - 0.5) > 1e-4) { camera.near = 0.5; camera.updateProjectionMatrix(); } } catch (e) {}
   // 让身体真的"倒下"：整个人绕 X 轴放平、贴着地面，镜头才看得出死亡状态
   try {
     person.visible = true;
