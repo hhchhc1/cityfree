@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix569-mobile-lights-perf">
+<meta name="cf-build" content="20261124-fix570-mobile-sharper-image">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1287,10 +1287,14 @@ try {
 } catch (eGl) {}
 renderer.setSize(innerWidth, innerHeight);
 // 像素比上下限：手机 0.85~1.25 可动态调整；桌面保持设备原始值（不降质）
-// 【fix567】改成 var：自动档在"持续跑得很流畅"时会把这个上限往上提（1.25 → 1.375 → 1.5），
+// 【fix567】改成 var：自动档在"持续跑得很流畅"时会把这个上限往上提，
 // 让性能有余量的机器自动变清晰 —— 这才是"自动"该有的行为，而不是只会往下掉。
-var PIXEL_RATIO_MAX = isMobile ? 1.25 : Math.min(devicePixelRatio, 2);
-const PIXEL_RATIO_MIN = isMobile ? 0.85 : Math.min(devicePixelRatio, 2);
+// 【fix570·2026-11-24】用户："没有那么卡，但是手机的画质还是比电脑的低，能不能再高一点。"
+// 根因：fix569 干掉 45 盏火把点光源后 GPU 余量释放，但像素比还停在 1.25（手机 DPR 2.5~3 的 40%），
+// 看着就是糊。1.25 → 1.45 只多约 35% 像素量，配合已有真实减负足够稳；
+// 下限 0.85 → 0.95，避免自动降档后糊成一片。
+var PIXEL_RATIO_MAX = isMobile ? 1.45 : Math.min(devicePixelRatio, 2);
+const PIXEL_RATIO_MIN = isMobile ? 0.95 : Math.min(devicePixelRatio, 2);
 let pixelRatio = PIXEL_RATIO_MAX;
 renderer.setPixelRatio(pixelRatio);
 document.body.appendChild(renderer.domElement);
@@ -28601,9 +28605,11 @@ const CULL_DISTANCE = isMobile ? 300 : 320;            // 行人/警察可见半
 const CULL_DISTANCE_CAR = isMobile ? 400 : 550;        // 车辆可见半径
 const CULL_HYSTERESIS = 40;                            // 可见性迟滞：已可见的要多跑 40m 才隐藏，防止边界反复横跳闪烁
 const CULL_HYSTERESIS_CAR = 50;
-const LOD_CAR_DISTANCE = isMobile ? 70 : 110;          // 超过此距离的车换成"车形低模"（轮廓一致，不再是方块）
-const LOD_PERSON_DISTANCE = isMobile ? 45 : 80;        // 超过此距离的行人换成"会走路的廉价骨架"（5 个 mesh，见 makeCheapHumanRig）
-const LOD_ARM_DISTANCE = isMobile ? 58 : 100;          // 超过此距离连远景骨架的胳膊也省掉（只剩 3 个 mesh）
+// 【fix570】画面清晰度提高后，原来的低模切换太早：45m 外的人已经能看清轮廓，
+// 却还是廉价骨架，看着像"人走近才加载"。手机端各放宽约 20%（低画质档仍走 isLowGfx 的 24m/28m，不增加负担）。
+const LOD_CAR_DISTANCE = isMobile ? 80 : 110;          // 超过此距离的车换成"车形低模"（轮廓一致，不再是方块）
+const LOD_PERSON_DISTANCE = isMobile ? 55 : 80;        // 超过此距离的行人换成"会走路的廉价骨架"（5 个 mesh，见 makeCheapHumanRig）
+const LOD_ARM_DISTANCE = isMobile ? 66 : 100;          // 超过此距离连远景骨架的胳膊也省掉（只剩 3 个 mesh）
                                                        // 70m 外的人在手机屏上只有二十几个像素高，完整模型和方块看不出区别，但 draw call 差 22 倍
 // 远距 LOD：把完整模型（车身/轮子/司机/骑手，或行人关节…）塞进 detail 子组，
 // 超过阈值时只显示一个低模盒子（1 个 draw call），近距再切回完整模型。
@@ -29164,8 +29170,9 @@ function ecoCullScale() {
 // 实测降到 0.62 帧率并没有变好（瓶颈不在填充率），只换来一片模糊。
 // 【fix567】下限 0.71 → 0.9：用户反馈"手机上画质比较低"。0.71 已经是肉眼可见的糊，
 // 而降到那一步时帧率往往并没有真的变好（瓶颈在 draw call / CPU，不在填充率）。
-// 现在最低只到 0.9，宁可少降一点、也别让玩家看到一片马赛克。
-function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(0.9, PIXEL_RATIO_MIN - e * 0.05); }
+// 【fix570】再提到 1.0：fix569 后瓶颈已经从 GPU 填充率转到 draw call，继续降分辨率换不到帧率，
+// 只会让画面糊。真要保帧率优先靠 ecoCullScale() 收远景、减 AI，而不是把画面压成马赛克。
+function ecoPixelMin() { const e = (_cpuEco | 0); return Math.max(1.0, PIXEL_RATIO_MIN - e * 0.05); }
 let _qFrames = 0, _qWindowStart = 0, _qBad = 0, _qGood = 0, _qCooldownUntil = 0, _qSharp = 0;
 function updateAutoQuality() {
   if (!isMobile) return;
@@ -29195,8 +29202,9 @@ function updateAutoQuality() {
       if (pixelRatio > prMin + 0.01) {
         // 【fix569】renderer.setPixelRatio() 会重建 WebGL  drawing buffer，手机上单次就能卡 100~300ms。
         // 旧逻辑每次只降 0.12、冷却 4 秒 → 从 1.25 掉到 0.9 要连续重建 3 次，玩家感觉就是"一卡一卡的"。
-        // 现在 Severe（<16fps）一步到底，普通掉帧 0.18 一步；同时立刻推进 CPU 省电档，不再等下一轮。
-        const target = Math.max(prMin, pixelRatio - (fps < 16 ? 0.5 : 0.18));
+        // 现在 Severe（<16fps）一步到底；【fix570】普通掉帧 0.18 → 0.14：
+        // 既然下限已经抬到 1.0，就不必一掉帧先砍一大块清晰度，优先靠同时推进的 CPU 省电档保帧率。
+        const target = Math.max(prMin, pixelRatio - (fps < 16 ? 0.5 : 0.14));
         pixelRatio = target;
         try { renderer.setPixelRatio(pixelRatio); } catch (e) {}
         if (_cpuEco < 2) _cpuEco++;
@@ -29211,14 +29219,16 @@ function updateAutoQuality() {
     }
   } else if (fps >= 34) {      // 回到 34fps 就升回来（原来要 55fps，机器永远够不到）
     _qGood++; _qBad = 0;
-    // 【fix567】跑得很快（≥50fps）且分辨率已经顶到上限 → 把上限往上抬一档。
+    // 【fix567】跑得很快且分辨率已经顶到上限 → 把上限往上抬一档。
     // 手机上 dpr 普遍 2.5~3，1.25 只相当于物理像素的 40%，看着确实糊；
     // 但一上来就给高分辨率又会把弱机打趴。所以做成"先稳后清"：证明能跑顺，再逐步加清晰度。
-    if (fps >= 50 && isMobile && PIXEL_RATIO_MAX < 1.5 && pixelRatio >= PIXEL_RATIO_MAX - 0.01) {
+    // 【fix570】门槛 50fps → 42fps、连续 8 窗 → 5 窗、上限 1.5 → 1.7、步长 0.125 → 0.15：
+    // 原逻辑要求几乎满帧才升档，多数手机永远卡在 1.25；现在中高帧率机器也能爬到 1.6~1.7。
+    if (fps >= 42 && isMobile && PIXEL_RATIO_MAX < 1.7 && pixelRatio >= PIXEL_RATIO_MAX - 0.01) {
       _qSharp = (_qSharp || 0) + 1;
-      if (_qSharp >= 8) {
+      if (_qSharp >= 5) {
         _qSharp = 0;
-        PIXEL_RATIO_MAX = Math.min(1.5, PIXEL_RATIO_MAX + 0.125);
+        PIXEL_RATIO_MAX = Math.min(1.7, PIXEL_RATIO_MAX + 0.15);
         pixelRatio = PIXEL_RATIO_MAX;
         renderer.setPixelRatio(pixelRatio);
         _qCooldownUntil = now + 8000;
@@ -29231,7 +29241,7 @@ function updateAutoQuality() {
       _qGood = 0; _qCooldownUntil = now + 6000;
       try { setHint(_cpuEco === 0 ? '已恢复完整远景' : ''); } catch (e) {}
     } else if (_qGood >= 4 && pixelRatio < PIXEL_RATIO_MAX - 0.01) {   // 连续 4 窗达标就回调分辨率
-      pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.12);
+      pixelRatio = Math.min(PIXEL_RATIO_MAX, pixelRatio + 0.15);        // 【fix570】0.12 → 0.15，回调更快
       renderer.setPixelRatio(pixelRatio);
       _qGood = 0; _qCooldownUntil = now + 4000;
     }
@@ -36813,13 +36823,15 @@ syncMotoJumpBtn();
 // 三个抱怨其实是一件事的两面：分辨率越高越清楚，但也越吃 GPU 填充率。
 // 之前只有"自动"一条路，而且降质下限低到 0.71（非常糊），玩家既不能自己调、也不知道为什么变糊。
 // 现在给三档锁定 + 自动：
-//   低：0.8  —— 只给"能跑就行"的机器，填充率约为中的 41%
-//   中：1.25 —— 默认，接近 720p 的观感
-//   高：设备 dpr（封顶 2）—— 旗舰机开，像素量约是中的 2.5 倍
-//   自动：仍按帧率升降，但下限从 0.71 提到 0.9（不会再糊成一片）
+//   低：1.0  —— 【fix570】不再靠糊换性能，靠 eco=3 真减少同屏人车/灯光/粒子
+//   中：1.45 —— 【fix570】默认上限提高，手机画面明显更清晰
+//   高：设备 dpr（封顶 2）—— 旗舰机开
+//   自动：按帧率升降，下限 1.0（不会再糊成一片）
+// 【fix570】用户："没有那么卡，但是手机的画质还是比电脑的低"。根因是三处叠加：
+// 自动上限 1.25、升档要 50fps 且封顶 1.5、低档直接 0.8。fix569 已腾出 GPU 余量，这里统一上调。
 function gfxPreset(level) {
-  if (level === 'low') return { pr: 0.8, eco: 3 };   // 【fix569】低档不只是糊，还要真减少同屏对象
-  if (level === 'mid') return { pr: 1.25, eco: 0 };
+  if (level === 'low') return { pr: 1.0, eco: 3 };    // 【fix570】低档保留全部减负，但分辨率不再糊
+  if (level === 'mid') return { pr: 1.45, eco: 0 };
   if (level === 'high') return { pr: Math.min(devicePixelRatio || 1, 2), eco: 0 };
   return null;   // auto
 }
@@ -36849,7 +36861,7 @@ function applyGfx(level, silent) {
   if (!silent) {
     try { saveGame(); } catch (e) {}
     try {
-      setHint(level === 'low' ? '画质：低（极速省电：减少同屏人车/灯光/粒子）'
+      setHint(level === 'low' ? '画质：低（省电：减少同屏人车/灯光/粒子，分辨率不糊）'
         : level === 'mid' ? '画质：中'
         : level === 'high' ? '画质：高（最清晰，也更吃性能）'
         : '画质：自动（按帧率调整）');
