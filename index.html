@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix572-deathcam-show-body">
+<meta name="cf-build" content="20261124-fix573-invasion-battle">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -12537,6 +12537,212 @@ function makeQuestMarker(x, z, groundY) {
 // ---- 任务点 UI ----
 let questOfferOpen = false, questOfferId = null;
 let questResultOpen = false;
+// ==================== 【fix573·2026-11-24】外族入侵 ====================
+// 用户："再加一个玩法：有外族入侵，然后要联合市民警察还有军方一起击败外敌。"
+// 设计：外敌是独立阵营 faction=200，从城市四角向中心推进；任务期间玩家与城内原住民临时停战，
+// 市民/军方支援用现有的 hate='faction' + hateTarget 机制打外敌，警察由本文件单独驱动，
+// 全部外敌被击退即完成任务。外敌不进 respawn，任务结束/放弃时统一清理。
+var invasionActive = false, invasionTick = 0, invasionTotal = 0;
+var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
+var INV_UNIFORM = 0x8e3b2e;      // 外族暗红褐制服
+var MIL_UNIFORM_INV = 0x4a5a3a;  // 军方支援的军绿色（和基地守卫一致）
+function nearestInvader(x, z, maxD) {
+  let best = null, bd = maxD * maxD;
+  for (const v of INVADERS) {
+    if (!v.alive || v.down) continue;
+    const dx = v.x - x, dz = v.z - z, d2 = dx * dx + dz * dz;
+    if (d2 < bd) { bd = d2; best = v; }
+  }
+  return best;
+}
+function nearestNonInvader(x, z, maxD) {
+  let best = null, bd = maxD * maxD;
+  for (const r of residents) {
+    if (r.isInvader || !r.alive || r.down) continue;
+    const dx = r.x - x, dz = r.z - z, d2 = dx * dx + dz * dz;
+    if (d2 < bd) { bd = d2; best = r; }
+  }
+  return best;
+}
+function cleanupInvasion() {
+  invasionActive = false;
+  for (const v of INVADERS) {
+    try { scene.remove(v.group); } catch (e) {}
+    const i = residents.indexOf(v); if (i >= 0) residents.splice(i, 1);
+  }
+  for (const s of INV_SUPPORT) {
+    try { scene.remove(s.group); } catch (e) {}
+    const i = residents.indexOf(s); if (i >= 0) residents.splice(i, 1);
+  }
+  for (const c of INV_COPS) {
+    try { scene.remove(c.group); } catch (e) {}
+    const i = cops.indexOf(c); if (i >= 0) cops.splice(i, 1);
+  }
+  INVADERS.length = 0; INV_SUPPORT.length = 0; INV_COPS.length = 0;
+  for (const r of residents) {
+    if (r.hate === 'faction' && r.hateTarget && r.hateTarget.isInvader) { r.hate = null; r.hateTarget = null; }
+  }
+  for (const c of cops) { c._invTarget = null; c.huntT = 0; c.aggro = false; }
+}
+function spawnInvasionForce(q) {
+  cleanupInvasion();
+  invasionActive = true; invasionTick = 0;
+  const N = isMobile ? 8 : 12;
+  invasionTotal = N;
+  q.progressTotal = N; q.progressValue = 0;
+  // 从玩家四周 130m 处杀过来：城市四角太远（要跑两分钟才交战），看不到"入侵"。
+  const px = person.position.x, pz = person.position.z;
+  const spots = [
+    { x: px - 130, z: pz - 130 }, { x: px + 130, z: pz - 130 },
+    { x: px - 130, z: pz + 130 }, { x: px + 130, z: pz + 130 }
+  ];
+  for (let i = 0; i < N; i++) {
+    const sp = spots[i % spots.length];
+    const sp2 = { x: sp.x + (Math.random() - 0.5) * 50, z: sp.z + (Math.random() - 0.5) * 50 };
+    clampCity(sp2);
+    const x = sp2.x, z = sp2.z;
+    const g = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM });
+    const wp = (i % 3 === 0) ? 'ak47' : 'rifle';
+    addWeaponMesh(g, wp);
+    const gy = terrainHeight(x, z);
+    g.position.set(x, gy, z);
+    g.rotation.y = Math.atan2(-x, -z);
+    scene.add(g);
+    const v = {
+      group: g, x: x, z: z, angle: g.rotation.y,
+      alive: true, walking: true, timer: 0, walkTime: 0, respawn: 0,
+      hp: 120, maxHp: 120, melee: 'sword', ranged: wp,
+      faction: 200, isInvader: true, skipAI: true, flee: false, hate: null,
+      down: false, downT: 0, attackCd: 0, phase: Math.random() * 6,
+      punchAnim: 0, punchHand: 0, armed: true, ammo: 90, maxAmmo: 90,
+      chaseMode: 'run', _side: Math.random() < 0.5 ? 1 : -1
+    };
+    INVADERS.push(v); residents.push(v);
+  }
+  // 军方支援：两名基地警卫空降到战场，和市民一起打外敌（不占基地原哨位）
+  for (let i = 0; i < 2; i++) {
+    const pp = { x: px + (i ? 38 : -38), z: pz - 38 };
+    clampCity(pp);
+    const x = pp.x, z = pp.z;
+    const g = makeHuman(MIL_UNIFORM_INV, false, { uniformColor: MIL_UNIFORM_INV, militaryCap: true });
+    addWeaponMesh(g, 'rifle');
+    const gy = terrainHeight(x, z);
+    g.position.set(x, gy, z); scene.add(g);
+    const s = {
+      group: g, x: x, z: z, angle: 0, alive: true, walking: false,
+      timer: 0, walkTime: 0, respawn: 0, hp: 210, maxHp: 210,
+      melee: 'fist', ranged: 'rifle', faction: 0, flee: false, hate: null,
+      down: false, downT: 0, attackCd: 0, phase: i, punchAnim: 0, punchHand: 0,
+      armed: true, ammo: 180, maxAmmo: 180, chaseMode: 'run',
+      isBaseGuard: true, isInvSupport: true, hqFlatY: gy, noRespawn: true
+    };
+    INV_SUPPORT.push(s); residents.push(s);
+  }
+  // 两名警察支援也空降到战场边缘，否则原警察都在警局、离入侵点太远，第一时间看不到他们参战
+  for (let i = 0; i < 2; i++) {
+    const pp = { x: px + (i ? 26 : -26), z: pz + 26 };
+    clampCity(pp);
+    const g = makeCopFigure();
+    const gy = terrainHeight(pp.x, pp.z);
+    g.position.set(pp.x, gy, pp.z); scene.add(g);
+    const c = {
+      group: g, x: pp.x, z: pp.z, angle: 0, hp: 80, alive: true,
+      fightCd: 0, respawn: 0, down: false, downT: 0,
+      ranged: 'pistol', melee: 'baton', armed: true, ammo: 24, maxAmmo: 24,
+      aggro: false, huntT: 0, isInvPolice: true
+    };
+    INV_COPS.push(c); cops.push(c);
+  }
+  // 临时停战：清掉所有人对玩家的仇恨，警察也不再追玩家
+  for (const r of residents) {
+    if (r.isInvader) continue;
+    if (r.hate === 'player') { r.hate = null; r.hateTarget = null; }
+  }
+  for (const c of cops) { c.huntT = 0; c.aggro = false; c._invTarget = null; }
+  try { setHint('外族入侵！与市民、警察和军方一起击退 ' + N + ' 名入侵者'); } catch (e) {}
+  try { floatText('外族入侵！', '#ff5544'); } catch (e) {}
+  try { sfx('siren'); } catch (e) {}
+}
+function updateInvasion(dt, q) {
+  if (!invasionActive) { spawnInvasionForce(q); return; }
+  const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
+  const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+  // 外敌自己驱动（skipAI），优先打附近的市民/军方，否则直扑玩家
+  for (const v of INVADERS) {
+    if (!v.alive || v.down) continue;
+    const nearP = nearestNonInvader(v.x, v.z, 26);
+    const toPlayer = !nearP || Math.hypot(px - v.x, pz - v.z) < 10;
+    const tx = toPlayer ? px : nearP.x, tz = toPlayer ? pz : nearP.z;
+    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz) || 1;
+    v.angle = Math.atan2(dx, dz); v.group.rotation.y = v.angle;
+    if (d > 11) {
+      let mx = dx / d, mz = dz / d;
+      if (!hasLineOfSight(v.x, v.z, tx, tz, null)) {
+        const s = v._side || 1;
+        mx = -mz * s * 0.85 + dx / d * 0.45;
+        mz = dx / d * s * 0.85 + dz / d * 0.45;
+      }
+      const p = { x: v.x + mx * 4.2 * dt, z: v.z + mz * 4.2 * dt };
+      collideNpc(p, 0.4, v); clampCity(p);
+      v.x = p.x; v.z = p.z; v.group.position.x = p.x; v.group.position.z = p.z;
+    }
+    v.phase += dt * 8;
+    if (v.attackCd > 0) v.attackCd -= dt;
+    if (d < 24 && v.attackCd <= 0 && hasLineOfSight(v.x, v.z, tx, tz, null)) {
+      v.attackCd = 1.0 + Math.random() * 0.5;
+      sfxNear('shoot', v.x, v.z, 50);
+      spawnTracer(v.x + dx / d * 1.2, 1.3, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
+      spawnBurst(v.x + dx / d * 1.2, v.z + dz / d * 1.2, 0xffff88, 4);
+      if (toPlayer) npcShotPlayer(9, v.x, v.z, v.ranged);
+      else if (nearP) { nearP.hp -= 8; if (nearP.hp <= 0) killResident(nearP, v); }
+    }
+  }
+  // 每 2 秒重新分配市民 / 军方支援的目标（用现有 faction 分支让他们真的开枪）
+  invasionTick -= dt;
+  if (invasionTick <= 0) {
+    invasionTick = 2;
+    for (const r of residents) {
+      if (r.isInvader || !r.alive || r.down || r.isBaseGuard) continue;
+      const tgt = nearestInvader(r.x, r.z, 220);
+      if (tgt) { r.hate = 'faction'; r.hateTarget = tgt; r.armed = true; }
+    }
+    for (const s of INV_SUPPORT) {
+      const tgt = nearestInvader(s.x, s.z, 260);
+      if (tgt) { s.hate = 'faction'; s.hateTarget = tgt; s.armed = true; }
+    }
+    for (const c of cops) c._invTarget = nearestInvader(c.x, c.z, 160);
+  }
+  // 警察：临时改打外敌（原 updateCop 的 huntPlayer 在入侵期间已停用）
+  for (const c of cops) {
+    const tgt = c._invTarget;
+    if (!tgt || !tgt.alive || !c.alive) continue;
+    const dx = tgt.x - c.x, dz = tgt.z - c.z, d = Math.hypot(dx, dz) || 1;
+    if (c.fightCd > 0) c.fightCd -= dt;
+    if (d > 10) {
+      const p = { x: c.x + dx / d * 4.5 * dt, z: c.z + dz / d * 4.5 * dt };
+      collideNpc(p, 0.4, c); clampCity(p);
+      c.x = p.x; c.z = p.z; c.group.position.x = p.x; c.group.position.z = p.z;
+      c.angle = Math.atan2(dx, dz); c.group.rotation.y = c.angle;
+    }
+    if (d < 22 && c.fightCd <= 0 && hasLineOfSight(c.x, c.z, tgt.x, tgt.z, null)) {
+      c.fightCd = 1.0;
+      sfxNear('shoot', c.x, c.z, 50);
+      spawnTracer(c.x + dx / d * 1.2, 1.3, c.z + dz / d * 1.2, tgt.x, 1.0, tgt.z, 'pistol');
+      tgt.hp -= 7;
+      if (tgt.hp <= 0) killResident(tgt, c);
+    }
+  }
+  // 全部击退 → 领奖状态
+  let left = 0;
+  for (const v of INVADERS) if (v.alive && !v.down) left++;
+  q.progressValue = invasionTotal - left;
+  if (left === 0 && q.state === 'active') {
+    try { achUnlock('invasionHero'); } catch (e) {}
+    cleanupInvasion();
+    completeQuest(q.id);
+    try { floatText('外敌已被击退！', '#7dffa8'); } catch (e) {}
+  }
+}
 let questBusyHintT = 0;          // 互斥提示的节流计时
 // 任务点感应冷却：拒绝接取后必须等一会儿，并且要走出光柱再回来才重新感应，
 // 否则玩家一直站在光柱里会被弹窗反复糊脸（"开车过去一直卡在那里"）。
@@ -12645,6 +12851,13 @@ function claimQuest(id) {
     q.marker.group.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     q.marker = null;
   }
+  if (q.id === 'invasion') {
+    // 【fix573】入侵每天一次：明天光柱自动刷新，再来一波
+    q.state = 'cooldown'; q.completed = false; q.progressValue = 0;
+    q.cooldownUntilDay = worldDay + 1;
+    if (!q.marker) q.marker = makeQuestMarker(q.x, q.z, terrainHeight(q.x, q.z));
+    setHint('外敌已退，明天可能还会有新的入侵');
+  }
   if (q.repeatable) {
     // 可重复任务：领完奖立刻重置回「可接」，并重新竖起任务光柱（赛车可以反复刷）
     questBridge.despawnRaceCar(q);
@@ -12676,6 +12889,7 @@ function abortQuest(id) {
   q.progressValue = 0;
   if (q.checkpoints) for (const c of q.checkpoints) scene.remove(c.group);
   q.checkpoints = null;
+  if (q.id === 'invasion') cleanupInvasion();   // 【fix573】放弃入侵要清掉外敌与军方支援
   sfx('coin');
   renderQuestTracker();
   setHint('已放弃任务：' + q.name);
@@ -12683,6 +12897,7 @@ function abortQuest(id) {
 }
 function failQuest(q, reason) {
   if (q.id === 'race') questBridge.despawnRaceCar(q);
+  if (q.id === 'invasion') cleanupInvasion();   // 【fix573】失败同样要撤兵，否则外敌永久留在城里
   q.state = 'available';
   // 同 abortQuest：用 initialPhase 复位，否则赛车失败一次后就再也开不了。
   q.phase = q.initialPhase || 'idle';
@@ -12924,9 +13139,10 @@ function updateQuests(dt) {
         q.state = 'available'; q.completed = false;
         q.phase = q.initialPhase || 'idle';
         q.elapsed = 0; q.checkpointIndex = 0; q.progressValue = 0;
-        q.checkpoints = null; q.progressTotal = questBridge.RACE_CHECKS;
+        q.checkpoints = null;
+        if (q.id === 'race') q.progressTotal = questBridge.RACE_CHECKS;   // 【fix573】入侵任务不能被赛车检查点数覆盖
         if (!q.marker) q.marker = makeQuestMarker(q.x, q.z, terrainHeight(q.x, q.z));
-        setHint('新的一天，赛车任务可以再接了！');
+        setHint(q.id === 'invasion' ? '新的一天，外族可能再次入侵！' : '新的一天，赛车任务可以再接了！');
         floatText('任务已刷新', '#7dffa8');
       }
       continue;
@@ -13707,6 +13923,33 @@ var questBridge = { despawnRaceCar: null, RACE_CHECKS: 6 };
   };
   heliQuest.marker = makeQuestMarker(heliQuest.x, heliQuest.z, terrainHeight(heliQuest.x, heliQuest.z));
   QUESTS.push(heliQuest);
+})();
+
+// 【fix573】任务三：外族入侵（市民 / 警察 / 军方与玩家并肩作战）
+(function addInvasionQuest() {
+  const invQuest = {
+    id: 'invasion', name: '外族入侵', state: 'available', completed: false,
+    phase: 'idle', initialPhase: 'idle', elapsed: 0,
+    x: 0, z: -160,
+    desc: '一支外族武装从城市四角入侵，正在向市中心推进。\n\n' +
+          '这一次你不是一个人在战斗：市民会拿起武器、警察会暂时停止追捕、' +
+          '军事基地也会派警卫支援，所有人一起把外敌赶出城市。\n\n' +
+          '击退全部入侵者即可领取奖励。',
+    rewardGold: 8000, rewardXp: 1600,
+    rewardText: '8000 金币　+　1600 经验　+　卫国英雄',
+    progressTotal: isMobile ? 8 : 12, progressValue: 0,
+    objectiveText() {
+      return '击退外族入侵者　' + Math.round(this.progressValue || 0) + ' / ' + (this.progressTotal || 0);
+    },
+    phaseText() {
+      return '市民、警察与军方正与你并肩作战';
+    },
+    onUpdate(q, dt, px, py, pz) {
+      updateInvasion(dt, q);
+    }
+  };
+  invQuest.marker = makeQuestMarker(invQuest.x, invQuest.z, terrainHeight(invQuest.x, invQuest.z));
+  QUESTS.push(invQuest);
 })();
 
 // ---- 存档：任务状态 ----
@@ -14806,7 +15049,8 @@ var ACH_DEFS = [
   { id:'dragon',      name:'屠龙少年',        desc:'累计成功击败 1000 个敌人（包括 NPC 和城管）', gold:5000, xp:1200 },
   { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 },
   { id:'grapple1000', name:'我离不掉你了',    desc:'累计使用钩爪 1000 次',               gold:5000, xp:1200 },
-  { id:'publicEnemy', name:'城市公敌',        desc:'第一次激起民愤（五星时打爆军方直升机与坦克）', gold:2500, xp:600 }
+  { id:'publicEnemy', name:'城市公敌',        desc:'第一次激起民愤（五星时打爆军方直升机与坦克）', gold:2500, xp:600 },
+  { id:'invasionHero',name:'卫国英雄',        desc:'第一次联合市民、警察与军方击退外族入侵',       gold:3000, xp:800 }
 ];
 // 运行时状态（存档字段 achv）：done=已达成；count=累计计数（击杀/图鉴）；tpFree=免费传送卷库存
 var ACHY = { done:{}, count:{ kills:0, folk:0, grapples:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
@@ -17251,7 +17495,8 @@ var ACH_PACK_REWARD = {
   dragon:      { medkit: 5, stamkit: 5 },
   perfect:     { medkit: 5, stamkit: 5 },
   grapple1000: { medkit: 3, stamkit: 3 },
-  publicEnemy: { medkit: 3, stamkit: 3 }
+  publicEnemy: { medkit: 3, stamkit: 3 },
+  invasionHero: { medkit: 2, stamkit: 2 }
 };
 function achPackText(id) {
   const p = ACH_PACK_REWARD[id];
@@ -23206,6 +23451,8 @@ function pedAvoidance(r, fx, fz, dt) {
   r._avLat = want; r._avSlow = slow; r._avActive = active;
 }
 function updateResident(r, dt) {
+  // 【fix573】外族入侵者由 updateInvasion 单独驱动，不走市民/帮派 AI；死亡后也不在原地复活
+  if (r.isInvader) return;
   if (!r.alive) { r.respawn -= dt; if (r.respawn <= 0) respawnResident(r); else if (r.respawn < 1.5) fadeFigure(r.group, Math.max(0, r.respawn / 1.5)); return; }
   // === 武器显隐 ===
   // 关键修复：原来 rWpn.visible = (chaseMode === 'shoot')，而 chaseMode 在
@@ -23719,7 +23966,8 @@ function updateCop(c, dt) {
   // 星级早就清零了，警察还在追着玩家打，玩家一脸问号。
   // 现在只看两件事：**通缉中**，或**玩家本人最近 8 秒内攻击过警察**（c.huntT，由 hitCop /
   // knockDownCop / 碾压设置，NPC 互殴不设）。零颗星、没惹警察 = 绝对安全。
-  const huntPlayer = wanted >= 1 || (c.huntT || 0) > 0;
+  // 【fix573】外族入侵期间警察暂时停止追捕玩家，转为与外敌作战（任务结束后自动恢复）
+  const huntPlayer = !invasionActive && (wanted >= 1 || (c.huntT || 0) > 0);
   if (huntPlayer && target && d <= 55) {
     c.aggro = true;   // 追捕中：记在 aggro 上（逃离 55m 外的 else 分支会清零）
     c.angle = Math.atan2(dx, dz); c.group.rotation.y = c.angle;
