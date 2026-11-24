@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix568-house-wall-flicker-loft">
+<meta name="cf-build" content="20261124-fix569-mobile-lights-perf">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -18369,7 +18369,23 @@ var _fxInst = null, _fxMax = 0, _fxFree = [], _fxMat4 = null, _fxColor = null, _
 // 【fix567】上限放宽：以前手机上只给 90 颗，因为每颗都是独立 draw call（90 个已经很贵）。
 // 现在全部走同一个 InstancedMesh = 1 个 draw call，加数量几乎不增加 GPU 状态切换，
 // 只有 160 个 0.09m 小方块的填充率 —— 很便宜。这样枪战时火花不会被"背景粒子"挤掉。
-function effectCap() { return isMobile ? 160 : 320; }   // 同屏粒子上限（超出就回收最老的）
+// 【fix569】统一性能档位：0=正常 / 1=轻降 / 2=自动省电+ / 3=手动低画质（极速）。
+// 用 function 声明而不是 const，保证前面定义的函数运行时也能拿到（项目 TDZ 约定）。
+function perfEco() {
+  try {
+    if (PROGRESS && PROGRESS.gfx === 'low') return 3;
+    if (PROGRESS && PROGRESS.gfx === 'mid') return 0;
+    if (PROGRESS && PROGRESS.gfx === 'high') return 0;
+  } catch (e) {}
+  return (_cpuEco | 0);
+}
+function isLowGfx() { return perfEco() >= 3; }
+function effectCap() {
+  const e = perfEco();
+  if (e >= 3) return 70;
+  if (e >= 2) return 110;
+  return isMobile ? 160 : 320;
+}   // 同屏粒子上限（超出就回收最老的）
 function fxEnsure() {
   if (_fxInst || _fxBroken) return;
   try {
@@ -18603,7 +18619,12 @@ function smokeGeometry(heavy) {
   if (!_smokeGeoLightCache) _smokeGeoLightCache = new THREE.SphereGeometry(0.22, 6, 5);
   return _smokeGeoLightCache;
 }
-function smokeCap() { return isMobile ? 40 : 140; }   // 同屏烟雾上限（车辆受损会持续冒烟，不封顶会越积越多）
+function smokeCap() {
+  const e = perfEco();
+  if (e >= 3) return 14;      // 低画质：烟少量意思到，不再几十片半透明片叠屏
+  if (e >= 2) return 24;
+  return isMobile ? 40 : 140;
+}   // 同屏烟雾上限（车辆受损会持续冒烟，不封顶会越积越多）
 // 【2026-10-20·fix28】手机 60→40：每颗烟都是独立半透明球（一次 draw call + 一份填充率），
 // 手机上 40 颗已经够表达"车在冒烟"，再多纯属白烧 GPU。
 function emitSmoke(x, y, z, heavy) {
@@ -25902,7 +25923,16 @@ function updateStreetLights() {
     // 迟滞 30m：防止在半径边缘来回开车时灯罩反复闪烁。
     // 【fix493】新城区路灯更密（约 150 盏），光晕剔除半径收窄到 110m（主城 160m），
     // 免得夜里一进新城凭空多出几十个 Sprite 的 draw call；迟滞 30m 的规则不变。
-    const _hR = L.nc ? 110 : LAMP_HALO_RADIUS;
+    // 【fix569】低画质直接隔一盏画一盏：260 盏灯 = 260 个 Sprite + 260 个地面光斑，
+    // 夜里即便半径剔除后仍常有 100+ 个半透明 draw call，和 45 盏火把光源一起压垮手机。
+    const _eco = perfEco();
+    if (_eco >= 3 && (i & 1)) {
+      L._lit = false;
+      if (L.halo) L.halo.visible = false;
+      if (L.pool) L.pool.visible = false;
+      continue;
+    }
+    const _hR = _eco >= 3 ? 70 : (L.nc ? 110 : LAMP_HALO_RADIUS);
     const haloR = L._lit ? _hR : _hR - 30;
     L._lit = on && d2 < haloR * haloR;
     if (L.halo) L.halo.visible = L._lit;
@@ -27373,7 +27403,10 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     // 【第五轮】半径 60 → 130：60m 在手机上还是一片清楚的人（步行可视半径 300m，LOD 后只到 45m），
     // 被冻住的人会原地定住不动 —— 玩家看到的就是"街上的人全是雕像"。
     // 130m 以内全部正常走路；更远的才冻结（那时候已经是几个像素，动没动都看不出来）。
-    const _aiPX = playerWorldX(), _aiPZ = playerWorldZ(), _aiR2 = 130 * 130;
+    // 【fix569】低画质/自动省电时进一步收窄 AI 半径：看不见的远处 NPC 每帧跑寻路、
+    // 帮派扫描和视线检测是纯 CPU 浪费；有仇恨/倒地的永远不冻结，战斗不受影响。
+    const _aiR = isLowGfx() ? 75 : ((_cpuEco | 0) >= 2 ? 95 : 130);
+    const _aiPX = playerWorldX(), _aiPZ = playerWorldZ(), _aiR2 = _aiR * _aiR;
     for (const r of residents) {
       const _aiDX = r.x - _aiPX, _aiDZ = r.z - _aiPZ;
       if (_aiDX * _aiDX + _aiDZ * _aiDZ > _aiR2 && r.alive && !r.hate && !r.down) continue;
@@ -28985,7 +29018,8 @@ function updateDynamicVisibility() {
         }
         if (item.group.userData.detail && item.group.userData.lod) {
           // LOD 切换同样要迟滞：否则在阈值附近开车时 detail/lod 的显隐会每帧翻转，看起来一闪一闪
-          const lodBase = isVehicle ? LOD_CAR_DISTANCE : LOD_PERSON_DISTANCE;
+          // 【fix569】低画质让人更早换成 3~5 网格的廉价骨架，省掉 22 网格的完整人体。
+          const lodBase = isVehicle ? LOD_CAR_DISTANCE : (isLowGfx() ? 24 : LOD_PERSON_DISTANCE);
           const wasLod = item.group.userData.lod.visible;
           const useLod = dist > (wasLod ? lodBase - 15 : lodBase);
           item.group.userData.detail.visible = !useLod;
@@ -28995,7 +29029,7 @@ function updateDynamicVisibility() {
           if (useLod && !isVehicle) {
             const rig = item.group.userData.lodRig;
             if (rig && rig.userData.armL) {
-              const showArms = dist < LOD_ARM_DISTANCE;
+              const showArms = dist < (isLowGfx() ? 28 : LOD_ARM_DISTANCE);
               if (rig.userData.armL.visible !== showArms) {
                 rig.userData.armL.visible = showArms;
                 rig.userData.armR.visible = showArms;
@@ -29112,13 +29146,20 @@ try { warmUpLods(); } catch (error) { console.error('[LOD warmup error]', error)
 // 主动降一档分辨率能把最坏情况压住，比让玩家手动重开游戏强得多。
 // 【2026-10-20·fix29】加第二级"流畅模式"：分辨率降到底还是卡，就自动收窄远景可见半径
 // （少画人/车 = 少 draw call + 少 NPC 动画）。这才是原生游戏动态画质的做法：先降分辨率、再降远景。
-var _cpuEco = 0;   // 0=正常 / 1=省电（远景 ×0.92）/ 2=省电+（远景 ×0.86）
+// 【fix569】restoreSaveGame() 之后已经 applyGfx(PROGRESS.gfx) 写过 _cpuEco 了，
+// 这里不能再用 `var _cpuEco = 0` 覆盖掉（否则读档选了"低"却仍按正常远景跑）。
+var _cpuEco = (typeof _cpuEco === 'undefined') ? 0 : _cpuEco;   // 0=正常 / 1=轻降 / 2=自动省电+ / 3=手动低画质
 // 注意：下面用 (_cpuEco|0) 而不是直接比大小 —— 启动时 updateDynamicVisibility() 会在
 // _cpuEco 赋值之前被调用一次，undefined 直接比较会得到错误的降质档位（项目 TDZ 约定的写法）。
 // 【2026-10-21·fix32】收缩幅度大幅调轻（原 0.82/0.65）：0.65 意味着行人只在 195m 内可见，
 // 再减去 40m 迟滞 → 人要到 155m 才"凭空出现"，玩家看到的就是"远处的人走到跟前才加载出来"。
 // 现在 0.92/0.86 基本看不出来，只作为最后手段。
-function ecoCullScale() { const e = (_cpuEco | 0); return e >= 2 ? 0.86 : (e === 1 ? 0.92 : 1); }
+// 【fix569】自动省电从 0.86 再收到 0.72（人 216m / 车 288m），手动低画质 0.56（人 168m / 车 224m）。
+// 之前 0.86 几乎没减少 draw call，玩家自然感觉"降质了还是卡"。
+function ecoCullScale() {
+  const e = perfEco();
+  return e >= 3 ? 0.56 : (e >= 2 ? 0.72 : (e === 1 ? 0.92 : 1));
+}
 // 省电模式下允许像素比再往下探一点，但**绝不下探到 0.62**：
 // 实测降到 0.62 帧率并没有变好（瓶颈不在填充率），只换来一片模糊。
 // 【fix567】下限 0.71 → 0.9：用户反馈"手机上画质比较低"。0.71 已经是肉眼可见的糊，
@@ -29152,15 +29193,20 @@ function updateAutoQuality() {
     if (_qBad >= 3) {          // 连续 3 个 1 秒窗都低于 28fps 才动手（偶发掉帧不降质）
       const prMin = ecoPixelMin();
       if (pixelRatio > prMin + 0.01) {
-        const steps = fps < 16 ? 2 : 1;
-        pixelRatio = Math.max(prMin, pixelRatio - 0.12 * steps);
-        renderer.setPixelRatio(pixelRatio);
-        _qBad = 0; _qCooldownUntil = now + 4000;
+        // 【fix569】renderer.setPixelRatio() 会重建 WebGL  drawing buffer，手机上单次就能卡 100~300ms。
+        // 旧逻辑每次只降 0.12、冷却 4 秒 → 从 1.25 掉到 0.9 要连续重建 3 次，玩家感觉就是"一卡一卡的"。
+        // 现在 Severe（<16fps）一步到底，普通掉帧 0.18 一步；同时立刻推进 CPU 省电档，不再等下一轮。
+        const target = Math.max(prMin, pixelRatio - (fps < 16 ? 0.5 : 0.18));
+        pixelRatio = target;
+        try { renderer.setPixelRatio(pixelRatio); } catch (e) {}
+        if (_cpuEco < 2) _cpuEco++;
+        _qBad = 0; _qSharp = 0; _qCooldownUntil = now + 9000;
+        try { setHint('帧率偏低，已降低分辨率并减少同屏对象'); } catch (e) {}
       } else if (_cpuEco < 2) {
-        // 分辨率已经到底了还在卡 → 进入省电模式：轻微收窄远景（0.92 / 0.86，几乎看不出来）
+        // 分辨率已经到底了还在卡 → 进入省电模式：收窄远景 + 减少 AI/粒子/灯光
         _cpuEco++;
-        _qBad = 0; _qCooldownUntil = now + 5000;
-        try { setHint(_cpuEco === 1 ? '已开启「省电模式」：轻微收窄远景以保帧率' : '已开启「省电模式」：远景进一步收窄'); } catch (e) {}
+        _qBad = 0; _qCooldownUntil = now + 7000;
+        try { setHint(_cpuEco === 1 ? '已开启「省电模式」：减少同屏对象以保帧率' : '已开启「省电模式」：进一步减负'); } catch (e) {}
       }
     }
   } else if (fps >= 34) {      // 回到 34fps 就升回来（原来要 55fps，机器永远够不到）
@@ -29792,7 +29838,13 @@ wtex.center.set(0.5, 0.5); wtex.rotation = 0;   // 【fix175】流向再转 90 �
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: _haloTex, color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       halo.position.y = 2.9; halo.scale.set(4.6, 4.6, 1); g.add(halo);
       let li = null;
-      if (k % 3 === 0) {
+      // 【fix569·2026-11-24·用户："手机上还是非常卡，有时候就卡死"】
+      // 根因：城墙火把每 3 盏就挂一盏真实 PointLight，全城 45 盏常驻可见。
+      // three.js 前向渲染会把**所有可见点光源**塞进每个材质的 shader uniform，
+      // 45 盏 = 每像素算 45 次光照，手机上直接把 GPU 打爆（软件模拟里可见光源 47 盏，
+      // 其中 45 盏就是这些火把）。火把本身已有 3 层锥形焰 + 加色 halo + 地面光斑，
+      // 视觉上完全够亮，真光源纯属隐形税。手机端直接不建，桌面保留 1/6 盏。
+      if (!isMobile && k % 6 === 0) {
         li = new THREE.PointLight(0xffa64a, 3.2, 34, 2);
         li.position.y = 3.0; g.add(li);
       }
@@ -36766,7 +36818,7 @@ syncMotoJumpBtn();
 //   高：设备 dpr（封顶 2）—— 旗舰机开，像素量约是中的 2.5 倍
 //   自动：仍按帧率升降，但下限从 0.71 提到 0.9（不会再糊成一片）
 function gfxPreset(level) {
-  if (level === 'low') return { pr: 0.8, eco: 2 };
+  if (level === 'low') return { pr: 0.8, eco: 3 };   // 【fix569】低档不只是糊，还要真减少同屏对象
   if (level === 'mid') return { pr: 1.25, eco: 0 };
   if (level === 'high') return { pr: Math.min(devicePixelRatio || 1, 2), eco: 0 };
   return null;   // auto
@@ -36797,7 +36849,7 @@ function applyGfx(level, silent) {
   if (!silent) {
     try { saveGame(); } catch (e) {}
     try {
-      setHint(level === 'low' ? '画质：低（最省电，画面较糊）'
+      setHint(level === 'low' ? '画质：低（极速省电：减少同屏人车/灯光/粒子）'
         : level === 'mid' ? '画质：中'
         : level === 'high' ? '画质：高（最清晰，也更吃性能）'
         : '画质：自动（按帧率调整）');
@@ -36990,6 +37042,9 @@ try {
     L3.position.set(SX - 2, base + 13, 0); grp.add(L3);
     scene.add(grp);
     var lites = [L1, L2, L3];
+    // 【fix569】这 3 盏灯在中镇山顶（x≈694），离玩家再远也会进 shader 光源表。
+    // 手机端关掉真光源，保留灯柱/灯罩/加色 glow，山顶夜景仍然看得见是亮的。
+    if (isMobile) for (var _zi = 0; _zi < lites.length; _zi++) lites[_zi].visible = false;
     function tickNight() {
       var n = 1 - Math.min(1, Math.max(0, (typeof dayLightF === 'number' ? dayLightF : 1)));
       for (var i = 0; i < lites.length; i++) lites[i].intensity = (i === 2 ? 1.15 : 1.6) * n;
