@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix570-mobile-sharper-image">
+<meta name="cf-build" content="20261124-fix571-rage-crash-guard">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1279,6 +1279,9 @@ try {
       window.__glLostAt = Date.now();
       // 【fix567】重载前先存一次档 —— 手机崩溃/回收上下文时，玩家最怕的是"画面没了还丢了进度"。
       setTimeout(function () {
+        // 【fix571】重载前强制锁到低画质：上下文丢失本身就是负载峰值导致，原样重载会再次丢失，
+        // 用户看到的就是"闪退"。低档重载既保住存档，也把民愤/枪战的持续压力降下来。
+        try { if (typeof PROGRESS !== 'undefined') PROGRESS.gfx = 'low'; } catch (e5) {}
         try { if (typeof saveGame === 'function') saveGame(); } catch (e4) {}
         if (_ctxLost) { try { location.reload(); } catch (e3) {} }   // 已经恢复了就不用重载
       }, 2500);
@@ -22925,6 +22928,16 @@ function npcMoveDir(r, tx, tz, dt, ignoreVeh) {
   const ml = Math.hypot(mx, mz) || 1;
   return { x: mx / ml, z: mz / ml, los: false };
 }
+// 【fix571】民愤名额内的 NPC 缓存绕墙方向：hasLineOfSight 每 0.25 秒要扫一遍全城建筑，
+// 手机上即便只有 12 个名额也偏重。每 3 帧才重算一次方向，中间帧复用，移动观感几乎不变。
+function npcMoveDirCached(r, tx, tz, dt, ignoreVeh) {
+  if (!(isMobile && civilRage && r._rageSlot)) return npcMoveDir(r, tx, tz, dt, ignoreVeh);
+  r._mvTick = (r._mvTick || 0) + 1;
+  if (r._mvCache && r._mvTick % 3 !== 0) return r._mvCache;
+  const v = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+  r._mvCache = v;
+  return v;
+}
 function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz);
   // 【fix523】警报中的基地守卫：连发步枪 + 90m 追击半径。普通 NPC 完全不受影响。
@@ -22938,8 +22951,11 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
   // 等于白共享。守卫走上面的 _baseAlert 分支，其他帮派/路人仍按 40m。
   // 【fix552】"激起民愤"期间全城追人：普通路人/警察的 40m 追击上限放到 260m，
   // 否则远处的 NPC 虽然被设了仇恨，一帧就被"太远"判掉，看着还是没人来。
+  // 【fix571】民愤期间只有拿到名额的 NPC 才放宽到 260m；其余维持原规则（路人 40m / 帮派 2000m），
+  // 否则民愤 tick 虽然只给名额内设仇恨，chaseCap 仍把所有有 player 仇恨的人放进 260m 全城追击。
+  const _rageChase = civilRage && r._rageSlot;
   const _chaseCap = _baseAlert ? 90
-    : (civilRage ? 260
+    : (_rageChase ? 260
     : (r.hate === 'player' ? ((r.faction === 3 && !r.isBaseGuard) ? 2000 : 40) : 22));
   if (d > _chaseCap) return false;
   // ---- Task #10：三维意识 ----
@@ -22979,7 +22995,7 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     // 原来看不见目标时仍然"对着墙开枪"：曳光弹画到墙前 9m + 枪声，一群 NPC 贴着围墙排成一列对着墙打，
     // 观感就是隔着墙火拼。现在：**看不见就完全不开枪**（不画曳光弹、不出枪声、不耗弹药），
     // 同时用更快的速度沿墙绕行，绕到能看见才开打。
-    const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+    const _mv = npcMoveDirCached(r, tx, tz, dt, ignoreVeh);
     const moveSpd = _mv.los ? 1.8 : 4.6;   // 绕墙时走快一点，别磨磨蹭蹭
     if (d > meleeRange + 2) {
       if (!_mv.los) { r.angle = Math.atan2(_mv.x, _mv.z); r.group.rotation.y = r.angle; }
@@ -22990,7 +23006,9 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     r.phase = (r.phase || 0) + dt * 5;
     if (r.attackCd <= 0 && _mv.los) {
       // 【fix523】警报中的基地守卫 0.16 秒一发（约 6 发/秒），普通 NPC 仍是原来的 1.2 秒一发
-      r.attackCd = _baseAlert ? 0.16 : 1.2; r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
+      // 【fix571】民愤名额内手机端拉长到 1.9 秒一发：减少曳光弹/音效/命中判定的持续峰值
+      r.attackCd = _baseAlert ? 0.16 : ((civilRage && r._rageSlot && isMobile) ? 1.9 : 1.2);
+      r.punchAnim = 1; sfxNear('shoot', r.x, r.z, 45);
       // 弹道改成真三维：起点=自己的枪口高度，终点=目标的实际高度（不再写死 1.3 → 1.05）
       spawnTracer(r.x + dx / d * 0.7, myY + 1.3, r.z + dz / d * 0.7, tx, tY + 1.05, tz, r.ranged);
       let hitChance = THREE.MathUtils.clamp(0.88 - d * 0.018, 0.1, 0.88);
@@ -23021,7 +23039,7 @@ function chaseAndAttack(r, dt, tx, tz, onHit, ignoreVeh, ty) {
     if (d > meleeRange) {
       const runSpd = 6.5;  // 奔跑速度
       // 【fix545】隔墙时沿墙绕行（否则会一直顶着墙原地跑，永远打不到人）
-      const _mv = npcMoveDir(r, tx, tz, dt, ignoreVeh);
+      const _mv = npcMoveDirCached(r, tx, tz, dt, ignoreVeh);
       if (!_mv.los) { r.angle = Math.atan2(_mv.x, _mv.z); r.group.rotation.y = r.angle; }
       const p = { x: r.x + _mv.x * runSpd * dt, z: r.z + _mv.z * runSpd * dt };
       collideNpc(p, 0.4, r); clampCity(p); r.x = p.x; r.z = p.z;
@@ -23704,7 +23722,7 @@ function updateCop(c, dt) {
     const _ignVeh = (state === 'drive' ? currentCar : null);
     if (d > 9 && !unreachable) {
       // 远：跑步追
-      const _mv = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+      const _mv = npcMoveDirCached(c, target.x, target.z, dt, _ignVeh);
       if (!_mv.los) { c.angle = Math.atan2(_mv.x, _mv.z); c.group.rotation.y = c.angle; }
       const p = { x: c.x + _mv.x * 5.5 * dt, z: c.z + _mv.z * 5.5 * dt };
       collideNpc(p, 0.4, c);
@@ -23732,7 +23750,7 @@ function updateCop(c, dt) {
         }
       }
       // 射击时慢慢靠近（隔墙就沿墙侧移）
-      const _mv2 = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+      const _mv2 = npcMoveDirCached(c, target.x, target.z, dt, _ignVeh);
       if (!_mv2.los) { c.angle = Math.atan2(_mv2.x, _mv2.z); c.group.rotation.y = c.angle; }
       const cp = { x: c.x + _mv2.x * 2.0 * dt, z: c.z + _mv2.z * 2.0 * dt };
       collideNpc(cp, 0.4, c); clampCity(cp); c.x = cp.x; c.z = cp.z;
@@ -23741,7 +23759,7 @@ function updateCop(c, dt) {
     } else if (state === 'walk') {
       // 近身：警棍（奔跑靠近后攻击）
       if (d > 1.5) {
-        const _mv3 = npcMoveDir(c, target.x, target.z, dt, _ignVeh);
+        const _mv3 = npcMoveDirCached(c, target.x, target.z, dt, _ignVeh);
         if (!_mv3.los) { c.angle = Math.atan2(_mv3.x, _mv3.z); c.group.rotation.y = c.angle; }
         const rp = { x: c.x + _mv3.x * 6.0 * dt, z: c.z + _mv3.z * 6.0 * dt };
         collideNpc(rp, 0.4, c); clampCity(rp); c.x = rp.x; c.z = rp.z;
@@ -27641,16 +27659,40 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
       _civilRageTick = 2;
       const _rpx = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
       const _rpz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+      // 【fix571·2026-11-24】用户："五星激起民愤之后，过了一会手机直接闪退"。
+      // 根因：民愤把 260m 内**所有**路人的追击上限放到 260m、每 2 秒补满弹药，
+      // 上百个 NPC 同时每帧跑 npcMoveDir、每 0.25 秒扫全城建筑做 LOS，CPU 峰值把手机拖到系统杀进程。
+      // 修法：保留"全城都盯上你"的观感，但手机端只给最近的 12 名居民 / 6 名警察发"民愤名额"，
+      // 每 2 秒重排、倒下的由后面的人补位；桌面仍是 40 / 16，玩法不变。
+      const _rageCap = isMobile ? 12 : 40, _copCap = isMobile ? 6 : 16;
+      for (const r of residents) { if (r._rageSet && r.hate === 'player') { r.hate = null; r._rageSet = false; } }
+      for (const c of cops) { if (c._rageSet && c.hate === 'player') { c.hate = null; c._rageSet = false; } }
+      const _near = [], _nearC = [];
       for (const r of residents) {
         if (!r.alive || r.down || r.isBaseGuard) continue;
-        if (Math.hypot(r.x - _rpx, r.z - _rpz) > 260) continue;
+        const dx = r.x - _rpx, dz = r.z - _rpz, d2 = dx * dx + dz * dz;
+        if (d2 <= 260 * 260) _near.push({ o: r, d2: d2, keep: r._rageSlot ? -1e8 : 0 });
+      }
+      for (const c of cops) {
+        if (!c.alive) continue;
+        const dx = c.x - _rpx, dz = c.z - _rpz, d2 = dx * dx + dz * dz;
+        if (d2 <= 260 * 260) _nearC.push({ o: c, d2: d2 });
+      }
+      _near.sort((a, b) => (a.d2 + a.keep) - (b.d2 + b.keep));
+      _nearC.sort((a, b) => a.d2 - b.d2);
+      for (const r of residents) r._rageSlot = false;
+      for (const c of cops) c._rageSlot = false;
+      for (let i = 0; i < Math.min(_rageCap, _near.length); i++) {
+        const r = _near[i].o;
+        r._rageSlot = true; r._rageSet = true;
         r.hate = 'player'; r.armed = true; r.flee = false;
         if (r.faction === 3) r._hateT0 = performance.now();   // 黑帮的 30 秒仇恨记忆要续期
         if (r.ammo <= 0 && r.maxAmmo > 0) r.ammo = r.maxAmmo;
       }
-      for (const c of cops) {
-        if (!c.alive) continue;
-        c.huntT = Math.max(c.huntT || 0, 12);
+      for (let i = 0; i < Math.min(_copCap, _nearC.length); i++) {
+        const c = _nearC[i].o;
+        c._rageSlot = true; c._rageSet = true;
+        c.hate = 'player'; c.huntT = Math.max(c.huntT || 0, 12);
       }
     }
   }
