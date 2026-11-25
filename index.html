@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261125-fix574-house-flicker-lamps">
+<meta name="cf-build" content="20261125-fix574b-invasion-deploy-grapple">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -634,6 +634,42 @@
   .qr-card.fail .qr-title { color: #ff8a80; }
   .qr-body { font-size: 14px; line-height: 1.7; color: #dff0e6; white-space: pre-wrap; }
   .qr-btn { margin-top: 18px; padding: 11px 30px; display: inline-block; border-radius: 22px; background: #2ee06a; color: #04180c; font-weight: bold; cursor: pointer; -webkit-user-select: none; user-select: none; }
+  /* ---- 【fix574b】外族入侵：战前部署面板 ---- */
+  #invDeploy {
+    position: fixed; inset: 0; z-index: 101; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(4,8,16,0.68); font-family: sans-serif;
+  }
+  .dep-card {
+    width: min(660px, 94vw); max-height: 92vh; overflow-y: auto;
+    background: linear-gradient(180deg, #1b1424, #0d0a14);
+    border: 2px solid #b060ff; border-radius: 14px; padding: 16px 20px 18px;
+    color: #f3eaff; box-shadow: 0 12px 46px rgba(0,0,0,.7), 0 0 30px rgba(176,96,255,.25);
+    animation: qoIn .18s ease-out;
+  }
+  .dep-title { font-size: 19px; font-weight: bold; color: #d8a8ff; margin-bottom: 4px; }
+  .dep-sub { font-size: 12px; color: #bca9d4; line-height: 1.55; margin-bottom: 12px; }
+  .dep-row {
+    display: flex; align-items: center; gap: 8px; padding: 9px 0;
+    border-top: 1px solid rgba(176,96,255,.2);
+  }
+  .dep-name { flex: 0 0 96px; font-size: 13px; font-weight: bold; color: #ffe9a8; }
+  .dep-opts { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; }
+  .dep-opt {
+    pointer-events: auto; cursor: pointer; -webkit-user-select: none; user-select: none;
+    padding: 7px 9px; border-radius: 7px; font-size: 12px; font-weight: bold;
+    background: rgba(255,255,255,.07); color: #b9a9cc; border: 1px solid rgba(255,255,255,.16);
+  }
+  .dep-opt.on { background: linear-gradient(180deg, #7b3fd0, #52259a); color: #fff; border-color: #b060ff; }
+  .dep-opt:active { transform: translateY(1px); }
+  .dep-go {
+    margin-top: 14px; width: 100%; padding: 13px 0; border-radius: 10px; text-align: center;
+    font-size: 16px; font-weight: bold; cursor: pointer; -webkit-user-select: none; user-select: none;
+    background: linear-gradient(180deg, #ff6a4a, #c22d1c); color: #fff;
+    box-shadow: 0 4px 16px rgba(255,90,60,.35);
+  }
+  .dep-go:active { transform: translateY(1px); }
+  .dep-tip { margin-top: 8px; font-size: 11px; color: #9d8bb5; text-align: center; }
   .mm-quest { fill: #4dff88; stroke: #04180c; stroke-width: 1.5; }
   .mm-quest-active { fill: #ffd76a; stroke: #3a2a04; stroke-width: 1.5; }
   /* ---- 地图左上角人物头像（点击进入属性面板） ---- */
@@ -972,6 +1008,39 @@
       <div class="qr-title" id="qrTitle">任务完成</div>
       <div class="qr-body" id="qrBody"></div>
       <div class="qr-btn" id="qrOk">确定</div>
+    </div>
+  </div>
+  <!-- 【fix574b】外族入侵：接取后先调配部队，点“开始阻击”才放外敌进城的面板 -->
+  <div id="invDeploy" style="display:none">
+    <div class="dep-card">
+      <div class="dep-title">🛡 战前部署 · 外族入侵</div>
+      <div class="dep-sub">侦察确认：一支装备精良的外族部队正从城北机场集结，即将沿主干道扑向市区。<br>给他们分配阻击任务，再下令开战。分配会影响各部队的开战位置与作战半径。</div>
+      <div class="dep-row" data-force="police">
+        <div class="dep-name">👮 警察</div>
+        <div class="dep-opts">
+          <div class="dep-opt on" data-opt="guard">留守市中心</div>
+          <div class="dep-opt" data-opt="rush">机场正面阻击</div>
+          <div class="dep-opt" data-opt="flank">侧翼包抄</div>
+        </div>
+      </div>
+      <div class="dep-row" data-force="military">
+        <div class="dep-name">🎖 基地护卫</div>
+        <div class="dep-opts">
+          <div class="dep-opt" data-opt="guard">留守市中心</div>
+          <div class="dep-opt on" data-opt="rush">机场正面阻击</div>
+          <div class="dep-opt" data-opt="flank">侧翼包抄</div>
+        </div>
+      </div>
+      <div class="dep-row" data-force="civil">
+        <div class="dep-name">🧍 市民义勇</div>
+        <div class="dep-opts">
+          <div class="dep-opt on" data-opt="guard">留守市中心</div>
+          <div class="dep-opt" data-opt="rush">机场正面阻击</div>
+          <div class="dep-opt" data-opt="flank">侧翼包抄</div>
+        </div>
+      </div>
+      <div class="dep-go" id="invStart">分配完成 · 开始阻击</div>
+      <div class="dep-tip">开战后警察与基地护卫自动停战，共同对外</div>
     </div>
   </div>
 
@@ -10525,11 +10594,32 @@ function makeHuman(clothes, isCop, opts = {}) {
   eyeR.position.set(0.09, 0.03, 0.21); head.add(eyeR);
 
   // 瞳孔（大而明显）
-  const pupilMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
+  // 【fix574b】外敌：opts.redEyes → 眼白和瞳孔都改成发光的血红（恶魔眼）
+  const pupilMat = new THREE.MeshLambertMaterial({
+    color: opts.redEyes ? 0xff2020 : 0x000000,
+    emissive: opts.redEyes ? 0x660000 : 0x000000
+  });
+  if (opts.redEyes) eyeMat.color.setHex(0xff5544);
   const pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), pupilMat);
   pupilL.position.set(-0.09, 0.04, 0.23); head.add(pupilL);
   const pupilR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), pupilMat);
   pupilR.position.set(0.09, 0.04, 0.23); head.add(pupilR);
+
+  // 【fix574b】外敌头顶两只恶魔角：对称的弯曲尖角（圆柱段 + 锥尖），暗红发光。
+  if (opts.demonHorns) {
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0x5a1210, emissive: 0x250604 });
+    for (const hs of [-1, 1]) {
+      const horn = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.085, 0.24, 7), hornMat);
+      base.position.y = 0.12; horn.add(base);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.22, 7), hornMat);
+      tip.position.y = 0.34; horn.add(tip);
+      horn.position.set(hs * 0.16, 0.28, 0.02);
+      horn.rotation.z = -hs * 0.42;   // 向外撇开
+      horn.rotation.x = -0.12;        // 微微朝前
+      head.add(horn);
+    }
+  }
 
 
   // 警察/特殊职业标志
@@ -12564,6 +12654,20 @@ var invasionActive = false, invasionTick = 0, invasionTotal = 0;
 var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
 var INV_UNIFORM = 0x8e3b2e;      // 外族暗红褐制服
 var MIL_UNIFORM_INV = 0x4a5a3a;  // 军方支援的军绿色（和基地守卫一致）
+// 【fix574b】战前部署：玩家给三支友军分配的任务（guard=守城 / rush=机场正面 / flank=侧翼），
+// 决定他们开战时的出生位置与作战半径；面板打开时游戏暂停，点「开始阻击」才真正放外敌进城。
+var invDeployOpen = false;
+var INV_ORDERS = { police: 'guard', military: 'rush', civil: 'guard' };
+var AIRPORT_INV = { x: 0, z: -257 };   // 外敌集结地：城北机场（与 addAirport 的 CX/CZ 一致）
+// 外敌武器池：火箭筒 / 手枪 / 斧头 / 电锯 / AK47 / 加特林 / 步枪 / 霰弹枪
+// 近战武器（斧头/电锯）也进池：他们冲到面前会抡起来，观感更像"各式各样的外敌"。
+var INV_WEAPONS = ['ak47', 'rpg', 'pistol', 'minigun', 'axe', 'rifle', 'chainsaw', 'shotgun'];
+// 部署阵位：guard=守在玩家附近（市中心） / rush=机场正面迎击 / flank=机场侧翼包抄
+function invDeploySpot(order, px, pz, fallback) {
+  if (order === 'rush') return { x: AIRPORT_INV.x, z: AIRPORT_INV.z + 92 };
+  if (order === 'flank') return { x: AIRPORT_INV.x + 105, z: AIRPORT_INV.z + 72 };
+  return fallback(0);
+}
 function nearestInvader(x, z, maxD) {
   let best = null, bd = maxD * maxD;
   for (const v of INVADERS) {
@@ -12605,41 +12709,50 @@ function cleanupInvasion() {
 function spawnInvasionForce(q) {
   cleanupInvasion();
   invasionActive = true; invasionTick = 0;
-  const N = isMobile ? 8 : 12;
+  // 【fix574b】用户："外族入侵的时候让他们从机场这边一窝蜂的涌来" + "数量再多一些"
+  const N = isMobile ? 14 : 22;
   invasionTotal = N;
   q.progressTotal = N; q.progressValue = 0;
-  // 从玩家四周 130m 处杀过来：城市四角太远（要跑两分钟才交战），看不到"入侵"。
   const px = person.position.x, pz = person.position.z;
-  const spots = [
-    { x: px - 130, z: pz - 130 }, { x: px + 130, z: pz - 130 },
-    { x: px - 130, z: pz + 130 }, { x: px + 130, z: pz + 130 }
-  ];
+  // 集结地 = 城北机场（0,-257）。所有人挤在跑道南侧的一小片区域，
+  // 开战后一起朝玩家冲过去，就是"一窝蜂从机场涌来"的观感。
+  // 螺旋小半径散开：人多了不至于完全重叠在一点。
   for (let i = 0; i < N; i++) {
-    const sp = spots[i % spots.length];
-    const sp2 = { x: sp.x + (Math.random() - 0.5) * 50, z: sp.z + (Math.random() - 0.5) * 50 };
+    const a = i * 2.399963, rr = 3 + (i % 5) * 2.6;   // 黄金角螺旋
+    const sp2 = {
+      x: AIRPORT_INV.x + Math.cos(a) * rr + (Math.random() - 0.5) * 4,
+      z: AIRPORT_INV.z + 34 + Math.sin(a) * rr + (Math.random() - 0.5) * 4
+    };
     clampCity(sp2);
     const x = sp2.x, z = sp2.z;
-    const g = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM });
-    const wp = (i % 3 === 0) ? 'ak47' : 'rifle';
+    const g = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM, demonHorns: true, redEyes: true });
+    // 武器多样化：火箭筒 / 手枪 / 斧头 / 电锯 / AK47 / 加特林 / 步枪轮着来
+    const wp = INV_WEAPONS[i % INV_WEAPONS.length];
     addWeaponMesh(g, wp);
     const gy = terrainHeight(x, z);
     g.position.set(x, gy, z);
     g.rotation.y = Math.atan2(-x, -z);
     scene.add(g);
+    const _melee = (wp === 'axe' || wp === 'chainsaw') ? wp : 'sword';
+    const _isMelee = (wp === 'axe' || wp === 'chainsaw');
     const v = {
       group: g, x: x, z: z, angle: g.rotation.y,
       alive: true, walking: true, timer: 0, walkTime: 0, respawn: 0,
-      hp: 120, maxHp: 120, melee: 'sword', ranged: wp,
+      hp: wp === 'rpg' || wp === 'minigun' ? 180 : 120,
+      maxHp: wp === 'rpg' || wp === 'minigun' ? 180 : 120,
+      melee: _melee, ranged: _isMelee ? null : wp,
+      weaponKey: wp,
       faction: 200, isInvader: true, skipAI: true, flee: false, hate: null,
       down: false, downT: 0, attackCd: 0, phase: Math.random() * 6,
-      punchAnim: 0, punchHand: 0, armed: true, ammo: 90, maxAmmo: 90,
+      punchAnim: 0, punchHand: 0, armed: !_isMelee, ammo: 90, maxAmmo: 90,
       chaseMode: 'run', _side: Math.random() < 0.5 ? 1 : -1
     };
     INVADERS.push(v); residents.push(v);
   }
-  // 军方支援：两名基地警卫空降到战场，和市民一起打外敌（不占基地原哨位）
-  for (let i = 0; i < 2; i++) {
-    const pp = { x: px + (i ? 38 : -38), z: pz - 38 };
+  // 军方支援：三名基地警卫，按部署选择的阵位出生（不占基地原哨位）
+  const _milSpot = invDeploySpot(INV_ORDERS.military, px, pz, i => ({ x: px + (i ? 38 : -38), z: pz - 38 }));
+  for (let i = 0; i < 3; i++) {
+    const pp = { x: _milSpot.x + (i - 1) * 12, z: _milSpot.z + (i % 2 ? 6 : -6) };
     clampCity(pp);
     const x = pp.x, z = pp.z;
     const g = makeHuman(MIL_UNIFORM_INV, false, { uniformColor: MIL_UNIFORM_INV, militaryCap: true });
@@ -12656,9 +12769,10 @@ function spawnInvasionForce(q) {
     };
     INV_SUPPORT.push(s); residents.push(s);
   }
-  // 两名警察支援也空降到战场边缘，否则原警察都在警局、离入侵点太远，第一时间看不到他们参战
-  for (let i = 0; i < 2; i++) {
-    const pp = { x: px + (i ? 26 : -26), z: pz + 26 };
+  // 三名支援警察，按部署阵位出生，第一时间就能看到他们参战
+  const _copSpot = invDeploySpot(INV_ORDERS.police, px, pz, i => ({ x: px + (i ? 26 : -26), z: pz + 26 }));
+  for (let i = 0; i < 3; i++) {
+    const pp = { x: _copSpot.x + (i - 1) * 9, z: _copSpot.z + (i % 2 ? 5 : -5) };
     clampCity(pp);
     const g = makeCopFigure();
     const gy = terrainHeight(pp.x, pp.z);
@@ -12671,6 +12785,37 @@ function spawnInvasionForce(q) {
     };
     INV_COPS.push(c); cops.push(c);
   }
+  // 【fix574b】市民义勇：部署面板第三行现在真的生效了 —— 按 INV_ORDERS.civil
+  // 在「市中心 / 机场正面 / 侧翼」三个阵位出生，拿着棍棒斧头跟在军警后面打外敌。
+  // 之前这一行只是摆设：面板能点，但没有任何市民部队因它改变位置。
+  const _civN = isMobile ? 3 : 5;
+  const _civSpot = invDeploySpot(INV_ORDERS.civil, px, pz, i => ({ x: px + (i ? 30 : -30), z: pz + 12 }));
+  for (let i = 0; i < _civN; i++) {
+    const pp = { x: _civSpot.x + (i - (_civN - 1) / 2) * 7, z: _civSpot.z + (i % 2 ? 5 : -5) };
+    clampCity(pp);
+    const x = pp.x, z = pp.z;
+    const clanIdx = i % CIVILIAN_CLAN_N;
+    const civColor = CIVILIAN_CLAN_COLORS[clanIdx];
+    const g = makeHuman(civColor, false, {
+      uniformColor: civColor, skinColor: civColor,
+      clothColor: civColor, pantColor: civColor, shoeColor: civColor
+    });
+    const _wm = (i % 2) ? 'bat' : 'axe';
+    addWeaponMesh(g, _wm, civColor);
+    const gy = terrainHeight(x, z);
+    g.position.set(x, gy, z); scene.add(g);
+    const cv = {
+      group: g, x: x, z: z, angle: 0, alive: true, walking: true,
+      timer: 0, walkTime: 0, respawn: 0, hp: 90, maxHp: 90,
+      melee: _wm, ranged: null, faction: 100 + clanIdx, clan: clanIdx,
+      flee: false, hate: null, down: false, downT: 0, attackCd: 0,
+      phase: i, punchAnim: 0, punchHand: 0, armed: true,
+      ammo: 0, maxAmmo: 0, chaseMode: 'run',
+      // 复用 isInvSupport 让三方统一享有关军互保护（damageResident / friendlyFire / 子弹过滤）
+      isInvSupport: true, isCivilVolunteer: true, noRespawn: true
+    };
+    INV_SUPPORT.push(cv); residents.push(cv);
+  }
   // 临时停战：清掉所有人对玩家的仇恨，警察也不再追玩家
   for (const r of residents) {
     if (r.isInvader) continue;
@@ -12682,6 +12827,8 @@ function spawnInvasionForce(q) {
   try { sfx('siren'); } catch (e) {}
 }
 function updateInvasion(dt, q) {
+  // 【fix574b】部署面板还开着时不刷兵（玩家还没点"开始阻击"）
+  if (invDeployOpen) return;
   if (!invasionActive) { spawnInvasionForce(q); return; }
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
@@ -12706,13 +12853,24 @@ function updateInvasion(dt, q) {
     }
     v.phase += dt * 8;
     if (v.attackCd > 0) v.attackCd -= dt;
-    if (d < 24 && v.attackCd <= 0 && hasLineOfSight(v.x, v.z, tx, tz, null)) {
-      v.attackCd = 1.0 + Math.random() * 0.5;
-      sfxNear('shoot', v.x, v.z, 50);
-      spawnTracer(v.x + dx / d * 1.2, 1.3, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
-      spawnBurst(v.x + dx / d * 1.2, v.z + dz / d * 1.2, 0xffff88, 4);
-      if (toPlayer) npcShotPlayer(9, v.x, v.z, v.ranged);
-      else if (nearP) { nearP.hp -= 8; if (nearP.hp <= 0) killResident(nearP, v); }
+    const _melee = (v.weaponKey === 'axe' || v.weaponKey === 'chainsaw');
+    const _range = _melee ? 3.2 : (v.weaponKey === 'rpg' ? 60 : 24);
+    if (d < _range && v.attackCd <= 0 && hasLineOfSight(v.x, v.z, tx, tz, null)) {
+      // 【fix574b】按武器种类区分：斧头/电锯近身劈砍、火箭筒溅射、其余连发枪械
+      v.attackCd = _melee ? 0.7 : (v.weaponKey === 'minigun' ? 0.16 : (v.weaponKey === 'rpg' ? 2.6 : 0.8 + Math.random() * 0.4));
+      v.punchAnim = 1;
+      const _dmg = _melee ? (v.weaponKey === 'axe' ? 26 : 20)
+        : (v.weaponKey === 'rpg' ? 42 : (v.weaponKey === 'minigun' ? 8 : (v.weaponKey === 'pistol' ? 10 : 12)));
+      if (_melee) {
+        sfxNear('hit', v.x, v.z, 30);
+        spawnBurst(tx, tz, 0xff4422, 6);
+      } else {
+        sfxNear('shoot', v.x, v.z, 50);
+        spawnTracer(v.x + dx / d * 1.2, 1.3, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
+        spawnBurst(v.x + dx / d * 1.2, v.z + dz / d * 1.2, v.weaponKey === 'rpg' ? 0xff8833 : 0xffff88, 4);
+      }
+      if (toPlayer) npcShotPlayer(_dmg, v.x, v.z, v.ranged || 'pistol');
+      else if (nearP) { nearP.hp -= _dmg; if (nearP.hp <= 0) killResident(nearP, v); }
     }
   }
   // 每 2 秒重新分配市民 / 军方支援的目标（用现有 faction 分支让他们真的开枪）
@@ -12796,6 +12954,48 @@ function closeQuestOffer(accept) {
   if (id !== null) { questSenseCd = QUEST_SENSE_CD; questArmed.set(id, false); }
   if (accept && id !== null) acceptQuest(id);
 }
+// ========== 【fix574b】外族入侵：战前部署面板 ==========
+function openInvDeploy() {
+  invDeployOpen = true;
+  const el = document.getElementById('invDeploy');
+  // 复位为默认阵位（每次接任务重新分配）
+  INV_ORDERS.police = 'guard'; INV_ORDERS.military = 'rush'; INV_ORDERS.civil = 'guard';
+  el.querySelectorAll('.dep-row').forEach(row => {
+    const key = row.getAttribute('data-force');
+    row.querySelectorAll('.dep-opt').forEach(opt => {
+      opt.classList.toggle('on', opt.getAttribute('data-opt') === INV_ORDERS[key]);
+    });
+  });
+  el.style.display = 'flex';
+}
+function closeInvDeploy() {
+  invDeployOpen = false;
+  document.getElementById('invDeploy').style.display = 'none';
+}
+// 点击阵位选项（事件委托）
+document.getElementById('invDeploy').addEventListener('click', e => {
+  const opt = e.target && e.target.closest ? e.target.closest('.dep-opt') : null;
+  if (opt) {
+    const row = opt.closest('.dep-row');
+    const key = row && row.getAttribute('data-force');
+    const val = opt.getAttribute('data-opt');
+    if (!key || !val) return;
+    INV_ORDERS[key] = val;
+    row.querySelectorAll('.dep-opt').forEach(o => o.classList.toggle('on', o === opt));
+    sfx('click');
+    return;
+  }
+  if (e.target && e.target.closest && e.target.closest('#invStart')) {
+    closeInvDeploy();
+    const q = QUESTS.find(v => v.id === 'invasion');
+    const _o = INV_ORDERS;
+    setHint('阻击部署完成：警察' + (_o.police === 'rush' ? '机场正面' : _o.police === 'flank' ? '侧翼' : '守城')
+      + ' / 军方' + (_o.military === 'rush' ? '机场正面' : _o.military === 'flank' ? '侧翼' : '守城')
+      + ' / 市民' + (_o.civil === 'rush' ? '机场正面' : _o.civil === 'flank' ? '侧翼' : '守城'));
+    if (q) spawnInvasionForce(q);   // 点完"开始阻击"才真正放外敌进城
+  }
+});
+
 function showQuestResult(ok, title, body) {
   questResultOpen = true;
   const el = document.getElementById('questResult');
@@ -12836,6 +13036,10 @@ function acceptQuest(id) {
   showOverlay('已接受任务：' + q.name, 3);
   setHint(q.objectiveText());
   renderQuestTracker();
+  // 【fix574b】外族入侵：接取后不立刻刷兵，先打开战前部署面板让玩家调配三支友军
+  if (id === 'invasion') {
+    try { openInvDeploy(); } catch (e) { console.error('[invDeploy]', e); }
+  }
 }
 function completeQuest(id) {
   const q = QUESTS.find(v => v.id === id);
@@ -12931,7 +13135,9 @@ function failQuest(q, reason) {
 function renderQuestTracker() {
   const wrap = document.getElementById('questTracker');
   // 赛车任务不常驻左上角，只在完成瞬间提示（q.id === 'race' 单独过滤掉）
-  const active = QUESTS.filter(q => (q.state === 'active' || q.state === 'ready' || q.state === 'cooldown') && q.id !== 'race');
+  // 【fix574b】外族入侵做完领奖后也不再常驻：用户截图里"今天已经做过了，明天再来"一直挂在左上角，
+  // 明明已经结束了却占位。现在 cooldown 状态的任务统一不显示（明天光柱会自己刷新，不需要常驻提醒）。
+  const active = QUESTS.filter(q => (q.state === 'active' || q.state === 'ready') && q.id !== 'race');
   if (!active.length) { wrap.innerHTML = ''; return; }
   wrap.innerHTML = active.map(q => {
     let timerHtml = '', objHtml = q.objectiveText(), bar = '', sub = '';
@@ -13949,13 +14155,15 @@ var questBridge = { despawnRaceCar: null, RACE_CHECKS: 6 };
     id: 'invasion', name: '外族入侵', state: 'available', completed: false,
     phase: 'idle', initialPhase: 'idle', elapsed: 0,
     x: 0, z: -160,
-    desc: '一支外族武装从城市四角入侵，正在向市中心推进。\n\n' +
-          '这一次你不是一个人在战斗：市民会拿起武器、警察会暂时停止追捕、' +
-          '军事基地也会派警卫支援，所有人一起把外敌赶出城市。\n\n' +
-          '击退全部入侵者即可领取奖励。',
-    rewardGold: 8000, rewardXp: 1600,
-    rewardText: '8000 金币　+　1600 经验　+　卫国英雄',
-    progressTotal: isMobile ? 8 : 12, progressValue: 0,
+    desc: '侦察确认：一支装备精良的外族武装正在城北机场集结，' +
+          '他们带着火箭筒、加特林、AK47、电锯和斧头，头顶尖角、双眼血红。\n\n' +
+          '接取后先调配你的部队：警察、军事基地护卫、市民义勇，' +
+          '各自安排「留守市中心 / 机场正面阻击 / 侧翼包抄」。\n\n' +
+          '点「分配完成 · 开始阻击」后，外敌会从机场一窝蜂扑向市区。' +
+          '入侵期间警察与军方自动停战，所有人一致对外。',
+    rewardGold: 12000, rewardXp: 2400,
+    rewardText: '12000 金币　+　2400 经验　+　护城英雄',
+    progressTotal: isMobile ? 14 : 22, progressValue: 0,
     objectiveText() {
       return '击退外族入侵者　' + Math.round(this.progressValue || 0) + ' / ' + (this.progressTotal || 0);
     },
@@ -15068,7 +15276,7 @@ var ACH_DEFS = [
   { id:'perfect',     name:'完美身躯',        desc:'人物属性全部加满',                   gold:5000, xp:1200 },
   { id:'grapple1000', name:'我离不掉你了',    desc:'累计使用钩爪 1000 次',               gold:5000, xp:1200 },
   { id:'publicEnemy', name:'城市公敌',        desc:'第一次激起民愤（五星时打爆军方直升机与坦克）', gold:2500, xp:600 },
-  { id:'invasionHero',name:'卫国英雄',        desc:'第一次联合市民、警察与军方击退外族入侵',       gold:3000, xp:800 }
+  { id:'invasionHero',name:'护城英雄',        desc:'第一次联合市民、警察与军方击退外族入侵',       gold:3000, xp:800 }
 ];
 // 运行时状态（存档字段 achv）：done=已达成；count=累计计数（击杀/图鉴）；tpFree=免费传送卷库存
 var ACHY = { done:{}, count:{ kills:0, folk:0, grapples:0 }, folkSeen:{}, tpFree:{ tpcity:0, tpisland:0, tpairport:0 } };
@@ -16143,7 +16351,7 @@ function isUiTouch(t) {
   // 【2026-10-15·修"点足球面板的按钮会触发移动轮盘"】这里必须把足球场的元素也列进来：
   // 漏掉它们的话，点「开赛」「取消」的触摸会被当成游戏触摸，直接把左下角摇杆拉起来 ——
   // 玩家看到的就是"点开赛就触发移动轮盘、点取消也不行"。
-  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #viewFirstBtn, #viewThirdBtn, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel, #achvPanel, #achvClose'));
+  return !!(t && t.closest && t.closest('#atk, #weaponBtn, #btn, #gasBtn, #reverseBtn, #heliUpBtn, #heliDownBtn, #steerPad, #shopBtn, #shop, #kickBtn, #grappleBtn, #jump, #sprintBtn, #musicBtn, #skipBtn, #jobModal, #garageBtn, #minimap, #mapAvatar, #mapPanel, #statsPanel, #questTracker, #questOffer, #questResult, #invDeploy, #ferrisBtn, #ferrisOffBtn, #islandBtn, #islandPanel, #scopeBtn, #salvoBtn, #ferrisPanel, #devBtn, #devExitBtn, #devPanel, #soccerPanel, #soccerKick, #soccerPass, #soccerTackle, #soccerSprint, #setPanel, #layoutBar, #viewFirstBtn, #viewThirdBtn, #signThemeBtn, #flightPanel, #flBuyPerm, #flBuyOnce, #flCancel, #achvPanel, #achvClose'));
 }
 addEventListener('touchstart', e => {
   // 【fix53】机票面板必须在这里让位！
@@ -16152,7 +16360,7 @@ addEventListener('touchstart', e => {
   //   ① 被当成游戏触摸 → 落入摇杆分支 → 摇杆被拉到手指位置（用户报的"轮盘移到左手点的地方"）
   //   ② 随后 e.preventDefault() → 浏览器不合成 click → 三个按钮**全都点不动**
   // 两个症状同一个根因。（我当初只用 CDP 鼠标点击验证过，而手机走的是 touch 事件，漏了。）
-    if (ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen || (window.__wikiPanelOpen && window.__wikiPanelOpen())) return;   // 【fix237】民居百科面板也让位     // 【fix234】返程面板也要让位，否则手机点不动
+    if (invDeployOpen || ferrisPanelOpen || devPanelOpen || islandPanelOpen || flightPanelOpen || retPanelOpen || (window.__wikiPanelOpen && window.__wikiPanelOpen())) return;   // 【fix574b】部署面板让位；【fix237】民居百科面板也让位     // 【fix234】返程面板也要让位，否则手机点不动
   if (typeof achvPanelOpen === 'function' && achvPanelOpen()) return;   // 【fix507】成就面板打开时触摸让位，别把摇杆拉起来
   // 【2026-10-15】足球开赛面板开着时同样让位：否则点「开赛」「取消」会穿透到游戏里、把摇杆拉起来
   if (typeof SOC !== 'undefined' && SOC && SOC.panelOn) return;
@@ -21664,6 +21872,13 @@ function killCop(c, by) {
 //   · by='npc' 让 addKillBounty 直接 return —— 警察打死人不该给玩家加星。
 function damageResident(r, dmg, by, fromNpc) {
   if (!r.alive) return;
+  // 【fix574b】入侵期间友军（军方护卫 / 支援警察 / 市民义勇）互不伤害、互不记仇：
+  // 这三条线原本分属不同阵营，警察和基地护卫挨着开枪就会互相记恨、当场内讧。
+  // 玩家自己动手不受保护（玩家仍可攻击任何人）。
+  if (invasionActive && fromNpc && typeof fromNpc === 'object') {
+    const _ally = x => !!(x && (x.isBaseGuard || x.isInvSupport || x.isInvPolice || x._invTarget || x.isCop));
+    if (_ally(r) && _ally(fromNpc)) return;
+  }
   r.hp -= dmg;
   // 【fix523】用户："只要在军事基地里伤害守卫，守卫就都会群起而攻之"。
   // 原来只有 shoot() 里开枪才 alertBaseGuards，近战、爆炸、撞人打伤守卫都不会全员响应。
@@ -22903,6 +23118,8 @@ const COP_FOE_MEMORY = 12;      // 记仇时长（秒）：超过 12 秒没交�
 const COP_FOE_SEARCH = 30;      // 找仇人的半径（米）：超出就认为跑了
 function copFightNpc(c, dt) {
   const f = c.foe;
+  // 【fix574b】入侵期间警察不与军方护卫/支援/市民义勇互殴
+  if (f && invasionActive && (f.isBaseGuard || f.isInvSupport || f.isInvPolice || f._invTarget)) { c.foe = null; return false; }
   if (!f || !f.alive || f.down) { c.foe = null; return false; }
   c.foeT -= dt;
   if (c.foeT <= 0) { c.foe = null; return false; }
@@ -22946,6 +23163,8 @@ function copFightNpc(c, dt) {
 }
 function residentHitCop(c, dmg, fromNpc) {
   if (!c.alive || c.down) return;
+  // 【fix574b】入侵期间军方护卫/支援警察/市民义勇全部是友军，互相打到的流弹一律不计
+  if (invasionActive && fromNpc && (fromNpc.isBaseGuard || fromNpc.isInvSupport || fromNpc.isInvPolice || fromNpc._invTarget)) return;
   c.hp -= dmg;
   c.aggro = true;   // 被NPC攻击后立即还击
   if (fromNpc && fromNpc.alive) { c.foe = fromNpc; c.foeT = COP_FOE_MEMORY; }
@@ -22969,6 +23188,12 @@ function npcShotCopCheck(r, tx, tz, ignoreVeh) {
   }
   if (!best) return false;
   if (!hasLineOfSight(r.x, r.z, best.x, best.z, ignoreVeh)) return false;
+  // 【fix574b】入侵期间军方护卫/支援警察/市民义勇互相之间不算误伤，
+  // 连仇恨都不记（否则虽然不掉血，射手会一直追着友军跑，看起来像内讧）
+  if (invasionActive) {
+    const _ally = x => !!(x && (x.isBaseGuard || x.isInvSupport || x.isInvPolice || x._invTarget || x.isCop));
+    if (_ally(r) && _ally(best)) return false;
+  }
   // 真的有警察挡在枪线上
   residentHitCop(best, 8, r);
   if (r.hate !== 'cop') r.hate = 'cop';
@@ -23150,6 +23375,12 @@ function firstFriendlyFireTarget(shooter, tx, tz, maxDist) {
   const consider = o => {
     if (!o || o === shooter || !o.alive || o.down) return;
     if (sameClan(o, shooter)) return;                // 同颜色 = 自己人，绝不误伤
+    // 【fix574b】外族入侵期间全面停战：军方护卫（faction:0，和黄帮撞号）、支援警察、
+    // 拿了外敌目标的市民，三方都算自己人 —— 用户："警察不能和守卫起冲突，不能互相殴打"。
+    if (invasionActive) {
+      const _ally = x => !!(x && (x.isBaseGuard || x.isInvSupport || x.isInvPolice || x._invTarget || x.isCop));
+      if (_ally(o) && _ally(shooter)) return;
+    }
     const ox = o.x - shooter.x, oz = o.z - shooter.z;
     const t = ox * ux + oz * uz;
     if (t < 0.8 || t > bd) return;
@@ -23469,6 +23700,18 @@ function pedAvoidance(r, fx, fz, dt) {
   r._avLat = want; r._avSlow = slow; r._avActive = active;
 }
 function updateResident(r, dt) {
+  // 【fix574b·2026-11-25·用户："钩爪勾路上的行人，有时候卡卡的才能到身前"】
+  // 根因：updateGrapple 每帧把被勾住的人插值到玩家脚边（见 16672 pull 分支），
+  // 但同一帧后面 27708 的居民循环又调用 updateResident —— 这个人的 AI（逃跑/追击/绕墙）
+  // 和 collideNpc 会再改一次 r.x/r.z，两套逻辑抢同一具身体，于是人被"拉一下、弹回去、再拉"，
+  // 观感就是一顿一顿地卡到身前。不是每次都犯：只有当目标当时有 hate/flee 在移动时才打架。
+  // 修法：拉拽期间 NPC AI 完全让位，坐标只由 updateGrapple 驱动；带 2 秒超时兜底，
+  // 防止异常情况下 grappled 没被 releaseGrapple 清掉、人永远僵在原地。
+  if (r.grappled) {
+    r._grabT = (r._grabT || 0) + dt;
+    if (r._grabT > 2) { r.grappled = false; r._grabT = 0; }
+    else return;
+  } else if (r._grabT) r._grabT = 0;
   // 【fix573】外族入侵者由 updateInvasion 单独驱动，不走市民/帮派 AI；死亡后也不在原地复活
   if (r.isInvader) return;
   if (!r.alive) { r.respawn -= dt; if (r.respawn <= 0) respawnResident(r); else if (r.respawn < 1.5) fadeFigure(r.group, Math.max(0, r.respawn / 1.5)); return; }
@@ -23861,7 +24104,10 @@ function recyclePedestrians(dt) {
   // 【2026-10-19·fix26】把误入球场的行人清出去（用户要求"球场里不能有游荡的人"）：
   // 人行道点已尽量避开球场，但沿路行走仍可能走进球场带；这里每 0.8 秒兜底把场内的人挪到球场外的合法人行道。
   for (const r of residents) {
-    if (!r.alive || r.down) continue;
+    // 【fix574b】正在被钩爪牵引的人绝不能被"远处回收"瞬移：
+    // 否则 updateGrapple 每帧插值到一半，recyclePedestrians 突然把人搬到玩家身旁的另一个点，
+    // 视觉上就是"卡一下才到身前"（用户反馈：有时正常、有时卡顿）。
+    if (!r.alive || r.down || r.grappled) continue;
     if (inPitchArea(r.x, r.z, 2)) {
       const s = randomSidewalkSpot();
       r.x = s.x; r.z = s.z; r.axis = s.axis; r.roadC = s.roadC; r.side = s.side; r.walkSign = s.sign;
@@ -23879,7 +24125,8 @@ function recyclePedestrians(dt) {
   camera.getWorldDirection(_pedFwd);
   const movers = [];
   for (const r of residents) {
-    if (!r.sidewalk || !r.alive || r.down || r.hate) continue;   // 正在打架/倒地的别动
+    // 【fix574b】+ r.grappled：被钩爪拉着的路人不能被搬走，否则拉拽中途会瞬移、卡顿
+    if (!r.sidewalk || !r.alive || r.down || r.hate || r.grappled) continue;   // 正在打架/倒地/被拉的别动
     const dx = r.x - px, dz = r.z - pz, d2 = dx * dx + dz * dz;
     if (d2 < PED_RECYCLE_DIST * PED_RECYCLE_DIST) continue;
     const d = Math.sqrt(d2) || 1;
@@ -29243,6 +29490,10 @@ function humanLodColor(item) {
 function attachLod(item, lodColor, isVehicle) {
   const g = item.group;
   if (!g || g.userData.detail || g.userData.lodDone) return;
+  // 【fix574b】外敌（恶魔角+红眼+各式武器）和参战的军方支援不能被远景廉价骨架替换：
+  // 廉价骨架就是个纯色小人，角、红眼、武器全没了，玩家从机场方向看过去就是一群杂色点。
+  // 这几支部队总数有限（手机 14+6），保留完整模型不会压垮性能。
+  if (item.isInvader || item.isInvSupport) { g.userData.lodDone = true; return; }
   // 【按用户要求】车辆不再做"远景低模替换"：无论远近，永远显示原本的完整车模。
   // 原因：城市里几乎每辆车都在 70m 以外，低模会让玩家觉得"车全都不是原来那辆"。
   // 车辆的性能改由"几何体按材质合并（每辆 39→18 个网格）+ 车流减量"来保证。
@@ -29395,6 +29646,7 @@ function gamePaused() {
     return getComputedStyle(el).display !== 'none';
   };
   return vis('shop') || vis('mapPanel') || vis('statsPanel') || vis('questOffer') || vis('questResult')
+      || vis('invDeploy')   // 【fix574b】外族入侵战前部署面板：调配时冻结世界
       || vis('ferrisPanel') || vis('devPanel') || vis('jobModal') || vis('islandPanel')
       || vis('setPanel')
       || vis('achvPanel')   // 【fix507】成就面板打开时暂停世界（手动关闭后恢复，非 update 驱动）
