@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261125-fix574c-ped-walk-smooth">
+<meta name="cf-build" content="20261125-fix575-inv-battlefield">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -7162,6 +7162,115 @@ var AIRLINER = null;
   }
 })();
 
+// ==================== 【fix575·2026-11-25】机场以北战场 ====================
+// 用户："把机场以北的方向扩充一块地，然后弄一个战场，感觉用一些战壕还有堡垒，
+//         还有那种防弹带一些战争元素的感觉"。
+// 位置：x∈[-150,150]、z∈[-460,-305]，正好在机场净空区（z≥-298）以北，
+// 外敌从 z=-400 的战场深处出生，一路穿过战壕/堡垒压向机场。
+// 全部用静态几何体（合批前创建），不新增 draw call；不用 buildings 碰撞，
+// 免得外敌被工事卡住走不动 —— 战壕是"视觉掩体"，不拦路。
+(function addInvBattlefield() {
+  try {
+    const BX0 = -150, BX1 = 150, BZ0 = -460, BZ1 = -305;
+    const earth  = new THREE.MeshLambertMaterial({ color: 0x6b5b42 });
+    const sand   = new THREE.MeshLambertMaterial({ color: 0xa8935f });
+    const sandD  = new THREE.MeshLambertMaterial({ color: 0x8c7a4d });
+    const concrete = new THREE.MeshLambertMaterial({ color: 0x777b78 });
+    const concreteD= new THREE.MeshLambertMaterial({ color: 0x5d615e });
+    const steel  = new THREE.MeshLambertMaterial({ color: 0x4a4640 });
+    const rust   = new THREE.MeshLambertMaterial({ color: 0x8a5138 });
+    const boxG = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const putB = (geo, mat, x, y, z, ry) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z); if (ry) m.rotation.y = ry;
+      scene.add(m); return m;
+    };
+    const gy = (x, z) => terrainHeight(x, z);
+
+    // ---- 战场地面：压出一块深色焦土，和绿色机场草地区分开 ----
+    for (let gz = BZ0; gz < BZ1; gz += 22) {
+      for (let gx = BX0; gx < BX1; gx += 22) {
+        const y = gy(gx + 11, gz + 11);
+        putB(boxG(22, 0.12, 22), earth, gx + 11, y - 0.02, gz + 11);
+      }
+    }
+    // ---- 战壕：两道平行沙袋墙夹出 3m 宽的通道，沿 x 方向延伸 ----
+    // 每袋 1.6×0.5×0.8，交错叠两层；通道里是露出泥土的凹沟视觉。
+    const trenchZs = [-432, -396, -360, -328];
+    for (const tz of trenchZs) {
+      for (let x = BX0 + 6; x < BX1 - 6; x += 1.7) {
+        const yo = gy(x, tz);
+        // 泥沟底（略低的深色带）
+        putB(boxG(1.8, 0.08, 3.2), concreteD, x, yo + 0.03, tz);
+        for (const side of [-1, 1]) {
+          const wz = tz + side * 2.1;
+          const yw = gy(x, wz);
+          for (let layer = 0; layer < 2; layer++) {
+            const off = (layer % 2) ? 0.85 : 0;
+            putB(boxG(1.7, 0.46, 0.85), layer ? sandD : sand,
+                 x + off, yw + 0.24 + layer * 0.44, wz);
+          }
+        }
+      }
+    }
+    // ---- 堡垒：4 座混凝土碉堡，带射击孔与顶部盖板 ----
+    const bunkers = [
+      { x: -104, z: -414 }, { x: 96, z: -414 },
+      { x: -58, z: -344 },  { x: 64, z: -344 }
+    ];
+    for (const b of bunkers) {
+      const y = gy(b.x, b.z);
+      // 主体：四面墙（留出南面射击口）
+      putB(boxG(10, 2.4, 0.7), concrete, b.x, y + 1.2, b.z - 4);
+      putB(boxG(0.7, 2.4, 8), concrete, b.x - 5, y + 1.2, b.z);
+      putB(boxG(0.7, 2.4, 8), concrete, b.x + 5, y + 1.2, b.z);
+      // 南面：两段矮墙 + 中间射击口（外敌/玩家可以看见里面的枪口）
+      putB(boxG(3.2, 2.4, 0.7), concrete, b.x - 3.2, y + 1.2, b.z + 4);
+      putB(boxG(3.2, 2.4, 0.7), concrete, b.x + 3.2, y + 1.2, b.z + 4);
+      putB(boxG(3.4, 0.8, 0.7), concrete, b.x, y + 2.0, b.z + 4);
+      // 顶部钢板 + 边缘
+      putB(boxG(11, 0.35, 9), concreteD, b.x, y + 2.6, b.z);
+      // 射击孔里的机枪管（暗铁色，从南面伸出）
+      putB(boxG(0.16, 0.16, 2.2), steel, b.x, y + 1.25, b.z + 4.7);
+      putB(boxG(0.6, 0.5, 0.5), rust, b.x, y + 1.25, b.z + 4.1);
+    }
+    // ---- 防弹沙袋墙：沿 x 方向若干段交错短墙，给推进路线制造起伏 ----
+    const wallZs = [-378, -350];
+    for (const wz of wallZs) {
+      for (let x = BX0 + 12; x < BX1 - 12; x += 9) {
+        const y = gy(x, wz);
+        for (let layer = 0; layer < 3; layer++) {
+          const n = 5 - layer;
+          for (let k = 0; k < n; k++) {
+            putB(boxG(1.5, 0.42, 0.8), (k + layer) % 2 ? sand : sandD,
+                 x + k * 1.55 + (layer ? 0.77 : 0) - 3, y + 0.22 + layer * 0.4, wz + (layer % 2 ? 0.2 : -0.2));
+          }
+        }
+      }
+    }
+    // ---- 铁丝网：细钢管桩 + 三道横线，横在战场前沿 ----
+    const wireZ = -318;
+    for (let x = BX0 + 8; x < BX1 - 8; x += 6) {
+      const y = gy(x, wireZ);
+      putB(boxG(0.12, 1.5, 0.12), steel, x, y + 0.75, wireZ);
+      for (const hh of [0.45, 0.9, 1.3]) {
+        putB(boxG(6.0, 0.035, 0.035), steel, x + 3, y + hh, wireZ);
+      }
+    }
+    // ---- 战争残骸：翻倒的军用车辆骨架 / 木箱弹箱，增加战场细节 ----
+    const wreckSpots = [[-76, -420], [42, -404], [-20, -370], [110, -356], [8, -338]];
+    for (const [wx, wz] of wreckSpots) {
+      const y = gy(wx, wz);
+      putB(boxG(3.6, 0.9, 1.9), rust, wx, y + 0.5, wz, (wx % 7) * 0.2);
+      putB(boxG(1.5, 0.7, 1.5), concreteD, wx, y + 1.2, wz + 0.5);
+      for (let k = 0; k < 3; k++) {
+        putB(boxG(0.8, 0.5, 0.6), sandD, wx + 2.5 + k * 0.9, y + 0.26, wz - 1.2);
+      }
+    }
+    window.__invBattlefield = { x0: BX0, x1: BX1, z0: BZ0, z1: BZ1, bunkers: bunkers.length };
+  } catch (eBattle) { try { console.error('[invBattlefield]', eBattle); } catch (e9) {} }
+})();
+
 // 公园（中心区域，绿地+池塘+亭子）
 (function addPark() {
   const zx = 0, zz = 0;
@@ -12652,16 +12761,41 @@ let questResultOpen = false;
 // 全部外敌被击退即完成任务。外敌不进 respawn，任务结束/放弃时统一清理。
 var invasionActive = false, invasionTick = 0, invasionTotal = 0;
 var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
+var INV_VEHICLES = [];   // 【fix575】外敌装甲火力点（战场上的敌方军车）
+// 【fix575·2026-11-25·用户："外族入侵期间玩家对 NPC/警察/城管/守卫都是没有伤害的，
+// 而且这时候杀外族的人也不会升星"】
+// 入侵是"全城一致对外"的剧情任务：玩家和城内所有友军临时停战，只有外敌可打。
+// 这里做统一判定，所有伤害/升星入口调用它：
+//   · 目标是外敌 → 照常受伤、照常能打死（否则任务没法完成）
+//   · 目标是友军（路人/帮派/警察/城管/基地守卫）→ 玩家来源的攻击完全无效
+//   · NPC 之间互殴不受影响（by='npc'/'cop' 等来源不算玩家攻击）
+function invPlayerImmune(target, by, fromNpc) {
+  if (!invasionActive) return false;
+  if (target && target.isInvader) return false;          // 外敌照打
+  if (fromNpc && typeof fromNpc === 'object') return false;  // NPC 互殴不拦
+  if (by === 'npc' || by === 'cop' || by === 'stealth') return false;
+  return true;                                            // 玩家来源打友军 → 免疫
+}
+// 入侵期间击杀/开枪/撞人一律不升星（无论打的是外敌还是友军）。
+function invNoWanted() { return invasionActive; }
 var INV_UNIFORM = 0x8e3b2e;      // 外族暗红褐制服
 var MIL_UNIFORM_INV = 0x4a5a3a;  // 军方支援的军绿色（和基地守卫一致）
 // 【fix574b】战前部署：玩家给三支友军分配的任务（guard=守城 / rush=机场正面 / flank=侧翼），
 // 决定他们开战时的出生位置与作战半径；面板打开时游戏暂停，点「开始阻击」才真正放外敌进城。
 var invDeployOpen = false;
 var INV_ORDERS = { police: 'guard', military: 'rush', civil: 'guard' };
-var AIRPORT_INV = { x: 0, z: -257 };   // 外敌集结地：城北机场（与 addAirport 的 CX/CZ 一致）
+var AIRPORT_INV = { x: 0, z: -257 };   // 城北机场中心（与 addAirport 的 CX/CZ 一致）
+// 【fix575】外敌集结地移到机场**最北边界外的战场**：从 z≈-400 一路往南推进，
+// 穿过机场跑道、停机坪，再进市区 —— 玩家能远远看到一长队人从地平线压过来。
+var INV_SPAWN_Z = -400;
 // 外敌武器池：火箭筒 / 手枪 / 斧头 / 电锯 / AK47 / 加特林 / 步枪 / 霰弹枪
 // 近战武器（斧头/电锯）也进池：他们冲到面前会抡起来，观感更像"各式各样的外敌"。
-var INV_WEAPONS = ['ak47', 'rpg', 'pistol', 'minigun', 'axe', 'rifle', 'chainsaw', 'shotgun'];
+// 【fix575】扩充到 14 种：原 8 种 + 狙击枪/冲锋枪/四联火箭筒/武士刀/双截棍/锤子，
+// 用户："外敌的人更多一点，他们也可以有一些奇怪的武器或者载具"。
+var INV_WEAPONS = ['ak47', 'rpg', 'pistol', 'minigun', 'axe', 'rifle', 'chainsaw', 'shotgun',
+                   'sniper', 'smg', 'rpg4', 'katana', 'nunchaku', 'hammer'];
+// 近战武器：这些外敌不端枪，冲到跟前挥砍；其余都是远程，端枪推进
+var INV_MELEE = ['axe', 'chainsaw', 'katana', 'nunchaku', 'hammer'];
 // 部署阵位：guard=守在玩家附近（市中心） / rush=机场正面迎击 / flank=机场侧翼包抄
 function invDeploySpot(order, px, pz, fallback) {
   if (order === 'rush') return { x: AIRPORT_INV.x, z: AIRPORT_INV.z + 92 };
@@ -12688,6 +12822,9 @@ function nearestNonInvader(x, z, maxD) {
 }
 function cleanupInvasion() {
   invasionActive = false;
+  // 【fix575】入侵结束清掉军方支援载具（直升机/坦克），避免它们失去外敌目标后继续追玩家
+  try { if (typeof clearMilHeli === 'function') clearMilHeli(); } catch (e) {}
+  try { if (typeof clearMilTank === 'function') clearMilTank(); } catch (e) {}
   for (const v of INVADERS) {
     try { scene.remove(v.group); } catch (e) {}
     const i = residents.indexOf(v); if (i >= 0) residents.splice(i, 1);
@@ -12700,6 +12837,11 @@ function cleanupInvasion() {
     try { scene.remove(c.group); } catch (e) {}
     const i = cops.indexOf(c); if (i >= 0) cops.splice(i, 1);
   }
+  // 【fix575】清掉外敌装甲火力点（它们是独立对象，不在 cars 里，玩家打不坏，任务结束直接移除）
+  for (const tv of INV_VEHICLES) {
+    try { scene.remove(tv.group); unregisterDynamicObject && unregisterDynamicObject(tv.group); } catch (e) {}
+  }
+  INV_VEHICLES.length = 0;
   INVADERS.length = 0; INV_SUPPORT.length = 0; INV_COPS.length = 0;
   for (const r of residents) {
     if (r.hate === 'faction' && r.hateTarget && r.hateTarget.isInvader) { r.hate = null; r.hateTarget = null; }
@@ -12710,18 +12852,20 @@ function spawnInvasionForce(q) {
   cleanupInvasion();
   invasionActive = true; invasionTick = 0;
   // 【fix574b】用户："外族入侵的时候让他们从机场这边一窝蜂的涌来" + "数量再多一些"
-  const N = isMobile ? 14 : 22;
+  // 【fix575】数量再加：手机 22 / 桌面 34（原 14/22），配合更宽的正面推进阵型
+  const N = isMobile ? 22 : 34;
   invasionTotal = N;
   q.progressTotal = N; q.progressValue = 0;
   const px = person.position.x, pz = person.position.z;
-  // 集结地 = 城北机场（0,-257）。所有人挤在跑道南侧的一小片区域，
-  // 开战后一起朝玩家冲过去，就是"一窝蜂从机场涌来"的观感。
-  // 螺旋小半径散开：人多了不至于完全重叠在一点。
+  // 【fix575】集结地 = 机场以北的新战场（z≈-400），排成宽正面缓缓往南压过来。
+  // 玩家站在机场/市区就能望见北边地平线上一条黑压压的进攻线，而不是凭空在身边刷出来。
+  // 横排展开（x 从 -70 到 +70）+ 多排纵深（每排错开 9m），越靠后出发越晚到达。
+  const _cols = Math.ceil(N / 3);
   for (let i = 0; i < N; i++) {
-    const a = i * 2.399963, rr = 3 + (i % 5) * 2.6;   // 黄金角螺旋
+    const row = Math.floor(i / _cols), col = i % _cols;
     const sp2 = {
-      x: AIRPORT_INV.x + Math.cos(a) * rr + (Math.random() - 0.5) * 4,
-      z: AIRPORT_INV.z + 34 + Math.sin(a) * rr + (Math.random() - 0.5) * 4
+      x: AIRPORT_INV.x + (col - (_cols - 1) / 2) * 8.5 + (Math.random() - 0.5) * 2.5,
+      z: INV_SPAWN_Z - row * 9 + (Math.random() - 0.5) * 2.5
     };
     clampCity(sp2);
     const x = sp2.x, z = sp2.z;
@@ -12733,19 +12877,21 @@ function spawnInvasionForce(q) {
     g.position.set(x, gy, z);
     g.rotation.y = Math.atan2(-x, -z);
     scene.add(g);
-    const _melee = (wp === 'axe' || wp === 'chainsaw') ? wp : 'sword';
-    const _isMelee = (wp === 'axe' || wp === 'chainsaw');
+    const _isMelee = INV_MELEE.indexOf(wp) >= 0;
+    const _melee = _isMelee ? wp : 'sword';
     const v = {
       group: g, x: x, z: z, angle: g.rotation.y,
       alive: true, walking: true, timer: 0, walkTime: 0, respawn: 0,
-      hp: wp === 'rpg' || wp === 'minigun' ? 180 : 120,
-      maxHp: wp === 'rpg' || wp === 'minigun' ? 180 : 120,
+      hp: (wp === 'rpg' || wp === 'rpg4' || wp === 'minigun') ? 200 : 130,
+      maxHp: (wp === 'rpg' || wp === 'rpg4' || wp === 'minigun') ? 200 : 130,
       melee: _melee, ranged: _isMelee ? null : wp,
       weaponKey: wp,
       faction: 200, isInvader: true, skipAI: true, flee: false, hate: null,
       down: false, downT: 0, attackCd: 0, phase: Math.random() * 6,
       punchAnim: 0, punchHand: 0, armed: !_isMelee, ammo: 90, maxAmmo: 90,
-      chaseMode: 'run', _side: Math.random() < 0.5 ? 1 : -1
+      chaseMode: 'run', _side: Math.random() < 0.5 ? 1 : -1,
+      // 【fix575】invMoving 记录这一帧是否真的在走，用于动画；invSpeed 缓慢推进速度
+      invMoving: false, invSpeed: 1.5 + Math.random() * 0.5
     };
     INVADERS.push(v); residents.push(v);
   }
@@ -12822,7 +12968,34 @@ function spawnInvasionForce(q) {
     if (r.hate === 'player') { r.hate = null; r.hateTarget = null; }
   }
   for (const c of cops) { c.huntT = 0; c.aggro = false; c._invTarget = null; }
-  try { setHint('外族入侵！与市民、警察和军方一起击退 ' + N + ' 名入侵者'); } catch (e) {}
+  // 【fix575】外敌装甲火力点：战场里 4 辆暗红色敌方军车，架着重机枪朝市区扫射。
+  // 它们是独立对象（不进 cars，玩家撞不到也开不了），由 updateInvasion 统一驱动开火，
+  // 任务结束随 cleanupInvasion 一起消失 —— 满足"外敌也可以有一些载具"且不碰复杂驾驶系统。
+  const _invCarSpots = [[-72, -386], [68, -386], [-34, -342], [40, -342]];
+  for (let i = 0; i < _invCarSpots.length; i++) {
+    const [cx, cz] = _invCarSpots[i];
+    let cg = null;
+    try { cg = makeCar('suv', 0x7a2d24, false); } catch (e) { cg = null; }
+    if (!cg) continue;
+    const cy = terrainHeight(cx, cz);
+    cg.position.set(cx, cy, cz);
+    cg.rotation.y = Math.PI;   // 车头朝南（朝城市）
+    scene.add(cg);
+    try { registerDynamicObject(cg); } catch (e) {}
+    // 车顶机枪（细管 + 枪座），纯视觉
+    try {
+      const gunMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.8, 6), gunMat);
+      barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 1.7, -0.8);
+      cg.add(barrel);   // 挂车上：清理时随车一起移除，不残留
+    } catch (e) {}
+    INV_VEHICLES.push({ group: cg, x: cx, z: cz, shootCd: 1.2 + i * 0.4 });
+  }
+  // 【fix575】军方出动直升机 + 坦克围剿外敌：直接复用五星通缉那两套 AI，
+  // 目标由 milHeliPlayerPos() 在入侵期间自动改成最近外敌（见该函数）。
+  try { if (typeof spawnMilHeli === 'function') spawnMilHeli(); } catch (e) {}
+  try { if (typeof spawnMilTank === 'function') spawnMilTank(); } catch (e) {}
+  try { setHint('外族入侵！军方直升机与坦克已出动，联合市民警察击退 ' + N + ' 名入侵者'); } catch (e) {}
   try { floatText('外族入侵！', '#ff5544'); } catch (e) {}
   try { sfx('siren'); } catch (e) {}
 }
@@ -12833,45 +13006,108 @@ function updateInvasion(dt, q) {
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
   // 外敌自己驱动（skipAI），优先打附近的市民/军方，否则直扑玩家
+  // 【fix575 重写】三处大改：①缓慢推进 1.5~2m/s（原 4.2 像冲刺）；
+  // ②每帧调 animateHuman —— 原来 phase/punchAnim 一直在涨却没人驱动，人是僵的；
+  // ③开火加后坐力/枪口火光/枪声节奏，近战加挥砍动作，不再是"拿着枪的木偶"。
   for (const v of INVADERS) {
-    if (!v.alive || v.down) continue;
-    const nearP = nearestNonInvader(v.x, v.z, 26);
-    const toPlayer = !nearP || Math.hypot(px - v.x, pz - v.z) < 10;
+    if (!v.alive || v.down) {
+      // 倒地的外敌也要躺下，不能站着"死"
+      if (v.alive === false && v.group && v.group.rotation.x < 0.5) v.group.rotation.x = Math.PI / 2;
+      continue;
+    }
+    const nearP = nearestNonInvader(v.x, v.z, 30);
+    const toPlayer = !nearP || Math.hypot(px - v.x, pz - v.z) < 12;
     const tx = toPlayer ? px : nearP.x, tz = toPlayer ? pz : nearP.z;
     const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz) || 1;
     v.angle = Math.atan2(dx, dz); v.group.rotation.y = v.angle;
-    if (d > 11) {
+    const _melee = INV_MELEE.indexOf(v.weaponKey) >= 0;
+    const _range = _melee ? 3.2 : (v.weaponKey === 'rpg' || v.weaponKey === 'rpg4' ? 70
+                    : (v.weaponKey === 'sniper' ? 90 : 30));
+    // 缓慢推进：远距离全速前进，进入射程后停下举枪（远程）/继续贴身（近战）
+    const wantMove = d > (_melee ? 2.6 : Math.min(_range * 0.7, 22));
+    v.invMoving = wantMove;
+    if (wantMove) {
       let mx = dx / d, mz = dz / d;
       if (!hasLineOfSight(v.x, v.z, tx, tz, null)) {
         const s = v._side || 1;
         mx = -mz * s * 0.85 + dx / d * 0.45;
         mz = dx / d * s * 0.85 + dz / d * 0.45;
       }
-      const p = { x: v.x + mx * 4.2 * dt, z: v.z + mz * 4.2 * dt };
+      // 分段推进：远处（>150m）5m/s 快速压境，中段 3.2m/s，
+      // 接近玩家/友军（<60m）才放慢到 1.5~2m/s —— 既有"缓缓逼近"的压迫感，
+      // 又不会让玩家在市区等 3 分钟才看到人。
+      const spd = (d > 150) ? 5.0 : (d > 60 ? 3.2 : (v.invSpeed || 1.7));
+      const p = { x: v.x + mx * spd * dt, z: v.z + mz * spd * dt };
       collideNpc(p, 0.4, v); clampCity(p);
       v.x = p.x; v.z = p.z; v.group.position.x = p.x; v.group.position.z = p.z;
     }
-    v.phase += dt * 8;
+    // 动画驱动：走路摆腿摆臂；停下时端枪（持枪武器）或举械（近战）
+    v.phase += dt * (wantMove ? 6.5 : 2.2);
+    if (v.punchAnim > 0) v.punchAnim = Math.max(0, v.punchAnim - dt * 3.2);
+    const _pose = _melee ? v.melee : (v.weaponKey === 'pistol' ? 'pistol' : 'rifle');
+    // animateHuman 的端枪待机只在 !moving 时生效，所以外敌停下开火时自然进入端枪姿势；
+    // 移动时是正常走路摆臂 —— 这就是原来"僵硬"和"不举枪"的解法。
+    animateHuman(v.group, v.phase, v.punchAnim || 0, _pose, wantMove, v.punchHand || 0, 0, 0);
     if (v.attackCd > 0) v.attackCd -= dt;
-    const _melee = (v.weaponKey === 'axe' || v.weaponKey === 'chainsaw');
-    const _range = _melee ? 3.2 : (v.weaponKey === 'rpg' ? 60 : 24);
     if (d < _range && v.attackCd <= 0 && hasLineOfSight(v.x, v.z, tx, tz, null)) {
-      // 【fix574b】按武器种类区分：斧头/电锯近身劈砍、火箭筒溅射、其余连发枪械
-      v.attackCd = _melee ? 0.7 : (v.weaponKey === 'minigun' ? 0.16 : (v.weaponKey === 'rpg' ? 2.6 : 0.8 + Math.random() * 0.4));
-      v.punchAnim = 1;
-      const _dmg = _melee ? (v.weaponKey === 'axe' ? 26 : 20)
-        : (v.weaponKey === 'rpg' ? 42 : (v.weaponKey === 'minigun' ? 8 : (v.weaponKey === 'pistol' ? 10 : 12)));
+      // 按武器种类区分射速/伤害：狙击慢而重、加特林连发、火箭筒溅射、近战挥砍
+      const _heavy = (v.weaponKey === 'rpg' || v.weaponKey === 'rpg4');
+      v.attackCd = _melee ? 0.75
+        : (v.weaponKey === 'minigun' ? 0.14
+        : (v.weaponKey === 'sniper' ? 2.4
+        : (_heavy ? 2.8 : 0.8 + Math.random() * 0.4)));
+      v.punchAnim = 1;   // 开火/挥砍瞬间触发后坐力/挥械动画
+      const _dmg = _melee ? (v.weaponKey === 'hammer' ? 32 : (v.weaponKey === 'axe' ? 28 : 24))
+        : (v.weaponKey === 'sniper' ? 45
+        : (_heavy ? 46
+        : (v.weaponKey === 'minigun' ? 8
+        : (v.weaponKey === 'pistol' ? 11 : 14))));
+      const mzY = terrainHeight(v.x, v.z) + 1.3;
       if (_melee) {
         sfxNear('hit', v.x, v.z, 30);
         spawnBurst(tx, tz, 0xff4422, 6);
       } else {
-        sfxNear('shoot', v.x, v.z, 50);
-        spawnTracer(v.x + dx / d * 1.2, 1.3, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
-        spawnBurst(v.x + dx / d * 1.2, v.z + dz / d * 1.2, v.weaponKey === 'rpg' ? 0xff8833 : 0xffff88, 4);
+        sfxNear('shoot', v.x, v.z, 60);
+        spawnTracer(v.x + dx / d * 1.2, mzY, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
+        // 枪口火光 + 火箭筒尾焰，让"开枪"一眼看得见
+        spawnBurst(v.x + dx / d * 1.3, v.z + dz / d * 1.3,
+          (_heavy || v.weaponKey === 'minigun') ? 0xff8833 : 0xffff88, _heavy ? 7 : 4);
       }
       if (toPlayer) npcShotPlayer(_dmg, v.x, v.z, v.ranged || 'pistol');
       else if (nearP) { nearP.hp -= _dmg; if (nearP.hp <= 0) killResident(nearP, v); }
     }
+  }
+  // 【fix575】外敌装甲火力点：车顶机枪朝市区方向扫射，打玩家或附近的友军。
+  // 只在外敌还没推进到车旁边时开火（有自己人在附近就不误伤），节奏 1.1~1.5s 一发。
+  for (const tv of INV_VEHICLES) {
+    if (tv.shootCd > 0) tv.shootCd -= dt;
+    if (tv.shootCd > 0) continue;
+    // 附近 8m 内有自己人就停火，避免自己人挡枪口
+    let friendlyNear = false;
+    for (const v of INVADERS) {
+      if (v.alive && Math.hypot(v.x - tv.x, v.z - tv.z) < 8) { friendlyNear = true; break; }
+    }
+    if (friendlyNear) { tv.shootCd = 0.6; continue; }
+    // 目标：优先玩家（70m 内），否则最近友军（60m 内）
+    const pd = Math.hypot(px - tv.x, pz - tv.z);
+    let tgt = null, td = 0;
+    if (pd < 70) { tgt = { x: px, z: pz, player: true }; td = pd; }
+    else {
+      for (const r of residents) {
+        if (!r.alive || r.isInvader || r.down) continue;
+        const d0 = Math.hypot(r.x - tv.x, r.z - tv.z);
+        if (d0 < 60 && (!tgt || d0 < td)) { tgt = r; td = d0; }
+      }
+    }
+    if (!tgt) { tv.shootCd = 1.0; continue; }
+    if (!hasLineOfSight(tv.x, tv.z, tgt.x, tgt.z, null)) { tv.shootCd = 0.8; continue; }
+    tv.shootCd = 1.1 + Math.random() * 0.4;
+    const gy0 = terrainHeight(tv.x, tv.z) + 1.7;
+    sfxNear('shoot', tv.x, tv.z, 55);
+    spawnTracer(tv.x, gy0, tv.z, tgt.x, 1.0, tgt.z, 'rifle');
+    spawnBurst(tv.x, tv.z, 0xffff88, 4);
+    if (tgt.player) npcShotPlayer(9, tv.x, tv.z, 'rifle');
+    else { tgt.hp -= 9; if (tgt.hp <= 0) killResident(tgt, 'npc'); }
   }
   // 每 2 秒重新分配市民 / 军方支援的目标（用现有 faction 分支让他们真的开枪）
   invasionTick -= dt;
@@ -14546,6 +14782,8 @@ function lightCrimeLocked() { return wanted >= LIGHT_CRIME_CAP - 1e-6; }
 // 注意：这里不用独立计数器 —— 直接看当前 wanted。这样"先撞人把星级顶到 2 星、
 // 再回头开车撞人"也不会继续加（旧写法用独立计数器就会漏掉这种情况）。
 function lightCrimeWanted(step, cap, color) {
+  // 【fix575】入侵期间玩家一切行为都不升星（开枪/撞人/击杀外敌/误伤都不算）
+  if (invNoWanted()) return false;
   const lim = Math.min(cap, LIGHT_CRIME_CAP);
   if (wanted >= lim - 1e-6) return false;      // 已经到顶：这类行为不再加星
   const add = Math.min(step, lim - wanted);    // 最后半星只加一半，不会冲过上限
@@ -14594,6 +14832,8 @@ let killBountyCount = 0;
 // 也就是从 0 一路打到 5 星要 2+3+5+10+20×2 = 60 条人命（改动前只要 21 条）。
 const KILL_NEED_BY_TIER = { 0: 2, 1: 3, 2: 5, 3: 10, 4: 20 };
 function addKillBounty(by) {
+  // 【fix575】入侵期间杀外敌/任何人都不升星
+  if (invNoWanted()) return;
   // 开车碾死 / 非玩家击杀 / 瞄准镜暗杀 / **警察执法击毙**：都不计入通缉阶梯
   // （'cop' 是 2026-10-13 警察还击 NPC 时的来源标记，警察打人不能给玩家加星）
   if (by === 'car' || by === 'npc' || by === 'stealth' || by === 'cop') return;
@@ -15489,6 +15729,8 @@ function openAchievements() {
 }
 
 function addHeat(n) {
+  // 【fix575】入侵期间不攒通缉热度
+  if (invNoWanted()) return;
   // 【perf16】两星以上，轻罪不再攒热度 —— 否则"打城管/撞人"照样能把星级推上去，
   // 违背"两星以上只要不打死人就不再加星"。
   if (lightCrimeLocked()) return;
@@ -15497,6 +15739,8 @@ function addHeat(n) {
 }
 // 加星时顺手把衰减倒计时清零 —— "星还在的时候又犯事，就重新计时 20 秒"（用户要求）
 function addWanted(n) {
+  // 【fix575】入侵期间冻结玩家通缉：不升星也不重置衰减（保持进入任务时的星级）
+  if (invNoWanted()) return;
   // 【2026-10-13 用户要求】高星抗性：4 星之后**不管来源、每次最多只算半颗星**
   // （击杀阶梯 +1、炸车 +1、杀警察 +2 一律只给 0.5），要攒两次才涨一颗。
   // 只有 5 星封顶，所以 4→5 这一段相当于难度翻倍 —— 配合上面拉长的击杀阶梯，
@@ -19243,6 +19487,8 @@ function blastPeople(x, z, R, dmgAt, killR, vh, oy, by) {
   };
   for (const r of residents) {
     if (!r.alive) continue;
+    // 【fix575】入侵期间爆炸不伤友军（外敌照炸）
+    if (invPlayerImmune(r, by)) continue;
     if (vh && Math.abs(terrainHeight(r.x, r.z) + 1.0 - (oy || 0)) > vh) continue;   // 垂直范围外不伤到
     const d = Math.hypot(r.x - x, r.z - z);
     if (d >= R) continue;
@@ -19253,6 +19499,8 @@ function blastPeople(x, z, R, dmgAt, killR, vh, oy, by) {
   }
   for (const c of cops) {
     if (!c.alive) continue;
+    // 【fix575】入侵期间爆炸不伤警察（外敌照炸）
+    if (invPlayerImmune(c, by)) continue;
     if (vh && Math.abs(terrainHeight(c.x, c.z) + 1.0 - (oy || 0)) > vh) continue;   // 垂直范围外不伤到
     const d = Math.hypot(c.x - x, c.z - z);
     if (d >= R) continue;
@@ -21872,6 +22120,8 @@ function killCop(c, by) {
 //   · by='npc' 让 addKillBounty 直接 return —— 警察打死人不该给玩家加星。
 function damageResident(r, dmg, by, fromNpc) {
   if (!r.alive) return;
+  // 【fix575】入侵期间玩家打友军无效（外敌照常受伤）
+  if (invPlayerImmune(r, by, fromNpc)) return;
   // 【fix574b】入侵期间友军（军方护卫 / 支援警察 / 市民义勇）互不伤害、互不记仇：
   // 这三条线原本分属不同阵营，警察和基地护卫挨着开枪就会互相记恨、当场内讧。
   // 玩家自己动手不受保护（玩家仍可攻击任何人）。
@@ -21917,6 +22167,8 @@ function damageResident(r, dmg, by, fromNpc) {
 }
 function hitCop(c, dmg, by) {
   if (!c.alive) return;
+  // 【fix575】入侵期间玩家打警察/城管无效
+  if (invPlayerImmune(c, by)) return;
   c.hp -= (dmg || 15);
   c.aggro = true;   // 受到一次攻击就立即反击，无需等全局通缉
   // 【2026-10-13】"玩家追击记忆"：只有**玩家本人**打的才算（NPC 互殴不该把火引到玩家头上）。
@@ -21939,6 +22191,8 @@ function hitCop(c, dmg, by) {
 // 撞倒：倒地 + 掉血 + 起身后仇恨攻击者；同色路人同仇；血量归零则直接击杀
 function knockDownResident(r, who, dmg, by) {
   if (!r.alive || r.down) return;
+  // 【fix575】入侵期间玩家撞/打友军无效（who 为玩家时）
+  if (invPlayerImmune(r, by || (who === 'player' ? 'gun' : 'npc'))) return;
   // 【fix530】撞倒也算"动了基地的人"：守卫被车撞飞同样要全员警报。
   if (r.isBaseGuard && by !== 'npc' && by !== 'stealth') { try { alertBaseGuards(45); } catch (e) {} }
   r.hp -= (dmg || 30);
@@ -21959,6 +22213,8 @@ function knockDownResident(r, who, dmg, by) {
 }
 function knockDownCop(c, dmg, by) {
   if (!c.alive || c.down) return;
+  // 【fix575】入侵期间玩家撞/打警察无效
+  if (invPlayerImmune(c, by)) return;
   c.hp -= (dmg || 30);
   c.aggro = true;   // 被车撞倒后起身立即反击（仇恨攻击）
   if (by !== 'npc') c.huntT = 8;   // 同上：玩家撞的才记仇
@@ -21968,6 +22224,8 @@ function knockDownCop(c, dmg, by) {
 }
 // 车辆撞击：站立时扣血+倒地（保1血），第2次站立撞击才死（runOverResident / runOverCop 都有 vehicleHits>=2 判定）
 function runOverResident(r, isMotorcycle, by) {
+  // 【fix575】入侵期间玩家车辆撞友军无效（外敌照撞）；先判断再走下面的倒地分支
+  if (invPlayerImmune(r, by)) return;
   if (r.down) {
     // 倒地被碾：只推开不杀（站立撞击才算）。玩家压着尸体时这里会每 0.8s 触发一次，也走节流
     collisionSfx('splat');
@@ -22007,6 +22265,8 @@ function runOverResident(r, isMotorcycle, by) {
   }
 }
 function runOverCop(c, by) {
+  // 【fix575】入侵期间玩家车辆撞警察无效
+  if (invPlayerImmune(c, by)) return;
   if (c.down) {
     collisionSfx('splat');
     return;
@@ -22262,6 +22522,11 @@ function kickTarget() {
   spawnBurst(t.o.x, t.o.z, 0xffffff, 10);
   if (t.kind === 'resident') {
     const r = t.o;
+    // 【fix575】入侵期间玩家踢友军无效（外敌照踢）：命中瞬间拦下，体力已扣但不出手
+    if (invPlayerImmune(r, 'melee')) {
+      setHint('入侵期间友军无敌，只能攻击外敌');
+      return;
+    }
     // 【fix530·2026-11-18·用户："不只是开枪，只要踢飞……里边的守卫，其他守卫都要共享仇恨"】
     // 踢飞走的是 r.alive=false 这条独立路径，**完全不经过 damageResident()**，
     // 所以 fix523 加在 damageResident 里的基地警报在这里一次都不会触发。
@@ -26709,6 +26974,23 @@ function heliBldTop(x, z, r) {
   return top;
 }
 function milHeliPlayerPos() {
+  // 【fix575·2026-11-25·用户："军方也可以出动直升机和坦克来围剿这些外族"】
+  // 军方载具 AI（updateMilHeli / updateMilTank）的目标都写死走这个函数。
+  // 入侵期间改成优先锁最近的外敌：一处改动，直升机盘旋扫射、坦克火箭弹全部转火外敌，
+  // 玩家站在旁边看他们帮着围剿，而不是追着自己打。外敌清空后自动回到追玩家。
+  if (invasionActive && typeof nearestInvader === 'function') {
+    const hp0 = (state === 'drive' && currentCar) ? entityFootY(currentCar) : person.position.y;
+    const tgt = nearestInvader(
+      (state === 'drive' && currentCar) ? currentCar.x : person.position.x,
+      (state === 'drive' && currentCar) ? currentCar.z : person.position.z,
+      600
+    );
+    if (tgt) {
+      let ty = terrainHeight(tgt.x, tgt.z);
+      if (!isFinite(ty)) ty = (isFinite(hp0) ? hp0 : 0);
+      return { x: tgt.x, y: ty, z: tgt.z };
+    }
+  }
   // 【fix554·2026-11-22·用户："军方的坦克怎么不出来，还有飞机呢"】
   // 根因：坦克/汽车的高度**不在对象上**（`v.y` 是 undefined，真实高度在 `v.group.position.y`）。
   // 玩家一开坦克，这里返回 y=undefined → wantY 变 NaN → 直升机高度被写成 NaN →
@@ -26885,7 +27167,8 @@ function updateMilTank(dt) {
   const pp = milHeliPlayerPos();
   const dx = pp.x - milTank.x, dz = pp.z - milTank.z;
   const d = Math.hypot(dx, dz) || 1;
-  if (wanted < 5 - 1e-6 && milTank.state !== 'leaving') {
+  // 【fix575】入侵期间不受五星约束：外敌未清空前坦克一直留在战场围剿
+  if (wanted < 5 - 1e-6 && !invasionActive && milTank.state !== 'leaving') {
     milTank.state = 'leaving'; milTank.leaveT = 0;
     setHint('军方坦克脱离接触，正在撤回基地。');
   }
@@ -27131,7 +27414,8 @@ function updateMilHeli(dt) {
     milHeliPose(dt);
     return;
   }
-  const isFive = wanted >= 5 - 1e-6;
+  // 【fix575】入侵期间外敌未清，直升机不受五星约束，持续盘旋围剿
+  const isFive = (wanted >= 5 - 1e-6) || invasionActive;
   // 掉到四星：不瞬移消失，改成拉升返航
   if (!isFive && milHeli.state !== 'leaving') {
     milHeli.state = 'leaving';
