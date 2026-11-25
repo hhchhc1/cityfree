@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261124-fix573-invasion-battle">
+<meta name="cf-build" content="20261125-fix574-house-flicker-lamps">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -5504,14 +5504,16 @@ function buildPlayerHome() {
   // ---- 前庭石材铺装 + 车道 + 绿篱（把地皮做大、做精致）----
   const terrace = new THREE.Mesh(new THREE.BoxGeometry(17.6, 0.08, 6.6), new THREE.MeshLambertMaterial({ color: 0xcfc9bb }));
   terrace.position.set(hx, gy + 0.04, -59.6); scene.add(terrace);
+  // 【fix574】车道原来 y=0.045+0.04=0.085，和前庭石板顶面 0.08 几乎完全重合，
+  // 门口那一小片地面会抢深度闪烁。抬高 6cm 让两层明确分开。
   const drive = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 10.4), new THREE.MeshLambertMaterial({ color: 0xb9bec4 }));
-  drive.position.set(-90, gy + 0.045, -60.8); scene.add(drive);
+  drive.position.set(-90, gy + 0.105, -60.8); scene.add(drive);
   // 西侧绿篱（东侧是车库，不用再摆）
   {
     const hedge = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 6.6), hedgeM);
     hedge.position.set(hx - 9.1, gy + 0.5, -59.6); scene.add(hedge);
   }
-  // 车道两侧的路灯柱
+  // 车道两侧的路灯柱（这是玩家自家院子里的装饰灯，不是主城路灯）
   for (const sx of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x3a3a3a }));
     post.position.set(-90 + sx * 6.6, gy + 1.6, -56.2); scene.add(post);
@@ -5534,9 +5536,10 @@ function buildPlayerHome() {
   // 【fix568·2026-11-24·用户："紧挨车库的这面灰色的墙在一直闪烁"】
   // 根因：主楼东墙在 x=-95.5、厚 0.4（[-95.7,-95.3]），车库西墙**也在 x=-95.5、同样厚 0.4**，
   // 两个箱体的东/西表面完全共面 → 逐像素抢深度，从屋里看就是灰墙和米白墙交替闪。
-  // 修法：车库西墙往东挪 0.1（[-95.6,-95.2]），两堵墙不再共面；
-  // 主楼内部看到的是主楼东墙（米白），车库内部看到的是车库西墙（灰），两边都正常。
-  gWall(0.4, gh, gd, gx - gw / 2 + 0.1, gy + gh / 2, gz);
+  // 【fix574·2026-11-25】上次只挪 0.1m，两堵墙仍有 0.3m 实体重叠（[-95.6,-95.3]），
+  // 转角处照样抢深度。这次挪 0.6m 让两墙完全分离（车库西墙 [-95.1,-94.7]），
+  // 中间留 0.2m 空隙，从屋里分别只看得到自己的墙，不再有共面或穿插。
+  gWall(0.4, gh, gd, gx - gw / 2 + 0.6, gy + gh / 2, gz);
   gWall(0.4, gh, gd, gx + gw / 2, gy + gh / 2, gz);
   gWall(gw + 0.4, gh, 0.4, gx, gy + gh / 2, gz - gd / 2);
   // 入口两侧立柱 + 门楣
@@ -5547,16 +5550,21 @@ function buildPlayerHome() {
   }
   const gHeader = new THREE.Mesh(new THREE.BoxGeometry(gw + 1.2, 0.6, 0.6), gTrimM);
   gHeader.position.set(gx, gy + gh + 0.5, gz + gd / 2); scene.add(gHeader);
-  // 两坡人字顶
-  const gEave = gy + gh + 0.2, gRise = 1.6, gHalf = gw / 2 + 0.5, gLen = gd + 0.5;
-  const gPitch = Math.atan2(gRise, gHalf), gHyp = Math.hypot(gHalf, gRise);
-  for (const sgn of [1, -1]) {
-    const sl = new THREE.Mesh(new THREE.BoxGeometry(gHyp * 1.05, 0.16, gLen), gRoofM);
-    sl.rotation.z = -sgn * gPitch;
-    sl.position.set(gx + sgn * gHalf * 0.5, gEave + gRise * 0.5, gz); scene.add(sl);
-  }
+  // 车库屋顶：西侧靠主楼，改单坡（【fix574】）
+  // 根因：原来做双坡人字顶，西坡最西端 x=-96.17，而主楼东墙实体在 [-95.7,-95.3]，
+  // 坡面有约 0.87m 埋进墙里。墙顶那条深色横梁就是穿墙的坡面，和墙面抢深度 → 一直闪。
+  // 车库西墙本来贴着主楼，不需要另一半坡面；改成"西高东低"单坡，屋脊收在车库西墙顶，
+  // 整块屋顶只覆盖车库自己的地皮，不再插进主楼。
+  const gEave = gy + gh + 0.2, gRise = 1.6, gLen = gd + 0.5;
+  const gWallX = gx - gw / 2 + 0.6 + 0.2;   // 车库西墙东面 = -94.7
+  const gEastX = gx + gw / 2 + 0.2;         // 车库东墙外沿 = -84.3
+  const gSpan = gEastX - gWallX;
+  const gPitch = Math.atan2(gRise, gSpan), gHyp = Math.hypot(gSpan, gRise);
+  const sl = new THREE.Mesh(new THREE.BoxGeometry(gHyp * 1.02, 0.16, gLen), gRoofM);
+  sl.rotation.z = -gPitch;
+  sl.position.set((gWallX + gEastX) / 2, gEave + gRise / 2, gz); scene.add(sl);
   const gRidge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, gLen), gTrimM);
-  gRidge.position.set(gx, gEave + gRise + 0.04, gz); scene.add(gRidge);
+  gRidge.position.set(gWallX, gEave + gRise, gz); scene.add(gRidge);
   // 卷帘门（朝 +Z，整体 Group 带动画，内部画横向门板）
   const door = new THREE.Group();
   const gDoorH = gh - 0.2, gDoorW = gw - 0.6;
@@ -10324,6 +10332,15 @@ let lampHaloMat = null;       // 灯头光晕（远处一眼看见灯还亮着�
 let lampPoolMat = null;       // 地面光斑材质（夜里显现）
 let dayLightF = 1;            // 0=全黑 1=白天，由 updateDayNight 写入
 const streetLightPool = [];   // 复用的点光源（只给玩家附近最近几盏）
+// 【fix574·2026-11-25·用户："怎么里边还有路灯"】
+// 主城路灯按道路交叉口生成，玩家家 (-104,-69) 和车库 (-90,-70) 那一片原本是空地，
+// fix566 把地皮扩到 17×12 之后， intersection 路灯正好落进主楼/车库/前庭里，
+// 从室内看就是一根黑灯杆戳在客厅中间。这里在生成阶段直接跳过整块地皮。
+function inPlayerHomeLot(x, z) {
+  return (x > -116 && x < -94 && z > -76 && z < -62) ||   // 主楼（含紧贴西北角的一根）
+         (x > -96 && x < -84 && z > -75 && z < -65) ||     // 车库
+         (x > -113 && x < -84 && z > -63 && z < -55);      // 前庭 + 车道
+}
 (function addStreetLights() {
   const lightMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xffee88 });
@@ -10365,6 +10382,7 @@ const streetLightPool = [];   // 复用的点光源（只给玩家附近最近�
         // 路面半宽只有 4.5（ROAD=9），要让灯杆落在"人行道四角"，**两个方向都必须偏出路面**。
         for (const side of [-1, 1]) {
           const lx = r + side * 6, lz = d + side * 6;
+          if (inPlayerHomeLot(lx, lz)) continue;   // 【fix574】别把路灯种进玩家家里
           const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 5, 6), lightMat);
           pole.position.set(lx, 2.5, lz); scene.add(pole);
           const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), glowMat);
