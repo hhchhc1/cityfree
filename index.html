@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix576e-alien-vehicles-wrecks">
+<meta name="cf-build" content="20261126-fix577-deploy-trenches-flank-dev-repeat">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13746,14 +13746,67 @@ var INV_WEAPONS = ['ak47', 'rpg', 'pistol', 'minigun', 'axe', 'rifle', 'chainsaw
                    'sniper', 'smg', 'rpg4', 'katana', 'nunchaku', 'hammer'];
 // 近战武器：这些外敌不端枪，冲到跟前挥砍；其余都是远程，端枪推进
 var INV_MELEE = ['axe', 'chainsaw', 'katana', 'nunchaku', 'hammer'];
-// 部署阵位：guard=守在玩家附近（市中心） / rush=机场正面迎击 / flank=机场侧翼包抄
-function invDeploySpot(order, px, pz, fallback) {
-  // 【fix576d】原来 rush 出生在 (0,-165)（机场南侧），离外敌 235m —— 比 FACTION_HATE_GIVEUP(85m)
-  // 远得多，生成出来第一帧就"目标太远、放弃"，然后站着不动。用户看到的就是"军方和警察不来，只有市民"。
-  // 现在三个阵位都放在战场前沿（铁丝网外侧），一出生就在交火距离上。
-  if (order === 'rush') return { x: 0, z: -296 };
-  if (order === 'flank') return { x: 118, z: -306 };
-  return fallback(0);
+// 部署阵位：guard=真进己方战壕 / rush=机场正面迎击 / flank=侧翼包抄
+// 【fix577·2026-11-26·用户："完成部署就要让这些居民实打实的放在己方战壕或者阵地里，侧翼包抄也要做好"】
+// 原来 guard 用 fallback 以玩家为圆心生成，玩家站在光柱/机场边上时友军就散在广场上，
+// 根本不在战壕里；flank 也只是一个固定点 (118,-306)，没有"绕到侧面再打"的过程。
+// 现在三个阵位都落在战场坐标系里：守军进最南一道战壕 z=-345 的沟底（用 invTrenchZ 取蛇形中心线），
+// 正面组在机场前沿，侧翼组从战场东西两侧沿边推进到敌后，再转入正常交战。
+function invDeploySpot(order, px, pz, fallback, force) {
+  const _attack = !!(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
+  // 守军/正面/侧翼的 x 基准按兵种错开，三支部队同时选同一指令也不会叠在一起
+  const _baseX = force === 'military' ? -36 : force === 'police' ? 0 : 34;
+  if (order === 'rush') {
+    // 反攻时从机场南缘出发，别扎进 (8,-300) 那座碉堡的碰撞盒
+    return { x: 0, z: _attack ? -288 : -312, lane: 'rush' };
+  }
+  if (order === 'flank') {
+    // 军方走西侧、警察/市民走东侧。x 必须落在战壕胸墙的 5m 通行口中心线上
+    // （BX0=-190，缺口在 -190+30k），否则整队人顶在沙袋墙上"包抄"变"站桩"。
+    const x = invFlankLane(force);
+    return { x: x, z: _attack ? -302 : -330, side: Math.sign(x), flank: true, lane: 'flank' };
+  }
+  if (_attack) return { x: _baseX, z: -288 + (force === 'civil' ? 4 : 0), trench: false, lane: 'guard' };
+  const tx = _baseX;
+  return { x: tx, z: invTrenchZ(INV_TRENCH_Z[3], tx), trench: true, lane: 'guard' };
+}
+// 侧翼阶段的目标点：沿战场东西边缘往北插到敌后，再放开交给正常 faction AI。
+// 用 alive:true 且**没有 hp** 的哨兵对象，updateResident 会一路 npcAdvance 走过去，
+// 到点后不会把它"打死"，由 updateInvasion 检测到距离后切换回真实外敌目标。
+function invFlankLane(force) {
+  // 对应战壕通行口中心：-160 / 170 / 140，缺口宽 5m，整队沿同一条线走不卡墙
+  return force === 'military' ? -160 : force === 'police' ? 170 : 140;
+}
+function invFlankWaypoint(force, attack) {
+  return { alive: true, x: invFlankLane(force), z: attack ? -470 : -455, isInvWaypoint: true };
+}
+function invMarkFlank(unit, spot, force, attack) {
+  if (!spot || !spot.flank) return;
+  unit._invFlankSide = spot.side;
+  unit._invFlankPhase = 0;
+  unit._invFlankT = 0;
+  unit._invFlankWP = invFlankWaypoint(force, attack);
+  unit._invForce = force;
+  if (force !== 'police' && unit.hate !== undefined) { unit.hate = 'faction'; unit.hateTarget = unit._invFlankWP; }
+  if (unit._invTarget !== undefined) unit._invTarget = unit._invFlankWP;
+}
+// 每帧维持侧翼哨兵目标；到位/超时后放开给正常 faction AI。
+// 必须每帧重新钉一次，否则 2 秒一次的目标重分配会把哨兵覆盖成"正面最近外敌"，
+// 友军又会直着冲进沙袋墙，侧翼包抄就名存实亡。
+function invAdvanceFlanker(u, dt) {
+  if (!u || u._invFlankPhase !== 0 || !u.alive || u.down) return;
+  const wp = u._invFlankWP;
+  if (!wp) { u._invFlankPhase = 1; return; }
+  if (u._invForce !== 'police' && u.hate !== undefined && u.hateTarget !== wp) { u.hate = 'faction'; u.hateTarget = wp; u.armed = true; }
+  if (u._invTarget !== undefined) u._invTarget = wp;
+  u._invFlankT += dt;
+  const d = Math.hypot(wp.x - u.x, wp.z - u.z);
+  if (d < 12 || u._invFlankT > 42) {
+    u._invFlankPhase = 1;
+    u._invFlankWP = null;
+    if (u.hateTarget && u.hateTarget.isInvWaypoint) { u.hate = null; u.hateTarget = null; }
+    if (u._invTarget && u._invTarget.isInvWaypoint) u._invTarget = null;
+  }
 }
 function nearestInvader(x, z, maxD) {
   let best = null, bd = maxD * maxD;
@@ -14014,49 +14067,67 @@ function spawnInvasionForce(q) {
   }
   // 【fix576e】异族载具：2 辆悬空战车 + 1 架飞行器（都能打爆、都能开走）
   try { spawnAlienVehicles(); } catch (e) {}
-  // 军方支援：三名基地警卫，按部署选择的阵位出生（不占基地原哨位）
-  const _milSpot = invDeploySpot(INV_ORDERS.military, px, pz, i => ({ x: px + (i ? 38 : -38), z: pz - 38 }));
-  for (let i = 0; i < 3; i++) {
-    const pp = { x: _milSpot.x + (i - 1) * 12, z: _milSpot.z + (i % 2 ? 6 : -6) };
+  // 军方支援：基地警卫按部署阵位出生 —— 【fix577】guard 直接站进最南战壕，flank 从西侧包抄
+  const _milOrder = INV_ORDERS.military;
+  const _milSpot = invDeploySpot(_milOrder, px, pz, null, 'military');
+  const _milN = 4;
+  for (let i = 0; i < _milN; i++) {
+    const pp = _milSpot.flank
+      ? { x: _milSpot.x, z: _milSpot.z + (i - (_milN - 1) / 2) * 6 }
+      : { x: _milSpot.x + (i - (_milN - 1) / 2) * 11, z: _milSpot.z + (i % 2 ? 0.8 : -0.8) };
+    // 【fix577】战壕是蛇形的：必须按每个人最终的 x 重算沟底中心线，
+    // 否则用阵位基准 x 算一次再横向排开，两端的人会站到沙袋胸墙里。
+    if (_milSpot.trench) pp.z = invTrenchZ(INV_TRENCH_Z[3], pp.x) + (i % 2 ? 0.8 : -0.8);
     clampCity(pp);
     const x = pp.x, z = pp.z;
     const g = makeHuman(MIL_UNIFORM_INV, false, { uniformColor: MIL_UNIFORM_INV, militaryCap: true });
     addWeaponMesh(g, 'rifle');
     const gy = terrainHeight(x, z);
+    g.rotation.y = Math.PI;   // 出生就面朝北方战场，不是背对敌人
     g.position.set(x, gy, z); scene.add(g);
     const s = {
-      group: g, x: x, z: z, angle: 0, alive: true, walking: false,
+      group: g, x: x, z: z, angle: Math.PI, alive: true, walking: false,
       timer: 0, walkTime: 0, respawn: 0, hp: 210, maxHp: 210,
       melee: 'fist', ranged: 'rifle', faction: 0, flee: false, hate: null,
       down: false, downT: 0, attackCd: 0, phase: i, punchAnim: 0, punchHand: 0,
       armed: true, ammo: 180, maxAmmo: 180, chaseMode: 'run',
       isBaseGuard: true, isInvSupport: true, hqFlatY: gy, noRespawn: true
     };
+    invMarkFlank(s, _milSpot, 'military', _attack);
     INV_SUPPORT.push(s); residents.push(s);
   }
-  // 三名支援警察，按部署阵位出生，第一时间就能看到他们参战
-  const _copSpot = invDeploySpot(INV_ORDERS.police, px, pz, i => ({ x: px + (i ? 26 : -26), z: pz + 26 }));
-  for (let i = 0; i < 3; i++) {
-    const pp = { x: _copSpot.x + (i - 1) * 9, z: _copSpot.z + (i % 2 ? 5 : -5) };
+  // 支援警察：同样按部署阵位落位；guard 在最南战壕中段，flank 从东侧包抄
+  const _copOrder = INV_ORDERS.police;
+  const _copSpot = invDeploySpot(_copOrder, px, pz, null, 'police');
+  const _copN = 4;
+  for (let i = 0; i < _copN; i++) {
+    const pp = _copSpot.flank
+      ? { x: _copSpot.x, z: _copSpot.z + (i - (_copN - 1) / 2) * 6 }
+      : { x: _copSpot.x + (i - (_copN - 1) / 2) * 8, z: _copSpot.z + (i % 2 ? 0.7 : -0.7) };
+    if (_copSpot.trench) pp.z = invTrenchZ(INV_TRENCH_Z[3], pp.x) + (i % 2 ? 0.7 : -0.7);
     clampCity(pp);
     const g = makeCopFigure();
     const gy = terrainHeight(pp.x, pp.z);
+    g.rotation.y = Math.PI;
     g.position.set(pp.x, gy, pp.z); scene.add(g);
     const c = {
-      group: g, x: pp.x, z: pp.z, angle: 0, hp: 80, alive: true,
+      group: g, x: pp.x, z: pp.z, angle: Math.PI, hp: 80, alive: true,
       fightCd: 0, respawn: 0, down: false, downT: 0,
       ranged: 'pistol', melee: 'baton', armed: true, ammo: 24, maxAmmo: 24,
       aggro: false, huntT: 0, isInvPolice: true
     };
+    invMarkFlank(c, _copSpot, 'police', _attack);
     INV_COPS.push(c); cops.push(c);
   }
-  // 【fix574b】市民义勇：部署面板第三行现在真的生效了 —— 按 INV_ORDERS.civil
-  // 在「市中心 / 机场正面 / 侧翼」三个阵位出生，拿着棍棒斧头跟在军警后面打外敌。
-  // 之前这一行只是摆设：面板能点，但没有任何市民部队因它改变位置。
-  const _civN = isMobile ? 3 : 5;
-  const _civSpot = invDeploySpot(INV_ORDERS.civil, px, pz, i => ({ x: px + (i ? 30 : -30), z: pz + 12 }));
+  // 【fix577】市民义勇：guard 站进最南战壕东段，flank 从东侧内圈包抄；人数略增加，三支部队一眼可见
+  const _civN = isMobile ? 5 : 8;
+  const _civOrder = INV_ORDERS.civil;
+  const _civSpot = invDeploySpot(_civOrder, px, pz, null, 'civil');
   for (let i = 0; i < _civN; i++) {
-    const pp = { x: _civSpot.x + (i - (_civN - 1) / 2) * 7, z: _civSpot.z + (i % 2 ? 5 : -5) };
+    const pp = _civSpot.flank
+      ? { x: _civSpot.x + (i >= 4 ? 1.8 : -1.8), z: _civSpot.z + ((i % 4) - 1.5) * 3.2 }
+      : { x: _civSpot.x + (i - (_civN - 1) / 2) * 8, z: _civSpot.z + (i % 2 ? 0.7 : -0.7) };
+    if (_civSpot.trench) pp.z = invTrenchZ(INV_TRENCH_Z[3], pp.x) + (i % 2 ? 0.7 : -0.7);
     clampCity(pp);
     const x = pp.x, z = pp.z;
     const clanIdx = i % CIVILIAN_CLAN_N;
@@ -14068,9 +14139,10 @@ function spawnInvasionForce(q) {
     const _wm = (i % 2) ? 'bat' : 'axe';
     addWeaponMesh(g, _wm, civColor);
     const gy = terrainHeight(x, z);
+    g.rotation.y = Math.PI;
     g.position.set(x, gy, z); scene.add(g);
     const cv = {
-      group: g, x: x, z: z, angle: 0, alive: true, walking: true,
+      group: g, x: x, z: z, angle: Math.PI, alive: true, walking: true,
       timer: 0, walkTime: 0, respawn: 0, hp: 90, maxHp: 90,
       melee: _wm, ranged: null, faction: 100 + clanIdx, clan: clanIdx,
       flee: false, hate: null, down: false, downT: 0, attackCd: 0,
@@ -14079,6 +14151,7 @@ function spawnInvasionForce(q) {
       // 复用 isInvSupport 让三方统一享有关军互保护（damageResident / friendlyFire / 子弹过滤）
       isInvSupport: true, isCivilVolunteer: true, noRespawn: true
     };
+    invMarkFlank(cv, _civSpot, 'civil', _attack);
     INV_SUPPORT.push(cv); residents.push(cv);
   }
   // 临时停战：清掉所有人对玩家的仇恨，警察也不再追玩家
@@ -14305,20 +14378,27 @@ function updateInvasion(dt, q) {
       else if (tgt.hp !== undefined) { tgt.hp -= 9; if (tgt.hp <= 0) killResident(tgt, 'npc'); }
     }
   }
+  // 【fix577】侧翼部队先沿战场边缘推进到敌后，到位后才交回正常索敌
+  for (const s of INV_SUPPORT) invAdvanceFlanker(s, dt);
+  for (const c of INV_COPS) invAdvanceFlanker(c, dt);
   // 每 2 秒重新分配市民 / 军方支援的目标（用现有 faction 分支让他们真的开枪）
   invasionTick -= dt;
   if (invasionTick <= 0) {
     invasionTick = 2;
     for (const r of residents) {
-      if (r.isInvader || !r.alive || r.down || r.isBaseGuard) continue;
+      if (r.isInvader || !r.alive || r.down || r.isBaseGuard || r._invFlankPhase === 0) continue;
       const tgt = nearestInvader(r.x, r.z, 600);
       if (tgt) { r.hate = 'faction'; r.hateTarget = tgt; r.armed = true; }
     }
     for (const s of INV_SUPPORT) {
+      if (s._invFlankPhase === 0) continue;
       const tgt = nearestInvader(s.x, s.z, 700);
       if (tgt) { s.hate = 'faction'; s.hateTarget = tgt; s.armed = true; }
     }
-    for (const c of cops) c._invTarget = nearestInvader(c.x, c.z, 400);
+    for (const c of cops) {
+      if (c._invFlankPhase === 0) continue;
+      c._invTarget = nearestInvader(c.x, c.z, 400);
+    }
   }
   // 警察：临时改打外敌（原 updateCop 的 huntPlayer 在入侵期间已停用）
   for (const c of cops) {
@@ -14432,9 +14512,10 @@ function openInvDeploy() {
       ? '我方前沿阵地已失守，城市旗被恶魔旗换掉，外敌正躲在我们的工事里。<br>给你的部队分配反攻任务，然后从铁丝网缺口打上去，把阵地夺回来。'
       : '侦察确认：一支装备精良的外族部队正从城北机场集结，即将沿主干道扑向市区。<br>给他们分配阻击任务，再下令开战。分配会影响各部队的开战位置与作战半径。';
     if (go) go.textContent = _attack ? '部署完成 · 开始反攻' : '分配完成 · 开始阻击';
-    if (tip) tip.textContent = _attack
+    if (tip) tip.textContent = (_attack
       ? '打穿铁丝网缺口往北推进，清光守敌就能把城市旗重新插上'
-      : '开战后警察与基地护卫自动停战，共同对外';
+      : '开战后警察与基地护卫自动停战，共同对外') +
+      (typeof isDevOn === 'function' && isDevOn() ? '（开发者模式可反复测试）' : '');
   } catch (e) {}
   // 复位为默认阵位（每次接任务重新分配）
   INV_ORDERS.police = 'guard'; INV_ORDERS.military = 'rush'; INV_ORDERS.civil = 'guard';
@@ -14556,10 +14637,13 @@ function claimQuest(id) {
   }
   if (q.id === 'invasion') {
     // 【fix573】入侵每天一次：明天光柱自动刷新，再来一波
+    // 【fix577】开发者模式下不等天亮：cooldownUntilDay 设成当天，updateQuests 下一帧就刷新，
+    // 方便反复测试部署/侧翼/换旗，不用改系统日期。
+    const _devRepeat = (typeof isDevOn === 'function' && isDevOn());
     q.state = 'cooldown'; q.completed = false; q.progressValue = 0;
-    q.cooldownUntilDay = worldDay + 1;
+    q.cooldownUntilDay = worldDay + (_devRepeat ? 0 : 1);
     if (!q.marker) q.marker = makeQuestMarker(q.x, q.z, terrainHeight(q.x, q.z));
-    setHint('外敌已退，明天可能还会有新的入侵');
+    setHint(_devRepeat ? '开发者模式：外族入侵可立即再次接取' : '外敌已退，明天可能还会有新的入侵');
   }
   if (q.repeatable) {
     // 可重复任务：领完奖立刻重置回「可接」，并重新竖起任务光柱（赛车可以反复刷）
