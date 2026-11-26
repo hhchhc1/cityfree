@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261125-fix575-inv-battlefield">
+<meta name="cf-build" content="20261126-fix576b-war-flags-attack">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1580,6 +1580,27 @@ function terrainHeight(x, z) {
     const mbFlat = 2.5;   // 基地地面高度
     const t = THREE.MathUtils.clamp((65 - mbDist) / 20, 0, 1);
     h = h * (1 - t) + mbFlat * t;
+  }
+  // 【fix576·2026-11-25·用户："弄一些上下坡啥的"】机场北战场地形起伏。
+  // 直接改 terrainHeight 而不是摆几块假土坡：地面网格、人物脚底、车辆、子弹落点、
+  // 钩爪攀爬全部采样同一个函数，所以坡是真正能走上去的，不会出现"看着有坡、走过去悬空"。
+  // 抬高两座土丘（指挥所/观察塔各自坐在高地上）、挖一条干涸交通壕，边缘 20m 平滑过渡，
+  // z>-292 处权重归零，绝不碰机场压平区。
+  if (x > -170 && x < 170 && z > -475 && z < -292) {
+    const bx = Math.max(0, 1 - Math.abs(x) / 170);
+    const bz = Math.max(0, 1 - Math.abs(z + 383.5) / 91.5);
+    const edge = Math.min(1, bx * 7) * Math.min(1, bz * 7);
+    const bump = (cx, cz, r, hh) => {
+      const d = Math.hypot(x - cx, z - cz) / r;
+      return d < 1 ? hh * (1 - d) * (1 - d) : 0;
+    };
+    const warHills =
+        bump(-126, -436, 52, 4.4)   // 西北指挥所高地
+      + bump(118, -446, 48, 3.8)    // 东北观察塔高地
+      + bump(-20, -352, 42, 2.0)    // 南侧缓坡
+      - bump(12, -414, 36, 1.6)     // 中央干涸交通壕
+      - bump(-92, -344, 30, 1.1);   // 西侧弹坑洼地
+    h += edge * warHills;
   }
   // 【2026-10-22·fix41】机场地形压平 —— 迁址到城市正北的空地。
   // 选址依据（用游戏内真实数据实测，不是估计）：对全图网格逐个矩形做"占用采样"，
@@ -7162,13 +7183,17 @@ var AIRLINER = null;
   }
 })();
 
-// ==================== 【fix575·2026-11-25】机场以北战场 ====================
+// ==================== 【fix575/576·2026-11-25】机场以北战场 ====================
 // 用户："把机场以北的方向扩充一块地，然后弄一个战场，感觉用一些战壕还有堡垒，
 //         还有那种防弹带一些战争元素的感觉"。
+// 用户 fix576 反馈："这些战场元素都是虚的，都没有加碰撞逻辑……再弄得好一点儿，
+//         弄一些上下坡啥的，还有一些建筑，有战争建筑啥的。战争元素再多元化一点。"
 // 位置：x∈[-150,150]、z∈[-460,-305]，正好在机场净空区（z≥-298）以北，
 // 外敌从 z=-400 的战场深处出生，一路穿过战壕/堡垒压向机场。
-// 全部用静态几何体（合批前创建），不新增 draw call；不用 buildings 碰撞，
-// 免得外敌被工事卡住走不动 —— 战壕是"视觉掩体"，不拦路。
+// fix576：沙袋墙/碉堡/铁丝网/残骸/新增战争建筑全部注册 buildings 碰撞，
+//         同一批 AABB 同时被人物、车辆和子弹视线使用；每段工事都留缺口，
+//         外敌靠已有 hasLineOfSight 侧移逻辑绕行，不会被封死。
+// 全部用静态几何体（合批前创建），材质复用，不额外增加 draw call。
 (function addInvBattlefield() {
   try {
     const BX0 = -150, BX1 = 150, BZ0 = -460, BZ1 = -305;
@@ -7179,6 +7204,12 @@ var AIRLINER = null;
     const concreteD= new THREE.MeshLambertMaterial({ color: 0x5d615e });
     const steel  = new THREE.MeshLambertMaterial({ color: 0x4a4640 });
     const rust   = new THREE.MeshLambertMaterial({ color: 0x8a5138 });
+    // 【fix576】新增战争建筑配色：军绿、焦木、警示红、沙灰、玻璃
+    const olive  = new THREE.MeshLambertMaterial({ color: 0x5c6948 });
+    const oliveD = new THREE.MeshLambertMaterial({ color: 0x414b35 });
+    const wood   = new THREE.MeshLambertMaterial({ color: 0x4a3827 });
+    const red    = new THREE.MeshLambertMaterial({ color: 0xa83226 });
+    const glass  = new THREE.MeshLambertMaterial({ color: 0x232c2b });
     const boxG = (w, h, d) => new THREE.BoxGeometry(w, h, d);
     const putB = (geo, mat, x, y, z, ry) => {
       const m = new THREE.Mesh(geo, mat);
@@ -7186,13 +7217,36 @@ var AIRLINER = null;
       scene.add(m); return m;
     };
     const gy = (x, z) => terrainHeight(x, z);
+    // 【fix576】实体化：把可见工事登记成 buildings AABB。
+    // 同一份碰撞盒同时供 collideBuildingsFast（人/车）与 hasLineOfSight / _segHitsBox2D（子弹）使用，
+    // 这样"看得见的沙袋墙"就真的挡人、挡车、挡子弹，不再是纯装饰。
+    let invColliders = 0;
+    const solid = (x, z, w, d, y0, h) => {
+      if (typeof buildings === 'undefined') return;
+      buildings.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2,
+                       bottom: y0, top: y0 + h });
+      invColliders++;
+    };
 
     // ---- 战场地面：压出一块深色焦土，和绿色机场草地区分开 ----
-    for (let gz = BZ0; gz < BZ1; gz += 22) {
-      for (let gx = BX0; gx < BX1; gx += 22) {
-        const y = gy(gx + 11, gz + 11);
-        putB(boxG(22, 0.12, 22), earth, gx + 11, y - 0.02, gz + 11);
+    // 【fix576b】原来是 22m 见方的平板拼出来的。fix576 给战场加了真实起伏（terrainHeight 里的
+    // 土丘/交通壕）之后，平板立刻露馅：坡上的那几块一半埋进土里、一半悬空，从侧面看像浮着的木板。
+    // 改成一张按 terrainHeight 逐顶点采样的网格，跟着坡走，边缘自然贴合；顺便从 120 个 mesh
+    // 变成 1 个，静态合批后 draw call 也更省。
+    {
+      const _w = BX1 - BX0, _d = BZ1 - BZ0, _cx = (BX0 + BX1) / 2, _cz = (BZ0 + BZ1) / 2;
+      // 44×44 段（约 6.8m 一格）+ 抬高 0.13m：网格是按顶点采样 terrainHeight 的，
+      // 段太粗时三角形在土丘/交通壕的弯处会切进地面，露出下面的绿草地（实测 26 段就是这样）。
+      const gg = new THREE.PlaneGeometry(_w, _d, 44, 44);
+      gg.rotateX(-Math.PI / 2);
+      const pa = gg.attributes.position;
+      for (let i = 0; i < pa.count; i++) {
+        pa.setY(i, gy(pa.getX(i) + _cx, pa.getZ(i) + _cz) + 0.13);
       }
+      gg.computeVertexNormals();
+      const ground = new THREE.Mesh(gg, earth);
+      ground.position.set(_cx, 0, _cz);
+      scene.add(ground);
     }
     // ---- 战壕：两道平行沙袋墙夹出 3m 宽的通道，沿 x 方向延伸 ----
     // 每袋 1.6×0.5×0.8，交错叠两层；通道里是露出泥土的凹沟视觉。
@@ -7210,6 +7264,18 @@ var AIRLINER = null;
             putB(boxG(1.7, 0.46, 0.85), layer ? sandD : sand,
                  x + off, yw + 0.24 + layer * 0.44, wz);
           }
+        }
+      }
+      // 【fix576】两道沙袋堤实体化：24m 一段、留 6m 缺口可以穿过/绕行。
+      // 原来一堆装饰沙袋没有碰撞，人车子弹全穿过去；现在按段登记 AABB。
+      for (let x = BX0 + 6; x < BX1 - 6; x += 30) {
+        const segW = Math.min(24, BX1 - 6 - x);
+        if (segW < 3) continue;
+        for (const side of [-1, 1]) {
+          const wz = tz + side * 2.1;
+          const cx = x + segW / 2;
+          const y0 = Math.min(gy(x, wz), gy(cx, wz), gy(x + segW, wz));
+          solid(cx, wz, segW, 1.0, y0, 1.15);
         }
       }
     }
@@ -7233,6 +7299,9 @@ var AIRLINER = null;
       // 射击孔里的机枪管（暗铁色，从南面伸出）
       putB(boxG(0.16, 0.16, 2.2), steel, b.x, y + 1.25, b.z + 4.7);
       putB(boxG(0.6, 0.5, 0.5), rust, b.x, y + 1.25, b.z + 4.1);
+      // 【fix576】整座碉堡按外轮廓实体化：挡人/车/子弹。南面射击口只是视觉开口，
+      // 碰撞仍按整块算，避免外敌钻进墙里卡住；顶部钢板也在盒内。
+      solid(b.x, b.z, 10.6, 8.6, y, 2.9);
     }
     // ---- 防弹沙袋墙：沿 x 方向若干段交错短墙，给推进路线制造起伏 ----
     const wallZs = [-378, -350];
@@ -7246,15 +7315,32 @@ var AIRLINER = null;
                  x + k * 1.55 + (layer ? 0.77 : 0) - 3, y + 0.22 + layer * 0.4, wz + (layer % 2 ? 0.2 : -0.2));
           }
         }
+        // 【fix576】每段沙袋墙实体化（段间本来就有 1m 多缝隙）：挡人挡车，也能当射击掩体。
+        const y0 = Math.min(y, gy(x + 7, wz));
+        solid(x + 0.7, wz, 7.8, 1.0, y0, 1.35);
       }
     }
     // ---- 铁丝网：细钢管桩 + 三道横线，横在战场前沿 ----
+    // 【fix576】原来整条铁丝网只是细线，人和车直接穿。现在实体化，
+    // 并在 x≈-60 / 0 / 60 留出三处 12m 宽的缺口——视觉和碰撞一致，外敌可绕缺口推进。
     const wireZ = -318;
+    const wireGaps = [[-66, -54], [-6, 6], [54, 66]];
     for (let x = BX0 + 8; x < BX1 - 8; x += 6) {
+      const cx = x + 3;
+      if (wireGaps.some(g => cx > g[0] && cx < g[1])) continue;
       const y = gy(x, wireZ);
       putB(boxG(0.12, 1.5, 0.12), steel, x, y + 0.75, wireZ);
       for (const hh of [0.45, 0.9, 1.3]) {
-        putB(boxG(6.0, 0.035, 0.035), steel, x + 3, y + hh, wireZ);
+        putB(boxG(6.0, 0.035, 0.035), steel, cx, y + hh, wireZ);
+      }
+      solid(cx, wireZ, 6, 0.4, y, 1.4);
+    }
+    // 缺口两侧的斜拉倒刺：给缺口做可识别的视觉提示，同时不堵路
+    for (const g of wireGaps) {
+      for (const gx of g) {
+        const y = gy(gx, wireZ);
+        putB(boxG(0.16, 1.6, 0.16), rust, gx, y + 0.8, wireZ);
+        putB(boxG(2.4, 0.05, 0.05), steel, gx + (gx < 0 ? -1.2 : 1.2), y + 1.3, wireZ);
       }
     }
     // ---- 战争残骸：翻倒的军用车辆骨架 / 木箱弹箱，增加战场细节 ----
@@ -7266,10 +7352,500 @@ var AIRLINER = null;
       for (let k = 0; k < 3; k++) {
         putB(boxG(0.8, 0.5, 0.6), sandD, wx + 2.5 + k * 0.9, y + 0.26, wz - 1.2);
       }
+      // 【fix576】残骸与弹箱实体化：车骨架 + 旁边三只弹药箱合成一个障碍盒
+      solid(wx, wz + 0.2, 4.0, 2.2, y, 1.6);
+      solid(wx + 4.2, wz - 1.2, 3.0, 0.8, y, 0.6);
     }
-    window.__invBattlefield = { x0: BX0, x1: BX1, z0: BZ0, z1: BZ1, bunkers: bunkers.length };
+    // ================= 【fix576】战争建筑 + 多元化战场设施 =================
+    // 用户："再弄得好一点儿，弄一些上下坡啥的，还有一些建筑，有战争建筑啥的。
+    //        还有战争元素再多元化一点。" 地形起伏写在 terrainHeight() 里（真实可走的坡），
+    // 这里补的是战场上能看见、能躲、能挡子弹的建筑物和设施。
+    const putRx = (geo, mat, x, y, z, rx) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z); m.rotation.x = rx; scene.add(m); return m;
+    };
+
+    // (1) 战地指挥所：混凝土主体 + 沙袋屋顶 + 天线 + 红旗，位于战场西北高地
+    {
+      const cx = -126, cz = -436, y = gy(cx, cz);
+      putB(boxG(16, 3.2, 10), oliveD, cx, y + 1.6, cz);
+      putB(boxG(18, 0.35, 12), sand, cx, y + 3.35, cz);
+      putB(boxG(2.6, 2.2, 0.22), steel, cx, y + 1.1, cz + 5.1);
+      putB(boxG(10, 0.5, 0.14), glass, cx, y + 2.4, cz + 5.12);
+      putB(boxG(0.14, 4.2, 0.14), steel, cx + 6, y + 5.4, cz - 3);
+      putB(boxG(2.6, 0.08, 0.08), rust, cx + 6, y + 7.1, cz - 3);
+      putB(boxG(0.08, 1.8, 1.2), red, cx + 6, y + 6.4, cz - 2.4);
+      solid(cx, cz, 16, 10, y, 3.6);
+    }
+
+    // (2) 观察塔：四条木腿 + 高台 + 栏杆 + 梯子 + 探照灯；高台可站（platformTopAt 自动识别）
+    {
+      const tx = 118, tz = -446, y = gy(tx, tz);
+      for (const dx of [-2.7, 2.7]) for (const dz of [-2.7, 2.7]) {
+        putB(boxG(0.55, 6.6, 0.55), wood, tx + dx, y + 3.3, tz + dz);
+        solid(tx + dx, tz + dz, 0.7, 0.7, y, 6.6);
+      }
+      putB(boxG(7.4, 0.45, 7.4), wood, tx, y + 6.6, tz);
+      solid(tx, tz, 7.4, 7.4, y + 6.35, 0.5);
+      for (const dx of [-3.6, 3.6]) putB(boxG(0.14, 1.1, 7.4), steel, tx + dx, y + 7.3, tz);
+      for (const dz of [-3.6, 3.6]) putB(boxG(7.4, 1.1, 0.14), steel, tx, y + 7.3, tz + dz);
+      for (let i = 0; i < 9; i++) putB(boxG(2.6, 0.12, 0.14), steel, tx, y + 0.7 + i * 0.68, tz + 3.05);
+      putB(boxG(1.3, 0.8, 1.3), steel, tx, y + 7.25, tz - 2);
+      putB(boxG(1.0, 0.55, 0.12), glass, tx, y + 7.25, tz - 2.75);
+    }
+
+    // (3) 破损机库：钢架 + 波形顶棚 + 缺口墙体，放在外敌出生线后方，不挡推进
+    {
+      const hx = 0, hz = -450, y = gy(hx, hz);
+      for (const sx of [-14, 14]) {
+        putB(boxG(1, 5.6, 15), concreteD, hx + sx, y + 2.8, hz);
+        solid(hx + sx, hz, 1, 15, y, 5.6);
+      }
+      putB(boxG(30, 5.6, 1), concreteD, hx, y + 2.8, hz - 7.5);
+      solid(hx, hz - 7.5, 30, 1, y, 5.6);
+      for (let i = -2; i <= 2; i++) {
+        if (i === 0) continue;                       // 中间塌了一块，能看到里面
+        putB(boxG(6, 0.4, 16), steel, hx + i * 6, y + 5.8, hz);
+      }
+      solid(hx, hz, 30, 16, y + 5.6, 0.5);
+      for (const bx of [-10, 10]) {
+        putB(boxG(4.4, 0.9, 2.1), rust, hx + bx, y + 0.5, hz + 3);
+        solid(hx + bx, hz + 3, 4.4, 2.1, y, 1.0);
+      }
+    }
+
+    // (4) 弹药库：低矮混凝土库房 + 成排弹箱 + 警示条
+    {
+      const ax = -128, az = -334, y = gy(ax, az);
+      putB(boxG(11, 2.4, 8), concrete, ax, y + 1.2, az);
+      putB(boxG(12, 0.3, 9), concreteD, ax, y + 2.55, az);
+      putB(boxG(2.4, 1.8, 0.2), steel, ax, y + 0.9, az + 4.1);
+      putB(boxG(9, 0.22, 0.22), red, ax, y + 2.15, az + 4.15);
+      for (let k = 0; k < 4; k++) {
+        putB(boxG(1.1, 0.8, 0.9), sandD, ax + 7 + (k % 2) * 1.3, y + 0.4, az - 2 + Math.floor(k / 2) * 1.2);
+      }
+      solid(ax, az, 11, 8, y, 2.8);
+      solid(ax + 7.6, az - 1.4, 2.6, 2.4, y, 0.9);
+    }
+
+    // (5) 炮阵地：两处混凝土基座 + 火炮 + 弹药箱
+    for (const [gx, gz] of [[28, -428], [-38, -374]]) {
+      const y = gy(gx, gz);
+      putB(boxG(5, 0.6, 5), concrete, gx, y + 0.3, gz);
+      putB(boxG(0.45, 0.45, 4.2), steel, gx, y + 1.1, gz + 1.2);
+      putB(boxG(1.6, 0.9, 1.6), oliveD, gx, y + 0.95, gz - 0.8);
+      for (const wx of [-1.5, 1.5]) putB(boxG(1, 1, 0.4), steel, gx + wx, y + 0.7, gz - 0.8);
+      putB(boxG(0.9, 0.6, 0.8), sandD, gx + 3, y + 0.3, gz + 1.5);
+      solid(gx, gz, 5, 5, y, 1.5);
+    }
+
+    // (6) 反坦克锥（捷克刺猬）：交错钢梁，成组布置在坡道与铁丝网缺口外侧
+    const hedgehog = (x, z) => {
+      const y = gy(x, z);
+      putB(boxG(3.2, 0.2, 0.2), steel, x, y + 0.85, z, Math.PI / 4);
+      putB(boxG(3.2, 0.2, 0.2), steel, x, y + 0.85, z, -Math.PI / 4);
+      putB(boxG(0.22, 1.7, 0.22), steel, x, y + 0.85, z);
+      solid(x, z, 1.9, 1.9, y, 1.6);
+    };
+    for (const [hx, hz] of [[-82, -326], [-74, -326], [-22, -342], [-14, -342],
+                            [36, -342], [44, -342], [88, -326], [96, -326]]) hedgehog(hx, hz);
+
+    // (7) 战地帐篷 + 油料堆：生活保障痕迹，让战场不只是几堵墙
+    for (const [tx, tz] of [[-84, -316], [80, -316]]) {
+      const y = gy(tx, tz);
+      putB(boxG(7, 1.4, 4.6), olive, tx, y + 0.7, tz);
+      putRx(boxG(4.2, 0.18, 4.8), oliveD, tx - 1.7, y + 1.75, tz, -0.42);
+      putRx(boxG(4.2, 0.18, 4.8), oliveD, tx + 1.7, y + 1.75, tz, 0.42);
+      putB(boxG(1.5, 1.4, 0.12), glass, tx, y + 0.8, tz + 2.35);
+      solid(tx, tz, 7, 4.6, y, 2.1);
+    }
+    {
+      const fx = 84, fz = -444, y = gy(fx, fz);
+      for (let i = 0; i < 8; i++) {
+        const dx = (i % 4) * 1.15, dz = Math.floor(i / 4) * 1.15;
+        putB(boxG(0.85, 1.25, 0.85), i % 3 ? rust : oliveD, fx + dx, y + 0.62, fz + dz);
+      }
+      solid(fx + 1.7, fz + 0.6, 4.0, 2.4, y, 1.3);
+    }
+
+    // (8) 弹坑与旗杆：无碰撞的视觉细节，配合 terrainHeight 的起伏做出被炮火犁过的地面
+    for (const [cx, cz, r] of [[-44, -392, 5.2], [58, -412, 4.4], [12, -356, 3.6], [-108, -370, 4.0]]) {
+      const y = gy(cx, cz);
+      const crater = new THREE.Mesh(new THREE.CircleGeometry(r, 16), earth);
+      crater.rotation.x = -Math.PI / 2; crater.position.set(cx, y + 0.06, cz); scene.add(crater);
+    }
+    for (const [fx, fz] of [[-18, -322], [42, -322]]) {
+      const y = gy(fx, fz);
+      putB(boxG(0.12, 6, 0.12), steel, fx, y + 3, fz);
+      putB(boxG(2.2, 1.3, 0.08), red, fx + 1.1, y + 5.1, fz);
+      solid(fx, fz, 0.4, 0.4, y, 6);
+    }
+
+    // ================= 【fix576b】阵地战细节 =================
+    // 用户："战场做的更像一点吧，像一种阵地战一样细腻一点。建模精美一点。"
+    // 上面几组是"看得见的建筑"，这一组是让战场像"被经营过的阵地"的细节：
+    // 战壕木排护壁与踏板、救护所、直升机坪、油料库、天线阵、机枪巢。
+    // 每一样都登记了碰撞（除非本来就是地面贴片），人/车/子弹的行为和外观一致。
+
+    // (9) 战壕木排护壁 + 踏板：沿每条战壕内侧贴木板，沟底铺横向踏板
+    // 这是"阵地战"最直观的视觉语言 —— 光有沙袋是野外工事，有木排护壁才是长期据守的阵地。
+    for (const tz of trenchZs) {
+      for (let x = BX0 + 8; x < BX1 - 8; x += 2.6) {
+        const y = gy(x, tz);
+        for (const side of [-1, 1]) {
+          const wz = tz + side * 0.95;
+          // 护壁木板（略向内倾），每 4 块留一道缝
+          if (Math.floor((x - BX0) / 2.6) % 4 !== 0) {
+            putB(boxG(2.45, 0.85, 0.09), wood, x, y + 0.42, wz, 0);
+          }
+        }
+        // 沟底踏板（横木），每隔一块铺一条
+        if (Math.floor((x - BX0) / 2.6) % 2 === 0) {
+          putB(boxG(0.34, 0.06, 2.0), wood, x, y + 0.09, tz);
+        }
+      }
+    }
+
+    // (10) 战地救护所：白帐篷 + 红十字 + 担架 + 药箱；带碰撞
+    {
+      const ax = 118, az = -322, y = gy(ax, az);
+      const tentWhite = new THREE.MeshLambertMaterial({ color: 0xd8d6cc });
+      putB(boxG(8.4, 2.3, 6.2), tentWhite, ax, y + 1.15, az);
+      putRx(boxG(4.6, 0.2, 6.6), tentWhite, ax - 2.1, y + 2.72, az, -0.46);
+      putRx(boxG(4.6, 0.2, 6.6), tentWhite, ax + 2.1, y + 2.72, az, 0.46);
+      // 红十字：竖 + 横（贴在正面和屋顶）
+      putB(boxG(0.55, 1.55, 0.1), red, ax, y + 1.15, az + 3.12);
+      putB(boxG(1.55, 0.55, 0.1), red, ax, y + 1.25, az + 3.13);
+      putB(boxG(0.5, 1.3, 0.12), red, ax, y + 3.02, az);
+      putB(boxG(1.3, 0.5, 0.12), red, ax, y + 3.02, az);
+      // 门口担架 + 药箱
+      putB(boxG(2.2, 0.12, 0.75), steel, ax + 5.6, y + 0.5, az + 1.2);
+      for (const lx of [4.6, 6.6]) putB(boxG(0.1, 0.5, 0.1), steel, ax + lx, y + 0.25, az + 1.2);
+      for (let k = 0; k < 3; k++) putB(boxG(0.7, 0.55, 0.5), k ? sandD : tentWhite, ax + 5.4 + k * 0.85, y + 0.28, az - 2.2);
+      solid(ax, az, 8.4, 6.2, y, 2.9);
+      solid(ax + 5.6, az + 1.2, 2.4, 0.9, y, 0.7);
+    }
+
+    // (11) 直升机停机坪：圆形混凝土盘 + H 标识 + 边灯；贴地不拦人
+    {
+      const hx = -60, hz = -318, y = gy(hx, hz);
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(8.2, 28), concrete);
+      pad.rotation.x = -Math.PI / 2; pad.position.set(hx, y + 0.07, hz); scene.add(pad);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(7.4, 8.0, 28), new THREE.MeshLambertMaterial({ color: 0xd8c96a }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(hx, y + 0.1, hz); scene.add(ring);
+      // H：两竖一横（共用一份材质，别在循环里 new）
+      const markMat = new THREE.MeshLambertMaterial({ color: 0xe8e4d4 });
+      putB(boxG(0.5, 0.05, 3.4), markMat, hx - 1.2, y + 0.13, hz);
+      putB(boxG(0.5, 0.05, 3.4), markMat, hx + 1.2, y + 0.13, hz);
+      putB(boxG(2.4, 0.05, 0.5), markMat, hx, y + 0.13, hz);
+      const lampMat = new THREE.MeshLambertMaterial({ color: 0xffb347 });
+      for (let a = 0; a < 8; a++) {
+        const ang = a / 8 * Math.PI * 2;
+        putB(boxG(0.22, 0.16, 0.22), lampMat,
+             hx + Math.cos(ang) * 8.6, y + 0.1, hz + Math.sin(ang) * 8.6);
+      }
+    }
+
+    // (12) 油料库：三只卧式油罐 + 支架 + 输油管 + 防爆堤
+    {
+      const ox = -104, oz = -462, y = gy(ox, oz);
+      const tank = new THREE.MeshLambertMaterial({ color: 0x7d8570 });
+      for (let i = 0; i < 3; i++) {
+        const tx = ox + i * 6.2;
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 5.6, 14), tank);
+        cyl.rotation.z = Math.PI / 2; cyl.position.set(tx, y + 1.9, oz); scene.add(cyl);
+        putB(boxG(0.5, 0.9, 3.0), concreteD, tx - 1.8, y + 0.45, oz);
+        putB(boxG(0.5, 0.9, 3.0), concreteD, tx + 1.8, y + 0.45, oz);
+        solid(tx, oz, 5.8, 3.2, y, 3.4);
+      }
+      // 输油管：沿油罐南侧横过去，再拐向指挥所
+      for (let i = 0; i < 3; i++) putB(boxG(1.4, 0.28, 0.28), rust, ox + 2 + i * 5.2, y + 0.55, oz + 2.3);
+      putB(boxG(0.28, 0.28, 9), rust, ox + 12.6, y + 0.55, oz + 6.6);
+      // 防爆堤（土埂）
+      putB(boxG(21, 0.9, 1.2), sandD, ox + 6.2, y + 0.45, oz - 3.4);
+      solid(ox + 6.2, oz - 3.4, 21, 1.2, y, 0.9);
+    }
+
+    // (13) 通讯天线阵：三根高杆 + 斜拉索 + 设备箱，战场上的"眼睛"
+    {
+      const cx0 = 132, cz0 = -404, y = gy(cx0, cz0);
+      for (let i = 0; i < 3; i++) {
+        const ax = cx0 - i * 5.5, az = cz0 + (i % 2 ? 3 : -2);
+        const ay = gy(ax, az);
+        putB(boxG(0.24, 9.5 - i * 1.4, 0.24), steel, ax, ay + (9.5 - i * 1.4) / 2, az);
+        putB(boxG(2.0, 0.1, 0.1), steel, ax, ay + 7.2 - i * 1.2, az);
+        putB(boxG(0.1, 0.1, 2.0), steel, ax, ay + 6.4 - i * 1.2, az);
+        solid(ax, az, 0.5, 0.5, ay, 9.5 - i * 1.4);
+      }
+      // 设备箱 + 电缆卷
+      putB(boxG(2.2, 1.1, 1.6), oliveD, cx0 - 2, y + 0.55, cz0 + 6);
+      solid(cx0 - 2, cz0 + 6, 2.2, 1.6, y, 1.1);
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.16, 8, 14), steel);
+      coil.rotation.x = -Math.PI / 2; coil.position.set(cx0 + 2.4, y + 0.2, cz0 + 6.4); scene.add(coil);
+    }
+
+    // (14) 机枪巢：环形沙袋 + 中间机枪三脚架，布置在阵地前沿的射界要点
+    for (const [mx, mz] of [[-26, -314], [26, -314], [-88, -352], [86, -352]]) {
+      const y = gy(mx, mz);
+      for (let a = 0; a < 12; a++) {
+        const ang = a / 12 * Math.PI * 2;
+        // 正面（朝北）留一个缺口当射界
+        if (Math.abs(ang - Math.PI * 1.5) < 0.32) continue;
+        putB(boxG(1.35, 0.5, 0.8), a % 2 ? sand : sandD,
+             mx + Math.cos(ang) * 2.5, y + 0.25, mz + Math.sin(ang) * 2.5, ang);
+        if (a % 2 === 0) putB(boxG(1.2, 0.44, 0.75), sandD, mx + Math.cos(ang) * 2.45, y + 0.68, mz + Math.sin(ang) * 2.45, ang);
+      }
+      putB(boxG(0.9, 0.9, 0.9), concreteD, mx, y + 0.45, mz);
+      putB(boxG(0.14, 0.14, 2.0), steel, mx, y + 1.0, mz - 0.9);
+      solid(mx, mz, 5.4, 5.4, y, 1.2);
+    }
+
+    window.__invBattlefield = { x0: BX0, x1: BX1, z0: BZ0, z1: BZ1,
+                                bunkers: bunkers.length, colliders: invColliders };
   } catch (eBattle) { try { console.error('[invBattlefield]', eBattle); } catch (e9) {} }
 })();
+
+// ==================== 【fix576b·2026-11-26】战场旗帜（城市旗 / 恶魔旗） ====================
+// 用户："外族入侵的时候，外族最前面的人可以举一个有那种恶魔头像的旗子吧。然后在己方的阵地上
+//        插上一面城市的旗子，如果玩家死亡之后就播放一段动画，就是对面的外族入侵者把他们的
+//        恶魔旗子插换到这了，然后下次去的时候就要打进攻战。"
+// 三种状态：
+//   ① 平时：城市旗插在己方阵地（铁丝网中央缺口南侧），恶魔旗插在敌方集结地深处；
+//   ② 开战：恶魔旗"起旗"，跟着最前排的外敌走 —— 谁是尖兵谁扛旗，扛旗的被打死自动换人；
+//   ③ 玩家在防守战阵亡：播换旗过场，举旗手走到城市旗下拔旗、把恶魔旗插进同一个坑，
+//      城市旗落地；PROGRESS.invLost=true 存盘，下次接任务变成「收复阵地」进攻战。
+// 旗面用 CanvasTexture 手绘（城市剪影 / 恶魔头），布面顶点做正弦飘动 —— 只有两面旗，
+// 每帧几十个顶点，成本可以忽略，但远看比一块纯色板子像旗子得多。
+var INV_FLAGS = {
+  city: null, demon: null, carrier: null, cityLost: false,
+  // 己方阵地：铁丝网中央缺口西侧 9.5m。不放在缺口正中间 —— 旗杆有碰撞，
+  // 正中间会把"从机场直穿中门进战场"这条主路堵住（实测走过去会被挡在 z=-309.3）。
+  cityPos: { x: -9.5, z: -311 },
+  demonHome: { x: -40, z: -442 }  // 敌方集结地（破损机库西侧）
+};
+// 旗面贴图：手绘到 256×160 的 canvas 上，再当纹理贴到布面
+function cfFlagTexture(kind) {
+  const W = 256, H = 160;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  if (kind === 'demon') {
+    // ---- 恶魔旗：暗红渐变底 + 血纹 + 骨白恶魔头（尖角/血红眼/獠牙）----
+    const gr = c.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, '#6a1209'); gr.addColorStop(0.5, '#3d0a06'); gr.addColorStop(1, '#190303');
+    c.fillStyle = gr; c.fillRect(0, 0, W, H);
+    // 血纹（斜向细条，让旗面不平）
+    c.strokeStyle = 'rgba(160,36,22,0.45)';
+    for (let i = 0; i < 8; i++) {
+      c.lineWidth = 1 + (i % 3);
+      c.beginPath(); c.moveTo(-10 + i * 34, 0); c.lineTo(30 + i * 34, H); c.stroke();
+    }
+    // 上下锯齿边：做出"破旗"的轮廓
+    c.fillStyle = 'rgba(0,0,0,0.9)';
+    for (let x = 0; x < W; x += 16) {
+      c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 8, 9); c.lineTo(x + 16, 0); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(x, H); c.lineTo(x + 8, H - 9); c.lineTo(x + 16, H); c.closePath(); c.fill();
+    }
+    // 恶魔头：颅骨
+    c.fillStyle = '#e9dfc9';
+    c.beginPath(); c.ellipse(128, 92, 40, 38, 0, 0, Math.PI * 2); c.fill();
+    // 下巴收窄
+    c.beginPath(); c.moveTo(104, 118); c.lineTo(128, 146); c.lineTo(152, 118); c.closePath(); c.fill();
+    // 双角（向内弯）
+    c.beginPath(); c.moveTo(102, 66); c.quadraticCurveTo(64, 16, 40, 8);
+    c.quadraticCurveTo(74, 40, 86, 76); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(154, 66); c.quadraticCurveTo(192, 16, 216, 8);
+    c.quadraticCurveTo(182, 40, 170, 76); c.closePath(); c.fill();
+    // 眼窝（黑）+ 血红瞳孔（发光）
+    c.fillStyle = '#160303';
+    c.beginPath(); c.ellipse(112, 84, 13, 10, -0.18, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(144, 84, 13, 10, 0.18, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ff2a12';
+    c.beginPath(); c.ellipse(112, 84, 6, 5.2, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(144, 84, 6, 5.2, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffd0a0';
+    c.beginPath(); c.arc(110.4, 82.4, 2.2, 0, 7); c.fill();
+    c.beginPath(); c.arc(142.4, 82.4, 2.2, 0, 7); c.fill();
+    // 鼻腔 + 獠牙
+    c.fillStyle = '#160303';
+    c.beginPath(); c.moveTo(128, 94); c.lineTo(122, 108); c.lineTo(134, 108); c.closePath(); c.fill();
+    for (const tx of [112, 122, 134, 144]) {
+      c.beginPath(); c.moveTo(tx, 116); c.lineTo(tx + 3.5, 128); c.lineTo(tx + 7, 116); c.closePath(); c.fill();
+    }
+  } else {
+    // ---- 城市旗：深青底 + 金色描边 + 城市天际线 + 朝阳 ----
+    const gr = c.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, '#124a5c'); gr.addColorStop(0.6, '#0d3746'); gr.addColorStop(1, '#082530');
+    c.fillStyle = gr; c.fillRect(0, 0, W, H);
+    // 金色双描边
+    c.strokeStyle = '#d9b45a'; c.lineWidth = 6; c.strokeRect(5, 5, W - 10, H - 10);
+    c.strokeStyle = 'rgba(217,180,90,0.45)'; c.lineWidth = 2; c.strokeRect(14, 14, W - 28, H - 28);
+    // 朝阳（金色半圆 + 光晕）
+    const sun = c.createRadialGradient(128, 92, 4, 128, 92, 46);
+    sun.addColorStop(0, 'rgba(255,214,120,0.95)'); sun.addColorStop(1, 'rgba(255,196,80,0)');
+    c.fillStyle = sun; c.beginPath(); c.arc(128, 92, 46, 0, 7); c.fill();
+    c.fillStyle = '#f0c860'; c.beginPath(); c.arc(128, 92, 22, 0, 7); c.fill();
+    // 城市天际线（浅色剪影）：高低错落的楼群 + 中间一座塔
+    c.fillStyle = '#cfe6ef';
+    const sky = [[22, 128, 16, 26], [42, 118, 14, 36], [60, 132, 12, 22], [76, 110, 16, 44],
+                 [96, 124, 14, 30], [114, 118, 18, 36], [136, 106, 12, 48], [152, 122, 16, 32],
+                 [172, 114, 14, 40], [190, 128, 16, 26], [210, 120, 14, 34]];
+    for (const b of sky) c.fillRect(b[0], b[1], b[2], b[3]);
+    // 塔尖 + 旗顶十字天线
+    c.beginPath(); c.moveTo(136, 106); c.lineTo(142, 84); c.lineTo(148, 106); c.closePath(); c.fill();
+    c.fillStyle = '#f0c860'; c.fillRect(141, 74, 2.4, 12);
+    // 底部城墙线
+    c.fillStyle = '#9fc4d2'; c.fillRect(20, 154, 216, 4);
+    for (let x = 20; x < 236; x += 12) c.fillRect(x, 148, 7, 7);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+// 造一面旗：旗杆 + 杆顶金球 + 底座 + 布面（顶点可做飘动）
+function makeBattleFlag(kind, x, z, poleH) {
+  const g = new THREE.Group();
+  const gy0 = terrainHeight(x, z);
+  g.position.set(x, gy0, z);
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0x7a7466 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.115, poleH, 8), poleMat);
+  pole.position.y = poleH / 2; g.add(pole);
+  const goldMat = new THREE.MeshLambertMaterial({ color: 0xd8b24a });
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), goldMat);
+  cap.position.y = poleH + 0.1; g.add(cap);
+  const baseMat = new THREE.MeshLambertMaterial({ color: 0x4a4640 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.46, 0.22, 10), baseMat);
+  base.position.y = 0.11; g.add(base);
+  // 布面：左边缘贴杆，向右展开 2.7m；12×6 段够做飘动又几乎不耗性能
+  const clothGeo = new THREE.PlaneGeometry(2.7, 1.72, 12, 6);
+  clothGeo.translate(1.35, 0, 0);
+  const clothMat = new THREE.MeshLambertMaterial({
+    map: cfFlagTexture(kind), side: THREE.DoubleSide, transparent: true, alphaTest: 0.02
+  });
+  const cloth = new THREE.Mesh(clothGeo, clothMat);
+  cloth.position.set(0.1, poleH - 1.02, 0);
+  g.add(cloth);
+  registerDynamicObject(g);   // 旗面每帧动顶点，绝不能被静态合批吃掉
+  scene.add(g);
+  return {
+    group: g, cloth, clothGeo, pole, poleH, kind, x, z, baseY: gy0,
+    basePos: clothGeo.attributes.position.array.slice(0),   // 原始顶点，飘动时按它算
+    t: Math.random() * 6, drop: 0, raise: 1
+  };
+}
+// 布面飘动：越靠自由端摆幅越大；raise=0 时整块收成一条（插旗动画用）
+function waveFlagCloth(f, dt) {
+  if (!f || !f.clothGeo) return;
+  f.t += dt;
+  const arr = f.clothGeo.attributes.position.array;
+  const base = f.basePos;
+  const amp = 0.26 * (f.raise === undefined ? 1 : f.raise);
+  const rise = (f.raise === undefined ? 1 : f.raise);
+  for (let i = 0; i < arr.length; i += 3) {
+    const bx = base[i], by = base[i + 1];
+    const k = bx / 2.7;                                  // 0=贴杆 1=自由端
+    const kk = k * k;
+    arr[i] = bx;
+    arr[i + 1] = by * (0.15 + 0.85 * rise) + Math.sin(bx * 1.7 - f.t * 3.1) * 0.05 * kk;
+    arr[i + 2] = Math.sin(bx * 2.3 - f.t * 4.2 + by * 0.7) * amp * kk;
+  }
+  f.clothGeo.attributes.position.needsUpdate = true;
+  f.clothGeo.computeBoundingSphere();
+}
+// 建两面旗（脚本加载期执行一次）
+(function buildBattleFlags() {
+  try {
+    INV_FLAGS.city = makeBattleFlag('city', INV_FLAGS.cityPos.x, INV_FLAGS.cityPos.z, 5.6);
+    INV_FLAGS.demon = makeBattleFlag('demon', INV_FLAGS.demonHome.x, INV_FLAGS.demonHome.z, 5.0);
+    INV_FLAGS.demon.group.rotation.y = Math.PI;
+    // 旗杆碰撞：两个坑位各一根，人和车都不能穿过（插旗后旗杆还在原地）
+    try {
+      for (const p of [INV_FLAGS.cityPos, INV_FLAGS.demonHome]) {
+        const y0 = terrainHeight(p.x, p.z);
+        buildings.push({ minX: p.x - 0.28, maxX: p.x + 0.28, minZ: p.z - 0.28, maxZ: p.z + 0.28,
+                         bottom: y0, top: y0 + 5.6 });
+      }
+    } catch (e) {}
+  } catch (e) { try { console.error('[battleFlags]', e); } catch (e2) {} }
+})();
+// 按 PROGRESS.invLost / 是否开战，把两面旗摆到该在的位置
+function applyInvFlagState() {
+  const F = INV_FLAGS;
+  if (!F || !F.city || !F.demon) return;
+  F.cityLost = !!(typeof PROGRESS !== 'undefined' && PROGRESS.invLost);
+  if (F.cityLost) {
+    // 阵地失守：城市旗已经落地（过场里演过），恶魔旗插在己方阵地
+    F.city.group.visible = false;
+    F.carrier = null;
+    F.demon.group.visible = true;
+    F.demon.group.position.set(F.cityPos.x, terrainHeight(F.cityPos.x, F.cityPos.z), F.cityPos.z);
+    F.demon.group.rotation.y = 0;
+    F.demon.raise = 1;
+  } else {
+    F.city.group.visible = true;
+    F.city.cloth.position.y = F.city.poleH - 1.02;
+    F.city.cloth.rotation.z = 0;
+    if (!invasionActive) {
+      F.carrier = null;
+      F.demon.group.position.set(F.demonHome.x, terrainHeight(F.demonHome.x, F.demonHome.z), F.demonHome.z);
+      F.demon.group.rotation.y = Math.PI;
+      F.demon.raise = 1;
+    }
+  }
+  // 任务光柱跟着阵地状态走：平时在战场前沿（铁丝网中门后），失守后挪到阵地南侧，
+  // 免得玩家去接"进攻战"时正好站在守敌堆里。
+  try { syncInvQuestMarker(); } catch (e) {}
+}
+// 【fix576b】进攻战的光柱位置：失守后从 (0,-316) 退到铁丝网南侧 (0,-308)，
+// 玩家在铁丝网后面接任务、点完部署再往北打，不会一接任务就站在守敌枪口下。
+function syncInvQuestMarker() {
+  if (typeof QUESTS === 'undefined' || !QUESTS) return;
+  const q = QUESTS.find(v => v && v.id === 'invasion');
+  if (!q) return;
+  const nx = 0, nz = PROGRESS.invLost ? -308 : -316;
+  if (Math.abs(q.x - nx) < 0.01 && Math.abs(q.z - nz) < 0.01 && q.marker) return;
+  q.x = nx; q.z = nz;
+  if (q.marker) {
+    try {
+      scene.remove(q.marker.group);
+      if (typeof unregisterDynamicObject === 'function') unregisterDynamicObject(q.marker.group);
+      q.marker.group.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+    } catch (e) {}
+    q.marker = null;
+  }
+  try { q.marker = makeQuestMarker(q.x, q.z, terrainHeight(q.x, q.z)); } catch (e) {}
+}
+// 每帧：飘旗 + 举旗手跟随
+function updateBattleFlags(dt) {
+  const F = INV_FLAGS;
+  if (!F || !F.city || !F.demon) return;
+  if (F.city.group.visible) waveFlagCloth(F.city, dt);
+  waveFlagCloth(F.demon, dt);
+  // 举旗手：恶魔旗跟着他走（世界坐标跟随，不做父子挂载 —— 父子会被人物的缩放/倒地旋转带歪）
+  const c = F.carrier;
+  if (c && c.alive && !c.down && invasionActive && !F.cityLost) {
+    const a = c.angle || 0;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const lx = 0.62, lz = 0.34;                      // 右手侧稍靠前
+    const wx = c.x + lx * ca + lz * sa;
+    const wz = c.z - lx * sa + lz * ca;
+    F.demon.group.position.set(wx, terrainHeight(wx, wz), wz);
+    F.demon.group.rotation.y = a;
+  }
+}
+// 挑"最前排"的外敌扛旗：离己方阵地最近的活人。扛旗者被打死就换下一个。
+function assignInvFlagCarrier() {
+  const F = INV_FLAGS;
+  if (!F || F.cityLost) return;
+  let best = null, bd = 1e9;
+  for (const v of INVADERS) {
+    if (!v.alive || v.down) continue;
+    const d = Math.hypot(v.x - F.cityPos.x, v.z - F.cityPos.z);
+    if (d < bd) { bd = d; best = v; }
+  }
+  F.carrier = best;
+}
 
 // 公园（中心区域，绿地+池塘+亭子）
 (function addPark() {
@@ -12337,7 +12913,7 @@ const _ropeFrom = new THREE.Vector3(0, 1, 0), _ropeTo = new THREE.Vector3();
 // 【fix567·2026-11-24·用户："手机上画质比较低，枪战的时候会很卡，有时候直接崩溃自动退出"】
 // gfx：画质档位。'auto' = 跟随自动降质（旧行为）；'low'/'mid'/'high' = 玩家手动锁定。
 // 手动锁定后 updateAutoQuality() 不再插手 —— 用户明确选了档位，就不该被系统偷偷改回去。
-const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false, motoJump: false, gfx: 'auto' };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）   // 【fix539】motoJump=摩托车能否按空格跳跃（默认关）   // 【fix567】gfx=画质档位（auto/low/mid/high）
+const PROGRESS = { tankUnlocked: false, flightPass: false, devMode: false, signTheme: 0, firstPerson: false, vehicleFreeLook: false, motoJump: false, gfx: 'auto', invLost: false };   // 【fix63】开发者模式要能跨重启记住   // flightPass=永久往返机票（fix47）   // 【fix516】firstPerson=第一人称视角开关   // 【fix538】vehicleFreeLook=开车时能否自由拖动视角（默认关）   // 【fix539】motoJump=摩托车能否按空格跳跃（默认关）   // 【fix567】gfx=画质档位（auto/low/mid/high）   // 【fix576b】invLost=外族入侵时阵地失守（城市旗被恶魔旗换掉，下次打进攻战）
 // 黑帮大本营固定站岗成员（addBlackHQ 填充；任务二统计剩余人数用）
 const GANG_HQ_GUARDS = [];
 // 黑帮站岗成员的统一制服色（比纯黑亮，保证在深色豪宅/石板上能看清轮廓）
@@ -12760,6 +13336,7 @@ let questResultOpen = false;
 // 市民/军方支援用现有的 hate='faction' + hateTarget 机制打外敌，警察由本文件单独驱动，
 // 全部外敌被击退即完成任务。外敌不进 respawn，任务结束/放弃时统一清理。
 var invasionActive = false, invasionTick = 0, invasionTotal = 0;
+var invCarrierTick = 0;   // 【fix576b】举旗手重挑计时
 var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
 var INV_VEHICLES = [];   // 【fix575】外敌装甲火力点（战场上的敌方军车）
 // 【fix575·2026-11-25·用户："外族入侵期间玩家对 NPC/警察/城管/守卫都是没有伤害的，
@@ -12847,13 +13424,21 @@ function cleanupInvasion() {
     if (r.hate === 'faction' && r.hateTarget && r.hateTarget.isInvader) { r.hate = null; r.hateTarget = null; }
   }
   for (const c of cops) { c._invTarget = null; c.huntT = 0; c.aggro = false; }
+  // 【fix576b】外敌撤了 → 恶魔旗回敌方集结地（如果阵地没失守）；失守则继续插在己方阵地
+  try { assignInvFlagCarrier(); } catch (e) {}
+  try { applyInvFlagState(); } catch (e) {}
 }
 function spawnInvasionForce(q) {
   cleanupInvasion();
   invasionActive = true; invasionTick = 0;
+  // 【fix576b】两种形态：
+  //   defend（默认）：外敌从战场最北（z=-400）缓缓压过来，玩家守；
+  //   attack（阵地失守后）：外敌已经占住我方前沿（铁丝网—碉堡一线），玩家从南往北打回去。
+  // 进攻战的敌人贴着自己的工事守，所以数量少一些（守方有掩体），但个个在掩体后面。
+  const _attack = !!(q && q.invMode === 'attack');
   // 【fix574b】用户："外族入侵的时候让他们从机场这边一窝蜂的涌来" + "数量再多一些"
   // 【fix575】数量再加：手机 22 / 桌面 34（原 14/22），配合更宽的正面推进阵型
-  const N = isMobile ? 22 : 34;
+  const N = _attack ? (isMobile ? 16 : 24) : (isMobile ? 22 : 34);
   invasionTotal = N;
   q.progressTotal = N; q.progressValue = 0;
   const px = person.position.x, pz = person.position.z;
@@ -12863,10 +13448,19 @@ function spawnInvasionForce(q) {
   const _cols = Math.ceil(N / 3);
   for (let i = 0; i < N; i++) {
     const row = Math.floor(i / _cols), col = i % _cols;
-    const sp2 = {
-      x: AIRPORT_INV.x + (col - (_cols - 1) / 2) * 8.5 + (Math.random() - 0.5) * 2.5,
-      z: INV_SPAWN_Z - row * 9 + (Math.random() - 0.5) * 2.5
-    };
+    let sp2;
+    if (_attack) {
+      // 守敌：沿 z=-332 / -347 / -362 三排展开，躲在沙袋墙和碉堡后面
+      sp2 = {
+        x: (col - (_cols - 1) / 2) * 11 + (Math.random() - 0.5) * 3.2,
+        z: -332 - row * 15 + (Math.random() - 0.5) * 3.2
+      };
+    } else {
+      sp2 = {
+        x: AIRPORT_INV.x + (col - (_cols - 1) / 2) * 8.5 + (Math.random() - 0.5) * 2.5,
+        z: INV_SPAWN_Z - row * 9 + (Math.random() - 0.5) * 2.5
+      };
+    }
     clampCity(sp2);
     const x = sp2.x, z = sp2.z;
     const g = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM, demonHorns: true, redEyes: true });
@@ -12995,8 +13589,15 @@ function spawnInvasionForce(q) {
   // 目标由 milHeliPlayerPos() 在入侵期间自动改成最近外敌（见该函数）。
   try { if (typeof spawnMilHeli === 'function') spawnMilHeli(); } catch (e) {}
   try { if (typeof spawnMilTank === 'function') spawnMilTank(); } catch (e) {}
-  try { setHint('外族入侵！军方直升机与坦克已出动，联合市民警察击退 ' + N + ' 名入侵者'); } catch (e) {}
-  try { floatText('外族入侵！', '#ff5544'); } catch (e) {}
+  // 【fix576b】开战就把恶魔旗交给最前排的人；之后每 0.6s 重挑（扛旗的被打死自动换人）
+  try { assignInvFlagCarrier(); } catch (e) {}
+  if (_attack) {
+    try { setHint('进攻战：外敌占住了我方前沿阵地 ' + N + ' 人 —— 打穿铁丝网缺口，把阵地夺回来'); } catch (e) {}
+    try { floatText('收复阵地！', '#ffd24a'); } catch (e) {}
+  } else {
+    try { setHint('外族入侵！军方直升机与坦克已出动，联合市民警察击退 ' + N + ' 名入侵者'); } catch (e) {}
+    try { floatText('外族入侵！', '#ff5544'); } catch (e) {}
+  }
   try { sfx('siren'); } catch (e) {}
 }
 function updateInvasion(dt, q) {
@@ -13005,6 +13606,9 @@ function updateInvasion(dt, q) {
   if (!invasionActive) { spawnInvasionForce(q); return; }
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+  // 【fix576b】举旗手：每 0.6s 重挑最前排的活人扛恶魔旗（扛旗的被打死就换下一个）
+  invCarrierTick -= dt;
+  if (invCarrierTick <= 0) { invCarrierTick = 0.6; try { assignInvFlagCarrier(); } catch (e) {} }
   // 外敌自己驱动（skipAI），优先打附近的市民/军方，否则直扑玩家
   // 【fix575 重写】三处大改：①缓慢推进 1.5~2m/s（原 4.2 像冲刺）；
   // ②每帧调 animateHuman —— 原来 phase/punchAnim 一直在涨却没人驱动，人是僵的；
@@ -13149,10 +13753,19 @@ function updateInvasion(dt, q) {
   for (const v of INVADERS) if (v.alive && !v.down) left++;
   q.progressValue = invasionTotal - left;
   if (left === 0 && q.state === 'active') {
+    const wasAttack = (q.invMode === 'attack');
     try { achUnlock('invasionHero'); } catch (e) {}
+    // 【fix576b】进攻战打赢 = 阵地收复：城市旗插回去，PROGRESS.invLost 清零并落盘。
+    // 必须在 cleanupInvasion 之前改状态 —— cleanupInvasion 末尾会调 applyInvFlagState 按它摆旗。
+    if (wasAttack) {
+      PROGRESS.invLost = false;
+      try { saveGame(); } catch (e) {}
+    }
     cleanupInvasion();
     completeQuest(q.id);
-    try { floatText('外敌已被击退！', '#7dffa8'); } catch (e) {}
+    q.invMode = 'defend';
+    try { floatText(wasAttack ? '阵地已收复！' : '外敌已被击退！', '#7dffa8'); } catch (e) {}
+    if (wasAttack) { try { setHint('阵地收复！城市旗重新插上，恶魔旗已被拔掉'); } catch (e) {} }
   }
 }
 let questBusyHintT = 0;          // 互斥提示的节流计时
@@ -13161,6 +13774,21 @@ let questBusyHintT = 0;          // 互斥提示的节流计时
 const QUEST_SENSE_CD = 3;
 let questSenseCd = 0;            // 剩余冷却秒数
 const questArmed = new Map();    // 每个任务：是否已离开过光柱（true=可以重新感应）
+// 【fix576b】外族入侵的任务说明按阵地状态切换：守 / 反攻
+function invQuestDesc() {
+  if (typeof PROGRESS !== 'undefined' && PROGRESS.invLost) {
+    return '阵地失守：我方前沿已经被外族占住，城市旗被换成了恶魔旗，他们正躲在我们的战壕和碉堡里。\n\n' +
+           '接取后先调配反攻部队，点「部署完成 · 开始反攻」，从铁丝网的三处缺口往北打。\n' +
+           '把守敌全部清掉，就能把城市旗重新插回阵地。\n\n' +
+           '反攻期间警察与军方自动停战，所有人一致对外。';
+  }
+  return '侦察确认：一支装备精良的外族武装正在城北机场以北的战场集结，' +
+         '他们带着火箭筒、加特林、AK47、电锯和斧头，头顶尖角、双眼血红。\n\n' +
+         '接取后先调配你的部队：警察、军事基地护卫、市民义勇，' +
+         '各自安排「留守市中心 / 机场正面阻击 / 侧翼包抄」。\n\n' +
+         '点「分配完成 · 开始阻击」后，外敌会从机场北战场一窝蜂扑向市区。' +
+         '入侵期间警察与军方自动停战，所有人一致对外。';
+}
 function openQuestOffer(id) {
   const q = QUESTS.find(v => v.id === id);
   if (!q || q.state !== 'available' || questOfferOpen) return;
@@ -13177,7 +13805,8 @@ function openQuestOffer(id) {
   }
   questOfferOpen = true; questOfferId = id;
   document.getElementById('qoTitle').textContent = '📋 ' + q.name;
-  document.getElementById('qoBody').textContent = q.desc;
+  // 【fix576b】阵地失守后任务说明换成"反攻"，不能还写着"从战场一窝蜂扑向市区"
+  document.getElementById('qoBody').textContent = (id === 'invasion') ? invQuestDesc() : q.desc;
   document.getElementById('qoReward').textContent = '奖励　' + q.rewardText;
   const offer = document.getElementById('questOffer');
   offer.style.display = 'flex';
@@ -13194,6 +13823,20 @@ function closeQuestOffer(accept) {
 function openInvDeploy() {
   invDeployOpen = true;
   const el = document.getElementById('invDeploy');
+  // 【fix576b】进攻战：面板文案换成"收复阵地"，按钮换成"开始进攻"
+  const _attack = !!(typeof PROGRESS !== 'undefined' && PROGRESS.invLost);
+  try {
+    const t = el.querySelector('.dep-title'), s = el.querySelector('.dep-sub');
+    const go = document.getElementById('invStart'), tip = el.querySelector('.dep-tip');
+    if (t) t.textContent = _attack ? '⚔ 收复阵地 · 反攻部署' : '🛡 战前部署 · 外族入侵';
+    if (s) s.innerHTML = _attack
+      ? '我方前沿阵地已失守，城市旗被恶魔旗换掉，外敌正躲在我们的工事里。<br>给你的部队分配反攻任务，然后从铁丝网缺口打上去，把阵地夺回来。'
+      : '侦察确认：一支装备精良的外族部队正从城北机场集结，即将沿主干道扑向市区。<br>给他们分配阻击任务，再下令开战。分配会影响各部队的开战位置与作战半径。';
+    if (go) go.textContent = _attack ? '部署完成 · 开始反攻' : '分配完成 · 开始阻击';
+    if (tip) tip.textContent = _attack
+      ? '打穿铁丝网缺口往北推进，清光守敌就能把城市旗重新插上'
+      : '开战后警察与基地护卫自动停战，共同对外';
+  } catch (e) {}
   // 复位为默认阵位（每次接任务重新分配）
   INV_ORDERS.police = 'guard'; INV_ORDERS.military = 'rush'; INV_ORDERS.civil = 'guard';
   el.querySelectorAll('.dep-row').forEach(row => {
@@ -13225,7 +13868,8 @@ document.getElementById('invDeploy').addEventListener('click', e => {
     closeInvDeploy();
     const q = QUESTS.find(v => v.id === 'invasion');
     const _o = INV_ORDERS;
-    setHint('阻击部署完成：警察' + (_o.police === 'rush' ? '机场正面' : _o.police === 'flank' ? '侧翼' : '守城')
+    const _atk = !!(q && q.invMode === 'attack');
+    setHint((_atk ? '反攻部署完成：' : '阻击部署完成：') + '警察' + (_o.police === 'rush' ? '机场正面' : _o.police === 'flank' ? '侧翼' : '守城')
       + ' / 军方' + (_o.military === 'rush' ? '机场正面' : _o.military === 'flank' ? '侧翼' : '守城')
       + ' / 市民' + (_o.civil === 'rush' ? '机场正面' : _o.civil === 'flank' ? '侧翼' : '守城'));
     if (q) spawnInvasionForce(q);   // 点完"开始阻击"才真正放外敌进城
@@ -13273,7 +13917,9 @@ function acceptQuest(id) {
   setHint(q.objectiveText());
   renderQuestTracker();
   // 【fix574b】外族入侵：接取后不立刻刷兵，先打开战前部署面板让玩家调配三支友军
+  // 【fix576b】阵地失守过就切到进攻战：外敌已经占住我方前沿，玩家带人打回去
   if (id === 'invasion') {
+    q.invMode = PROGRESS.invLost ? 'attack' : 'defend';
     try { openInvDeploy(); } catch (e) { console.error('[invDeploy]', e); }
   }
 }
@@ -14390,21 +15036,30 @@ var questBridge = { despawnRaceCar: null, RACE_CHECKS: 6 };
   const invQuest = {
     id: 'invasion', name: '外族入侵', state: 'available', completed: false,
     phase: 'idle', initialPhase: 'idle', elapsed: 0,
-    x: 0, z: -160,
-    desc: '侦察确认：一支装备精良的外族武装正在城北机场集结，' +
+    // 【fix576】用户："把光柱移动到这儿" —— 从机场跑道南侧 (0,-160) 迁到机场北战场前沿。
+    // 【fix576b】位置微调到 (0,-316)：正好落在铁丝网中央缺口里、第一道战壕南侧 10m 的空档，
+    // 既在战场里（焦土范围内），又不会插进沙袋墙/战壕里（原来的 -326 正好在第一道沙袋堤上）。
+    x: 0, z: -316,
+    desc: '侦察确认：一支装备精良的外族武装正在城北机场以北的战场集结，' +
           '他们带着火箭筒、加特林、AK47、电锯和斧头，头顶尖角、双眼血红。\n\n' +
           '接取后先调配你的部队：警察、军事基地护卫、市民义勇，' +
           '各自安排「留守市中心 / 机场正面阻击 / 侧翼包抄」。\n\n' +
-          '点「分配完成 · 开始阻击」后，外敌会从机场一窝蜂扑向市区。' +
+          '点「分配完成 · 开始阻击」后，外敌会从机场北战场一窝蜂扑向市区。' +
           '入侵期间警察与军方自动停战，所有人一致对外。',
     rewardGold: 12000, rewardXp: 2400,
     rewardText: '12000 金币　+　2400 经验　+　护城英雄',
     progressTotal: isMobile ? 14 : 22, progressValue: 0,
+    // 【fix576b】invMode 由 acceptQuest 按 PROGRESS.invLost 决定：defend=守 / attack=收复阵地
+    invMode: 'defend',
     objectiveText() {
-      return '击退外族入侵者　' + Math.round(this.progressValue || 0) + ' / ' + (this.progressTotal || 0);
+      const _atk = (this.invMode === 'attack');
+      return (_atk ? '收复阵地 · 消灭守敌　' : '击退外族入侵者　') +
+             Math.round(this.progressValue || 0) + ' / ' + (this.progressTotal || 0);
     },
     phaseText() {
-      return '市民、警察与军方正与你并肩作战';
+      return this.invMode === 'attack'
+        ? '从铁丝网缺口往北推进，把城市旗重新插上阵地'
+        : '市民、警察与军方正与你并肩作战';
     },
     onUpdate(q, dt, px, py, pz) {
       updateInvasion(dt, q);
@@ -15760,6 +16415,126 @@ let killedByCop = false;
 // 【fix563·2026-11-22·用户："给玩家操控的人物死亡之后定格1秒的那个从下到上的第三视角的视图，
 //   让玩家看清人物死亡时的状态"】死亡定格镜头状态（见 update() 开头）
 var deathCam = null;
+// ==================== 【fix576b】阵地失守换旗过场 ====================
+// 用户："如果玩家死亡之后就播放一段动画，就是对面的外族入侵者把他们的恶魔旗子插换到这了，
+//        然后下次去的时候就要打进攻战。"
+// 触发：hurtPlayer 里判定"防守战阵亡"时置 _invLostOnDeath，死亡镜头放完后接这段过场。
+// 过程：镜头从尸体飞向旗位 → 举旗手（恶魔角红眼）扛着恶魔旗从北面走进来 →
+//       城市旗降下 → 恶魔旗插进同一个坑、旗面展开 → 飘字「阵地失守」→ arrest()。
+// 全程约 7 秒；世界冻结（update 开头 return），所以人物的走路动画要在这里手动驱动。
+var _invLostOnDeath = false;
+var invFlagCutscene = null;
+function startInvFlagCutscene() {
+  const F = INV_FLAGS;
+  if (!F || !F.city || !F.demon) { arrest(); return; }
+  const cp = F.cityPos;
+  const cy = terrainHeight(cp.x, cp.z);
+  // 举旗手：从阵地北侧（外敌压过来的方向）走来
+  let planter = null;
+  try {
+    planter = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM, demonHorns: true, redEyes: true });
+    addWeaponMesh(planter, 'axe');
+    const sx = cp.x + 3.6, sz = cp.z - 26;
+    planter.position.set(sx, terrainHeight(sx, sz), sz);
+    planter.rotation.y = Math.PI;             // 朝南，面向城市旗
+    planter.userData.phase = 0;
+    scene.add(planter);
+    registerDynamicObject(planter);
+  } catch (e) { planter = null; }
+  // 过场期间先按"未失守"渲染：城市旗还得站着，等下才被拔掉
+  F.cityLost = false;
+  F.carrier = null;
+  F.demon.group.visible = true;
+  F.demon.raise = 1;
+  F.city.group.visible = true;
+  F.city.cloth.position.y = F.city.poleH - 1.02;
+  F.city.cloth.rotation.z = 0;
+  invFlagCutscene = {
+    t: 0, dur: 7.0, planter: planter, planted: false, flagHint: false,
+    camFrom: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+    camTo: { x: cp.x + 9.5, y: cy + 4.3, z: cp.z + 11.5 },
+    lookAt: { x: cp.x, y: cy + 2.7, z: cp.z },
+    from: { x: planter ? planter.position.x : cp.x + 3.6, z: planter ? planter.position.z : cp.z - 26 },
+    to: { x: cp.x + 1.9, z: cp.z - 0.6 }
+  };
+  try { sfx('siren'); } catch (e) {}
+}
+function invFlagTick(dt) {
+  const S = invFlagCutscene;
+  if (!S) return;
+  S.t += dt;
+  // 硬超时兜底：任何异常都不许把玩家永久锁在过场里
+  if (S.t > S.dur + 2.5) { finishInvFlagCutscene(); return; }
+  const F = INV_FLAGS;
+  const cp = F.cityPos;
+  const cy = terrainHeight(cp.x, cp.z);
+  // ---- 镜头：0~1.6s 从尸体飞向旗位，之后缓慢推近 ----
+  const ck = Math.min(1, S.t / 1.6);
+  const ce = 1 - Math.pow(1 - ck, 2.2);
+  const push = Math.max(0, Math.min(1, (S.t - 1.6) / 4.6));
+  camera.position.set(
+    S.camFrom.x + (S.camTo.x - S.camFrom.x) * ce - push * 1.2,
+    S.camFrom.y + (S.camTo.y - S.camFrom.y) * ce - push * 0.55,
+    S.camFrom.z + (S.camTo.z - S.camFrom.z) * ce - push * 1.5
+  );
+  camera.lookAt(S.lookAt.x, S.lookAt.y, S.lookAt.z);
+  if (Math.abs(camera.fov - 50) > 0.05) { camera.fov = 50; camera.updateProjectionMatrix(); }
+  // ---- 1.0~4.0s 举旗手走到旗下（世界冻结，动画手动驱动）----
+  if (S.planter) {
+    const wk = Math.max(0, Math.min(1, (S.t - 1.0) / 3.0));
+    const we = wk < 0.5 ? 2 * wk * wk : 1 - Math.pow(-2 * wk + 2, 2) / 2;
+    const px2 = S.from.x + (S.to.x - S.from.x) * we;
+    const pz2 = S.from.z + (S.to.z - S.from.z) * we;
+    S.planter.position.set(px2, terrainHeight(px2, pz2), pz2);
+    S.planter.rotation.y = Math.PI;
+    const moving = wk > 0 && wk < 0.999;
+    S.planter.userData.phase = (S.planter.userData.phase || 0) + dt * (moving ? 6.2 : 1.4);
+    try { animateHuman(S.planter, S.planter.userData.phase, 0, 'axe', moving, 0, 0, 0); } catch (e) {}
+    // 恶魔旗跟着他（举旗走）
+    if (!S.planted) {
+      F.demon.group.position.set(px2 + 0.62, terrainHeight(px2, pz2), pz2 + 0.34);
+      F.demon.group.rotation.y = Math.PI;
+    }
+  }
+  // ---- 4.0~5.0s 城市旗被降下 ----
+  if (S.t > 4.0) {
+    const dk = Math.min(1, (S.t - 4.0) / 1.0);
+    F.city.cloth.position.y = (F.city.poleH - 1.02) - dk * (F.city.poleH - 1.7);
+    F.city.cloth.rotation.z = -dk * 0.55;
+  }
+  // ---- 4.6~5.8s 恶魔旗插进同一个坑，旗面展开 ----
+  if (S.t > 4.6) {
+    if (!S.planted) {
+      S.planted = true;
+      F.demon.group.position.set(cp.x, cy, cp.z);
+      F.demon.group.rotation.y = 0;
+    }
+    F.demon.raise = Math.min(1, (S.t - 4.6) / 1.2);
+  }
+  // ---- 5.4s 之后：城市旗消失 + 飘字提示 ----
+  if (S.t > 5.4 && !S.flagHint) {
+    S.flagHint = true;
+    try { F.city.group.visible = false; } catch (e) {}
+    try { floatText('阵地失守', '#ff5544'); } catch (e) {}
+    try { setHint('阵地失守！城市旗已被恶魔旗换掉 —— 下次到光柱要打进攻战，把阵地夺回来'); } catch (e) {}
+  }
+  if (S.t >= S.dur - 0.05) { finishInvFlagCutscene(); return; }
+}
+function finishInvFlagCutscene() {
+  const S = invFlagCutscene;
+  invFlagCutscene = null;
+  if (S && S.planter) {
+    try {
+      scene.remove(S.planter);
+      if (typeof unregisterDynamicObject === 'function') unregisterDynamicObject(S.planter);
+      S.planter.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+    } catch (e) {}
+  }
+  try { person.rotation.x = 0; } catch (e) {}
+  try { camera.fov = 60; camera.updateProjectionMatrix(); } catch (e) {}
+  try { applyInvFlagState(); } catch (e) {}
+  arrest();
+}
 function startDeathCam() {
   const px = person.position.x, pz = person.position.z;
   let gy = terrainHeight(px, pz);
@@ -15811,7 +16586,18 @@ function hurtPlayer(n, byCop) {
     // 【fix68】用户要求：『执行任务的时候死了一次还能执行任务，如果死了就代表任务失败』
     try {
       const _aq = QUESTS.find(v => v.state === 'active');
-      if (_aq) { abortQuest(_aq.id); setHint('已死亡 —— 任务失败：' + _aq.name); }
+      if (_aq) {
+        // 【fix576b】防守战阵亡 = 阵地失守：城市旗要被恶魔旗换掉，下次来打进攻战。
+        // 标记放在 abortQuest 之前 —— abortQuest 会 cleanupInvasion 把外敌全清掉，
+        // 之后就判断不出"刚才是防守战"了。换旗过场在死亡镜头结束后播（见 update 里的 deathCam 分支）。
+        if (_aq.id === 'invasion' && invasionActive && !PROGRESS.invLost && _aq.invMode !== 'attack') {
+          _invLostOnDeath = true;
+          PROGRESS.invLost = true;
+          try { saveGame(); } catch (e) {}
+        }
+        abortQuest(_aq.id);
+        setHint('已死亡 —— 任务失败：' + _aq.name);
+      }
     } catch (e) {}
     // 【fix563】不再立刻 arrest：先定格 1 秒、用第三人称"从下往上"的镜头看清死亡状态，
     // 时间到后由 update() 里调用 arrest() 继续走罚款/复活流程。
@@ -25752,6 +26538,73 @@ function drawQuestMarkers(c, X, Z, limit, px, pz) {
     c.fillStyle = color; c.fillText(label, mx, mz + (limit ? 11 : 16));
   }
 }
+// ==================== 【fix576b】小地图 / 全屏地图：机场北战场 ====================
+// 用户："还要把左上角的小地图也加上这个战场的元素。"
+// 画焦土范围、四条战壕、四座碉堡、铁丝网（含三处缺口）、两面旗，
+// 开战期间再叠一层外敌红点 —— 原来外敌不 hate 玩家，小地图上一个红点都没有，
+// 打防守战根本不知道该往哪边堵。
+function drawBattlefieldMap(c, X, Z, limit) {
+  const B = { x0: -150, x1: 150, z0: -460, z1: -305 };
+  if (limit) {
+    const cx = (B.x0 + B.x1) / 2, cz = (B.z0 + B.z1) / 2;
+    if (Math.hypot(cx - limit.px, cz - limit.pz) > limit.R + 230) return;
+  }
+  // 焦土底
+  c.fillStyle = 'rgba(104,80,50,0.40)';
+  c.fillRect(X(B.x0), Z(B.z0), X(B.x1) - X(B.x0), Z(B.z1) - Z(B.z0));
+  c.strokeStyle = 'rgba(150,120,80,0.55)'; c.lineWidth = 1;
+  c.strokeRect(X(B.x0), Z(B.z0), X(B.x1) - X(B.x0), Z(B.z1) - Z(B.z0));
+  // 战壕：四条横向虚线
+  c.strokeStyle = 'rgba(56,40,26,0.9)'; c.lineWidth = limit ? 2.0 : 3.2;
+  c.setLineDash([limit ? 5 : 9, limit ? 4 : 7]);
+  for (const tz of [-432, -396, -360, -328]) {
+    c.beginPath(); c.moveTo(X(-142), Z(tz)); c.lineTo(X(142), Z(tz)); c.stroke();
+  }
+  c.setLineDash([]);
+  // 碉堡
+  c.fillStyle = 'rgba(168,172,164,0.95)';
+  c.strokeStyle = 'rgba(30,34,30,0.9)'; c.lineWidth = 1;
+  const bs = limit ? 3.4 : 5.6;
+  for (const b of [[-104, -414], [96, -414], [-58, -344], [64, -344]]) {
+    c.fillRect(X(b[0]) - bs / 2, Z(b[1]) - bs / 2, bs, bs);
+    c.strokeRect(X(b[0]) - bs / 2, Z(b[1]) - bs / 2, bs, bs);
+  }
+  // 铁丝网：四段，中间三处缺口
+  c.strokeStyle = 'rgba(196,124,92,0.95)'; c.lineWidth = limit ? 1.6 : 2.4;
+  for (const seg of [[-150, -66], [-54, -6], [6, 54], [66, 150]]) {
+    c.beginPath(); c.moveTo(X(seg[0]), Z(-318)); c.lineTo(X(seg[1]), Z(-318)); c.stroke();
+  }
+  // 旗：己方阵地（失守就画成恶魔旗）+ 敌方集结地
+  const lost = !!(typeof PROGRESS !== 'undefined' && PROGRESS.invLost);
+  const flagAt = (fx, fz, color) => {
+    const mx = X(fx), mz = Z(fz), h = limit ? 9 : 15;
+    c.strokeStyle = 'rgba(20,20,20,0.95)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(mx, mz); c.lineTo(mx, mz - h); c.stroke();
+    c.fillStyle = color;
+    c.beginPath();
+    c.moveTo(mx, mz - h);
+    c.lineTo(mx + (limit ? 8 : 13), mz - h * 0.62);
+    c.lineTo(mx, mz - h * 0.26);
+    c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.8)'; c.lineWidth = 1; c.stroke();
+  };
+  flagAt(typeof INV_FLAGS !== 'undefined' && INV_FLAGS.cityPos ? INV_FLAGS.cityPos.x : -9.5,
+         typeof INV_FLAGS !== 'undefined' && INV_FLAGS.cityPos ? INV_FLAGS.cityPos.z : -311,
+         lost ? '#ff3b30' : '#3fe0a0');
+  if (!lost) flagAt(-40, -442, '#ff3b30');
+  // 开战期间：外敌红点（这是防守战最需要的战场信息）
+  if (typeof invasionActive !== 'undefined' && invasionActive && typeof INVADERS !== 'undefined') {
+    c.fillStyle = '#ff2b2b';
+    for (const v of INVADERS) {
+      if (!v.alive || v.down) continue;
+      if (limit) {
+        const dx = v.x - limit.px, dz = v.z - limit.pz;
+        if (dx * dx + dz * dz > limit.R * limit.R) continue;
+      }
+      c.beginPath(); c.arc(X(v.x), Z(v.z), limit ? 2.3 : 3.6, 0, 7); c.fill();
+    }
+  }
+}
 function drawMinimap() {
   const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
   const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
@@ -25771,6 +26624,8 @@ function drawMinimap() {
       mctx.fillStyle = 'rgba(220,232,245,0.92)'; mctx.fillText(z.name, cx, cy);
     }
   }
+  // 【fix576b】机场北战场：焦土 / 战壕 / 碉堡 / 铁丝网 / 旗帜 / 外敌红点
+  drawBattlefieldMap(mctx, w2m, w2n, { px: px, pz: pz, R: R });
   // 【fix528】跨海大桥：主城小地图也画出连接南岛的那条桥，别再让岛和城市看起来断开
   if (typeof BRIDGE_HALF_WIDTH !== 'undefined' && typeof BRIDGE_START_Z !== 'undefined' && typeof BRIDGE_END_Z !== 'undefined') {
     const bx0 = w2m(-BRIDGE_HALF_WIDTH), bx1 = w2m(BRIDGE_HALF_WIDTH);
@@ -26026,6 +26881,8 @@ function drawFullMap() {
     ctx.beginPath(); ctx.moveTo((bx0 + bx1) / 2, bz0); ctx.lineTo((bx0 + bx1) / 2, bz1); ctx.stroke();
     ctx.setLineDash([]);
   }
+  // 【fix576b】机场北战场（老城地图）：焦土 / 战壕 / 碉堡 / 铁丝网 / 旗帜 / 外敌红点
+  if (!_b.isNew) { try { drawBattlefieldMap(ctx, X, Y, null); } catch (eBF) {} }
   // 【fix290】名字改到最后统一画（见函数末尾）：先画必被楼块/城墙盖住。
   // 【fix274】南岸新区（科技城 / 霓虹楼群）：x 965~1518，z -80~318，两纵三横路网 + 楼块
   if (_b.isNew) {
@@ -27523,6 +28380,8 @@ function update(dt) {
   // 【fix565·2026-11-22·用户："死亡视角要从低到高拉起来，持续时间变为3.3秒"】
   // 死亡瞬间冻结整个世界（NPC/车流/计时全停），镜头从贴地仰视（约 0.45m）一路匀速抬到约 5.6 米的
   // 第三人称俯视，全程 3.3 秒；结束才走 arrest() 的罚款/复活。
+  // 【fix576b】阵地失守换旗过场：整段接管相机，世界冻结（和死亡镜头同一套做法）
+  if (invFlagCutscene) { invFlagTick(dt); return; }
   if (deathCam) {
     deathCam.t += dt;
     const DEATH_CAM_DUR = 3.3;
@@ -27537,6 +28396,11 @@ function update(dt) {
       deathCam = null;
       try { person.rotation.x = 0; } catch (e) {}
       if (Math.abs(camera.fov - 60) > 0.05) { camera.fov = 60; camera.updateProjectionMatrix(); }
+      // 【fix576b】防守战阵亡：死亡镜头之后不直接复活，先播换旗过场
+      if (_invLostOnDeath) {
+        _invLostOnDeath = false;
+        try { startInvFlagCutscene(); return; } catch (eFlag) { console.warn('[invFlag]', eFlag); }
+      }
       arrest();
     }
     return;
@@ -28367,6 +29231,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   try { updateDayNight(dt); } catch(e) { console.error('[DayNight error]', e); }
   try { drawGrappleRope(); } catch(e) { console.error('[Grapple render error]', e); }
   try { updateQuests(dt); } catch(e) { console.error('[Quest update error]', e); }
+  // 【fix576b】战场旗帜：旗面飘动 + 恶魔旗跟着举旗手走（两面旗，成本可忽略）
+  try { updateBattleFlags(dt); } catch(e) { console.error('[Battle flags]', e); }
   // 车库卷帘门：主角走近自动升起，走远降下
   const gdist = Math.hypot(person.position.x - garageDoor.x, person.position.z - (garageDoor.z + 3));
   garageDoor.open += ((gdist < 7 ? 1 : 0) - garageDoor.open) * Math.min(1, 5 * dt);
@@ -29126,7 +29992,7 @@ function saveGame() {
     equippedClothes: equippedClothes.slice(),   // 2026-10-13：穿戴状态也要存
     ownedCars: ownedCars.slice(),
     ammo: { ...ammoCount }, missions: { ...missions }, drivingId: state === 'drive' && currentCar ? currentCar.saveId : null,
-    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump, gfx: PROGRESS.gfx || 'auto' },
+    progress: { tankUnlocked: !!PROGRESS.tankUnlocked, flightPass: !!PROGRESS.flightPass, devMode: !!PROGRESS.devMode, firstPerson: !!PROGRESS.firstPerson, vehicleFreeLook: !!PROGRESS.vehicleFreeLook, motoJump: !!PROGRESS.motoJump, gfx: PROGRESS.gfx || 'auto', invLost: !!PROGRESS.invLost },
     achv: { done: ACHY.done, count: ACHY.count, folkSeen: ACHY.folkSeen, tpFree: ACHY.tpFree },   // 【fix507】成就进度持久化
     inventory: { medkit: invCount('medkit'), stamkit: invCount('stamkit') },   // 【fix564】背包消耗品
     invBuyDay: { medkit: (INV_BUY_DAY.medkit === undefined ? -1 : INV_BUY_DAY.medkit), stamkit: (INV_BUY_DAY.stamkit === undefined ? -1 : INV_BUY_DAY.stamkit) },
@@ -29243,7 +30109,7 @@ function restoreSaveGame() {
   currentWeapon = WEAPONS[data.currentWeapon] && ownedWeapons.includes(data.currentWeapon) ? data.currentWeapon : 'fist';
   if (data.missions) { missions.baseIntro = !!data.missions.baseIntro; missions.tankGate = typeof data.missions.tankGate === 'string' ? data.missions.tankGate : !!data.missions.tankGate; }
   // 解锁状态（坦克使用权等）
-  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; if (data.progress.motoJump !== undefined) PROGRESS.motoJump = !!data.progress.motoJump; if (typeof data.progress.gfx === 'string' && /^(auto|low|mid|high)$/.test(data.progress.gfx)) PROGRESS.gfx = data.progress.gfx; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
+  if (data.progress) { PROGRESS.tankUnlocked = !!data.progress.tankUnlocked; if (data.progress.flightPass !== undefined) PROGRESS.flightPass = !!data.progress.flightPass; if (data.progress.devMode !== undefined) PROGRESS.devMode = !!data.progress.devMode; if (data.progress.firstPerson !== undefined) PROGRESS.firstPerson = !!data.progress.firstPerson; if (data.progress.vehicleFreeLook !== undefined) PROGRESS.vehicleFreeLook = !!data.progress.vehicleFreeLook; if (data.progress.motoJump !== undefined) PROGRESS.motoJump = !!data.progress.motoJump; if (typeof data.progress.gfx === 'string' && /^(auto|low|mid|high)$/.test(data.progress.gfx)) PROGRESS.gfx = data.progress.gfx; if (data.progress.invLost !== undefined) PROGRESS.invLost = !!data.progress.invLost; try { if (PROGRESS.devMode && typeof setDevMode === 'function') setDevMode(true); } catch (e) {} }   // 【fix47】永久往返机票也要能存下来　【fix63】开发者模式跨重启保留（用户要求不要默认自动退出）　【fix516】第一人称视角跨重启保留　【fix538】车辆自由视角
   // 【fix507】成就进度恢复（静默，不重复发奖）
   try {
     if (data.achv) {
@@ -29983,6 +30849,8 @@ function gamePaused() {
   //    点「取消」后也失去了自动恢复的路径，表现为"足球玩不了、也取消不了"。
 }
 restoreSaveGame();
+// 【fix576b】读档后按 PROGRESS.invLost 摆旗：上次阵地失守过，就把城市旗收起来、恶魔旗插在己方阵地
+try { if (typeof applyInvFlagState === 'function') applyInvFlagState(); } catch (e) { console.warn('[battleFlags]', e); }
 // 【fix567】按存档里的画质档位落地一次（读档在 applyGfx 定义之前执行，这里显式应用）
 try { if (typeof applyGfx === 'function') applyGfx(PROGRESS.gfx || 'auto', true); } catch (e) { console.warn('[gfx]', e); }
 camYaw = personAngle.v; camPitch = 0;   // 视角初始对齐角色朝向
