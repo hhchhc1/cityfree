@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix577-deploy-trenches-flank-dev-repeat">
+<meta name="cf-build" content="20261126-fix578-real-torch-light">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1478,6 +1478,12 @@ var INV_TRENCH_Z = [-500, -445, -390, -345];
 var INV_TRENCH_AMP = 3.4;      // 蛇形摆幅（±3.4m）
 var INV_TRENCH_FREQ = 0.143;   // 摆动频率（约 44m 一个周期）
 function invTrenchZ(baseZ, x) { return baseZ + INV_TRENCH_AMP * Math.sin(x * INV_TRENCH_FREQ); }
+// 【fix578】夜战真光源：战场火把的地面光斑材质 + 可复用的近身点光源池。
+// 固定光源池只有 3(手机)/4(桌面) 盏，永远跟着玩家挪到最近的火把上 ——
+// 这样既真的照亮人/沙袋，又不会像 fix569 之前那样把 45 盏点光全塞进 shader。
+var INV_TORCH_SPOTS = [];
+var INV_TORCH_LIGHTS = [];
+var invTorchPoolMat = null;
 // 【fix576e·2026-11-26·用户："不要让这个战场有一些现代化的建筑了，不然显得很突兀"】
 // 外围厂房/仓库和乡村小房子是按环道随机撒的，扩战场后正好撒进战场里（截图里那栋黑底霓虹楼
 // 就是 outerStyles 里的 'neon' 风格）。所有外围生成器都要先过这个判定。
@@ -7804,24 +7810,43 @@ var AIRLINER = null;
       solid(mx, mz, 5.4, 5.4, y, 1.2);
     }
 
-    // ================= 【fix576d】夜战照明 =================
-    // 用户："如果是晚上的话，这里弄一些照明的火把或者灯光什么的。"
-    // 做法：每道战壕的胸墙上插火把（木杆 + 自发光火苗 + 光晕），
-    // 桌面端再给每道战壕的中心挂一盏 PointLight（4 盏，手机不加 —— 手机可见光源
-    // 一旦超过 10 个，前向渲染的像素光照开销会直接把帧率打死，这是 fix569 的老坑）。
-    // 火苗用 emissive 材质 + 加色混合的小球，夜里自己会亮，不依赖场景光。
+    // ================= 【fix576d / fix578】夜战照明 =================
+    // 用户（fix578）："战场上的火炬好像没有真正的照明作用，天黑的时候还是很黑，只是装饰。"
+    // 根因：fix576d 手机端为了保帧率一盏 PointLight 都没建，桌面端也只在每道战壕中心挂
+    // 一盏 0.85 强度的远景灯 —— 玩家站在火把边上时附近根本没有真实光源，火苗只是自发光球。
+    // fix569 的教训是不能给 45 盏火把每盏挂点光（前向渲染每像素算 45 次光照），
+    // 所以改成两层：
+    //   ① 每盏火把在战壕沟底铺一张加色地面光斑（静态、共享材质，夜里淡入），远处也能看见光池；
+    //   ② 3(手机)/4(桌面) 盏可复用 PointLight 永远挪到离玩家最近的火把上，真实照亮人、沙袋和地面。
+    // 这样近处有真光照、远处有光斑，光源数却恒定为 3/4，不会重蹈 fix569 的覆辙。
     {
       const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.95 });
       const glowMat = new THREE.MeshBasicMaterial({ color: 0xff7a1f, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false });
       const flameGeo = new THREE.SphereGeometry(0.17, 6, 5);
       const glowGeo = new THREE.SphereGeometry(0.62, 8, 6);
+      // 火把地面光斑：中心暖白、边缘透明的径向渐变（和城墙火把同一套做法）
+      const _cv = document.createElement('canvas'); _cv.width = _cv.height = 128;
+      const _c2 = _cv.getContext('2d');
+      const _grd = _c2.createRadialGradient(64, 64, 0, 64, 64, 64);
+      _grd.addColorStop(0, 'rgba(255,220,160,0.9)');
+      _grd.addColorStop(0.28, 'rgba(255,178,96,0.52)');
+      _grd.addColorStop(0.62, 'rgba(255,140,60,0.18)');
+      _grd.addColorStop(1, 'rgba(255,120,45,0)');
+      _c2.fillStyle = _grd; _c2.fillRect(0, 0, 128, 128);
+      invTorchPoolMat = new THREE.MeshBasicMaterial({
+        map: new THREE.CanvasTexture(_cv), color: 0xffffff,
+        transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, fog: false
+      });
+      invTorchPoolMat.visible = false;   // 白天连 render list 都不进
+      const _poolGeo = new THREE.CircleGeometry(8.5, 22);
       let torchN = 0;
       for (const tz of INV_TRENCH_Z) {
         for (let x = BX0 + 18; x < BX1 - 18; x += 34) {
           const zc = invTrenchZ(tz, x);
           const wz = zc + 3.75;
           const y = gy(x, wz);
-          // 木杆（插在胸墙外侧）+ 铁箍
+          // 木杆（插在胸墙南侧）+ 铁箍
           putB(boxG(0.10, 1.55, 0.10), wood, x, y + 0.78, wz);
           putB(boxG(0.20, 0.07, 0.20), steel, x, y + 1.48, wz);
           // 火苗 + 光晕
@@ -7829,18 +7854,16 @@ var AIRLINER = null;
           fl.position.set(x, y + 1.72, wz); fl.scale.set(1, 1.5, 1); scene.add(fl);
           const gl = new THREE.Mesh(glowGeo, glowMat);
           gl.position.set(x, y + 1.74, wz); scene.add(gl);
+          // 沟底光斑：放在火把北侧 3.75m 的壕底，正好把战壕照亮，不是贴在南墙上
+          const pool = new THREE.Mesh(_poolGeo, invTorchPoolMat);
+          pool.rotation.x = -Math.PI / 2;
+          pool.position.set(x, gy(x, zc) + 0.18, zc);
+          scene.add(pool);
+          INV_TORCH_SPOTS.push({ x: x, y: y, z: wz, pool: pool });
           solid(x, wz, 0.3, 0.3, y, 1.5);
           torchN++;
         }
-        // 桌面端：每道战壕中间一盏点光，暖橙色，半径压到 26m（只照亮近处，省性能）
-        if (!isMobile) {
-          try {
-            const lx = 0, lz = invTrenchZ(tz, 0);
-            const pl = new THREE.PointLight(0xffa64d, 0.85, 30, 2.0);
-            pl.position.set(lx, gy(lx, lz) + 3.2, lz);
-            scene.add(pl);
-          } catch (e) {}
-        }
+        // 【fix578】不再给每道战壕挂固定点光 —— 改由 updateInvTorchLights 的近身光源池统一驱动
       }
       window.__invTorches = torchN;
     }
@@ -7871,11 +7894,13 @@ var AIRLINER = null;
         const f = new THREE.Mesh(new THREE.SphereGeometry(0.3 - k * 0.06, 6, 5), fireMat);
         f.position.set(fireX + (k - 1) * 0.22, fy + 0.5 + k * 0.18, fireZ); f.scale.set(1, 1.8, 1); scene.add(f);
       }
-      if (!isMobile) {
-        try {
-          const pl = new THREE.PointLight(0xff7a2a, 1.0, 34, 2.0);
-          pl.position.set(fireX, fy + 2.2, fireZ); scene.add(pl);
-        } catch (e) {}
+      // 【fix578】敌方篝火也进同一套光源池：近了真照亮，远了只留加色光斑
+      if (invTorchPoolMat) {
+        const _firePool = new THREE.Mesh(new THREE.CircleGeometry(9.5, 22), invTorchPoolMat);
+        _firePool.rotation.x = -Math.PI / 2;
+        _firePool.position.set(fireX, fy + 0.2, fireZ);
+        scene.add(_firePool);
+        INV_TORCH_SPOTS.push({ x: fireX, y: fy, z: fireZ, pool: _firePool, boost: 1.25 });
       }
       // 弹药堆 + 油桶
       for (let i = 0; i < 10; i++) {
@@ -7973,6 +7998,52 @@ var AIRLINER = null;
                                 bunkers: bunkers.length, colliders: invColliders };
   } catch (eBattle) { try { console.error('[invBattlefield]', eBattle); } catch (e9) {} }
 })();
+
+// ==================== 【fix578】战场火把近身光源池 ====================
+// 用户："战场上的火炬好像没有真正的照明作用，天黑的时候还是很黑，只是装饰。"
+// 只在玩家附近点亮 3(手机)/4(桌面) 盏 PointLight，并钉到最近的火把/篝火上。
+// 光源总数恒定，远处火把靠共享的加色地面光斑表现，兼顾"真照明"和手机帧率。
+function initInvTorchLights() {
+  if (INV_TORCH_LIGHTS.length) return;
+  const n = isMobile ? 3 : 4;
+  for (let i = 0; i < n; i++) {
+    const pl = new THREE.PointLight(0xffa64d, 0, 32, 2.0);
+    pl.visible = false;
+    scene.add(pl);
+    INV_TORCH_LIGHTS.push(pl);
+  }
+}
+function updateInvTorchLights(nightF) {
+  if (!INV_TORCH_SPOTS.length) return;
+  if (invTorchPoolMat) {
+    invTorchPoolMat.opacity = 0.62 * nightF;
+    invTorchPoolMat.visible = nightF > 0.02;
+  }
+  if (nightF < 0.04) {
+    for (const pl of INV_TORCH_LIGHTS) { pl.intensity = 0; pl.visible = false; }
+    return;
+  }
+  initInvTorchLights();
+  const px = (state === 'drive' && currentCar) ? currentCar.x : person.position.x;
+  const pz = (state === 'drive' && currentCar) ? currentCar.z : person.position.z;
+  const near = [];
+  for (const s of INV_TORCH_SPOTS) {
+    const dx = s.x - px, dz = s.z - pz, d2 = dx * dx + dz * dz;
+    if (d2 < 110 * 110) near.push({ s: s, d2: d2 });
+  }
+  near.sort((a, b) => a.d2 - b.d2);
+  const t = performance.now() * 0.006;
+  for (let i = 0; i < INV_TORCH_LIGHTS.length; i++) {
+    const pl = INV_TORCH_LIGHTS[i], e = near[i];
+    if (!e || e.d2 > 92 * 92) { pl.intensity = 0; pl.visible = false; continue; }
+    pl.visible = true;
+    pl.position.set(e.s.x, e.s.y + 2.05, e.s.z);
+    const d = Math.sqrt(e.d2);
+    const fade = Math.max(0.25, 1 - d / 92);
+    const flicker = 0.92 + 0.08 * Math.sin(t + i * 1.7);
+    pl.intensity = (isMobile ? 2.8 : 2.2) * (e.s.boost || 1) * nightF * fade * flicker;
+  }
+}
 
 // ==================== 【fix576b·2026-11-26】战场旗帜（城市旗 / 恶魔旗） ====================
 // 用户："外族入侵的时候，外族最前面的人可以举一个有那种恶魔头像的旗子吧。然后在己方的阵地上
@@ -28549,6 +28620,7 @@ function updateDayNight(dt) {
   if (_frameCnt % 2 === 0) {
     updateHeadlights();
     updateStreetLights();
+    updateInvTorchLights(nightF);   // 【fix578】战场火把真光源：近身 3/4 盏跟随玩家
     updateHqLights();      // Task #8：大本营夜间照明（内部按 nightF + 距离自行开关）
     updateFerrisLights();  // Task #9：摩天轮底部 LED 灯圈的上照灯
     updateSoccerPitchLights();   // 【2026-10-19·fix22】南岛球场四角泛光灯（夜里按 nightF 点亮）
