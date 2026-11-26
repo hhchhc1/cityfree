@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix576d-battle-ai-night">
+<meta name="cf-build" content="20261126-fix576e-alien-vehicles-wrecks">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1478,6 +1478,14 @@ var INV_TRENCH_Z = [-500, -445, -390, -345];
 var INV_TRENCH_AMP = 3.4;      // 蛇形摆幅（±3.4m）
 var INV_TRENCH_FREQ = 0.143;   // 摆动频率（约 44m 一个周期）
 function invTrenchZ(baseZ, x) { return baseZ + INV_TRENCH_AMP * Math.sin(x * INV_TRENCH_FREQ); }
+// 【fix576e·2026-11-26·用户："不要让这个战场有一些现代化的建筑了，不然显得很突兀"】
+// 外围厂房/仓库和乡村小房子是按环道随机撒的，扩战场后正好撒进战场里（截图里那栋黑底霓虹楼
+// 就是 outerStyles 里的 'neon' 风格）。所有外围生成器都要先过这个判定。
+function inInvField(x, z, pad) {
+  const p = pad || 0;
+  return x > INV_FIELD.x0 - p && x < INV_FIELD.x1 + p &&
+         z > INV_FIELD.z0 - p && z < INV_FIELD.z1 + p;
+}
 // 地形高度：城市（含道路）保持平整，外圈乡村丘陵起伏，南侧海滩向水面下坡
 function terrainHeight(x, z) {
   // 【fix190】用户要求：把主城与新城市之间那条灰色地带变成深海。
@@ -3368,6 +3376,7 @@ var MAIN_ROAD_DASHES = markMainRoads();
     const a = Math.random() * Math.PI * 2, r = 210 + Math.random() * 95;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (z > 212 || isOnRoadOrBridge(x, z)) continue;
+    if (inInvField(x, z, 12)) continue;   // 【fix576e】战场里不要民用小房子
     // 乡村小房子同样要避开大本营（原来只避让了出生点和城市街区，山脚下会冒出小房子）
     if (nearGangHq(x, z, GANG_HQ_CLEAR)) continue;
     if (nearJobSite(x, z)) continue;
@@ -3437,6 +3446,7 @@ var MAIN_ROAD_DASHES = markMainRoads();
     // 别压在军事基地里
     if (Math.hypot(x + 280, z - 120) < 60) continue;
     if (Math.abs(x) <= CITY + 6 && Math.abs(z) <= CITY + 6) continue;   // 城市网格由街区生成器负责
+    if (inInvField(x, z, 16)) continue;   // 【fix576e】战场里不要现代厂房/霓虹楼
     // 环道厂房/仓库也必须避开大本营。
     // 修复"大本营上还是刷新房子"：外围厂房只避让了军事基地和城市方框，
     // 大本营在 (+x,+z) 方向的城市方框之外，于是厂房被丢在山脚上
@@ -7882,6 +7892,81 @@ var AIRLINER = null;
       putB(boxG(0.14, 6.4, 0.14), steel, 0, gy(0, campZ + 8) + 3.2, campZ + 8);
       putB(boxG(2.6, 1.5, 0.08), red, 1.3, gy(0, campZ + 8) + 5.4, campZ + 8);
       solid(0, campZ + 8, 0.4, 0.4, gy(0, campZ + 8), 6.4);
+    }
+
+    // ================= 【fix576e】战争残骸 =================
+    // 用户："再可以加一些战争的元素，战场元素，比如那种装甲车的遗骸残骸或者啥的"
+    // 三种：烧毁的装甲车壳（车体+歪炮塔+断裂履带）、坠毁飞行器（机身+断翼+散落碎片）、
+    // 战场杂物（履带节、钢盔、弹壳堆、半埋的弹药箱）。全部带碰撞。
+    const wreckMetal = new THREE.MeshLambertMaterial({ color: 0x3a352e });
+    const wreckBurn  = new THREE.MeshLambertMaterial({ color: 0x1f1a15 });
+    const wreckRust  = new THREE.MeshLambertMaterial({ color: 0x6b3a24 });
+    const addArmorHulk = (wx, wz, rot) => {
+      const y = gy(wx, wz);
+      const c = Math.cos(rot), s2 = Math.sin(rot);
+      const lx = (a, b) => ({ x: wx + a * c - b * s2, z: wz + a * s2 + b * c });
+      // 车体（歪斜、半陷）
+      const hull = putB(boxG(4.4, 1.2, 7.6), wreckMetal, wx, y + 0.5, wz, rot);
+      hull.rotation.z = 0.06;
+      // 炮塔（被掀翻，歪在一边）
+      const p1 = lx(-0.6, 0.8);
+      putB(boxG(2.6, 1.0, 2.8), wreckBurn, p1.x, y + 1.35, p1.z, rot + 0.5);
+      // 断裂的炮管
+      const p2 = lx(-0.2, -3.2);
+      putB(boxG(0.36, 0.36, 3.4), wreckMetal, p2.x, y + 1.5, p2.z, rot + 0.9);
+      // 侧裙 + 断裂履带
+      for (const sd of [-1, 1]) {
+        const p3 = lx(sd * 2.3, 0);
+        putB(boxG(0.45, 0.7, 7.0), wreckBurn, p3.x, y + 0.45, p3.z, rot);
+        for (let k = -2; k <= 2; k++) {
+          if (Math.abs(k) === 1) continue;   // 中间断开
+          const p4 = lx(sd * 2.4, k * 1.5);
+          putB(boxG(0.62, 0.26, 1.1), wreckMetal, p4.x, y + 0.18, p4.z, rot);
+        }
+      }
+      solid(wx, wz, 5.2, 8.4, y, 1.6);
+    };
+    const addCrashedCraft = (wx, wz, rot) => {
+      const y = gy(wx, wz);
+      // 机身（半埋进土里）
+      const body = putB(boxG(2.2, 1.4, 8.2), wreckMetal, wx, y + 0.55, wz, rot);
+      body.rotation.z = -0.22;
+      // 断翼
+      const c = Math.cos(rot), s2 = Math.sin(rot);
+      for (const sd of [-1, 1]) {
+        const ax = wx - sd * 3.0 * c, az = wz - sd * 3.0 * s2;
+        const wing = putB(boxG(5.4, 0.22, 1.9), wreckBurn, ax, y + 0.35, az, rot + sd * 0.35);
+        wing.rotation.x = sd * 0.18;
+      }
+      // 尾翼 + 散落碎片
+      putB(boxG(0.24, 2.0, 1.5), wreckMetal, wx + 3.4 * c, y + 1.0, wz + 3.4 * s2, rot);
+      for (let k = 0; k < 6; k++) {
+        const dx = (Math.random() - 0.5) * 12, dz = (Math.random() - 0.5) * 12;
+        putB(boxG(0.5 + Math.random() * 0.7, 0.16, 0.4 + Math.random() * 0.6), wreckBurn,
+             wx + dx, gy(wx + dx, wz + dz) + 0.1, wz + dz, Math.random() * 3);
+      }
+      solid(wx, wz, 3.4, 9.0, y, 1.5);
+    };
+    for (const [wx, wz, rt] of [[-96, -466, 0.7], [66, -438, -0.4], [-36, -418, 2.1], [128, -392, 0.2]]) {
+      addArmorHulk(wx, wz, rt);
+    }
+    for (const [wx, wz, rt] of [[-142, -430, 1.2], [22, -476, -0.8]]) {
+      addCrashedCraft(wx, wz, rt);
+    }
+    // 战场杂物：钢盔、履带节、弹壳堆
+    for (let i = 0; i < 26; i++) {
+      const wx = BX0 + 20 + Math.random() * (BX1 - BX0 - 40);
+      const wz = BZ0 + 20 + Math.random() * (BZ1 - BZ0 - 40);
+      const y = gy(wx, wz);
+      const kind = i % 3;
+      if (kind === 0) {
+        const hm = new THREE.Mesh(new THREE.SphereGeometry(0.26, 7, 5), wreckMetal);
+        hm.position.set(wx, y + 0.16, wz); hm.scale.set(1, 0.72, 1.05); scene.add(hm);
+      } else if (kind === 1) {
+        putB(boxG(0.7, 0.16, 0.34), wreckMetal, wx, y + 0.1, wz, Math.random() * 3);
+      } else {
+        putB(boxG(0.5, 0.22, 0.4), wreckRust, wx, y + 0.12, wz, Math.random() * 3);
+      }
     }
 
     window.__invBattlefield = { x0: BX0, x1: BX1, z0: BZ0, z1: BZ1,
@@ -13727,6 +13812,13 @@ function cleanupInvasion() {
     try { scene.remove(tv.group); unregisterDynamicObject && unregisterDynamicObject(tv.group); } catch (e) {}
   }
   INV_VEHICLES.length = 0;
+  // 【fix576e】异族载具：玩家正开着的那辆不删（否则人被卡在车里），其余随任务清掉
+  for (const av of ALIEN_VEHICLES) {
+    if (av === currentCar) { av.noSave = false; continue; }
+    try { scene.remove(av.group); if (typeof unregisterDynamicObject === 'function') unregisterDynamicObject(av.group); } catch (e) {}
+    const ci = cars.indexOf(av); if (ci >= 0) cars.splice(ci, 1);
+  }
+  ALIEN_VEHICLES.length = 0;
   INVADERS.length = 0; INV_SUPPORT.length = 0; INV_COPS.length = 0;
   for (const r of residents) {
     if (r.hate === 'faction' && r.hateTarget && r.hateTarget.isInvader) { r.hate = null; r.hateTarget = null; }
@@ -13736,6 +13828,123 @@ function cleanupInvasion() {
   try { assignInvFlagCarrier(); } catch (e) {}
   try { applyInvFlagState(); } catch (e) {}
 }
+// ==================== 【fix576e】异族载具 / 飞行器 ====================
+// 用户："让异星入侵者也有那种奇特的那种载具或者飞行物等武器吧，也可以是打中的，
+//        或者玩家也是可以驾驶的。"
+// 做法：全部做成**真正的车**（push 进 cars），所以天然满足三件事：
+//   · 子弹/火箭弹打得到（走 damageCar，打爆会炸）；
+//   · 玩家按 E 能开走（坦克走 isTank 那条路，飞行器走 isHelicopter）；
+//   · 任务结束随 cleanupInvasion 一起清掉（玩家正开着的那辆除外）。
+// 造型走"异族"路线：黑曜石外壳 + 血红发光缝 + 骨白尖刺，和城里的民用车完全不同。
+var ALIEN_VEHICLES = [];
+function buildAlienTankModel() {
+  const g = new THREE.Group();
+  const shell  = new THREE.MeshLambertMaterial({ color: 0x2a1e2a });
+  const shellD = new THREE.MeshLambertMaterial({ color: 0x150e15 });
+  const bone   = new THREE.MeshLambertMaterial({ color: 0xd9cdb6 });
+  const glowR  = new THREE.MeshBasicMaterial({ color: 0xff3b2a });
+  const glowP  = new THREE.MeshBasicMaterial({ color: 0x8a2bff });
+  const mk = (geo, mat, x, y, z, ry, rz) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    g.add(m); return m;
+  };
+  // 主体：六棱柱（黑曜石质感）+ 前后斜面
+  mk(new THREE.CylinderGeometry(2.4, 2.8, 1.35, 6), shell, 0, 1.05, 0, Math.PI / 6);
+  mk(new THREE.BoxGeometry(4.0, 0.85, 2.8), shellD, 0, 1.2, 2.6);
+  mk(new THREE.BoxGeometry(3.4, 0.7, 2.2), shellD, 0, 1.1, -2.7);
+  // 顶部穹顶 + 一圈骨白尖刺
+  mk(new THREE.SphereGeometry(1.55, 8, 6), shell, 0, 1.95, -0.3);
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    mk(new THREE.ConeGeometry(0.26, 1.5, 5), bone,
+       Math.cos(a) * 2.1, 1.55, Math.sin(a) * 2.1, -a, 0).rotation.z = 0.5;
+  }
+  // 血红发光缝（车体四周一圈）
+  mk(new THREE.TorusGeometry(2.55, 0.07, 4, 12), glowR, 0, 1.05, 0, 0).rotation.x = Math.PI / 2;
+  // 主炮：弯曲的骨质炮管
+  mk(new THREE.CylinderGeometry(0.2, 0.3, 4.6, 6), bone, 0, 1.55, 3.4).rotation.x = Math.PI / 2;
+  mk(new THREE.ConeGeometry(0.42, 1.2, 6), glowP, 0, 1.55, 5.9).rotation.x = Math.PI / 2;
+  // 三个悬浮舱（下面三个发紫光的圆盘）
+  for (let i = 0; i < 3; i++) {
+    const a = i / 3 * Math.PI * 2 + 0.5;
+    const px = Math.cos(a) * 1.9, pz = Math.sin(a) * 1.9;
+    mk(new THREE.CylinderGeometry(0.75, 0.55, 0.35, 8), shellD, px, 0.35, pz);
+    mk(new THREE.CylinderGeometry(0.6, 0.6, 0.06, 10), glowP, px, 0.16, pz);
+  }
+  return g;
+}
+function buildAlienFlyerModel() {
+  const g = new THREE.Group();
+  const shell  = new THREE.MeshLambertMaterial({ color: 0x241826 });
+  const bone   = new THREE.MeshLambertMaterial({ color: 0xd9cdb6 });
+  const glowR  = new THREE.MeshBasicMaterial({ color: 0xff3b2a });
+  const glowP  = new THREE.MeshBasicMaterial({ color: 0x9a3bff });
+  const mk = (geo, mat, x, y, z, rx) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z); if (rx) m.rotation.x = rx;
+    g.add(m); return m;
+  };
+  // 碟形主体
+  mk(new THREE.CylinderGeometry(3.0, 3.6, 0.55, 12), shell, 0, 0, 0);
+  mk(new THREE.SphereGeometry(1.35, 10, 6), shell, 0, 0.42, 0).scale.set(1, 0.55, 1);
+  // 底部三束推进光
+  for (let i = 0; i < 3; i++) {
+    const a = i / 3 * Math.PI * 2;
+    mk(new THREE.CylinderGeometry(0.42, 0.28, 0.18, 8), glowP, Math.cos(a) * 2.0, -0.36, Math.sin(a) * 2.0);
+  }
+  // 外圈血环
+  mk(new THREE.TorusGeometry(3.3, 0.08, 4, 16), glowR, 0, 0, 0, Math.PI / 2);
+  // 骨白尖角（前二后一）
+  for (const [hx, hz] of [[-1.6, 2.4], [1.6, 2.4], [0, -3.0]]) {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.24, 1.9, 5), bone);
+    horn.position.set(hx, 0.15, hz); horn.rotation.x = Math.PI / 2; g.add(horn);
+  }
+  // 驾驶舱（红光）
+  mk(new THREE.SphereGeometry(0.55, 8, 6), glowR, 0, 0.55, 1.4).scale.set(1, 0.7, 1.2);
+  return g;
+}
+function spawnAlienVehicles() {
+  const spots = [[-64, -430, 0.4], [86, -456, -0.5]];
+  for (const [ax, az, ar] of spots) {
+    let g = null;
+    try { g = buildAlienTankModel(); } catch (e) { g = null; }
+    if (!g) continue;
+    const ay = terrainHeight(ax, az) + 0.75;
+    g.position.set(ax, ay, az); g.rotation.y = ar;
+    scene.add(g);
+    try { registerDynamicObject(g); } catch (e) {}
+    const v = {
+      group: g, x: ax, y: ay, z: az, angle: ar, turretRel: 0,
+      radius: 3.2, durability: 300, damage: 0, hp: 300,
+      shootCd: 0, state: 'idle', leaveT: 0,
+      isTank: true, isEnemyTank: true, isAlien: true, fixed: true, noSave: true,
+      exploded: false, topSpeed: 17, accel: 6, rideH: 1.1
+    };
+    cars.push(v);
+    ALIEN_VEHICLES.push(v);
+  }
+  // 飞行器：只放一架，停在外敌营地附近，玩家可以开走
+  try {
+    const g = buildAlienFlyerModel();
+    const ax = -18, az = -520;
+    const ay = terrainHeight(ax, az) + 2.2;
+    g.position.set(ax, ay, az);
+    scene.add(g);
+    registerDynamicObject(g);
+    const v = {
+      group: g, x: ax, z: az, angle: 0, radius: 3.8, topSpeed: 42, accel: 15,
+      durability: 110, damage: 0, isHelicopter: true, isAlien: true,
+      flyHeight: 0, flyVy: 0, shootCd: 0, cannonCd: 0, rotorAngle: 0,
+      fixed: true, noSave: true, exploded: false
+    };
+    cars.push(v);
+    ALIEN_VEHICLES.push(v);
+  } catch (e) {}
+}
+
 // 【fix576d】生成单个外敌。抽出来是为了增援能复用同一套建模/属性，避免两处走样。
 function spawnInvaderAt(x, z, wp) {
   // 出生点先解一次碰撞：万一落进机库/碉堡/沙袋墙里，collideBuildingsFast 会把人推到最近的空位，
@@ -13803,6 +14012,8 @@ function spawnInvasionForce(q) {
     clampCity(sp2);
     spawnInvaderAt(sp2.x, sp2.z, INV_WEAPONS[i % INV_WEAPONS.length]);
   }
+  // 【fix576e】异族载具：2 辆悬空战车 + 1 架飞行器（都能打爆、都能开走）
+  try { spawnAlienVehicles(); } catch (e) {}
   // 军方支援：三名基地警卫，按部署选择的阵位出生（不占基地原哨位）
   const _milSpot = invDeploySpot(INV_ORDERS.military, px, pz, i => ({ x: px + (i ? 38 : -38), z: pz - 38 }));
   for (let i = 0; i < 3; i++) {
@@ -18536,7 +18747,7 @@ function nearestDrivable() {
   // 算成"可上车"，于是屏幕上一直挂着「上车」按钮，点了还真的会切到驾驶状态。
   if (ferrisRide.active) return null;
   let best = null, bd = 1e9;
-  for (const c of cars) if (!c.exploded) { const d = Math.hypot(c.x - person.position.x, c.z - person.position.z); if (d < bd) { bd = d; best = c; } }
+  for (const c of cars) if (!c.exploded && !c.noBoard) { const d = Math.hypot(c.x - person.position.x, c.z - person.position.z); if (d < bd) { bd = d; best = c; } }
   for (const t of traffic) if (!t.exploded) { const d = Math.hypot(t.x - person.position.x, t.z - person.position.z); if (d < bd) { bd = d; best = t; } }
   for (const pc of policeCars) { const d = Math.hypot(pc.x - person.position.x, pc.z - person.position.z); if (d < bd) { bd = d; best = pc; } }
   return best && bd < 6.0 ? best : null;
@@ -30454,7 +30665,7 @@ function vehicleSaveData(v) {
   };
 }
 function saveGame() {
-  const vehicles = cars.filter(v => !v.exploded).map(vehicleSaveData);
+  const vehicles = cars.filter(v => !v.exploded && !v.noSave).map(vehicleSaveData);
   if (state === 'drive' && currentCar && !vehicles.some(v => v.id === currentCar.saveId)) vehicles.push(vehicleSaveData(currentCar));
   const data = {
     version: SAVE_VERSION,
