@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix578-real-torch-light">
+<meta name="cf-build" content="20261126-fix579-invader-charge-melee">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -14075,12 +14075,24 @@ function spawnInvaderAt(x, z, wp) {
   // 否则他会卡在盒子里、每帧被推向随机方向（实测整队人被推着往北跑）。
   try { const p0 = { x: x, z: z }; collideBuildingsFast(p0, 0.6, terrainHeight(x, z)); x = p0.x; z = p0.z; } catch (e) {}
   const g = makeHuman(INV_UNIFORM, false, { uniformColor: INV_UNIFORM, demonHorns: true, redEyes: true });
+  const _isMelee = INV_MELEE.indexOf(wp) >= 0;
   addWeaponMesh(g, wp);
+  // 【fix579】远程外敌也要带一把斧头：冲到跟前自动换近战，不再举着枪站着挨打。
+  // addWeaponMesh 会覆盖 u.weapon，所以先存枪，再加斧头，最后把 u.weapon 指回枪，
+  // animateHuman 的 visGun 判定才不会在远程姿态时误判成"没枪"。
+  const u = g.userData || {};
+  if (_isMelee) {
+    u.meleeWeapon = u.weapon; u.rangedWeapon = null;
+  } else {
+    const _gun = u.weapon;
+    const _axe = addWeaponMesh(g, 'axe');
+    if (_axe) { _axe.visible = false; u.meleeWeapon = _axe; }
+    u.rangedWeapon = _gun; u.weapon = _gun;
+  }
   const gy = terrainHeight(x, z);
   g.position.set(x, gy, z);
   g.rotation.y = Math.atan2(-x, -z);
   scene.add(g);
-  const _isMelee = INV_MELEE.indexOf(wp) >= 0;
   const v = {
     group: g, x: x, z: z, angle: g.rotation.y,
     alive: true, walking: true, timer: 0, walkTime: 0, respawn: 0,
@@ -14329,20 +14341,39 @@ function updateInvasion(dt, q) {
     //   · 优先最近的市民/警察/军方（70m 内）—— 异族会打警察和市民，不是只盯着玩家
     //   · 玩家只有贴到 18m 内才会被"发现"，不再隔着半张地图锁定玩家
     //   · 一个目标都没有时朝城市方向（+z）稳步推进，而不是站着发呆
+    // 【fix579】原来只要有任何一个友军在 70m 内，就无条件忽略贴脸的玩家 ——
+    // 玩家离 3m、最近友军离 23m 时外敌仍举枪对 23m 外开火，近战永远触发不了。
+    // 现在按真实距离选目标：玩家必须 <18m 且比最近友军更近才被锁定。
     const _foe = nearestInvFoe(v.x, v.z, 70);
+    const _fd = _foe ? Math.hypot(_foe.x - v.x, _foe.z - v.z) : Infinity;
     const _pd = Math.hypot(px - v.x, pz - v.z);
-    const tgt = _foe || (_pd < 18 ? { x: px, z: pz, player: true } : null);
+    const tgt = (_pd < 18 && _pd < _fd) ? { x: px, z: pz, player: true } : _foe;
     const _noTgt = !tgt;
     const tx = _noTgt ? v.x : tgt.x;
     const tz = _noTgt ? v.z + 14 : tgt.z;
     const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz) || 1;
     v.angle = Math.atan2(dx, dz); v.group.rotation.y = v.angle;
-    const _melee = INV_MELEE.indexOf(v.weaponKey) >= 0;
+    // 【fix579·2026-11-26·用户："动作还是很僵硬，有的站着不动，开始之后必须往前冲，
+    //   冲到人跟前用斧子，远程用各种远程武器"】
+    // 三个根因一起修：
+    //   ① 原来远程敌进入 21m 就停火站桩，看着像不动 → 改成推进到 11m 才停，远距离全速冲；
+    //   ② 原来只有武器池里本来是近战的才用近战 → 现在任何敌人被贴到 4.2m 都自动换斧头；
+    //   ③ 原来远距离移动也只给普通走路姿态 → 冲锋阶段用 'run' 姿态，明显摆臂迈大步。
+    const _meleeByWeapon = INV_MELEE.indexOf(v.weaponKey) >= 0;
+    const _closeFight = !_noTgt && d < 4.2;
+    const _melee = _meleeByWeapon || _closeFight;
     const _range = _melee ? 3.2 : (v.weaponKey === 'rpg' || v.weaponKey === 'rpg4' ? 70
                     : (v.weaponKey === 'sniper' ? 90 : 30));
-    // 缓慢推进：远距离全速前进，进入射程后停下举枪（远程）/继续贴身（近战）
-    // 进攻战的守敌没有目标时原地据守（不能自己放弃工事往南走）；防守战的外敌继续压上
-    const wantMove = _noTgt ? (q.invMode !== 'attack') : (d > (_melee ? 2.6 : Math.min(_range * 0.7, 22)));
+    // 远程外敌随身带斧头：贴脸时收枪拔斧，拉开距离再换回远程武器
+    const _du = v.group.userData;
+    if (_du) {
+      if (_du.meleeWeapon) _du.meleeWeapon.visible = _melee;
+      if (_du.rangedWeapon) _du.rangedWeapon.visible = !_melee;
+    }
+    const _charge = _noTgt ? (q.invMode !== 'attack' && Math.abs(pz - v.z) > 12)
+                           : (d > (_meleeByWeapon ? 12 : 55));
+    const _hold = _melee ? 2.6 : Math.min(_range * 0.4, 11);
+    const wantMove = _noTgt ? (q.invMode !== 'attack') : (d > _hold);
     v.invMoving = wantMove;
     if (wantMove) {
       let mx = dx / d, mz = dz / d;
@@ -14353,22 +14384,17 @@ function updateInvasion(dt, q) {
         mx = nx * 0.85 + dx / d * 0.45;
         mz = nz * 0.85 + dz / d * 0.45;
       }
-      // 分段推进：远处（>150m）5m/s 快速压境，中段 3.2m/s，
-      // 接近玩家/友军（<60m）才放慢到 1.5~2m/s —— 既有"缓缓逼近"的压迫感，
-      // 又不会让玩家在市区等 3 分钟才看到人。
-      // 没有目标时 d 是 14m 的前视点距离，不能用它算速度档 —— 否则整队人永远以 1.7m/s 爬。
-      // 用「到玩家/城市方向的实际纵深」判档：远处 5m/s 压境，近了才放慢。
       const _spdD = _noTgt ? Math.abs(pz - v.z) : d;
-      const spd = (_spdD > 150) ? 5.0 : (_spdD > 60 ? 3.2 : (v.invSpeed || 1.7));
-      // 【fix576d】绕障版前进：顶着铁丝网/沙袋墙会沿切线滑过去，不再原地抽搐
+      // 冲锋恒定 5m/s；近身缠斗才回落到 1.5~2m/s，不再"全员慢走"。
+      const spd = _charge ? 5.0 : (_spdD > 150 ? 5.0 : (_spdD > 60 ? 3.2 : (v.invSpeed || 1.7)));
       if (!npcAdvance(v, mx, mz, spd * dt)) v._side = -(v._side || 1);
     }
-    // 动画驱动：走路摆腿摆臂；停下时端枪（持枪武器）或举械（近战）
-    v.phase += dt * (wantMove ? 6.5 : 2.2);
+    // 动画：冲锋用 run 姿态；近身用对应近战武器；远距离才端枪/举械待机
+    v.phase += dt * (_charge ? 9.5 : (wantMove ? 6.5 : 2.2));
     if (v.punchAnim > 0) v.punchAnim = Math.max(0, v.punchAnim - dt * 3.2);
-    const _pose = _melee ? v.melee : (v.weaponKey === 'pistol' ? 'pistol' : 'rifle');
-    // animateHuman 的端枪待机只在 !moving 时生效，所以外敌停下开火时自然进入端枪姿势；
-    // 移动时是正常走路摆臂 —— 这就是原来"僵硬"和"不举枪"的解法。
+    const _pose = _charge ? 'run'
+                : (_melee ? (_closeFight && !_meleeByWeapon ? 'axe' : v.melee)
+                          : (v.weaponKey === 'pistol' ? 'pistol' : 'rifle'));
     animateHuman(v.group, v.phase, v.punchAnim || 0, _pose, wantMove, v.punchHand || 0, 0, 0);
     if (v.attackCd > 0) v.attackCd -= dt;
     if (!_noTgt && d < _range && v.attackCd <= 0 && hasLineOfSight(v.x, v.z, tx, tz, null)) {
@@ -14379,7 +14405,9 @@ function updateInvasion(dt, q) {
         : (v.weaponKey === 'sniper' ? 2.4
         : (_heavy ? 2.8 : 0.8 + Math.random() * 0.4)));
       v.punchAnim = 1;   // 开火/挥砍瞬间触发后坐力/挥械动画
-      const _dmg = _melee ? (v.weaponKey === 'hammer' ? 32 : (v.weaponKey === 'axe' ? 28 : 24))
+      const _dmg = _melee
+        ? ((_closeFight && !_meleeByWeapon) ? 22
+           : (v.weaponKey === 'hammer' ? 32 : (v.weaponKey === 'axe' ? 28 : 24)))
         : (v.weaponKey === 'sniper' ? 45
         : (_heavy ? 46
         : (v.weaponKey === 'minigun' ? 8
@@ -14395,7 +14423,7 @@ function updateInvasion(dt, q) {
         spawnBurst(v.x + dx / d * 1.3, v.z + dz / d * 1.3,
           (_heavy || v.weaponKey === 'minigun') ? 0xff8833 : 0xffff88, _heavy ? 7 : 4);
       }
-      if (tgt.player) npcShotPlayer(_dmg, v.x, v.z, v.ranged || 'pistol');
+      if (tgt.player) npcShotPlayer(_dmg, v.x, v.z, _melee ? 'melee' : (v.ranged || 'pistol'));
       else if (tgt) {
         // 【fix576d】异族现在真的会打死市民/警察：市民走 killResident，警察走 hitCop('npc')
         if (tgt.isCop) {
