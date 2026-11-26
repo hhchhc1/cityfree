@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix576b-war-flags-attack">
+<meta name="cf-build" content="20261126-fix576c-trench-dig">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1463,6 +1463,13 @@ function gangHqDist(x, z) { return Math.hypot(x - GANG_HQ_X, z - GANG_HQ_Z); }
 function nearGangHq(x, z, r) { return gangHqDist(x, z) < r; }
 
 const WATER_Y = -0.6;
+// 【fix576c】机场北战场的 4 道战壕基准线。蛇形偏移由 invTrenchZ() 统一算，
+// terrainHeight（挖沟）和 addInvBattlefield（摆沙袋/登记碰撞）必须用同一个函数，
+// 否则沟挖在 A 处、沙袋摆在 B 处，看着就是"两排沙袋放在平地上"。
+var INV_TRENCH_Z = [-432, -396, -360, -328];
+var INV_TRENCH_AMP = 3.4;      // 蛇形摆幅（±3.4m）
+var INV_TRENCH_FREQ = 0.143;   // 摆动频率（约 44m 一个周期）
+function invTrenchZ(baseZ, x) { return baseZ + INV_TRENCH_AMP * Math.sin(x * INV_TRENCH_FREQ); }
 // 地形高度：城市（含道路）保持平整，外圈乡村丘陵起伏，南侧海滩向水面下坡
 function terrainHeight(x, z) {
   // 【fix190】用户要求：把主城与新城市之间那条灰色地带变成深海。
@@ -1601,6 +1608,26 @@ function terrainHeight(x, z) {
       - bump(12, -414, 36, 1.6)     // 中央干涸交通壕
       - bump(-92, -344, 30, 1.1);   // 西侧弹坑洼地
     h += edge * warHills;
+    // 【fix576c·2026-11-26·用户："太粗糙了，没有战壕的感觉"】
+    // 之前"战壕"只是两排沙袋摆在平地上，中间铺一条深色板 —— 从任何角度看都是两排围栏，
+    // 因为地面根本没有被挖下去。这里真的把地形挖开：4 道蛇形沟，半宽 3.6m、深 1.5m，
+    // 中心线随 x 摆动 ±3.4m（真实战壕必须蛇形，直线沟一发炮弹就能横扫整条）。
+    // 地面网格、人物脚底、载具、子弹落点全部采样 terrainHeight，所以沟是真的能走进去的。
+    //
+    // ⚠️ 不能再整体下沉：试过 -0.9m，战场大片掉到 WATER_Y(-0.6) 以下，海面直接从沟里透出来。
+    // 改成给一个下限：沟底最低压到 -0.28，既不会露水，也不会把焦土顶穿。
+    let cut = 0;
+    for (let ti = 0; ti < 4; ti++) {
+      const dz = Math.abs(z - invTrenchZ(INV_TRENCH_Z[ti], x));
+      if (dz < 3.6) {
+        // 平底 + 两侧斜坡：±2.2m 内是完整的 1.5m 深沟底，2.2~3.6m 收坡。
+        // 纯 V 形沟走进去像水渠，平底才像能站人、能架枪的战壕。
+        const c = dz < 2.2 ? 1.5 : 1.5 * (1 - (dz - 2.2) / 1.4);
+        if (c > cut) cut = c;
+      }
+    }
+    h -= edge * cut;
+    if (h < -0.28) h = -0.28;
   }
   // 【2026-10-22·fix41】机场地形压平 —— 迁址到城市正北的空地。
   // 选址依据（用游戏内真实数据实测，不是估计）：对全图网格逐个矩形做"占用采样"，
@@ -1825,6 +1852,17 @@ window.addFarGround = function () {   // 【fix104】挂到 window：它原本�
     // 于是它从岛面盘和路面**之上**顶出来，看着就是一层绿色盖在马路上面。
     // 岛内（半径 88 以内）整块压到水面以下，让岛面盘独占地面，这个穿模从根上消失。
     if (Math.hypot(gx - ISLAND_X, gz - ISLAND_Z) < 88) gh = Math.min(gh, WATER_Y - 1.5);
+    // 【fix576c·2026-11-26】机场北战场战壕带：把主地面在这些位置再压低 1.6m。
+    // 主地面是 128 段（7.8m 一格），而战壕只有 7.2m 宽 —— 粗网格插值出来的沟又宽又浅，
+    // 凹处的线性插值会"架桥"顶到焦土面（3m 一格）之上，于是沟里冒出一片绿草。
+    // 焦土网格才负责画出沟的形状，主地面只负责"别露出来"：整条战壕带压到沟底以下，
+    // 台阶藏在焦土下面，看不见。
+    if (gx > -158 && gx < 158 && gz > -472 && gz < -300) {
+      // 边界 22m 内线性淡出，避免整块下沉在战场边缘留下一道 1.6m 的坎
+      const _fx = Math.min(1, (158 - Math.abs(gx)) / 22);
+      const _fz = Math.min(1, Math.min(gz + 472, -300 - gz) / 22);
+      gh -= 1.8 * Math.min(1, _fx * 2) * Math.min(1, _fz * 2);
+    }
     pos.setZ(i, gh);
   }
   ground.geometry.computeVertexNormals();
@@ -7228,54 +7266,175 @@ var AIRLINER = null;
       invColliders++;
     };
 
-    // ---- 战场地面：压出一块深色焦土，和绿色机场草地区分开 ----
-    // 【fix576b】原来是 22m 见方的平板拼出来的。fix576 给战场加了真实起伏（terrainHeight 里的
-    // 土丘/交通壕）之后，平板立刻露馅：坡上的那几块一半埋进土里、一半悬空，从侧面看像浮着的木板。
-    // 改成一张按 terrainHeight 逐顶点采样的网格，跟着坡走，边缘自然贴合；顺便从 120 个 mesh
-    // 变成 1 个，静态合批后 draw call 也更省。
+    // ---- 【fix576c】程序生成的贴图：焦土颗粒 / 麻袋织纹 ----
+    // 之前所有东西都是纯色 Lambert，远看就是"棕色塑料板 + 土黄色胶囊"。
+    // 这两张贴图都用 canvas 现画（不占任何外部资源），乘在顶点色/材质色上，
+    // 一个网格一次 draw call 就能有颗粒、脏污、织纹。
+    const makeScorchTex = () => {
+      const S = 512;
+      const cv = document.createElement('canvas'); cv.width = cv.height = S;
+      const c = cv.getContext('2d');
+      c.fillStyle = '#7a6647'; c.fillRect(0, 0, S, S);
+      // 大块深浅斑（炮击烧灼 / 翻起的湿土）
+      for (let layer = 0; layer < 4; layer++) {
+        const n = 50 + layer * 70;
+        for (let i = 0; i < n; i++) {
+          const x = Math.random() * S, y = Math.random() * S;
+          const r = 5 + Math.random() * (58 - layer * 11);
+          const dark = Math.random() < 0.56;
+          c.fillStyle = dark ? 'rgba(52,38,24,' + (0.05 + Math.random() * 0.13) + ')'
+                             : 'rgba(172,150,110,' + (0.04 + Math.random() * 0.11) + ')';
+          c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+        }
+      }
+      // 细颗粒（碎石 / 灰烬）
+      for (let i = 0; i < 9000; i++) {
+        const x = Math.random() * S, y = Math.random() * S;
+        c.fillStyle = Math.random() < 0.5
+          ? 'rgba(38,28,18,' + (0.08 + Math.random() * 0.18) + ')'
+          : 'rgba(196,176,136,' + (0.05 + Math.random() * 0.12) + ')';
+        c.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+      }
+      // 车辙：两条平行的浅色带
+      c.strokeStyle = 'rgba(158,138,104,0.11)'; c.lineWidth = 10;
+      for (const off of [-16, 16]) {
+        c.beginPath();
+        for (let y = 0; y <= S; y += 14) c.lineTo(S / 2 + off + Math.sin(y * 0.021) * 20, y);
+        c.stroke();
+      }
+      const t = new THREE.CanvasTexture(cv);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(20, 10);
+      t.anisotropy = 4;
+      return t;
+    };
+    const makeBurlapTex = () => {
+      const S = 128;
+      const cv = document.createElement('canvas'); cv.width = cv.height = S;
+      const c = cv.getContext('2d');
+      c.fillStyle = '#b8a06c'; c.fillRect(0, 0, S, S);
+      // 经纬织纹
+      for (let i = 0; i < S; i += 4) {
+        c.fillStyle = 'rgba(118,98,60,0.30)'; c.fillRect(i, 0, 2, S);
+        c.fillStyle = 'rgba(212,192,152,0.22)'; c.fillRect(0, i, S, 2);
+      }
+      // 泥污
+      for (let i = 0; i < 240; i++) {
+        const x = Math.random() * S, y = Math.random() * S, r = 2 + Math.random() * 9;
+        c.fillStyle = 'rgba(66,52,32,' + (0.04 + Math.random() * 0.10) + ')';
+        c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+      }
+      const t = new THREE.CanvasTexture(cv);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(2, 2);
+      return t;
+    };
+    const scorchTex = makeScorchTex();
+    const burlapTex = makeBurlapTex();
+
+    // ---- 战场地面：焦土（顶点色做斑驳 + 战壕内压暗）----
+    // 【fix576c】原来整块焦土是单一棕色，加上粗网格，看上去就是一块"棕色塑料板"。
+    // 现在逐顶点写颜色：干土/湿土/焦黑三种色按确定性噪声混合，战壕沟底再压暗 ——
+    // 一个网格、一次 draw call，但地表有层次了。
     {
       const _w = BX1 - BX0, _d = BZ1 - BZ0, _cx = (BX0 + BX1) / 2, _cz = (BZ0 + BZ1) / 2;
-      // 44×44 段（约 6.8m 一格）+ 抬高 0.13m：网格是按顶点采样 terrainHeight 的，
-      // 段太粗时三角形在土丘/交通壕的弯处会切进地面，露出下面的绿草地（实测 26 段就是这样）。
-      const gg = new THREE.PlaneGeometry(_w, _d, 44, 44);
+      // 3m 一格（100×52）：战壕只有 7.2m 宽，格子再粗就插不出沟的形状。
+      const gg = new THREE.PlaneGeometry(_w, _d, 150, 78);   // 2m 一格：沟壁才切得利落
       gg.rotateX(-Math.PI / 2);
       const pa = gg.attributes.position;
+      const colArr = new Float32Array(pa.count * 3);
+      const cBase = new THREE.Color(0x6b5b42);
+      const cDry  = new THREE.Color(0x8d7752);
+      const cWet  = new THREE.Color(0x3b2f22);
+      const cBurn = new THREE.Color(0x2a2119);
+      const tmpC = new THREE.Color();
       for (let i = 0; i < pa.count; i++) {
-        pa.setY(i, gy(pa.getX(i) + _cx, pa.getZ(i) + _cz) + 0.13);
+        const wx = pa.getX(i) + _cx, wz = pa.getZ(i) + _cz;
+        pa.setY(i, gy(wx, wz) + 0.15);
+        // 确定性噪声（不用 Math.random，保证每次加载长得一样）
+        let n = Math.sin(wx * 0.21 + wz * 0.13) * 0.55
+              + Math.sin(wx * 0.63 - wz * 0.47) * 0.30
+              + Math.sin(wx * 1.70 + wz * 1.30) * 0.15;
+        n = n * 0.5 + 0.5;
+        let cutD = 0;
+        for (let ti = 0; ti < 4; ti++) {
+          const dz = Math.abs(wz - invTrenchZ(INV_TRENCH_Z[ti], wx));
+          if (dz < 3.6) { const c = 1 - dz / 3.6; if (c > cutD) cutD = c; }
+        }
+        tmpC.copy(cBase).lerp(n > 0.5 ? cDry : cWet, Math.abs(n - 0.5) * 1.7);
+        if (cutD > 0) tmpC.lerp(cBurn, Math.min(0.85, cutD * 0.9));
+        colArr[i * 3] = tmpC.r; colArr[i * 3 + 1] = tmpC.g; colArr[i * 3 + 2] = tmpC.b;
       }
+      gg.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
       gg.computeVertexNormals();
-      const ground = new THREE.Mesh(gg, earth);
+      const ground = new THREE.Mesh(gg, new THREE.MeshLambertMaterial({ vertexColors: true, map: scorchTex }));
       ground.position.set(_cx, 0, _cz);
       scene.add(ground);
     }
-    // ---- 战壕：两道平行沙袋墙夹出 3m 宽的通道，沿 x 方向延伸 ----
-    // 每袋 1.6×0.5×0.8，交错叠两层；通道里是露出泥土的凹沟视觉。
-    const trenchZs = [-432, -396, -360, -328];
+    // ---- 战壕：蛇形挖沟 + 沙袋胸墙 ----
+    // 【fix576c·2026-11-26·用户："没有战壕的感觉"】
+    // 三道改动：①沟真的挖下去了（terrainHeight 里的 cut），人走进去会低 1.5m；
+    // ②中心线蛇形摆动，不再是两条笔直的平行线；③沙袋改用扁球（枕头形）并逐袋抖动位置/角度/颜色，
+    // 长方体堆起来像木板，扁球才像一袋一袋的沙包。
+    const trenchZs = INV_TRENCH_Z;
+    // 沙袋色：5 种脏土色，用位置哈希挑，避免"每隔四袋重复一次"的机械感
+    const sandL = new THREE.MeshLambertMaterial({ map: burlapTex, color: 0xa8905f });
+    const sandX = new THREE.MeshLambertMaterial({ map: burlapTex, color: 0x6b5c3e });
+    const sandK = new THREE.MeshLambertMaterial({ map: burlapTex, color: 0x8a7a52 });
+    const sandA = new THREE.MeshLambertMaterial({ map: burlapTex, color: 0x8c7a4d });
+    const sandB = new THREE.MeshLambertMaterial({ map: burlapTex, color: 0xa8935f });
+    const SAND_M = [sandA, sandB, sandL, sandX, sandK];
+    const bagGeo = new THREE.SphereGeometry(1, isMobile ? 5 : 6, isMobile ? 3 : 4);
+    const putBag = (mat, x, y, z, ry, sx, sy, sz) => {
+      const m = new THREE.Mesh(bagGeo, mat);
+      m.position.set(x, y, z); m.rotation.y = ry; m.scale.set(sx, sy, sz);
+      scene.add(m); return m;
+    };
+    // 位置哈希：同一个位置每次加载都拿到同一个色号，但相邻两袋几乎不会同色
+    const bagHash = (a, b) => {
+      const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const _bagStep = isMobile ? 2.5 : 2.1;
     for (const tz of trenchZs) {
-      for (let x = BX0 + 6; x < BX1 - 6; x += 1.7) {
-        const yo = gy(x, tz);
-        // 泥沟底（略低的深色带）
-        putB(boxG(1.8, 0.08, 3.2), concreteD, x, yo + 0.03, tz);
-        for (const side of [-1, 1]) {
-          const wz = tz + side * 2.1;
-          const yw = gy(x, wz);
-          for (let layer = 0; layer < 2; layer++) {
-            const off = (layer % 2) ? 0.85 : 0;
-            putB(boxG(1.7, 0.46, 0.85), layer ? sandD : sand,
-                 x + off, yw + 0.24 + layer * 0.44, wz);
-          }
+      // 沟底横木踏板（沟底本身已经由焦土顶点色压暗，这里只补能看见的木板）
+      for (let x = BX0 + 4; x < BX1 - 4; x += 2.2) {
+        const zc = invTrenchZ(tz, x);
+        if (Math.floor((x - BX0) / 2.2) % 2 === 0) {
+          putB(boxG(0.42, 0.07, 3.6), wood, x, gy(x, zc) + 0.22, zc);
         }
       }
-      // 【fix576】两道沙袋堤实体化：24m 一段、留 6m 缺口可以穿过/绕行。
-      // 原来一堆装饰沙袋没有碰撞，人车子弹全穿过去；现在按段登记 AABB。
-      for (let x = BX0 + 6; x < BX1 - 6; x += 30) {
-        const segW = Math.min(24, BX1 - 6 - x);
-        if (segW < 3) continue;
+      // 胸墙：两层枕头沙袋交错叠（下层压缝、上层错开半个步长），逐袋抖动位置/角度/大小
+      let col = 0;
+      for (let x = BX0 + 4; x < BX1 - 4; x += _bagStep, col++) {
+        const zc = invTrenchZ(tz, x);
         for (const side of [-1, 1]) {
-          const wz = tz + side * 2.1;
+          const wz = zc + side * 3.75;
+          const yw = gy(x, wz);
+          const h1 = bagHash(col * 1.7 + (side > 0 ? 31.4 : 0), tz * 0.11);
+          const h2 = bagHash(col * 2.3 + (side > 0 ? 17.7 : 0), tz * 0.07);
+          const h3 = bagHash(col * 0.9 + (side > 0 ? 5.1 : 0), tz * 0.19);
+          const jx = (h1 - 0.5) * 0.14;
+          const jz = (h2 - 0.5) * 0.10;
+          const jr = (h3 - 0.5) * 0.16;
+          const sc = 0.94 + h2 * 0.14;
+          // 下层：压在唇上，稍微埋进土里（0.42 高，中心 +0.17 → 露出约 0.38）
+          putBag(SAND_M[Math.floor(h1 * 5) % 5], x + jx, yw + 0.20, wz + jz, jr,
+                 _bagStep * 0.60 * sc, 0.265, 0.50 * sc);
+          // 上层：错开半个步长，压在下层的缝上
+          putBag(SAND_M[Math.floor(h2 * 5) % 5], x + jx + _bagStep * 0.5, yw + 0.66, wz + jz - 0.02, jr * 0.7,
+                 _bagStep * 0.58 * sc, 0.255, 0.48 * sc);
+        }
+      }
+      // 碰撞：每 6m 一段（蛇形周期 44m，6m 弦高误差 <0.3m，人车不会漏过去）
+      for (let x = BX0 + 4; x < BX1 - 4; x += 6) {
+        const segW = Math.min(6, BX1 - 4 - x);
+        if (segW < 2) continue;
+        for (const side of [-1, 1]) {
           const cx = x + segW / 2;
+          const wz = invTrenchZ(tz, cx) + side * 3.75;
           const y0 = Math.min(gy(x, wz), gy(cx, wz), gy(x + segW, wz));
-          solid(cx, wz, segW, 1.0, y0, 1.15);
+          solid(cx, wz, segW + 0.4, 1.0, y0, 1.0);
         }
       }
     }
@@ -7334,6 +7493,23 @@ var AIRLINER = null;
         putB(boxG(6.0, 0.035, 0.035), steel, cx, y + hh, wireZ);
       }
       solid(cx, wireZ, 6, 0.4, y, 1.4);
+    }
+    // 【fix576c】蛇腹形铁丝网：原来只有三道直线，远看像栏杆。真铁丝网是一圈一圈的，
+    // 在每两根桩之间串 3 个铁圈，一眼就能认出是"过不去"的东西。
+    {
+      const coilGeo = new THREE.TorusGeometry(0.55, 0.028, 4, 8);
+      for (let x = BX0 + 8; x < BX1 - 8; x += 6) {
+        const cx = x + 3;
+        if (wireGaps.some(g => cx > g[0] && cx < g[1])) continue;
+        const y = gy(x, wireZ);
+        for (let k = 0; k < 3; k++) {
+          const ring = new THREE.Mesh(coilGeo, steel);
+          ring.position.set(x + 1.5 + k * 1.5, y + 0.55, wireZ);
+          ring.rotation.y = Math.PI / 2;
+          ring.rotation.z = (k % 2) * 0.35;
+          scene.add(ring);
+        }
+      }
     }
     // 缺口两侧的斜拉倒刺：给缺口做可识别的视觉提示，同时不堵路
     for (const g of wireGaps) {
