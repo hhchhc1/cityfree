@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261127-fix580-flag-defend-ally-truce">
+<meta name="cf-build" content="20261127-fix581-full-assault">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13915,6 +13915,8 @@ function invMarkFlank(unit, spot, force, attack) {
   unit._invFlankT = 0;
   unit._invFlankWP = invFlankWaypoint(force, attack);
   unit._invForce = force;
+  unit._invSpawn = { x: spot.x, z: spot.z };   // 【fix581】侧翼被打掉后从这里重新投入
+  unit._invFlankPersistent = !!spot.flank;
   if (force !== 'police' && unit.hate !== undefined) { unit.hate = 'faction'; unit.hateTarget = unit._invFlankWP; }
   if (unit._invTarget !== undefined) unit._invTarget = unit._invFlankWP;
 }
@@ -13934,6 +13936,33 @@ function invAdvanceFlanker(u, dt) {
     u._invFlankWP = null;
     if (u.hateTarget && u.hateTarget.isInvWaypoint) { u.hate = null; u.hateTarget = null; }
     if (u._invTarget && u._invTarget.isInvWaypoint) u._invTarget = null;
+  }
+}
+// 【fix581】侧翼单位死了不能就这么消失：每 3 秒检查一次，6 秒内从原侧翼落点重新投入。
+// 这样"从战场两侧包抄"始终有人在跑，而不是开局两分钟就只剩正面。
+function invReinforceFlanks() {
+  const attack = !!(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
+  const all = INV_SUPPORT.concat(INV_COPS);
+  for (const u of all) {
+    if (!u || !u._invFlankPersistent || !u._invSpawn) continue;
+    if (u.alive) { u._invDeadT = 0; continue; }
+    u._invDeadT = (u._invDeadT || 0) + 1;
+    if (u._invDeadT < 2) continue;
+    u._invDeadT = 0;
+    const sp = u._invSpawn;
+    u.alive = true; u.down = false; u.downT = 0; u.respawn = 0;
+    u.hp = u.maxHp || 100;
+    u.x = sp.x; u.z = sp.z; u.angle = Math.PI;
+    u.hate = null; u.hateTarget = null; u._invTarget = null;
+    u._invFlankPhase = 0; u._invFlankT = 0;
+    u._invFlankWP = invFlankWaypoint(u._invForce || 'civil', attack);
+    if (u.group) {
+      u.group.visible = true;
+      u.group.rotation.x = 0;
+      u.group.rotation.y = Math.PI;
+      u.group.position.set(sp.x, terrainHeight(sp.x, sp.z), sp.z);
+      try { if (typeof fadeFigure === 'function') fadeFigure(u.group, 1); } catch (e) {}
+    }
   }
 }
 function nearestInvader(x, z, maxD) {
@@ -13987,6 +14016,12 @@ function cleanupInvasion() {
   for (const c of INV_COPS) {
     try { scene.remove(c.group); } catch (e) {}
     const i = cops.indexOf(c); if (i >= 0) cops.splice(i, 1);
+  }
+  // 【fix581】入侵警车撤场，别留在战场上变成永久自由巡逻车
+  for (let i = policeCars.length - 1; i >= 0; i--) {
+    if (!policeCars[i] || !policeCars[i]._invPoliceCar) continue;
+    try { scene.remove(policeCars[i].group); } catch (e) {}
+    policeCars.splice(i, 1);
   }
   // 【fix575】清掉外敌装甲火力点（它们是独立对象，不在 cars 里，玩家打不坏，任务结束直接移除）
   for (const tv of INV_VEHICLES) {
@@ -14179,8 +14214,9 @@ function spawnInvasionForce(q) {
   //   所以说场面存在的这些外族入侵者必须要比任务完成之前杀的人要多很多"】
   // 改成「击杀配额 + 持续增援」：场上同时存在的人数是并发上限，被打死就从北面补人，
   // 直到累计击杀数达到配额。所以场面永远比进度条上的人多。
-  const CAP = _attack ? (isMobile ? 18 : 26) : (isMobile ? 24 : 36);   // 同屏上限
-  const NEED = _attack ? (isMobile ? 40 : 60) : (isMobile ? 55 : 85);  // 累计击杀配额
+  // 【fix581】用户："让异族士兵再多一点，攻势再猛一点，杀一个就补一个"
+  const CAP = _attack ? (isMobile ? 24 : 34) : (isMobile ? 34 : 50);   // 同屏上限
+  const NEED = _attack ? (isMobile ? 55 : 80) : (isMobile ? 90 : 130); // 累计击杀配额
   invasionTotal = NEED;
   invasionKilled = 0;
   invasionSpawned = 0;
@@ -14239,7 +14275,7 @@ function spawnInvasionForce(q) {
   // 支援警察：同样按部署阵位落位；guard 在最南战壕中段，flank 从东侧包抄
   const _copOrder = INV_ORDERS.police;
   const _copSpot = invDeploySpot(_copOrder, px, pz, null, 'police');
-  const _copN = 4;
+  const _copN = 6;   // 【fix581】城管/警察再多一点，配合 4 辆警车一起压上
   for (let i = 0; i < _copN; i++) {
     const pp = _copSpot.flank
       ? { x: _copSpot.x, z: _copSpot.z + (i - (_copN - 1) / 2) * 6 }
@@ -14258,6 +14294,23 @@ function spawnInvasionForce(q) {
     };
     invMarkFlank(c, _copSpot, 'police', _attack);
     INV_COPS.push(c); cops.push(c);
+  }
+  // 【fix581】警车进场：用户问"警车呢"——原来入侵只刷步行警察，警车还在城里按通缉逻辑跑。
+  // 现在按部署方向把 4 辆警车直接放到战场两翼/正面，任务结束随 cleanupInvasion 撤走。
+  var _invPoliceCarSpots = [
+    { x: _copSpot.flank ? _copSpot.x : -140, z: _copSpot.flank ? _copSpot.z + 10 : -330 },
+    { x: _copSpot.flank ? _copSpot.x : 140, z: _copSpot.flank ? _copSpot.z + 20 : -330 },
+    { x: -55, z: -302 }, { x: 55, z: -302 }
+  ];
+  for (const cp of _invPoliceCarSpots) {
+    const n0 = policeCars.length;
+    try { spawnPoliceCar(2); } catch (e) {}
+    if (policeCars.length <= n0) continue;
+    const pc = policeCars[policeCars.length - 1];
+    pc.x = cp.x; pc.z = cp.z; pc.angle = Math.PI; pc.speed = 0;
+    pc._invPoliceCar = true; pc.retire = false; pc.dispatched = false; pc.dispatchT = 0;
+    pc.group.position.set(cp.x, terrainHeight(cp.x, cp.z), cp.z);
+    pc.group.rotation.y = Math.PI;
   }
   // 【fix577】市民义勇：guard 站进最南战壕东段，flank 从东侧内圈包抄；人数略增加，三支部队一眼可见
   const _civN = isMobile ? 5 : 8;
@@ -14451,13 +14504,27 @@ function updateInvasion(dt, q) {
       if (_du.meleeWeapon) _du.meleeWeapon.visible = _melee;
       if (_du.rangedWeapon) _du.rangedWeapon.visible = !_melee;
     }
-    const _charge = _noTgt ? (_defendFlag && Math.abs(tz - v.z) > 12)
-                           : (d > (_meleeByWeapon ? 12 : 55));
-    const _hold = _melee ? 2.6 : Math.min(_range * 0.4, 11);
-    const wantMove = _noTgt ? (_defendFlag || q.invMode !== 'attack') : (d > _hold);
+    // 【fix581】用户："一直是跑的状态，奔跑姿态学一下市民就行" —— 外敌全程按冲锋处理
+    const _charge = true;
+    // 【fix581】站桩根因：原来远程敌到 11m、近战敌到 2.6m 就 wantMove=false，
+    // 加上 npcAdvance 五档全被铁丝网/沙袋挡住时只翻 _side，人就永远定在原地。
+    // 现在进射程后改成绕着目标走（边走边打），并加卡住计时强制切线脱离。
+    const _hold = _melee ? 2.0 : Math.min(_range * 0.25, 6.5);
+    const _inRange = !_noTgt && d <= _hold;
+    const wantMove = _noTgt ? (_defendFlag || q.invMode !== 'attack') : true;
     v.invMoving = wantMove;
     if (wantMove) {
       let mx = dx / d, mz = dz / d;
+      // 【fix581】铁丝网实体段在 z=-318，缺口只有 x=-60/0/60 三处。
+      // 原来贴住网时按"目标反方向切线"绕，测试里反而往北退（远离旗子）。
+      // 现在先沿网走到最近缺口，再往南穿过，路线明确且不会在网前站桩。
+      if (_noTgt && _defendFlag && v.z < -317 && v.z > -342) {
+        const gaps = [-60, 0, 60];
+        let gx = gaps[0], gd = Infinity;
+        for (const g of gaps) { const dd = Math.abs(g - v.x); if (dd < gd) { gd = dd; gx = g; } }
+        if (gd > 4) { mx = gx > v.x ? 1 : -1; mz = 0.32; }
+        else { mx = 0; mz = 1; }
+      }
       if (!_noTgt && !hasLineOfSight(v.x, v.z, tx, tz, null)) {
         // 看不到目标（被沙袋墙/碉堡挡住）→ 斜着绕：主方向 45% + 侧向 85%
         const s = v._side || 1;
@@ -14465,10 +14532,33 @@ function updateInvasion(dt, q) {
         mx = nx * 0.85 + dx / d * 0.45;
         mz = nz * 0.85 + dz / d * 0.45;
       }
-      const _spdD = _noTgt ? Math.abs(tz - v.z) : d;   // 【fix580】按旗子距离算冲锋速度，不再被玩家站位误导
-      // 冲锋恒定 5m/s；近身缠斗才回落到 1.5~2m/s，不再"全员慢走"。
-      const spd = _charge ? 5.0 : (_spdD > 150 ? 5.0 : (_spdD > 60 ? 3.2 : (v.invSpeed || 1.7)));
-      if (!npcAdvance(v, mx, mz, spd * dt)) v._side = -(v._side || 1);
+      // 进射程后不再直立站桩：30% 朝目标 + 85% 沿切线绕圈
+      if (_inRange) {
+        const s = v._side || 1;
+        mx = mx * 0.30 + (-dz / d * s) * 0.85;
+        mz = mz * 0.30 + ( dx / d * s) * 0.85;
+      }
+      const _spdD = _noTgt ? Math.abs(tz - v.z) : d;
+      // 冲锋恒定 5m/s；近身缠斗/绕圈 1.9m/s，不再"全员慢走"。
+      const spd = _charge ? 5.0 : (_inRange ? 1.9 : (_spdD > 150 ? 5.0 : (_spdD > 60 ? 3.2 : (v.invSpeed || 1.7))));
+      const bx = v.x, bz = v.z;
+      const ok = npcAdvance(v, mx, mz, spd * dt);
+      const moved = Math.hypot(v.x - bx, v.z - bz);
+      if (!ok || moved < spd * dt * 0.18) {
+        v._stuckT = (v._stuckT || 0) + dt;
+        if (v._stuckT > 0.45) {
+          v._detourT = 1.3;
+          v._detourSide = -(v._detourSide || v._side || 1);
+          v._stuckT = 0;
+        }
+      } else {
+        v._stuckT = 0;
+      }
+      if (v._detourT > 0) {
+        v._detourT -= dt;
+        const ex = -dz / d * v._detourSide, ez = dx / d * v._detourSide;
+        npcAdvance(v, ex, ez, spd * dt);
+      }
     }
     // 动画：冲锋用 run 姿态；近身用对应近战武器；远距离才端枪/举械待机
     v.phase += dt * (_charge ? 9.5 : (wantMove ? 6.5 : 2.2));
@@ -14578,6 +14668,7 @@ function updateInvasion(dt, q) {
   invasionTick -= dt;
   if (invasionTick <= 0) {
     invasionTick = 2;
+    try { invReinforceFlanks(); } catch (e) {}
     for (const r of residents) {
       if (r.isInvader || !r.alive || r.down || r.isBaseGuard || r._invFlankPhase === 0) continue;
       const tgt = nearestInvader(r.x, r.z, 600);
@@ -14619,11 +14710,11 @@ function updateInvasion(dt, q) {
   q.progressValue = invasionKilled;
   let aliveNow = 0;
   for (const v of INVADERS) if (v.alive && !v.down) aliveNow++;
-  const _cap = (q.invMode === 'attack') ? (isMobile ? 18 : 26) : (isMobile ? 24 : 36);
+  const _cap = (q.invMode === 'attack') ? (isMobile ? 24 : 34) : (isMobile ? 34 : 50);
   invasionSpawnTick -= dt;
   if (invasionSpawnTick <= 0 && aliveNow < _cap && invasionKilled + aliveNow < invasionTotal) {
-    invasionSpawnTick = 0.9;
-    const _n = Math.min(_cap - aliveNow, 3, invasionTotal - invasionKilled - aliveNow);
+    invasionSpawnTick = 0.45;   // 【fix581】补兵间隔减半，打掉一个很快补上，场面不会打空
+    const _n = Math.min(_cap - aliveNow, 5, invasionTotal - invasionKilled - aliveNow);
     for (let k = 0; k < _n; k++) {
       const _sx = (Math.random() - 0.5) * 220;
       const _sz = INV_SPAWN_Z + (Math.random() - 0.5) * 26;
@@ -17539,7 +17630,7 @@ function hurtPlayer(n, byCop, fromUnit) {
         // 可以继续战斗，不然就不好玩了"】
         // 入侵/反攻不再因为玩家阵亡而判任务失败，也不再触发换旗过场；
         // 只有「外敌真的摸到旗子」才失守（见 failInvByFlagCapture）。死亡只是从旗位重整旗鼓。
-        if (_aq.id === 'invasion') {
+        if (_aq.id === 'invasion' || invasionActive) {
           invRespawnAtFlag = true;
           killedByCop = false;          // 阵地上阵亡不给城管罚款
           _invLostOnDeath = false;
@@ -17612,8 +17703,10 @@ function arrest() {
   // 复活后跑两步就喘，很别扭）。
   player.hp = player.maxHp;
   player.stamina = player.maxStamina;
-  // 【fix580】入侵/反攻阵亡：不回医院、不罚款，直接在旗位复活继续打
-  if (invRespawnAtFlag && invasionActive) {
+  // 【fix581】只看 invRespawnAtFlag 这个"阵地复活债务"，不再附加 invasionActive：
+  // 用户实测死亡镜头结束前若任务状态被别的流程收掉，旧条件会失效并掉回医院。
+  // 这个标志只在入侵阵亡时置位，消费一次即清，不会误伤普通死亡。
+  if (invRespawnAtFlag) {
     invRespawnAtFlag = false;
     const rp = invFlagRespawnSpot();
     person.position.set(rp.x, rp.y, rp.z); person.visible = true;
@@ -17676,7 +17769,10 @@ function syncForces() {
   while (n1 < force.cars1) { spawnPoliceCar(1); n1++; }
   while (n2 < force.cars2) { spawnPoliceCar(2); n2++; }
   // 降星收队：超编的车先标记 retire，等它离玩家 70m 以外再悄悄撤走（近处凭空消失太突兀）
-  let over1 = n1 - force.cars1, over2 = n2 - force.cars2;
+  // 【fix581】入侵期间战场警车不参与通缉编制核算：wanted=0 会把它们全标 retire，
+  // 再被 AI 清理撤走 —— 用户报"警车呢"的第二个根因。
+  let over1 = invasionActive ? 0 : n1 - force.cars1;
+  let over2 = invasionActive ? 0 : n2 - force.cars2;
   for (const pc of policeCars) {
     if (over1 <= 0 && over2 <= 0) break;
     if (!pc || pc.exploded || pc.retire || pc.dispatched) continue;
@@ -19056,7 +19152,8 @@ function nearestDrivable() {
   for (const c of cars) if (!c.exploded && !c.noBoard) { const d = Math.hypot(c.x - person.position.x, c.z - person.position.z); if (d < bd) { bd = d; best = c; } }
   for (const t of traffic) if (!t.exploded) { const d = Math.hypot(t.x - person.position.x, t.z - person.position.z); if (d < bd) { bd = d; best = t; } }
   for (const pc of policeCars) { const d = Math.hypot(pc.x - person.position.x, pc.z - person.position.z); if (d < bd) { bd = d; best = pc; } }
-  return best && bd < 6.0 ? best : null;
+  // 【fix581】异族飞行器个头大但中心点离人可能 7~9m，原来统一 6m 门槛会让人贴着机翼却上不去
+  return best && bd < (best.isHelicopter ? 10.0 : 6.0) ? best : null;
 }
 function ejectDriver(v) {
   const a = v.group.rotation.y;
@@ -19207,6 +19304,12 @@ function tryToggle() {
       //   这正是用户报的「直升机飞到新城市放下后就不归位了」的根因。
       if (!c.fixed && !c.owned) c.playerUsed = true;
       state = 'drive'; currentCar = c; speed.v = 0; c.damage = c.damage || 0;
+      // 【fix581】异族飞行器上车即离地一小段，立刻看得见"它会飞"；炮弹/武器逻辑不动。
+      if (c.isAlien && c.isHelicopter) {
+        c.flyHeight = Math.max(c.flyHeight || 0, 4);
+        c.flyVy = 3;
+        try { setHint('异族飞行器已升空：升 / 降键调整高度，炮火照常发射'); } catch (e) {}
+      }
     // 【fix149】在基地里动直升机/坦克 → 全部警卫立刻追打
     try { if ((c.isHelicopter || c.isTank) && inMilitaryBase(c.x, c.z)) alertBaseGuards(45); } catch (e) {}
       if (c.isTaxi || c.isCrane) showJobChoice(c);
@@ -20845,22 +20948,44 @@ function npcAdvance(r, ux, uz, dist) {
   if (!(dist > 0)) return false;
   const len = Math.hypot(ux, uz) || 1;
   ux /= len; uz /= len;
+  // 【fix581】原来只试正前 / ±55° / ±90° 五档，站在铁丝网、沙袋端头或人群里时
+  // 五档全被碰撞推回，人就会一直原地不动。现在加密到 ±35/55/75/90/110°，
+  // 并把"接受位移"门槛从 35% 降到 22%；全失败时再强制沿障碍切线横移一次。
+  const c35 = 0.82, s35 = 0.57, c55 = 0.57, s55 = 0.82, c75 = 0.26, s75 = 0.97;
   const tries = [
     [ux, uz],
-    [ux * 0.57 - uz * 0.82, uz * 0.57 + ux * 0.82],
-    [ux * 0.57 + uz * 0.82, uz * 0.57 - ux * 0.82],
+    [ux * c35 - uz * s35, uz * c35 + ux * s35],
+    [ux * c35 + uz * s35, uz * c35 - ux * s35],
+    [ux * c55 - uz * s55, uz * c55 + ux * s55],
+    [ux * c55 + uz * s55, uz * c55 - ux * s55],
+    [ux * c75 - uz * s75, uz * c75 + ux * s75],
+    [ux * c75 + uz * s75, uz * c75 - ux * s75],
     [-uz, ux], [uz, -ux]
   ];
   for (const t of tries) {
     const p = { x: r.x + t[0] * dist, z: r.z + t[1] * dist };
     collideNpc(p, 0.42, r); clampCity(p);
     const moved = Math.hypot(p.x - r.x, p.z - r.z);
-    if (moved > dist * 0.35) {
+    if (moved > dist * 0.22) {
       r.x = p.x; r.z = p.z;
       if (r.group) { r.group.position.x = p.x; r.group.position.z = p.z; }
+      r._navBlockT = 0;
       return true;
     }
   }
+  // 最后手段：沿切线硬挤出去，下一次换另一侧，避免永远顶在同一个点上
+  const side = r._navSide || 1;
+  for (const t of [[-uz * side, ux * side], [uz * side, -ux * side]]) {
+    const p = { x: r.x + t[0] * dist * 1.4, z: r.z + t[1] * dist * 1.4 };
+    collideNpc(p, 0.42, r); clampCity(p);
+    if (Math.hypot(p.x - r.x, p.z - r.z) > dist * 0.18) {
+      r.x = p.x; r.z = p.z;
+      if (r.group) { r.group.position.x = p.x; r.group.position.z = p.z; }
+      r._navSide = -side;
+      return true;
+    }
+  }
+  r._navSide = -side;
   return false;
 }
 
@@ -21652,7 +21777,7 @@ function updateBurningVehicles(dt) {
 const tracers = [];
 const _trDir = new THREE.Vector3(), _trRight = new THREE.Vector3(), _trUp = new THREE.Vector3(), _trTgt = new THREE.Vector3();
 const TRACER_UP = new THREE.Vector3(0, 1, 0);
-const TRACER_CAP = isMobile ? 50 : 90;            // 同屏子弹轨迹上限
+const TRACER_CAP = isMobile ? 60 : 100;           // 【fix581】轨迹变长后略提上限，仍远低于粒子上限
 const _tracerPools = { single: [], stream: [], rocket: [], __beads: [] };
 var _tracerGeos = null, _tracerMats = null;
 function tracerKind(w) {
@@ -21665,18 +21790,20 @@ function tracerKind(w) {
 }
 function tracerPalette(kind) {
   // 【fix143】直升机机枪：粗 + 亮（原来是步枪那种细丝，天上打下来几乎看不见）
-  if (kind === 'cannon') return { head: 0xfff2a8, halo: 0xffe066, beam: 0xffd24a, headSize: 0.30, haloSize: 0.58, beamR: 0.16, op: 1.0, dur: 0.22 };
+  // 【fix581】用户："他们的子弹都没有轨迹，没有曳光弹那种效果" —— 原来 stream 只有 0.16s、
+  // beamR 0.028，手机上两三帧就没了，看着像瞬发。现在加粗、加亮、延长，并画整段轨迹。
+  if (kind === 'cannon') return { head: 0xfff2a8, halo: 0xffe066, beam: 0xffd24a, headSize: 0.30, haloSize: 0.58, beamR: 0.16, op: 1.0, dur: 0.30 };
   if (kind === 'rocket') return { head: 0xff4400, halo: 0xff6600, beam: 0xff8800, headSize: 0.13, haloSize: 0.24, beamR: 0.065, op: 1.0, dur: 0.35 };
-  if (kind === 'stream') return { head: 0xfff27a, halo: 0xfff6b0, beam: 0xfff088, headSize: 0.062, haloSize: 0.125, beamR: 0.028, op: 0.85, dur: 0.16 };
-  return                                    { head: 0xffaa33, halo: 0xffcc44, beam: 0xffaa33, headSize: 0.05, haloSize: 0.10, beamR: 0.02, op: 0.8, dur: 0.09 };
+  if (kind === 'stream') return { head: 0xfff27a, halo: 0xfff6b0, beam: 0xfff088, headSize: 0.078, haloSize: 0.16, beamR: 0.045, op: 0.95, dur: 0.30 };
+  return                                    { head: 0xffaa33, halo: 0xffcc44, beam: 0xffaa33, headSize: 0.068, haloSize: 0.14, beamR: 0.036, op: 0.92, dur: 0.22 };
 }
 function tracerMaterials(kind, p) {
   if (!_tracerMats) _tracerMats = {};
   if (!_tracerMats[kind]) {
     _tracerMats[kind] = {
       head: new THREE.MeshBasicMaterial({ color: p.head }),
-      halo: new THREE.MeshBasicMaterial({ color: p.halo, transparent: true, opacity: 0.5, depthWrite: false }),
-      beam: new THREE.MeshBasicMaterial({ color: p.beam, transparent: true, opacity: p.op, depthWrite: false })
+      halo: new THREE.MeshBasicMaterial({ color: p.halo, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }),
+      beam: new THREE.MeshBasicMaterial({ color: p.beam, transparent: true, opacity: p.op, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })
     };
   }
   return _tracerMats[kind];
@@ -21764,7 +21891,10 @@ function spawnTracer(fx, fy, fz, tx, ty, tz, weaponType, durOverride) {
   if (kind === 'spread') { spawnShotgunSpread(fx, fy, fz, tx, ty, tz, p); return; }
   const item = acquireTracer(kind, p);
   item.head.position.set(fx, fy, fz);
-  const tr = { head: item.head, beam: item.beam, sx: fx, sy: fy, sz: fz, tx, ty, tz, t: 0, dur: p.dur, beads: null, kind, _item: item };
+  // 【fix581】子弹/机枪：beam 直接画完整弹道，不再只画"枪口到弹头"那一小段，
+  // 否则弹头飞到目标时轨迹已经缩没，看起来就是没有曳光弹。
+  const fullBeam = (kind === 'single' || kind === 'stream' || kind === 'cannon');
+  const tr = { head: item.head, beam: item.beam, sx: fx, sy: fy, sz: fz, tx, ty, tz, t: 0, dur: p.dur, beads: null, kind, fullBeam: fullBeam, _item: item };
   ensureBeads(tr, kind, p, fx, fy, fz);
   tracers.push(tr);
 }
@@ -21788,11 +21918,12 @@ function spawnShotgunSpread(fx, fy, fz, tx, ty, tz, p) {
                 ty + _trRight.y * jx + _trUp.y * jy,
                 tz + _trRight.z * jx + _trUp.z * jy);
     const item = acquireTracer('single', p);
-    item.beam.visible = false;
+    // 【fix581】霰弹枪也要看得见轨迹：原来 beam.visible=false，7 颗弹丸只靠小光点，
+    // 手机上完全看不出"喷出去一片弹道"。现在每颗都有细曳光线。
     item.head.position.set(fx, fy, fz);
     tracers.push({ head: item.head, beam: item.beam, sx: fx, sy: fy, sz: fz,
                    tx: _trTgt.x, ty: _trTgt.y, tz: _trTgt.z, t: 0,
-                   dur: p.dur * (0.8 + Math.random() * 0.5), beads: null, kind: 'single', _item: item });
+                   dur: p.dur * (0.8 + Math.random() * 0.5), beads: null, kind: 'single', fullBeam: true, _item: item });
   }
 }
 // ========== 子弹飞行延迟命中（非自动枪械子弹慢，自动枪械保持快拷） ==========
@@ -21827,12 +21958,15 @@ function updateTracers(dt) {
     // 【2026-10-13 用户要求】火箭弹飞行过程中在尾部拖一条烟雾，效果更逼真。
     // 只在火箭弹（kind==='rocket'，单筒/四联通用）上每帧补一缕淡烟，受 smokeCap 上限约束，不会无限堆积。
     if (tr.kind === 'rocket') emitSmoke(x, y, z, false);
-    const dx = x - tr.sx, dy = y - tr.sy, dz = z - tr.sz;
+    // 【fix581】曳光弹要看到"整条轨迹"：子弹类用起点→终点全长；火箭弹仍用起点→弹头，
+    // 这样拖尾跟着弹体走，不会变成一条瞬间拉满的激光。
+    const ex = tr.fullBeam ? tr.tx : x, ey = tr.fullBeam ? tr.ty : y, ez = tr.fullBeam ? tr.tz : z;
+    const dx = ex - tr.sx, dy = ey - tr.sy, dz = ez - tr.sz;
     const len = Math.hypot(dx, dy, dz);
     if (len > 0.02) {
       tr.beam.visible = true;
       tr.beam.scale.y = len;
-      tr.beam.position.set((tr.sx + x) / 2, (tr.sy + y) / 2, (tr.sz + z) / 2);
+      tr.beam.position.set((tr.sx + ex) / 2, (tr.sy + ey) / 2, (tr.sz + ez) / 2);
       tr.beam.quaternion.setFromUnitVectors(_tFrom, _tTo.set(dx / len, dy / len, dz / len));
     } else {
       tr.beam.visible = false;
@@ -26513,7 +26647,11 @@ function updatePoliceCar(pc, dt) {
       }
     }
   }
-  const target = (state === 'drive') ? { x: currentCar.x, z: currentCar.z } : { x: person.position.x, z: person.position.z };
+  // 【fix581】入侵期间警车改打外敌：原来只看通缉玩家，所以战场上一辆警车都没有。
+  const invTgt = invasionActive ? nearestInvader(pc.x, pc.z, 400) : null;
+  const target = invTgt ? { x: invTgt.x, z: invTgt.z }
+              : (state === 'drive') ? { x: currentCar.x, z: currentCar.z }
+              : { x: person.position.x, z: person.position.z };
   const dx = target.x - pc.x, dz = target.z - pc.z;
   const d = Math.hypot(dx, dz);
   const move = () => {
@@ -26532,7 +26670,7 @@ function updatePoliceCar(pc, dt) {
   // 降星后 syncForces() 只是给它打个 pc.retire 标记，而那个标记只在"离玩家 70m 以上"
   // 时才把它撤走 —— 车还在追玩家，就永远满足不了条件，于是一直贴着玩家撞（用户报的 bug）。
   // 现在：退役 / 零颗星（且不在下车动画里）就掉头开走，开出 70m 后自然被回收。
-  if (pc.retire || (wanted < 1 && !(pc.dispatched && pc.dispatchT > 0))) {
+  if (!invasionActive && (pc.retire || (wanted < 1 && !(pc.dispatched && pc.dispatchT > 0)))) {
     const ax = pc.x - playerWorldX(), az = pc.z - playerWorldZ();
     const ad = Math.hypot(ax, az) || 1;
     pc.angle = Math.atan2(ax / ad, az / ad);      // 背对玩家
@@ -26549,13 +26687,23 @@ function updatePoliceCar(pc, dt) {
   if ((shoved > 0.12 || copOverlapAmount(pc) > 0.15) && pc.hitCd <= 0) {
     pc.hitCd = 2.2; pc.recoverT = 1.4; pc.recoverSide = Math.random() < 0.5 ? 1 : -1; pc.stuckT = 0;
   }
-  if (wanted < 1) {   // 无通缉→放弃追捕（慢慢停下）；1 星就要追
+  if (!invasionActive && wanted < 1) {   // 无通缉→放弃追捕（慢慢停下）；1 星就要追
     pc.speed *= (1 - Math.min(1, 3 * dt));
     if (Math.abs(pc.speed) > 0.05) move(); else pc.speed = 0;
     return;
   }
+  // 【fix581】入侵期间警车直接撞外敌，不停下来"下车抓玩家"
+  if (invasionActive && invTgt) {
+    if (d < 3.4 && pc.hitCd <= 0 && Math.abs(pc.speed) > 5) {
+      invTgt.hp -= 26;
+      spawnBurst(invTgt.x, invTgt.z, 0xff4422, 5);
+      if (invTgt.hp <= 0) killResident(invTgt, pc);
+      pc.hitCd = 0.9;
+    }
+    pc.dispatched = false; pc.dispatchT = 0;
+  }
   // 追到玩家附近：先停车→开车门→警察下车（慢动作细节），提前触发距离
-  if (!pc.dispatched && d < 14) {
+  if (!invasionActive && !pc.dispatched && d < 14) {
     pc.dispatched = true; pc.dispatchT = 0.6; pc.doorT = 0.7; pc.stuckT = 0; pc.recoverT = 0; sfx('enter');
   }
   if (pc.dispatched && pc.dispatchT > 0) {
@@ -30174,7 +30322,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
     for (let _pi = policeCars.length - 1; _pi >= 0; _pi--) {
       const pc = policeCars[_pi];
       if (!pc) { policeCars.splice(_pi, 1); continue; }
-      if (pc.retire && Math.hypot(pc.x - _aiPX, pc.z - _aiPZ) > 70) { scene.remove(pc.group); policeCars.splice(_pi, 1); continue; }
+      // 【fix581】入侵期间不撤走战场警车（它们本就在旗位 200m 外，会立刻被当成"收队完成"清掉）
+      if (!invasionActive && pc.retire && Math.hypot(pc.x - _aiPX, pc.z - _aiPZ) > 70) { scene.remove(pc.group); policeCars.splice(_pi, 1); continue; }
       updatePoliceCar(pc, dt); if (!pc.fly) pc.group.position.y = terrainHeight(pc.x, pc.z);
     }
   } catch(e) { console.error('[NPC update error]', e); }
@@ -41507,7 +41656,9 @@ window.focus();
           }
         }
         // ② 没有通缉时：远处多余的警车撤走（留最多 1 辆在近处）
-        if (w < 0.5) {
+        // 【fix581】入侵期间战场警车离玩家 200m+，原本会被这条"无通缉→60m外撤走"规则
+        // 在 2.5 秒内清空 —— 用户报"警车呢"。加 !invasionActive 保留战场警力。
+        if (w < 0.5 && !invasionActive) {
           var near = 0;
           for (var k = policeCars.length - 1; k >= 0; k--) {
             var pc = policeCars[k];
