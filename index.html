@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261127-fix582-inv-first-person-death">
+<meta name="cf-build" content="20261127-fix583-invader-collision-blast">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13870,8 +13870,14 @@ var INV_SPAWN_Z = -492;   // 【fix576d】-520 正好落在破损机库(z -524~-
 // 近战武器（斧头/电锯）也进池：他们冲到面前会抡起来，观感更像"各式各样的外敌"。
 // 【fix575】扩充到 14 种：原 8 种 + 狙击枪/冲锋枪/四联火箭筒/武士刀/双截棍/锤子，
 // 用户："外敌的人更多一点，他们也可以有一些奇怪的武器或者载具"。
-var INV_WEAPONS = ['ak47', 'rpg', 'pistol', 'minigun', 'axe', 'rifle', 'chainsaw', 'shotgun',
-                   'sniper', 'smg', 'rpg4', 'katana', 'nunchaku', 'hammer'];
+// 【fix583·2026-11-27·用户："让他们手里拿上枪，不要拿那个火箭筒了吧，只有一两个拿着火箭筒，
+//   其他都是拿着步枪或者加特林那种的，可以远距离攻击的。远距离一直用枪攻击，近距离再拿出斧子"】
+// 原池 14 种里 rpg/rpg4 两种火箭筒 + 5 种纯近战，满屏火箭筒、近战占比过高。
+// 现在以远程枪为主：ak47/minigun/rifle/smg 反复出现，狙击/霰弹各一，只留 1 个 rpg、1 个近战。
+// 近身拔斧由 spawnInvaderAt 给所有远程敌人挂斧头 + updateInvasion 的 _closeFight 统一处理，
+// 不需要把 axe/chainsaw 塞进主武器池也能做到"近距离拿出斧子"。
+var INV_WEAPONS = ['ak47', 'minigun', 'rifle', 'smg', 'ak47', 'minigun', 'rifle', 'smg',
+                   'ak47', 'minigun', 'rifle', 'sniper', 'shotgun', 'rpg'];
 // 近战武器：这些外敌不端枪，冲到跟前挥砍；其余都是远程，端枪推进
 var INV_MELEE = ['axe', 'chainsaw', 'katana', 'nunchaku', 'hammer'];
 // 部署阵位：guard=真进己方战壕 / rush=机场正面迎击 / flank=侧翼包抄
@@ -14455,8 +14461,9 @@ function updateInvasion(dt, q) {
   // ③开火加后坐力/枪口火光/枪声节奏，近战加挥砍动作，不再是"拿着枪的木偶"。
   for (const v of INVADERS) {
     if (!v.alive || v.down) {
-      // 倒地的外敌也要躺下，不能站着"死"
-      if (v.alive === false && v.group && v.group.rotation.x < 0.5) v.group.rotation.x = Math.PI / 2;
+      // 【fix583】原来只有 alive===false 才放平，被炮弹震成 down=true 但仍活着的外敌
+      // 就一直站着（skipAI 又不递减 downT 起身）。现在 down 或已死一律先放平，杜绝"站尸"。
+      if (v.group && v.group.rotation.x < 0.5) v.group.rotation.x = Math.PI / 2;
       continue;
     }
     // 【fix576d】目标选择重写（用户："有的怎么不会攻击呢，好像卡到那里一样""不要让异族知道玩家"
@@ -20971,7 +20978,10 @@ function npcAdvance(r, ux, uz, dist) {
     const moved = Math.hypot(p.x - r.x, p.z - r.z);
     if (moved > dist * 0.22) {
       r.x = p.x; r.z = p.z;
-      if (r.group) { r.group.position.x = p.x; r.group.position.z = p.z; }
+      // 【fix583】同步脚底高度到地形：外敌原来只在出生时设一次 y，
+      // 走进战壕/爬上台地后 y 停在原地，玩家在旁边会因"不同楼层"判定被跳过碰撞（虚体感）。
+      const _ny = terrainHeight(p.x, p.z);
+      if (r.group) { r.group.position.x = p.x; r.group.position.y = _ny; r.group.position.z = p.z; }
       r._navBlockT = 0;
       return true;
     }
@@ -20983,7 +20993,8 @@ function npcAdvance(r, ux, uz, dist) {
     collideNpc(p, 0.42, r); clampCity(p);
     if (Math.hypot(p.x - r.x, p.z - r.z) > dist * 0.18) {
       r.x = p.x; r.z = p.z;
-      if (r.group) { r.group.position.x = p.x; r.group.position.z = p.z; }
+      // 【fix583】切线硬脱离同样同步脚底高度，避免跳进战壕后 y 不跟随导致碰撞漏判
+      if (r.group) { r.group.position.x = p.x; r.group.position.y = terrainHeight(p.x, p.z); r.group.position.z = p.z; }
       r._navSide = -side;
       return true;
     }
@@ -21398,7 +21409,14 @@ function blastPeople(x, z, R, dmgAt, killR, vh, oy, by) {
     if (vh && Math.abs(terrainHeight(r.x, r.z) + 1.0 - (oy || 0)) > vh) continue;   // 垂直范围外不伤到
     const d = Math.hypot(r.x - x, r.z - z);
     if (d >= R) continue;
-    if (d < killR) { killResident(r, by); spawnBurst(r.x, r.z, 0xff2200, 14); knock(r); continue; }
+    // 【fix583·2026-11-27·用户："被炮弹震了一下没炸死，就震到那里不动了；
+    //   夜视仪一看逻辑上已经死了，躯体还在那，还能击败拿奖励"】
+    // 根因：外敌 skipAI，updateResident 里的 downT 递减（起身）逻辑对它不执行，
+    // 于是 blastPeople 给外圈敌人挂的 down=true/downT=1.6 永远不消，人站着不动、alive 却是活的；
+    // 若 damageResident 恰好把血打空则 alive=false 但这里只给活人设 down，尸体也站着。
+    // 现在外敌吃爆炸一律直接炸死（killResident 负责倒地 + 掉奖励 + 一次性结算），
+    // 普通居民/警察保留原来的"外圈震倒 1.6 秒再起"规则。
+    if (d < killR || r.isInvader) { killResident(r, by); spawnBurst(r.x, r.z, 0xff2200, 14); knock(r); continue; }
     damageResident(r, dmgAt(d), by);
     if (r.alive) { r.down = true; r.downT = 1.6; }
     knock(r);
@@ -30027,7 +30045,9 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
               const dx = r.x - tank.x, dz = r.z - tank.z;
               const rr = tank.radius + 0.6;
               if (dx * dx + dz * dz < rr * rr) {
-                if (r.down) { r.alive = false; r.respawn = 8; spawnBurst(r.x, r.z, 0xff3333, 6); dropReward(r.x, r.z, r); addXp(5); }
+                // 【fix583】原来这里只写 alive=false + dropReward，没放平尸体 → 外敌站着但逻辑已死，
+                // 还会被反复"击败"刷奖励。改走 killResident 统一结算：放平 + 掉一次奖励。
+                if (r.down) { killResident(r, 'tank'); }
                 else runOverResident(r, false, 'tank');
                 tank.hitCd = 0.8; hitNpc = true; break;
               }
@@ -30277,7 +30297,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
         if (r._carHitT && hitNow - r._carHitT < 500) return;
         r._carHitT = hitNow;
         // 已经倒地的人再被碾一次 = 撞死：算"打死人"，走击杀阶梯（不是撞人的半星）
-        if (r.down) { r.alive = false; r.respawn = 8; spawnBurst(r.x, r.z, 0xff3333, 6); dropReward(r.x, r.z, r); addXp(5); addKillBounty('car'); }
+        // 【fix583】同坦克：外敌被碾倒后统一走 killResident 放平 + 一次性掉奖励，杜绝站尸/重复刷奖励
+        if (r.down) { killResident(r, 'car'); }
         else runOverResident(r, currentCar.radius < 1.2, 'car');
       });
       // 警察同样一次全处理（safeT > 0 = 刚从警车下来，无敌期内不算被碾）
