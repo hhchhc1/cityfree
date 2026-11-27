@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261127-fix584-alien-vehicle-autopilot">
+<meta name="cf-build" content="20261127-fix585-active-assault-flight">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -14036,8 +14036,15 @@ function cleanupInvasion() {
   INV_VEHICLES.length = 0;
   // 【fix576e】异族载具：玩家正开着的那辆不删（否则人被卡在车里），其余随任务清掉
   for (const av of ALIEN_VEHICLES) {
-    if (av === currentCar) { av.noSave = false; continue; }
+    if (av === currentCar) {
+      av.noSave = false;
+      // 【fix585】玩家还开着就先藏掉地面光斑，别让任务结束后光斑独自留在原地
+      try { if (av._hoverSpot) av._hoverSpot.visible = false; } catch (e) {}
+      continue;
+    }
     try { scene.remove(av.group); if (typeof unregisterDynamicObject === 'function') unregisterDynamicObject(av.group); } catch (e) {}
+    try { if (av._hoverSpot && av._hoverSpot.parent) av._hoverSpot.parent.remove(av._hoverSpot); } catch (e) {}
+    av._hoverSpot = null;
     const ci = cars.indexOf(av); if (ci >= 0) cars.splice(ci, 1);
   }
   ALIEN_VEHICLES.length = 0;
@@ -14126,6 +14133,16 @@ function buildAlienFlyerModel() {
   }
   // 驾驶舱（红光）
   mk(new THREE.SphereGeometry(0.55, 8, 6), glowR, 0, 0.55, 1.4).scale.set(1, 0.7, 1.2);
+  // 【fix585·2026-11-27】底部悬停光晕：让"离地飞行"一眼可辨
+  const hoverGlow = new THREE.Mesh(
+    new THREE.RingGeometry(1.1, 3.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0xb45cff, transparent: true, opacity: 0.42,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  hoverGlow.rotation.x = -Math.PI / 2;
+  hoverGlow.position.y = -0.55;
+  g.add(hoverGlow);
+  g.userData.hoverGlow = hoverGlow;
   return g;
 }
 function spawnAlienVehicles() {
@@ -14156,10 +14173,20 @@ function spawnAlienVehicles() {
     g.position.set(ax, ay, az);
     scene.add(g);
     registerDynamicObject(g);
+    // 【fix585】地面悬停光斑：飞碟升空后光斑留在地面并随高度扩散，形成明确高度参照
+    const _spot = new THREE.Mesh(
+      new THREE.RingGeometry(1.4, 3.6, 24),
+      new THREE.MeshBasicMaterial({ color: 0x9a3bff, transparent: true, opacity: 0.3,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+    );
+    _spot.rotation.x = -Math.PI / 2;
+    _spot.position.set(ax, terrainHeight(ax, az) + 0.08, az);
+    scene.add(_spot);
     const v = {
       group: g, x: ax, z: az, angle: 0, radius: 3.8, topSpeed: 42, accel: 15,
       durability: 110, damage: 0, isHelicopter: true, isAlien: true,
       flyHeight: 0, flyVy: 0, shootCd: 0, cannonCd: 0, rotorAngle: 0,
+      _hoverSpot: _spot, _hoverT: Math.random() * 6,
       fixed: true, noSave: true, exploded: false
     };
     cars.push(v);
@@ -14479,19 +14506,28 @@ function updateInvasion(dt, q) {
     // 原来没目标时只是 v.z+14 盲目往南挪，附近有任何一个友军（哪怕 70m 外）就拐去追，
     // 结果整队人围着市民打转、永远到不了旗子。现在只有 34m 内的友军/18m 内的玩家
     // 才值得停下来打，其余情况一律把城市旗当行军目标，直扑机场前沿的旗位。
+    // 【fix585·2026-11-27·用户："玩家不走近他们就在原地跑步，根本没有往前走的想法，
+    //   没有一点积极性"】根因有两处：
+    //   ① 进攻战（attack）下 wantMove 在没目标时是 false → 人停在原地，但姿态仍是 run → 原地跑步；
+    //   ② 玩家要 18m 内、友军 34m 内才被锁定 → 玩家远远走近前，外敌根本"没看见"人。
+    //   现在：玩家感知放宽到 60m，友军 70m；无论守/攻，没近敌时一律朝"当前进攻目标"推进。
     const _foe = nearestInvFoe(v.x, v.z, 70);
     const _fd = _foe ? Math.hypot(_foe.x - v.x, _foe.z - v.z) : Infinity;
     const _pd = Math.hypot(px - v.x, pz - v.z);
-    const _playerTgt = (_pd < 18 && _pd < _fd);
-    const _engageFoe = !!_foe && _fd <= 34;
+    const _playerTgt = (_pd < 60 && _pd < _fd + 12);
+    const _engageFoe = !!_foe && _fd <= 60;
     const tgt = _playerTgt ? { x: px, z: pz, player: true } : (_engageFoe ? _foe : null);
     const _defendFlag = q.invMode !== 'attack' && !(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
     const _flag = (INV_FLAGS && INV_FLAGS.cityPos) ? INV_FLAGS.cityPos : { x: 0, z: -311 };
     // 每人一条微小横向偏移：不会全挤在旗杆同一个点上抽搐，但都落在夺旗判定圈内
-    if (_defendFlag && v._flagLane === undefined) v._flagLane = (Math.random() - 0.5) * 9;
+    if (v._flagLane === undefined) v._flagLane = (Math.random() - 0.5) * 9;
     const _noTgt = !tgt;
-    const tx = _noTgt ? (_defendFlag ? _flag.x + (v._flagLane || 0) : v.x) : tgt.x;
-    const tz = _noTgt ? (_defendFlag ? _flag.z + 1.2 : v.z + 14) : tgt.z;
+    // 【fix585】进攻战没近敌时也要有行军目标：朝玩家方向压过去（玩家在战场南边），
+    // 而不是 tx=v.x / tz=v.z+14 那种"往南挪一点就停"。守城战继续扑城市旗。
+    let tx, tz;
+    if (!_noTgt) { tx = tgt.x; tz = tgt.z; }
+    else if (_defendFlag) { tx = _flag.x + (v._flagLane || 0); tz = _flag.z + 1.2; }
+    else { tx = px + (v._flagLane || 0); tz = pz; }   // 进攻战：直扑玩家所在方向
     const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz) || 1;
     v.angle = Math.atan2(dx, dz); v.group.rotation.y = v.angle;
     // 【fix579·2026-11-26·用户："动作还是很僵硬，有的站着不动，开始之后必须往前冲，
@@ -14518,7 +14554,8 @@ function updateInvasion(dt, q) {
     // 现在进射程后改成绕着目标走（边走边打），并加卡住计时强制切线脱离。
     const _hold = _melee ? 2.0 : Math.min(_range * 0.25, 6.5);
     const _inRange = !_noTgt && d <= _hold;
-    const wantMove = _noTgt ? (_defendFlag || q.invMode !== 'attack') : true;
+    // 【fix585】原来进攻战无目标时 wantMove=false → 站着原地跑；现在永远保持推进意志
+    const wantMove = true;
     v.invMoving = wantMove;
     if (wantMove) {
       let mx = dx / d, mz = dz / d;
@@ -14539,11 +14576,12 @@ function updateInvasion(dt, q) {
         mx = nx * 0.85 + dx / d * 0.45;
         mz = nz * 0.85 + dz / d * 0.45;
       }
-      // 进射程后不再直立站桩：30% 朝目标 + 85% 沿切线绕圈
+      // 【fix585】原来进射程后 30% 朝目标 + 85% 切线绕圈 → 看着像原地绕圈、不往人身边压。
+      // 现在改为 80% 朝目标 + 20% 轻微侧移（避免叠人），始终朝目标推进。
       if (_inRange) {
         const s = v._side || 1;
-        mx = mx * 0.30 + (-dz / d * s) * 0.85;
-        mz = mz * 0.30 + ( dx / d * s) * 0.85;
+        mx = mx * 0.80 + (-dz / d * s) * 0.20;
+        mz = mz * 0.80 + ( dx / d * s) * 0.20;
       }
       const _spdD = _noTgt ? Math.abs(tz - v.z) : d;
       // 冲锋恒定 5m/s；近身缠斗/绕圈 1.9m/s，不再"全员慢走"。
@@ -20938,8 +20976,10 @@ function collideNpcBodies(p, r) {
 
 function collideTrees(p, r) { for (const tr of treeObstacles) pushCircle(p, r, tr, tr.r); }
 function collideGasBarrels(p, r) { for (const gb of gasBarrels) if (gb.alive) pushCircle(p, r, gb, gb.radius); }
-function collideNpc(p, r, self) {
-  collideBuildingsFast(p, r);
+// 【fix585】第 4 参数 feetY：跳跃越障时传入抬高后的脚底高度，
+// collideBuildingsFast 会据此忽略低于脚底的矮障碍（铁丝网/沙袋），高大建筑仍然挡路。
+function collideNpc(p, r, self, feetY) {
+  collideBuildingsFast(p, r, feetY);
   for (const pl of platforms) circleVsAABB(p, r, pl);
   collideCarsFast(p, r);
   for (const w of wrecks) circleVsCircle(p, r, { x: w.x, z: w.z }, w.radius);
@@ -20958,6 +20998,24 @@ function npcAdvance(r, ux, uz, dist) {
   if (!(dist > 0)) return false;
   const len = Math.hypot(ux, uz) || 1;
   ux /= len; uz /= len;
+  // 【fix585】跳跃越障：卡住时（_navBlockT 累积）起跳，越过铁丝网/沙袋/战壕。
+  // _jumpT>0 期间用抬高后的 feetY 做碰撞，矮障碍（top<脚+0.3）被忽略，高楼仍挡路；
+  // 同时把模型 y 抬高画抛物线，配合 animateHuman 的 'jump' 姿态。
+  let _jumpFeetY = undefined;
+  if (r._jumpCd > 0) r._jumpCd -= 1 / 60;
+  if ((r._jumpT || 0) > 0) {
+    r._jumpT -= 1 / 60;   // 跳一次约 0.75 秒（由调用帧驱动，够跨过 6m 宽的铁丝网段）
+    const jp = 1 - Math.max(0, r._jumpT) / 0.75;          // 0→1
+    const arc = Math.sin(Math.min(1, jp) * Math.PI);      // 抛物线高度
+    _jumpFeetY = terrainHeight(r.x, r.z) + 0.2 + arc * 2.0;
+    if (r.group) { r.group.position.y = _jumpFeetY; if (r.group.userData) r.group.userData._jumpArc = arc; }
+    r._jumpArc = arc;
+  } else if (r._jumpArc) {
+    // 落地：把 y 落回地形，避免停在半空
+    r._jumpArc = 0;
+    if (r.group) r.group.position.y = terrainHeight(r.x, r.z);
+    if (r.group && r.group.userData) r.group.userData._jumpArc = 0;
+  }
   // 【fix581】原来只试正前 / ±55° / ±90° 五档，站在铁丝网、沙袋端头或人群里时
   // 五档全被碰撞推回，人就会一直原地不动。现在加密到 ±35/55/75/90/110°，
   // 并把"接受位移"门槛从 35% 降到 22%；全失败时再强制沿障碍切线横移一次。
@@ -20974,15 +21032,35 @@ function npcAdvance(r, ux, uz, dist) {
   ];
   for (const t of tries) {
     const p = { x: r.x + t[0] * dist, z: r.z + t[1] * dist };
-    collideNpc(p, 0.42, r); clampCity(p);
+    // 【fix585】跳跃时传抬高 feetY，矮障碍不再挡路
+    collideNpc(p, 0.42, r, _jumpFeetY); clampCity(p);
     const moved = Math.hypot(p.x - r.x, p.z - r.z);
     if (moved > dist * 0.22) {
       r.x = p.x; r.z = p.z;
-      // 【fix583】同步脚底高度到地形：外敌原来只在出生时设一次 y，
-      // 走进战壕/爬上台地后 y 停在原地，玩家在旁边会因"不同楼层"判定被跳过碰撞（虚体感）。
-      const _ny = terrainHeight(p.x, p.z);
+      // 【fix583/585】同步脚底高度到地形；跳跃中保留抛物线抬升，落地后回到地形
+      const _ny = _jumpFeetY !== undefined ? _jumpFeetY : terrainHeight(p.x, p.z);
       if (r.group) { r.group.position.x = p.x; r.group.position.y = _ny; r.group.position.z = p.z; }
       r._navBlockT = 0;
+      return true;
+    }
+  }
+  // 【fix585】九档全失败 → 起跳越过铁丝网/沙袋/战壕：这一帧就带着抬高的 feetY
+  // 朝目标方向硬穿一次（矮障碍被忽略，高大建筑仍挡）。跳跃期间会连续多帧走这条路。
+  if (!(_jumpFeetY > 0)) {
+    r._navBlockT = (r._navBlockT || 0) + dist;
+    // 累积被挡位移超过 1.2m 就起跳，避免一碰到小石子就跳
+    if (r._navBlockT > 1.2 && !(r._jumpCd > 0)) {
+      r._jumpT = 0.75; r._jumpCd = 2.2; r._navBlockT = 0;
+    }
+  }
+  if ((r._jumpT || 0) > 0) {
+    const jy = terrainHeight(r.x, r.z) + 0.2 + Math.sin(Math.min(1, 1 - r._jumpT / 0.75) * Math.PI) * 2.0;
+    const p = { x: r.x + ux * dist * 1.6, z: r.z + uz * dist * 1.6 };
+    collideNpc(p, 0.42, r, jy); clampCity(p);
+    if (Math.hypot(p.x - r.x, p.z - r.z) > dist * 0.1) {
+      r.x = p.x; r.z = p.z;
+      r._jumpArc = Math.sin(Math.min(1, 1 - r._jumpT / 0.75) * Math.PI);
+      if (r.group) { r.group.position.set(p.x, jy, p.z); if (r.group.userData) r.group.userData._jumpArc = r._jumpArc; }
       return true;
     }
   }
@@ -21455,6 +21533,8 @@ function explodeCar(v) {
   if (v.exploded) return; v.exploded = true;
   // 先把驾驶中的玩家甩出来
   if (state === 'drive' && currentCar === v) { state = 'walk'; currentCar = null; person.visible = true; person.position.set(v.x, personGroundY(v.x, v.z), v.z); stopCarMusic(); }
+  // 【fix585】飞碟被打爆后同步收掉地面悬停光斑，别留一个空转的紫色光圈
+  try { if (v._hoverSpot && v._hoverSpot.parent) v._hoverSpot.parent.remove(v._hoverSpot); v._hoverSpot = null; } catch (e) {}
   blackenGroup(v.group);   // 整车变黑
   if (v.group && v.group.userData.detail) { v.group.userData.detail.visible = true; v.group.userData.lod.visible = false; }   // 残骸永远显示完整车模，别留个低模盒子
   // 【fix151】车辆爆炸也做大：两颗火球 + 冲击波 + 碎片翻倍
@@ -22382,6 +22462,21 @@ function animateHumanCore(g, phase, punch, atk, moving, punchHand, kick, reloadP
   const isGun = style === 'pistol' || style === 'rifle' || style === 'smg' || style === 'shotgun' || style === 'sniper' || style === 'rpg';
   const isMeleeGun = style === 'chainsaw' || style === 'katana' || style === 'nunchaku';
   const isRunning = style === 'run';
+  // 【fix585】跳跃越障姿态：收腿抬膝、双臂上扬，落地恢复。任何 NPC 跳过铁丝网/战壕都能看到动作。
+  const _ja = (u && u._jumpArc) || 0;
+  if (_ja > 0.01) {
+    u.legL.rotation.x = -0.95 * _ja; u.legR.rotation.x = -0.45 * _ja;
+    u.legL.rotation.z = -0.12 * _ja; u.legR.rotation.z = 0.12 * _ja;
+    if (u.kneeL) u.kneeL.rotation.x = 0.9 * _ja;
+    if (u.kneeR) u.kneeR.rotation.x = 0.75 * _ja;
+    u.armL.rotation.x = -1.5 * _ja; u.armL.rotation.z = -0.35 * _ja;
+    u.armR.rotation.x = -1.3 * _ja; u.armR.rotation.z = 0.35 * _ja;
+    if (u.elbowL) u.elbowL.rotation.x = -0.3 * _ja;
+    if (u.elbowR) u.elbowR.rotation.x = -0.3 * _ja;
+    if (u.hip) u.hip.rotation.x = 0.12 * _ja;
+    if (u.head) u.head.rotation.x = -0.08 * _ja;
+    return;
+  }
 
   // 踢飞：右腿前踢、双臂后摆平衡（动腿，不出拳）
   if (kick > 0.01) {
@@ -26713,15 +26808,33 @@ function updatePoliceCar(pc, dt) {
     if (Math.abs(pc.speed) > 0.05) move(); else pc.speed = 0;
     return;
   }
-  // 【fix581】入侵期间警车直接撞外敌，不停下来"下车抓玩家"
-  if (invasionActive && invTgt) {
+  // 【fix585】入侵期间警车开到外敌附近 → 警察下车作战（原来入侵时把下车逻辑整个跳过，
+  // 警车只会撞人，撞不动就卡在战壕里当路障 —— 用户："警车开过来警察要下车打他们"）。
+  // 卡死判定不能只看 pc.stuckT：顶住沙袋时速度早被刹到 <2，那个计时器根本不涨。
+  // 这里按每帧真实位移算：连续 2.5 秒挪不动就当成卡死，强制放警察下车。
+  if (invasionActive && invTgt && !pc._invDropped) {
+    if (pc._invLastX !== undefined) {
+      const _moved = Math.hypot(pc.x - pc._invLastX, pc.z - pc._invLastZ);
+      pc._invStuckT = _moved < 0.02 ? (pc._invStuckT || 0) + dt : 0;
+    }
+    pc._invLastX = pc.x; pc._invLastZ = pc.z;
+  }
+  if (invasionActive && invTgt && !pc.dispatched && !pc._invDropped) {
+    if (d < 20 || (pc.stuckT || 0) > 3 || (pc._invStuckT || 0) > 2.5) {
+      pc.dispatched = true; pc.dispatchT = 0.6; pc.doorT = 0.7;
+      pc.stuckT = 0; pc.recoverT = 0; pc._invDropped = true;
+      sfx('enter');
+      try { setHint('警车已抵达战场：警察下车阻击外敌'); } catch (e) {}
+    }
+  }
+  // 入侵期间撞到外敌仍然造成伤害（下车前的最后一撞）
+  if (invasionActive && invTgt && !pc.dispatched) {
     if (d < 3.4 && pc.hitCd <= 0 && Math.abs(pc.speed) > 5) {
       invTgt.hp -= 26;
       spawnBurst(invTgt.x, invTgt.z, 0xff4422, 5);
       if (invTgt.hp <= 0) killResident(invTgt, pc);
       pc.hitCd = 0.9;
     }
-    pc.dispatched = false; pc.dispatchT = 0;
   }
   // 追到玩家附近：先停车→开车门→警察下车（慢动作细节），提前触发距离
   if (!invasionActive && !pc.dispatched && d < 14) {
@@ -26764,7 +26877,11 @@ function updatePoliceCar(pc, dt) {
           const g = makeCopFigure();
           g.position.set(sp.x, terrainHeight(sp.x, sp.z), sp.z); scene.add(g);
           // safeT：刚下车的短暂无敌期，避免下车瞬间就被玩家车辆碾倒
-          cops.push({ group: g, x: sp.x, z: sp.z, angle: pc.angle, hp: 80, alive: true, fightCd: 0, respawn: 0, down: false, downT: 0, ranged: 'pistol', melee: 'baton', armed: true, ammo: 6, maxAmmo: 6, aggro: false, safeT: 2.5, fromCar: pc });
+          // 【fix585】入侵期间下车的警察标 isInvPolice 并进 INV_COPS，
+          // 让他们和战场上的支援警察一样主动找外敌作战（updateCop 的入侵分支）。
+          const _newCop = { group: g, x: sp.x, z: sp.z, angle: pc.angle, hp: 80, alive: true, fightCd: 0, respawn: 0, down: false, downT: 0, ranged: 'pistol', melee: 'baton', armed: true, ammo: 24, maxAmmo: 24, aggro: false, safeT: 2.5, fromCar: pc, isInvPolice: invasionActive };
+          cops.push(_newCop);
+          if (invasionActive) INV_COPS.push(_newCop);
         }
       }
     }
@@ -26772,6 +26889,37 @@ function updatePoliceCar(pc, dt) {
     return;
   }
   if (pc.dispatched) {
+    // 【fix585】入侵期间警察已下车 → 警车撤出战场（往南开路），别停在战壕里当路障。
+    // 用户："这种里边怎么还会有车辆呢？不能开，放这些的意义是啥？"
+    if (invasionActive && pc._invDropped) {
+      // 下车后车要真正开出战场。直着往南会顶在沙袋/铁丝网/战壕边上（实测停在 z=-447 不动），
+      // 所以撞到东西就横向绕一段再继续南下，避免变成永久路障。
+      if (pc._invExitSide === undefined) pc._invExitSide = pc.x < 0 ? 1 : -1;
+      if ((pc._invExitDetour || 0) > 0) {
+        pc._invExitDetour -= dt;
+        pc.angle = Math.atan2(pc._invExitSide * 2, 1);   // 斜向绕障碍
+      } else {
+        pc.angle = 0;                                    // 朝南（+z）
+      }
+      pc.group.rotation.y = pc.angle;
+      pc.speed = Math.min((pc.speed || 0) + 14 * dt, 18);
+      const blocked = move();
+      if (blocked > Math.max(0.6, pc.speed * dt * 0.5)) {
+        pc._invExitDetour = 1.1;
+        pc._invExitBlock = (pc._invExitBlock || 0) + dt;
+        if (pc._invExitBlock > 1.4) { pc._invExitSide = -pc._invExitSide; pc._invExitBlock = 0; }
+      } else if ((pc._invExitDetour || 0) <= 0) pc._invExitBlock = 0;
+      // 开出战场（z > -290）就移除；被多个障碍夹死时最多给 4.5 秒，
+      // 到点直接移出战场 —— 用户要的是"战场里不要留不能开、没意义的车辆"。
+      pc._invExitT = (pc._invExitT || 0) + dt;
+      if (pc.z > -290 || pc._invExitT > 4.5) {
+        pc._invRemove = true;
+        try { if (pc.group && pc.group.parent) scene.remove(pc.group); } catch (e) {}
+        const pi = policeCars.indexOf(pc); if (pi >= 0) policeCars.splice(pi, 1);
+      }
+      blink();
+      return;
+    }
     // 已下完车：待命；离玩家远了重新加入追捕（持续有警车来抓）
     pc.speed *= (1 - Math.min(1, 3 * dt));
     move();
@@ -29316,9 +29464,31 @@ function updateAlienVehicles(dt) {
     // 机体位置 / 朝向
     const gy = terrainHeight(c.x, c.z);
     if (c.isHelicopter) {
-      // 飞行器：保持低空盘旋，慢慢升到 ~9m；玩家开过再下车也照常升空
-      c.flyHeight = Math.min(9, (c.flyHeight || 0) + dt * 2.2);
-      c.group.position.set(c.x, gy + c.flyHeight + 1.8, c.z);
+      // 【fix585·2026-11-27】用户："敌方的这个飞碟，让他明显的感觉到飞起来。"
+      // 原来飞碟只升到 9m、无浮动，夜里看着像贴在地上。现在异族飞碟巡航 24m，
+      // 缓慢爬升/回落（玩家开高后下车不会瞬间掉下来），加上下浮动和轻微横滚，
+      // 底部光晕 + 地面光斑同步呼吸，形成明确的离地高度参照。
+      const targetH = c.isAlien ? 24 : 9;
+      let _h = c.flyHeight || 0;
+      _h = _h < targetH ? Math.min(targetH, _h + dt * 3.2) : Math.max(targetH, _h - dt * 4);
+      c.flyHeight = _h;
+      c._hoverT = (c._hoverT || 0) + dt;
+      const bob = c.isAlien ? Math.sin(c._hoverT * 2.1) * 0.38 : 0;
+      c.group.position.set(c.x, gy + c.flyHeight + 1.8 + bob, c.z);
+      if (c.isAlien) {
+        c.group.rotation.z = Math.sin(c._hoverT * 1.3) * 0.045;
+        c.group.rotation.x = Math.cos(c._hoverT * 1.7) * 0.03;
+        const hg = c.group.userData && c.group.userData.hoverGlow;
+        if (hg) hg.material.opacity = 0.3 + 0.16 * (0.5 + 0.5 * Math.sin(c._hoverT * 3.4));
+        const sp = c._hoverSpot;
+        if (sp) {
+          sp.visible = true;
+          sp.position.set(c.x, gy + 0.08, c.z);
+          const sc = 1 + _h * 0.055;
+          sp.scale.set(sc, sc, 1);
+          sp.material.opacity = Math.max(0.08, 0.34 - _h * 0.006);
+        }
+      }
       c.rotorAngle = (c.rotorAngle || 0) + dt * 12;
     } else {
       c.y += ((gy + 0.8) - c.y) * Math.min(1, dt * 6);
