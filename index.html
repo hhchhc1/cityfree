@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261127-fix583-invader-collision-blast">
+<meta name="cf-build" content="20261127-fix584-alien-vehicle-autopilot">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -29282,6 +29282,116 @@ function updateMilTank(dt) {
   }
   milTank._ppx = pp.x; milTank._ppz = pp.z;
 }
+
+// ========== 【fix584·2026-11-27】异族载具自动驾驶 AI ==========
+// 用户："异族载具必须一直要有人开吗？玩家开上再下车那个也要会动，动起来打防守的，
+//        或者打玩家/市民/警察/守卫。"
+// 根因：异族战车/飞行器只被塞进 cars，除了出生摆位就没有任何 AI 驱动 ——
+// 它们既不在 militaryTank 的 updateMilTank 里，也没有自己的更新函数，
+// 于是玩家不上车就永远停在原地，玩家下车后又被通用载具逻辑当成"停好的车"冻住。
+// 现在给它们独立的 AI：只要没被玩家驾驶，就自动找目标（玩家/市民/警察/军方）推进开火。
+function updateAlienVehicles(dt) {
+  if (!invasionActive || !ALIEN_VEHICLES || !ALIEN_VEHICLES.length) return;
+  for (const c of ALIEN_VEHICLES) {
+    if (!c || c.exploded) continue;
+    // 玩家正在开：完全交给玩家，AI 停手（和军方坦克一致）
+    if (state === 'drive' && currentCar === c) { c._alienAI = false; continue; }
+    c._alienAI = true;
+    // 找目标：玩家 140m 内优先，否则最近的友军（市民/军方/警察）
+    const px = person.position.x, pz = person.position.z;
+    const pd = Math.hypot(px - c.x, pz - c.z);
+    const foe = nearestInvFoe(c.x, c.z, 320);
+    const fd = foe ? Math.hypot(foe.x - c.x, foe.z - c.z) : Infinity;
+    let tx, tz, isPlayer = false;
+    if (pd < 140 && pd <= fd) { tx = px; tz = pz; isPlayer = true; }
+    else if (foe) { tx = foe.x; tz = foe.z; }
+    else { tx = c.x; tz = c.z + 20; }   // 没目标就往南（城市旗方向）缓缓推进
+    const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz) || 1;
+    const des = Math.atan2(dx, dz);
+    let da = des - c.angle;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    const turn = (c.isHelicopter ? 1.8 : 1.0) * dt;
+    c.angle += Math.max(-turn, Math.min(turn, da));
+    // 机体位置 / 朝向
+    const gy = terrainHeight(c.x, c.z);
+    if (c.isHelicopter) {
+      // 飞行器：保持低空盘旋，慢慢升到 ~9m；玩家开过再下车也照常升空
+      c.flyHeight = Math.min(9, (c.flyHeight || 0) + dt * 2.2);
+      c.group.position.set(c.x, gy + c.flyHeight + 1.8, c.z);
+      c.rotorAngle = (c.rotorAngle || 0) + dt * 12;
+    } else {
+      c.y += ((gy + 0.8) - c.y) * Math.min(1, dt * 6);
+      c.group.position.set(c.x, c.y, c.z);
+    }
+    c.group.rotation.y = c.angle;
+    try { if (c.group.userData.turret) c.group.userData.turret.rotation.y = Math.atan2(dx, dz) - c.angle; } catch (e) {}
+    // 行进：远距离全速压上；进射程后仍保持低速推进（边走边打），
+    // 不能像原来那样一进射程就完全停住 —— 用户要"动起来打"，停着的载具像路障。
+    const hold = c.isHelicopter ? 45 : 85;
+    const spd = Math.abs(da) < 2.2
+      ? (d > hold ? (c.isHelicopter ? 18 : 11) : (c.isHelicopter ? 6 : 3.5))
+      : 0;
+    if (spd > 0 && !isPlayer) {
+      const p = { x: c.x + Math.sin(c.angle) * spd * dt, z: c.z + Math.cos(c.angle) * spd * dt };
+      collideBuildingsFast(p, c.radius || 3); clampCity(p);
+      // 顶墙/顶障碍：偏一下绕开
+      if (Math.hypot(p.x - c.x, p.z - c.z) < spd * dt * 0.3) {
+        c._alienDetour = (c._alienDetour || 0) + dt;
+        if (c._alienDetour > 0.4) { c.angle += (Math.random() < 0.5 ? 1 : -1) * 0.9; c._alienDetour = 0; }
+      } else { c._alienDetour = 0; }
+      c.x = p.x; c.z = p.z;
+    } else if (spd > 0 && isPlayer) {
+      // 目标是玩家时同样压上去（玩家离得远才推进）
+      const p = { x: c.x + Math.sin(c.angle) * spd * dt, z: c.z + Math.cos(c.angle) * spd * dt };
+      collideBuildingsFast(p, c.radius || 3); clampCity(p);
+      c.x = p.x; c.z = p.z;
+    }
+    // ---- 开火：坦克高爆火箭弹 / 飞行器速射机枪，都只打看得见的目标 ----
+    const maxRange = c.isHelicopter ? 150 : 170;
+    if ((d < maxRange) && (isPlayer || foe) &&
+        hasLineOfSight(c.x, c.z, tx, tz, null)) {
+      const cdKey = c.isHelicopter ? 'shootCd' : 'shootCd';
+      if (c[cdKey] > 0) c[cdKey] -= dt;
+      if (c[cdKey] <= 0) {
+        if (c.isHelicopter) {
+          // 飞行器机枪：0.28s 一发，直接对目标结算伤害 + 曳光
+          c.shootCd = 0.28;
+          const hy = gy + c.flyHeight + 1.2;
+          spawnTracer(c.x, hy, c.z, tx, terrainHeight(tx, tz) + 1.0, tz, 'minigun');
+          spawnBurst(c.x, hy, 0xffe066, 4);
+          try { sfxNear('shoot', c.x, c.z, 140); } catch (e) {}
+          if (isPlayer) { if (pd < 40) hurtPlayer(7); }
+          else if (foe) {
+            // by 用 'npc'：invPlayerImmune 只豁免 npc/cop/stealth 这类非玩家来源，
+            // 写 'alien' 会被误判成"玩家打友军"而让市民/军方对外敌载具免疫。
+            if (foe.isCop) { if (typeof hitCop === 'function') hitCop(foe.cop || foe, 7, 'npc'); }
+            else { if (typeof damageResident === 'function') damageResident(foe, 7, 'npc', c); }
+          }
+        } else {
+          // 坦克：3.6s 一发高爆火箭弹，落点溅射
+          c.shootCd = 3.6;
+          const fly = Math.min(1.6, d / 110 + 0.35);
+          const ix = tx, iz = tz, iy = terrainHeight(ix, iz) + 0.8;
+          const bx = c.x + Math.sin(c.angle) * 6.5, bz = c.z + Math.cos(c.angle) * 6.5;
+          spawnTracer(bx, gy + 2.6, bz, ix, iy, iz, 'rocket');
+          spawnBurst(bx, bz, 0xffff88, 6, gy + 2.6);
+          try { sfxNear('shoot', c.x, c.z, 160); } catch (e) {}
+          queueBullet(ix, iy, iz, fly, function () {
+            try {
+              spawnFireball(ix, iy + 0.8, iz, 1.2, 5.4, 0.45, 0xffd066);
+              spawnBurst(ix, iz, 0xffaa33, 26, iy); emitSmoke(ix, iy, iz, true);
+              try { sfxNear('boom', ix, iz, 150); } catch (e) {}
+              const now = Math.hypot(person.position.x - ix, person.position.z - iz);
+              if (now < 11 && Math.abs((person.position.y || 0) - iy) < 8) hurtPlayer(Math.round(8 + 24 * (1 - now / 11)));
+              try { blastPeople(ix, iz, 10, dd => Math.round(6 + 16 * (1 - dd / 10)), 3, 0, 0, 'npc'); } catch (e) {}
+            } catch (e) {}
+          });
+        }
+      }
+    }
+  }
+}
 // ========== 【fix549·2026-11-21】军方直升机可以被击落 / 被钩爪拽下来 ==========
 // 用户："这个军方的飞机为什么拽不下来，还有也打不中"
 // 根因：`milHeli` 是一个**完全独立**的对象，既不在 cars / traffic 里，也不在 residents 里，
@@ -30412,6 +30522,8 @@ if (isDevOn()) player.stamina = player.maxStamina;   // 【fix182】开发者模
   try { updateMilHeli(dt); } catch (e) { console.error('[mil heli]', e); }
   // 【fix545】五星 + 玩家占了直升机 → 军方改派坦克（同样放在载具大 try 之外）
   try { updateMilTank(dt); } catch (e) { console.error('[mil tank]', e); }
+  // 【fix584】异族载具自动驾驶：无人时自动追击玩家/市民/警察/军方，玩家开过再下车也照常动
+  try { updateAlienVehicles(dt); } catch (e) { console.error('[alien vehicles]', e); }
   // 【fix558】五星期间基地停机坪上的飞机/坦克"已出动"，基地里不再有停着的
   try { syncBaseVehicleSortie(); } catch (e) { console.error('[base sortie]', e); }
   try { updateDrops(dt); updateHospitalPacks(dt); } catch(e) { console.error('[Drops update error]', e); }
