@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261126-fix579-invader-charge-melee">
+<meta name="cf-build" content="20261127-fix580-flag-defend-ally-truce">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -8057,7 +8057,7 @@ function updateInvTorchLights(nightF) {
 // 旗面用 CanvasTexture 手绘（城市剪影 / 恶魔头），布面顶点做正弦飘动 —— 只有两面旗，
 // 每帧几十个顶点，成本可以忽略，但远看比一块纯色板子像旗子得多。
 var INV_FLAGS = {
-  city: null, demon: null, carrier: null, cityLost: false,
+  city: null, demon: null, carrier: null, guardGlow: null, cityLost: false,
   // 己方阵地：铁丝网中央缺口西侧 9.5m。不放在缺口正中间 —— 旗杆有碰撞，
   // 正中间会把"从机场直穿中门进战场"这条主路堵住（实测走过去会被挡在 z=-309.3）。
   cityPos: { x: -9.5, z: -311 },
@@ -8193,12 +8193,38 @@ function waveFlagCloth(f, dt) {
   f.clothGeo.attributes.position.needsUpdate = true;
   f.clothGeo.computeBoundingSphere();
 }
+// 【fix580】城市旗防守高亮：两圈地面光环 + 一道半透明光柱，只在防守战开战时亮。
+// 用 MeshBasicMaterial + AdditiveBlending，夜里也很显眼；只有 3 个动态网格，不会碰 fix569 的点光源坑。
+function makeInvFlagGuardGlow(x, z) {
+  const gy = terrainHeight(x, z);
+  const g = new THREE.Group();
+  g.position.set(x, gy, z);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x62e8ff, transparent: true, opacity: 0.55,
+    depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false
+  });
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0x54d6ff, transparent: true, opacity: 0.10,
+    depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false
+  });
+  const ring1 = new THREE.Mesh(new THREE.RingGeometry(5.2, 6.0, 40), ringMat);
+  ring1.rotation.x = -Math.PI / 2; ring1.position.y = 0.10; g.add(ring1);
+  const ring2 = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.5, 32), ringMat.clone());
+  ring2.rotation.x = -Math.PI / 2; ring2.position.y = 0.12; g.add(ring2);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 3.2, 14, 20, 1, true), beamMat);
+  beam.position.y = 7.0; g.add(beam);
+  g.visible = false;
+  scene.add(g); registerDynamicObject(g);
+  return { group: g, ring1: ring1, ring2: ring2, ringMat: ringMat, ring2Mat: ring2.material, beamMat: beamMat, t: 0 };
+}
 // 建两面旗（脚本加载期执行一次）
 (function buildBattleFlags() {
   try {
     INV_FLAGS.city = makeBattleFlag('city', INV_FLAGS.cityPos.x, INV_FLAGS.cityPos.z, 5.6);
     INV_FLAGS.demon = makeBattleFlag('demon', INV_FLAGS.demonHome.x, INV_FLAGS.demonHome.z, 5.0);
     INV_FLAGS.demon.group.rotation.y = Math.PI;
+    // 【fix580】旗位高亮：开战后提醒玩家「这里失守就输」
+    INV_FLAGS.guardGlow = makeInvFlagGuardGlow(INV_FLAGS.cityPos.x, INV_FLAGS.cityPos.z);
     // 旗杆碰撞：两个坑位各一根，人和车都不能穿过（插旗后旗杆还在原地）
     try {
       for (const p of [INV_FLAGS.cityPos, INV_FLAGS.demonHome]) {
@@ -8235,6 +8261,8 @@ function applyInvFlagState() {
       F.demon.raise = 1;
     }
   }
+  // 【fix580】高亮只在防守战亮着；失守/过场/非任务期间一律收掉，免得平日晃眼
+  if (F.guardGlow) F.guardGlow.group.visible = false;
   // 任务光柱跟着阵地状态走：平时在战场前沿（铁丝网中门后），失守后挪到阵地南侧，
   // 免得玩家去接"进攻战"时正好站在守敌堆里。
   try { syncInvQuestMarker(); } catch (e) {}
@@ -8274,6 +8302,22 @@ function updateBattleFlags(dt) {
     const wz = c.z - lx * sa + lz * ca;
     F.demon.group.position.set(wx, terrainHeight(wx, wz), wz);
     F.demon.group.rotation.y = a;
+  }
+  // 【fix580】旗位高亮脉冲：外敌一旦摸到这个圈就判阵地失守，白天/夜里都要看得见
+  const gl = F.guardGlow;
+  if (gl) {
+    const on = invasionActive && !F.cityLost && !invWinCutscene && !invFlagCutscene &&
+               !(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
+    gl.group.visible = !!on;
+    if (on) {
+      gl.t += dt;
+      const p = 0.5 + 0.5 * Math.sin(gl.t * 2.9);
+      gl.ring1.scale.setScalar(1 + p * 0.07);
+      gl.ring2.rotation.z += dt * 0.65;
+      gl.ringMat.opacity = 0.42 + p * 0.34;
+      gl.ring2Mat.opacity = 0.55 + p * 0.35;
+      gl.beamMat.opacity = 0.06 + p * 0.07;
+    }
   }
 }
 // 挑"最前排"的外敌扛旗：离己方阵地最近的活人。扛旗者被打死就换下一个。
@@ -13781,6 +13825,9 @@ var invasionActive = false, invasionTick = 0, invasionTotal = 0;
 var invCarrierTick = 0;   // 【fix576b】举旗手重挑计时
 var invasionKilled = 0, invasionSpawned = 0, invasionSpawnTick = 0;   // 【fix576d】击杀配额/增援
 var invWinCutscene = null;   // 【fix576d】胜利后城市旗飘扬定格
+// 【fix580】入侵期间玩家阵亡不从医院/警局复活，而是从城市旗阵地重新投入战斗。
+// 只在 deathCam 结束进 arrest() 时消费一次；普通死亡流程完全不受影响。
+var invRespawnAtFlag = false;
 var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
 var INV_VEHICLES = [];   // 【fix575】外敌装甲火力点（战场上的敌方军车）
 // 【fix575·2026-11-25·用户："外族入侵期间玩家对 NPC/警察/城管/守卫都是没有伤害的，
@@ -13796,6 +13843,16 @@ function invPlayerImmune(target, by, fromNpc) {
   if (fromNpc && typeof fromNpc === 'object') return false;  // NPC 互殴不拦
   if (by === 'npc' || by === 'cop' || by === 'stealth') return false;
   return true;                                            // 玩家来源打友军 → 免疫
+}
+// 【fix580·2026-11-26·用户："面对外敌入侵或者夺回阵地的时候，城管和士兵是不能打玩家的"】
+// 上面那个函数管的是「玩家 → 友军」；这里管反方向「友军 → 玩家」。
+// 入侵期间城管、基地守卫、军方支援、市民义勇都临时停战，任何来源的伤害都不许落到玩家身上。
+// 外敌（isInvader / isAlienSoldier）不受保护，照常能打死玩家。
+function invAllyAttacker(u) {
+  if (!invasionActive || !u || u.isInvader || u.isAlienSoldier) return false;
+  if (u.isBaseGuard || u.isInvSupport || u.isInvPolice || u.isCivilVolunteer) return true;
+  if (typeof cops !== 'undefined' && cops.indexOf(u) >= 0) return true;
+  return false;
 }
 // 入侵期间击杀/开枪/撞人一律不升星（无论打的是外敌还是友军）。
 function invNoWanted() { return invasionActive; }
@@ -14317,6 +14374,19 @@ function spawnInvasionForce(q) {
   }
   try { sfx('siren'); } catch (e) {}
 }
+// 【fix580】外敌摸到城市旗 = 防守失败。注意不能等玩家死：用户明确要求
+// "一旦有外族士兵走到旗子那里的话就算失败，然后播放那个动画"。
+// 这里先锁存 invLost 并撤兵，再让换旗过场接管镜头；玩家本人不罚款、不送医院。
+function failInvByFlagCapture(q) {
+  if (!q || q.state !== 'active' || q.invMode === 'attack' || !invasionActive) return false;
+  if (invFlagCutscene || invWinCutscene || (typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost)) return false;
+  try { PROGRESS.invLost = true; saveGame(); } catch (e) {}
+  _invLostOnDeath = false;
+  invRespawnAtFlag = false;
+  try { abortQuest(q.id); } catch (e) {}
+  try { startInvFlagCutscene(true); } catch (e) { return false; }
+  return true;
+}
 function updateInvasion(dt, q) {
   // 【fix574b】部署面板还开着时不刷兵（玩家还没点"开始阻击"）
   if (invDeployOpen) return;
@@ -14344,13 +14414,24 @@ function updateInvasion(dt, q) {
     // 【fix579】原来只要有任何一个友军在 70m 内，就无条件忽略贴脸的玩家 ——
     // 玩家离 3m、最近友军离 23m 时外敌仍举枪对 23m 外开火，近战永远触发不了。
     // 现在按真实距离选目标：玩家必须 <18m 且比最近友军更近才被锁定。
+    // 【fix580·2026-11-26·用户："外族入侵的时候，他们要朝着机场/旗子那个方向走，
+    // 一旦有外族士兵走到旗子那里就算失败"】
+    // 原来没目标时只是 v.z+14 盲目往南挪，附近有任何一个友军（哪怕 70m 外）就拐去追，
+    // 结果整队人围着市民打转、永远到不了旗子。现在只有 34m 内的友军/18m 内的玩家
+    // 才值得停下来打，其余情况一律把城市旗当行军目标，直扑机场前沿的旗位。
     const _foe = nearestInvFoe(v.x, v.z, 70);
     const _fd = _foe ? Math.hypot(_foe.x - v.x, _foe.z - v.z) : Infinity;
     const _pd = Math.hypot(px - v.x, pz - v.z);
-    const tgt = (_pd < 18 && _pd < _fd) ? { x: px, z: pz, player: true } : _foe;
+    const _playerTgt = (_pd < 18 && _pd < _fd);
+    const _engageFoe = !!_foe && _fd <= 34;
+    const tgt = _playerTgt ? { x: px, z: pz, player: true } : (_engageFoe ? _foe : null);
+    const _defendFlag = q.invMode !== 'attack' && !(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
+    const _flag = (INV_FLAGS && INV_FLAGS.cityPos) ? INV_FLAGS.cityPos : { x: 0, z: -311 };
+    // 每人一条微小横向偏移：不会全挤在旗杆同一个点上抽搐，但都落在夺旗判定圈内
+    if (_defendFlag && v._flagLane === undefined) v._flagLane = (Math.random() - 0.5) * 9;
     const _noTgt = !tgt;
-    const tx = _noTgt ? v.x : tgt.x;
-    const tz = _noTgt ? v.z + 14 : tgt.z;
+    const tx = _noTgt ? (_defendFlag ? _flag.x + (v._flagLane || 0) : v.x) : tgt.x;
+    const tz = _noTgt ? (_defendFlag ? _flag.z + 1.2 : v.z + 14) : tgt.z;
     const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz) || 1;
     v.angle = Math.atan2(dx, dz); v.group.rotation.y = v.angle;
     // 【fix579·2026-11-26·用户："动作还是很僵硬，有的站着不动，开始之后必须往前冲，
@@ -14370,10 +14451,10 @@ function updateInvasion(dt, q) {
       if (_du.meleeWeapon) _du.meleeWeapon.visible = _melee;
       if (_du.rangedWeapon) _du.rangedWeapon.visible = !_melee;
     }
-    const _charge = _noTgt ? (q.invMode !== 'attack' && Math.abs(pz - v.z) > 12)
+    const _charge = _noTgt ? (_defendFlag && Math.abs(tz - v.z) > 12)
                            : (d > (_meleeByWeapon ? 12 : 55));
     const _hold = _melee ? 2.6 : Math.min(_range * 0.4, 11);
-    const wantMove = _noTgt ? (q.invMode !== 'attack') : (d > _hold);
+    const wantMove = _noTgt ? (_defendFlag || q.invMode !== 'attack') : (d > _hold);
     v.invMoving = wantMove;
     if (wantMove) {
       let mx = dx / d, mz = dz / d;
@@ -14384,7 +14465,7 @@ function updateInvasion(dt, q) {
         mx = nx * 0.85 + dx / d * 0.45;
         mz = nz * 0.85 + dz / d * 0.45;
       }
-      const _spdD = _noTgt ? Math.abs(pz - v.z) : d;
+      const _spdD = _noTgt ? Math.abs(tz - v.z) : d;   // 【fix580】按旗子距离算冲锋速度，不再被玩家站位误导
       // 冲锋恒定 5m/s；近身缠斗才回落到 1.5~2m/s，不再"全员慢走"。
       const spd = _charge ? 5.0 : (_spdD > 150 ? 5.0 : (_spdD > 60 ? 3.2 : (v.invSpeed || 1.7)));
       if (!npcAdvance(v, mx, mz, spd * dt)) v._side = -(v._side || 1);
@@ -14433,6 +14514,19 @@ function updateInvasion(dt, q) {
           spawnBurst(tgt.x, tgt.z, 0xff4422, 3);
           if (tgt.hp <= 0) killResident(tgt, v);
         }
+      }
+    }
+  }
+  // 【fix580】夺旗判定：防守战只要有一个活着的外敌摸进城市旗 7m 圈，立刻判负。
+  // 放在推进循环之后、胜利结算之前，避免同一帧正好打完配额还被判输。
+  if (q.invMode !== 'attack' && !invFlagCutscene && !invWinCutscene &&
+      !(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost) && INV_FLAGS && INV_FLAGS.cityPos) {
+    const _cp = INV_FLAGS.cityPos;
+    for (const v of INVADERS) {
+      if (!v.alive || v.down) continue;
+      if (Math.hypot(v.x - _cp.x, v.z - _cp.z) < 7) {
+        if (failInvByFlagCapture(q)) return;
+        break;
       }
     }
   }
@@ -17206,9 +17300,11 @@ var deathCam = null;
 // 全程约 7 秒；世界冻结（update 开头 return），所以人物的走路动画要在这里手动驱动。
 var _invLostOnDeath = false;
 var invFlagCutscene = null;
-function startInvFlagCutscene() {
+// 【fix580】capture=true：外敌摸到旗子触发（玩家还活着），过场结束后不复活流程；
+// 不传参：兼容旧的「防守战阵亡 → 换旗」路径，结束后走 arrest()。
+function startInvFlagCutscene(capture) {
   const F = INV_FLAGS;
-  if (!F || !F.city || !F.demon) { arrest(); return; }
+  if (!F || !F.city || !F.demon) { if (!capture) arrest(); return false; }
   const cp = F.cityPos;
   const cy = terrainHeight(cp.x, cp.z);
   // 举旗手：从阵地北侧（外敌压过来的方向）走来
@@ -17232,7 +17328,7 @@ function startInvFlagCutscene() {
   F.city.cloth.position.y = F.city.poleH - 1.02;
   F.city.cloth.rotation.z = 0;
   invFlagCutscene = {
-    t: 0, dur: 7.0, planter: planter, planted: false, flagHint: false,
+    capture: !!capture, t: 0, dur: 7.0, planter: planter, planted: false, flagHint: false,
     camFrom: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
     camTo: { x: cp.x + 9.5, y: cy + 4.3, z: cp.z + 11.5 },
     lookAt: { x: cp.x, y: cy + 2.7, z: cp.z },
@@ -17240,6 +17336,7 @@ function startInvFlagCutscene() {
     to: { x: cp.x + 1.9, z: cp.z - 0.6 }
   };
   try { sfx('siren'); } catch (e) {}
+  return true;
 }
 function invFlagTick(dt) {
   const S = invFlagCutscene;
@@ -17315,6 +17412,12 @@ function finishInvFlagCutscene() {
   try { person.rotation.x = 0; } catch (e) {}
   try { camera.fov = 60; camera.updateProjectionMatrix(); } catch (e) {}
   try { applyInvFlagState(); } catch (e) {}
+  // 【fix580】夺旗失守：玩家没死，不该被送医院/罚款；只弹结果提示，阵地状态已变成可反攻。
+  if (S && S.capture) {
+    try { showQuestResult(false, '阵地失守', '外族士兵攻到了城市旗下，恶魔旗换下了城市旗。\n\n下次到任务光柱接取「收复阵地」，打进攻战把旗子夺回来。'); } catch (e) {}
+    try { setHint('阵地失守！下次接取收复阵地任务，把城市旗插回来'); } catch (e) {}
+    return;
+  }
   arrest();
 }
 // ==================== 【fix576d】胜利定格：城市旗飘扬 ====================
@@ -17397,7 +17500,10 @@ function startDeathCam() {
   } catch (e) {}
   try { sfx('hurt'); } catch (e) {}
 }
-function hurtPlayer(n, byCop) {
+function hurtPlayer(n, byCop, fromUnit) {
+  // 【fix580】入侵期间友军（城管/基地守卫/军方支援/市民义勇）不得伤害玩家。
+  // byCop 也是友军标志（警棍、军方直升机/坦克的 byCop=true 都走这里），一并挡掉。
+  if (invasionActive && (byCop || invAllyAttacker(fromUnit))) return;
   // 【2026-10-13 用户报】坐在摩天轮上还会被地面的人打到、被楼下的警棍挥到 ——
   // 摩天轮这条链路完全没算高度：攻击判定（居民/警察的射击、警棍、近战）只比平面距离，
   // 而轿厢最低点离地 6m、最高 70m，地面上的任何近战和子弹都不可能够到。直接免伤。
@@ -17429,16 +17535,19 @@ function hurtPlayer(n, byCop) {
     try {
       const _aq = QUESTS.find(v => v.state === 'active');
       if (_aq) {
-        // 【fix576b】防守战阵亡 = 阵地失守：城市旗要被恶魔旗换掉，下次来打进攻战。
-        // 标记放在 abortQuest 之前 —— abortQuest 会 cleanupInvasion 把外敌全清掉，
-        // 之后就判断不出"刚才是防守战"了。换旗过场在死亡镜头结束后播（见 update 里的 deathCam 分支）。
-        if (_aq.id === 'invasion' && invasionActive && !PROGRESS.invLost && _aq.invMode !== 'attack') {
-          _invLostOnDeath = true;
-          PROGRESS.invLost = true;
-          try { saveGame(); } catch (e) {}
+        // 【fix580·2026-11-26·用户："如果玩家在这个过程中死亡的话就从旗帜那里复活，
+        // 可以继续战斗，不然就不好玩了"】
+        // 入侵/反攻不再因为玩家阵亡而判任务失败，也不再触发换旗过场；
+        // 只有「外敌真的摸到旗子」才失守（见 failInvByFlagCapture）。死亡只是从旗位重整旗鼓。
+        if (_aq.id === 'invasion') {
+          invRespawnAtFlag = true;
+          killedByCop = false;          // 阵地上阵亡不给城管罚款
+          _invLostOnDeath = false;
+          try { setHint('你在阵地上倒下 —— 将从城市旗处复活，继续战斗'); } catch (e) {}
+        } else {
+          abortQuest(_aq.id);
+          setHint('已死亡 —— 任务失败：' + _aq.name);
         }
-        abortQuest(_aq.id);
-        setHint('已死亡 —— 任务失败：' + _aq.name);
       }
     } catch (e) {}
     // 【fix563】不再立刻 arrest：先定格 1 秒、用第三人称"从下往上"的镜头看清死亡状态，
@@ -17488,6 +17597,13 @@ function useWantedCard() {
   setHint('通缉清零　所有人对玩家的仇恨已消除');
   renderShop();
 }
+// 【fix580】旗帜复活点：旗杆本身有碰撞盒，不能直接把人塞在旗杆坐标上。
+// 往南 4.2m / 西 3.6m 是铁丝网缺口外侧的开阔地，复活后抬头就能看见高亮旗圈。
+function invFlagRespawnSpot() {
+  const cp = (INV_FLAGS && INV_FLAGS.cityPos) ? INV_FLAGS.cityPos : { x: -9.5, z: -311 };
+  const x = cp.x - 3.6, z = cp.z + 4.2;
+  return { x: x, y: terrainHeight(x, z) + 0.08, z: z };
+}
 function arrest() {
   const wasCopKill = killedByCop;
   killedByCop = false;
@@ -17496,7 +17612,14 @@ function arrest() {
   // 复活后跑两步就喘，很别扭）。
   player.hp = player.maxHp;
   player.stamina = player.maxStamina;
-  if (wasCopKill) {
+  // 【fix580】入侵/反攻阵亡：不回医院、不罚款，直接在旗位复活继续打
+  if (invRespawnAtFlag && invasionActive) {
+    invRespawnAtFlag = false;
+    const rp = invFlagRespawnSpot();
+    person.position.set(rp.x, rp.y, rp.z); person.visible = true;
+    showOverlay('已从城市旗阵地重新投入战斗', 2.2);
+    floatText('继续战斗！', '#7dffa8');
+  } else if (wasCopKill) {
     // 被警察打死：在**警察局**门口醒来，并交 500 罚款（不够就把身上的钱扣光）
     const fine = Math.min(500, gold);
     gold -= fine;
@@ -21308,7 +21431,9 @@ const CAR_BULLET_DMG = { fist: 0, pistol: 0.45, revolver: 0.45, shotgun: 1.3, sm
 // 坦克碾压：原来碰一下就 explodeCar（一辆车都扛不住），现在改成双方都掉耐久。
 const CAR_TANK_CRUSH_DMG = 11;   // 被坦克碾压的车每次掉多少耐久
 const CAR_TANK_SELF_DMG = 7;    // 坦克自己每次碾压掉多少耐久（很重，压一辆车代价不小）
-function npcShotPlayer(dmg, fromX, fromZ, gun, fromCop) {
+function npcShotPlayer(dmg, fromX, fromZ, gun, fromCop, fromUnit) {
+  // 【fix580】入侵期间城管/士兵的子弹一律不落到玩家身上（外敌不传 fromUnit，不受影响）
+  if (invAllyAttacker(fromUnit)) return;
   // fromCop：这一枪是不是警察开的 —— 决定玩家被打死后复活在警察局（+罚款）还是医院
   // 敌人打玩家也分部位：10% 爆头(×2.5)、10% 打腿(×0.6)、其余普通
   const zr = Math.random();
@@ -25796,9 +25921,9 @@ function updateResident(r, dt) {
       if (r.isRpgSoldier) {
         try { spawnFireball(person.position.x, person.position.y + 1.0, person.position.z, 1.0, 4.4, 0.42, 0xffd066); } catch (e) {}
         try { sfxNear('boom', r.x, r.z, 100); } catch (e) {}
-        npcShotPlayer(20, r.x, r.z, 'rpg');
+        npcShotPlayer(20, r.x, r.z, 'rpg', false, r);
       } else {
-        npcShotPlayer(r.isBaseGuard ? dmg * 0.35 : dmg, r.x, r.z, r.ranged);   // fix230: 警卫枪伤 35%
+        npcShotPlayer(r.isBaseGuard ? dmg * 0.35 : dmg, r.x, r.z, r.ranged, false, r);   // fix230: 警卫枪伤 35%
       }
     };
     if (chaseAndAttack(r, dt, tx, tz, _hitPlayer, (state === 'drive' ? currentCar : null), ty)) return;
@@ -26222,7 +26347,7 @@ function updateCop(c, dt) {
           let hitChance = THREE.MathUtils.clamp(0.92 - d * 0.022, 0.12, 0.92);
           // 仰角越大越难打中（最高砍到 45%）
           if (Math.abs(dyT) > 3) hitChance *= THREE.MathUtils.clamp(1 - (Math.abs(dyT) - 3) * 0.06, 0.45, 1);
-          if (Math.random() < hitChance) npcShotPlayer(8, c.x, c.z, c.ranged || 'pistol', true);   // true = 警察开的枪
+          if (Math.random() < hitChance) npcShotPlayer(8, c.x, c.z, c.ranged || 'pistol', true, c);   // true = 警察开的枪
         } else {
           c.fightCd = 0.35;   // 隔着墙：不开枪，稍后再看（绕行由下面的 npcMoveDir 负责）
         }
@@ -29102,9 +29227,29 @@ function spawnRpgSoldier(x, z, angle) {
   try { floatText('军方士兵下车了！', '#ff8844'); } catch (e) {}
   return s;
 }
+// 【fix580】抢异族坦克/飞行器时下来的是异族士兵，不是军方火箭筒兵。
+// 复用 spawnInvaderAt：尖角红眼、暗红褐制服、带斧头+RPG，并交给 updateInvasion 驱动，
+// 不会像"顶着 isInvader 却不进 INVADERS"那样站在原地发呆。
+function maybeSpawnAlienDriver(car) {
+  if (!car || car._rpgSpawned) return null;
+  car._rpgSpawned = true;
+  const sx = car.x + Math.cos(car.angle || 0) * 4.6;
+  const sz = car.z - Math.sin(car.angle || 0) * 4.6;
+  const u = spawnInvaderAt(sx, sz, 'rpg');
+  if (u) {
+    u.hp = u.maxHp = 220;
+    u.angle = Math.atan2(person.position.x - sx, person.position.z - sz);
+    u.group.rotation.y = u.angle;
+    try { floatText('异族士兵下车了！', '#ff6655'); } catch (e) {}
+  }
+  return u;
+}
 // 抢军方载具时调用：在载具侧面放一个火箭筒士兵（每辆车只来一次）
 function maybeSpawnRpgSoldier(car) {
   if (!car || car._rpgSpawned) return null;
+  // 【fix580】异族载具上面原本也挂着 isEnemyTank（复用军方坦克判定），
+  // 结果会走军绿制服那条分支 —— 用户看到的"军方人员"就是这个。先拦下来。
+  if (car.isAlien) return maybeSpawnAlienDriver(car);
   const isMil = (car === window.militaryHelicopter) || (car === window.militaryTank) || !!car.isEnemyTank;
   if (!isMil) return null;
   car._rpgSpawned = true;
