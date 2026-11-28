@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261128-fix586-visible-tracers-target-respawn">
+<meta name="cf-build" content="20261128-fix587-natural-battlefield-80pct">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -1477,7 +1477,27 @@ var INV_FIELD_BASE = 1.9;
 var INV_TRENCH_Z = [-500, -445, -390, -345];
 var INV_TRENCH_AMP = 3.4;      // 蛇形摆幅（±3.4m）
 var INV_TRENCH_FREQ = 0.143;   // 摆动频率（约 44m 一个周期）
-function invTrenchZ(baseZ, x) { return baseZ + INV_TRENCH_AMP * Math.sin(x * INV_TRENCH_FREQ); }
+// 【fix587·2026-11-28·用户："战场有点格式化了，做得逼真真实一点"】
+// 原中心线只有单一正弦，整条沟像用尺子画的。叠加一层小振幅高-frequency 摆动，
+// 沙袋墙/碰撞盒/火把都走同一个 invTrenchZ，所以弯曲后依然严丝合缝。
+function invTrenchZ(baseZ, x) {
+  return baseZ + INV_TRENCH_AMP * Math.sin(x * INV_TRENCH_FREQ)
+       + 1.15 * Math.sin(x * 0.31 + baseZ * 0.07);
+}
+// 确定性哈希：同一个战场位置每次加载得到同一结果，但相邻位置差别很大。
+function invHash(a, b) {
+  const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
+// 沙袋胸墙的通行口：原来每 30m 固定 5m 口，远近看都像尺子量出来的。
+// 改成每段 24~34m、口宽 4~8m、位置由哈希抖动；视觉与碰撞共用这个函数。
+function invTrenchGap(x, baseZ) {
+  const k = Math.floor((x + 190) / 29);
+  const s = x + 190 - k * 29;
+  const start = 3 + invHash(k, baseZ) * 9;
+  const width = 4 + invHash(k + 17, baseZ) * 4;
+  return s > start && s < start + width;
+}
 // 【fix578】夜战真光源：战场火把的地面光斑材质 + 可复用的近身点光源池。
 // 固定光源池只有 3(手机)/4(桌面) 盏，永远跟着玩家挪到最近的火把上 ——
 // 这样既真的照亮人/沙袋，又不会像 fix569 之前那样把 45 盏点光全塞进 shader。
@@ -1637,17 +1657,26 @@ function terrainHeight(x, z) {
       - bump(16, -468, 42, 1.7)     // 中央干涸交通壕
       - bump(-110, -348, 34, 1.2);  // 西侧弹坑洼地
     h += edge * warHills;
+    // 【fix587】原来整块台地几乎水平，只有几座固定土丘，远看像一块铺平的棕色板。
+    // 叠加三层低频起伏（幅度合计 <1m），不碰边界，人和车照样能走。
+    const _micro = Math.sin(x * 0.047 + z * 0.031) * 0.55
+                 + Math.sin(x * 0.113 - z * 0.087) * 0.30
+                 + Math.sin(x * 0.27 + z * 0.19) * 0.12;
+    h += edge * _micro;
     // 【fix576c·2026-11-26·用户："太粗糙了，没有战壕的感觉"】
     // 之前"战壕"只是两排沙袋摆在平地上，中间铺一条深色板 —— 从任何角度看都是两排围栏，
     // 因为地面根本没有被挖下去。这里真的把地形挖开：4 道蛇形沟，半宽 3.6m、深 1.5m，
     // 中心线随 x 摆动 ±3.4m（真实战壕必须蛇形，直线沟一发炮弹就能横扫整条）。
     let cut = 0;
     for (let ti = 0; ti < 4; ti++) {
-      const dz = Math.abs(z - invTrenchZ(INV_TRENCH_Z[ti], x));
-      if (dz < 3.6) {
-        // 平底 + 两侧斜坡：±2.2m 内是完整的 1.5m 深沟底，2.2~3.6m 收坡。
-        // 纯 V 形沟走进去像水渠，平底才像能站人、能架枪的战壕。
-        const c = dz < 2.2 ? 1.5 : 1.5 * (1 - (dz - 2.2) / 1.4);
+      const bz = INV_TRENCH_Z[ti];
+      const dz = Math.abs(z - invTrenchZ(bz, x));
+      // 【fix587】沟宽/沟深沿 x 缓慢变化，不再是四条等宽等深的平行槽。
+      const hw = 3.35 + 0.50 * Math.sin(x * 0.082 + ti * 1.9);
+      const dep = 1.32 + 0.30 * Math.sin(x * 0.057 + ti * 2.4);
+      if (dz < hw) {
+        const flat = hw - 1.4;
+        const c = dz < flat ? dep : dep * (1 - (dz - flat) / 1.4);
         if (c > cut) cut = c;
       }
     }
@@ -7387,8 +7416,10 @@ var AIRLINER = null;
         n = n * 0.5 + 0.5;
         let cutD = 0;
         for (let ti = 0; ti < 4; ti++) {
-          const dz = Math.abs(wz - invTrenchZ(INV_TRENCH_Z[ti], wx));
-          if (dz < 3.6) { const c = 1 - dz / 3.6; if (c > cutD) cutD = c; }
+          const bz = INV_TRENCH_Z[ti];
+          const dz = Math.abs(wz - invTrenchZ(bz, wx));
+          const hw = 3.35 + 0.50 * Math.sin(wx * 0.082 + ti * 1.9);
+          if (dz < hw) { const c = 1 - dz / hw; if (c > cutD) cutD = c; }
         }
         tmpC.copy(cBase).lerp(n > 0.5 ? cDry : cWet, Math.abs(n - 0.5) * 1.7);
         if (cutD > 0) tmpC.lerp(cBurn, Math.min(0.85, cutD * 0.9));
@@ -7399,6 +7430,35 @@ var AIRLINER = null;
       const ground = new THREE.Mesh(gg, new THREE.MeshLambertMaterial({ vertexColors: true, map: scorchTex }));
       ground.position.set(_cx, 0, _cz);
       scene.add(ground);
+    }
+    // ---- 【fix587】弹坑 / 烧灼斑：一次实例化绘制，打破整块焦土的规则网格感 ----
+    {
+      const N = isMobile ? 42 : 72;
+      const cg = new THREE.CircleGeometry(1, 14);
+      cg.rotateX(-Math.PI / 2);
+      const cm = new THREE.MeshBasicMaterial({ color: 0x241b12, transparent: true,
+        opacity: 0.52, depthWrite: false });
+      const cm2 = new THREE.MeshBasicMaterial({ color: 0x4a3823, transparent: true,
+        opacity: 0.34, depthWrite: false });
+      const craters = new THREE.InstancedMesh(cg, cm, N);
+      const rims = new THREE.InstancedMesh(cg, cm2, N);
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < N; i++) {
+        const cx = BX0 + 10 + invHash(i * 1.7, 1) * (BX1 - BX0 - 20);
+        const cz = BZ0 + 10 + invHash(i * 2.3, 2) * (BZ1 - BZ0 - 20);
+        const r = 1.3 + invHash(i * 3.1, 3) * 3.6;
+        const y = gy(cx, cz);
+        dummy.position.set(cx, y + 0.17, cz);
+        dummy.rotation.set(0, invHash(i, 4) * 6.283, 0);
+        dummy.scale.set(r, 1, r * (0.62 + invHash(i, 5) * 0.5));
+        dummy.updateMatrix(); craters.setMatrixAt(i, dummy.matrix);
+        dummy.position.y = y + 0.165;
+        dummy.scale.set(r * 1.45, 1, r * 1.35);
+        dummy.updateMatrix(); rims.setMatrixAt(i, dummy.matrix);
+      }
+      craters.instanceMatrix.needsUpdate = true;
+      rims.instanceMatrix.needsUpdate = true;
+      scene.add(rims); scene.add(craters);
     }
     // ---- 战壕：蛇形挖沟 + 沙袋胸墙 ----
     // 【fix576c·2026-11-26·用户："没有战壕的感觉"】
@@ -7436,81 +7496,108 @@ var AIRLINER = null;
       // 胸墙：两层枕头沙袋交错叠（下层压缝、上层错开半个步长），逐袋抖动位置/角度/大小
       let col = 0;
       for (let x = BX0 + 4; x < BX1 - 4; x += _bagStep, col++) {
-        // 【fix576d】每 30m 留 5m 通行口：原来胸墙是连续 380m 的实心墙，
-        // 外敌/市民/警察全被挡在沟外沿墙滑行，永远打不到对面（实测 55 秒只推进 36m）。
-        if (((x - BX0) % 30 + 30) % 30 < 5) continue;
+        // 【fix576d/587】原来每 30m 固定 5m 口，像尺子量出来的；现在每段 24~34m、
+        // 口宽 4~8m 且位置抖动，但视觉与碰撞共用 invTrenchGap()，不会出现看得见能过、实际被挡。
+        if (invTrenchGap(x, tz)) continue;
         const zc = invTrenchZ(tz, x);
         for (const side of [-1, 1]) {
-          const wz = zc + side * 3.75;
+          const wz = zc + side * (3.55 + (bagHash(col * 0.7, tz) - 0.5) * 0.7);
           const yw = gy(x, wz);
           const h1 = bagHash(col * 1.7 + (side > 0 ? 31.4 : 0), tz * 0.11);
           const h2 = bagHash(col * 2.3 + (side > 0 ? 17.7 : 0), tz * 0.07);
           const h3 = bagHash(col * 0.9 + (side > 0 ? 5.1 : 0), tz * 0.19);
-          const jx = (h1 - 0.5) * 0.14;
-          const jz = (h2 - 0.5) * 0.10;
-          const jr = (h3 - 0.5) * 0.16;
-          const sc = 0.94 + h2 * 0.14;
-          // 下层：压在唇上，稍微埋进土里（0.42 高，中心 +0.17 → 露出约 0.38）
-          putBag(SAND_M[Math.floor(h1 * 5) % 5], x + jx, yw + 0.20, wz + jz, jr,
-                 _bagStep * 0.60 * sc, 0.265, 0.50 * sc);
-          // 上层：错开半个步长，压在下层的缝上
-          putBag(SAND_M[Math.floor(h2 * 5) % 5], x + jx + _bagStep * 0.5, yw + 0.66, wz + jz - 0.02, jr * 0.7,
-                 _bagStep * 0.58 * sc, 0.255, 0.48 * sc);
+          const jx = (h1 - 0.5) * 0.38;
+          const jz = (h2 - 0.5) * 0.26;
+          const jr = (h3 - 0.5) * 0.42;
+          const sc = 0.82 + h2 * 0.34;
+          // 下层：压在唇上，稍微埋进土里；右后沙袋被炮火掀翻，位置/高度更散乱
+          putBag(SAND_M[Math.floor(h1 * 5) % 5], x + jx, yw + 0.18 + h3 * 0.10, wz + jz, jr,
+                 _bagStep * (0.52 + h1 * 0.18) * sc, 0.22 + h2 * 0.10, (0.44 + h3 * 0.16) * sc);
+          // 上层：约 1/5 段被打塌只剩一层，其余错开半袋压缝
+          if (h3 > 0.20) {
+            putBag(SAND_M[Math.floor(h2 * 5) % 5], x + jx + _bagStep * (0.36 + h1 * 0.22),
+                   yw + 0.58 + h1 * 0.12, wz + jz - 0.05, jr * 0.8,
+                   _bagStep * (0.50 + h2 * 0.16) * sc, 0.21 + h3 * 0.09, (0.42 + h1 * 0.14) * sc);
+          }
         }
       }
       // 碰撞：每 6m 一段（蛇形周期 44m，6m 弦高误差 <0.3m，人车不会漏过去）
       for (let x = BX0 + 4; x < BX1 - 4; x += 6) {
         const segW = Math.min(6, BX1 - 4 - x);
         if (segW < 2) continue;
-        if (((x - BX0) % 30 + 30) % 30 < 5) continue;   // 与视觉同位置留通行口
+        if (invTrenchGap(x + segW / 2, tz)) continue;   // 与视觉同位置留通行口
         for (const side of [-1, 1]) {
           const cx = x + segW / 2;
-          const wz = invTrenchZ(tz, cx) + side * 3.75;
+          const wz = invTrenchZ(tz, cx) + side * (3.55 + (bagHash(cx * 0.7, tz) - 0.5) * 0.7);
           const y0 = Math.min(gy(x, wz), gy(cx, wz), gy(x + segW, wz));
-          solid(cx, wz, segW + 0.4, 1.0, y0, 1.0);
+          solid(cx, wz, segW + 0.4, 1.0, y0, 0.85);
         }
       }
     }
-    // ---- 堡垒：4 座混凝土碉堡，带射击孔与顶部盖板 ----
+    // ---- 堡垒：【fix587】尺寸、位置、破损程度各不相同，不再是 6 个一样的灰盒子 ----
     const bunkers = [
-      { x: -140, z: -474 }, { x: 140, z: -474 },
-      { x: -74, z: -370 },  { x: 82, z: -370 },
-      { x: -8, z: -420 },   { x: 8, z: -300 }
+      { x: -146, z: -479, w: 9.2, d: 8.0, h: 2.6, ruined: false },
+      { x:  132, z: -487, w: 11.4, d: 7.4, h: 2.1, ruined: true  },
+      { x:  -79, z: -376, w: 8.4, d: 9.4, h: 2.7, ruined: false },
+      { x:   90, z: -365, w: 10.6, d: 8.2, h: 2.3, ruined: false },
+      { x:  -15, z: -431, w: 7.6, d: 7.2, h: 1.9, ruined: true  },
+      { x:   29, z: -302, w: 9.4, d: 8.8, h: 2.5, ruined: false }
     ];
     for (const b of bunkers) {
       const y = gy(b.x, b.z);
+      const w = b.w, d = b.d, h = b.h, hw = w / 2, hd = d / 2;
+      const wallMat = b.ruined ? concreteD : concrete;
       // 主体：四面墙（留出南面射击口）
-      putB(boxG(10, 2.4, 0.7), concrete, b.x, y + 1.2, b.z - 4);
-      putB(boxG(0.7, 2.4, 8), concrete, b.x - 5, y + 1.2, b.z);
-      putB(boxG(0.7, 2.4, 8), concrete, b.x + 5, y + 1.2, b.z);
+      putB(boxG(w, h, 0.7), wallMat, b.x, y + h / 2, b.z - hd);
+      putB(boxG(0.7, h, d), wallMat, b.x - hw, y + h / 2, b.z);
+      putB(boxG(0.7, h, d), wallMat, b.x + hw, y + h / 2, b.z);
       // 南面：两段矮墙 + 中间射击口（外敌/玩家可以看见里面的枪口）
-      putB(boxG(3.2, 2.4, 0.7), concrete, b.x - 3.2, y + 1.2, b.z + 4);
-      putB(boxG(3.2, 2.4, 0.7), concrete, b.x + 3.2, y + 1.2, b.z + 4);
-      putB(boxG(3.4, 0.8, 0.7), concrete, b.x, y + 2.0, b.z + 4);
-      // 顶部钢板 + 边缘
-      putB(boxG(11, 0.35, 9), concreteD, b.x, y + 2.6, b.z);
-      // 射击孔里的机枪管（暗铁色，从南面伸出）
-      putB(boxG(0.16, 0.16, 2.2), steel, b.x, y + 1.25, b.z + 4.7);
-      putB(boxG(0.6, 0.5, 0.5), rust, b.x, y + 1.25, b.z + 4.1);
-      // 【fix576】整座碉堡按外轮廓实体化：挡人/车/子弹。南面射击口只是视觉开口，
-      // 碰撞仍按整块算，避免外敌钻进墙里卡住；顶部钢板也在盒内。
-      solid(b.x, b.z, 10.6, 8.6, y, 2.9);
-    }
-    // ---- 防弹沙袋墙：沿 x 方向若干段交错短墙，给推进路线制造起伏 ----
-    const wallZs = [-378, -350];
-    for (const wz of wallZs) {
-      for (let x = BX0 + 12; x < BX1 - 12; x += 9) {
-        const y = gy(x, wz);
-        for (let layer = 0; layer < 3; layer++) {
-          const n = 5 - layer;
-          for (let k = 0; k < n; k++) {
-            putB(boxG(1.5, 0.42, 0.8), (k + layer) % 2 ? sand : sandD,
-                 x + k * 1.55 + (layer ? 0.77 : 0) - 3, y + 0.22 + layer * 0.4, wz + (layer % 2 ? 0.2 : -0.2));
-          }
+      putB(boxG(w * 0.32, h, 0.7), wallMat, b.x - w * 0.32, y + h / 2, b.z + hd);
+      putB(boxG(w * 0.32, h, 0.7), wallMat, b.x + w * 0.32, y + h / 2, b.z + hd);
+      putB(boxG(w * 0.34, h * 0.33, 0.7), wallMat, b.x, y + h * 0.83, b.z + hd);
+      // 顶部：完好碉堡有钢板，被打塌的只剩半边顶板 + 一堆碎块
+      if (!b.ruined) {
+        putB(boxG(w + 1, 0.35, d + 1), concreteD, b.x, y + h + 0.2, b.z);
+        putB(boxG(0.16, 0.16, 2.2), steel, b.x, y + h * 0.52, b.z + hd + 0.7);
+        putB(boxG(0.6, 0.5, 0.5), rust, b.x, y + h * 0.52, b.z + hd + 0.1);
+      } else {
+        putB(boxG(w * 0.55, 0.3, d * 0.45), concreteD, b.x - w * 0.2, y + h + 0.12, b.z - d * 0.2);
+        for (let k = 0; k < 5; k++) {
+          const rx = b.x - hw - 1 + invHash(k, b.z) * (w + 2);
+          const rz = b.z + hd + 0.8 + invHash(k + 9, b.x) * 3.2;
+          putB(boxG(0.6 + invHash(k, b.x) * 0.9, 0.4 + invHash(k, b.z) * 0.5,
+                    0.6 + invHash(k + 3, b.z) * 0.8), concreteD,
+               rx, gy(rx, rz) + 0.22, rz);
         }
-        // 【fix576】每段沙袋墙实体化（段间本来就有 1m 多缝隙）：挡人挡车，也能当射击掩体。
-        const y0 = Math.min(y, gy(x + 7, wz));
-        solid(x + 0.7, wz, 7.8, 1.0, y0, 1.35);
+      }
+      // 碰撞按外轮廓：挡人/车/子弹，射击口只是视觉开口，避免外敌钻进墙里卡住。
+      solid(b.x, b.z, w + 0.8, d + 0.8, y, h + 0.4);
+    }
+    // ---- 防弹沙袋墙：【fix587】段长/间距/位置不再等距，部分段被打塌 ----
+    const wallZs = [-381, -348];
+    for (let wi = 0; wi < wallZs.length; wi++) {
+      const wz0 = wallZs[wi];
+      for (let x = BX0 + 12; x < BX1 - 12;) {
+        const step = 7 + invHash(x * 0.13, wi) * 7;
+        const segLen = 4.5 + invHash(x * 0.31, wi + 3) * 3.5;
+        const wz = wz0 + (invHash(x * 0.07, wi + 11) - 0.5) * 5;
+        const intact = invHash(x * 0.19, wi + 5) > 0.16;   // 约 16% 段被炸平
+        if (intact) {
+          const yFor = gy(x, wz);
+          const layers = invHash(x, wi + 21) > 0.45 ? 2 : 1;
+          for (let layer = 0; layer < layers; layer++) {
+            const n = Math.max(2, Math.round(segLen / 1.6) - layer);
+            for (let k = 0; k < n; k++) {
+              putB(boxG(1.35 + invHash(k, x) * 0.35, 0.42, 0.8), (k + layer) % 2 ? sand : sandD,
+                   x + k * (segLen / n) + (layer ? 0.5 : 0) - segLen / 2,
+                   yFor + 0.22 + layer * 0.4 + (invHash(k + layer, wz) - 0.5) * 0.12,
+                   wz + (layer % 2 ? 0.24 : -0.24) + (invHash(k, wz) - 0.5) * 0.3);
+            }
+          }
+          const y0 = Math.min(yFor, gy(x + segLen, wz));
+          solid(x + segLen / 2, wz, segLen + 0.4, 1.0, y0, 0.55 + layers * 0.4);
+        }
+        x += step;
       }
     }
     // ---- 铁丝网：细钢管桩 + 三道横线，横在战场前沿 ----
@@ -7841,27 +7928,37 @@ var AIRLINER = null;
       invTorchPoolMat.visible = false;   // 白天连 render list 都不进
       const _poolGeo = new THREE.CircleGeometry(8.5, 22);
       let torchN = 0;
+      // 【fix587】原来每 34m 一盏、间隔完全一致，夜里像一条等距灯带。
+      // 改成 24~48m 随机间距 + 横向抖动，约 12% 已熄灭（只留木杆），火苗/光斑大小各异。
       for (const tz of INV_TRENCH_Z) {
-        for (let x = BX0 + 18; x < BX1 - 18; x += 34) {
-          const zc = invTrenchZ(tz, x);
-          const wz = zc + 3.75;
-          const y = gy(x, wz);
+        for (let x = BX0 + 18; x < BX1 - 18;) {
+          const step = 24 + invHash(x * 0.11, tz) * 24;
+          const tx = x + (invHash(x * 0.29, tz + 3) - 0.5) * 9;
+          const zc = invTrenchZ(tz, tx);
+          const wz = zc + 3.55 + (invHash(tx, tz + 5) - 0.5) * 0.7;
+          const y = gy(tx, wz);
+          const aliveFire = invHash(x * 0.17, tz + 7) > 0.12;
           // 木杆（插在胸墙南侧）+ 铁箍
-          putB(boxG(0.10, 1.55, 0.10), wood, x, y + 0.78, wz);
-          putB(boxG(0.20, 0.07, 0.20), steel, x, y + 1.48, wz);
-          // 火苗 + 光晕
-          const fl = new THREE.Mesh(flameGeo, flameMat);
-          fl.position.set(x, y + 1.72, wz); fl.scale.set(1, 1.5, 1); scene.add(fl);
-          const gl = new THREE.Mesh(glowGeo, glowMat);
-          gl.position.set(x, y + 1.74, wz); scene.add(gl);
-          // 沟底光斑：放在火把北侧 3.75m 的壕底，正好把战壕照亮，不是贴在南墙上
-          const pool = new THREE.Mesh(_poolGeo, invTorchPoolMat);
-          pool.rotation.x = -Math.PI / 2;
-          pool.position.set(x, gy(x, zc) + 0.18, zc);
-          scene.add(pool);
-          INV_TORCH_SPOTS.push({ x: x, y: y, z: wz, pool: pool });
-          solid(x, wz, 0.3, 0.3, y, 1.5);
-          torchN++;
+          putB(boxG(0.10, 1.55, 0.10), wood, tx, y + 0.78, wz);
+          putB(boxG(0.20, 0.07, 0.20), steel, tx, y + 1.48, wz);
+          if (aliveFire) {
+            const fs = 0.75 + invHash(tx, tz + 9) * 0.65;
+            const fl = new THREE.Mesh(flameGeo, flameMat);
+            fl.position.set(tx, y + 1.72, wz); fl.scale.set(fs, 1.5 * fs, fs); scene.add(fl);
+            const gl = new THREE.Mesh(glowGeo, glowMat);
+            gl.position.set(tx, y + 1.74, wz); gl.scale.setScalar(fs); scene.add(gl);
+            // 沟底光斑：放在火把北侧的壕底；尺寸随火焰大小变化，夜里不再是等距光圆
+            const pool = new THREE.Mesh(_poolGeo, invTorchPoolMat);
+            pool.rotation.x = -Math.PI / 2;
+            pool.position.set(tx, gy(tx, zc) + 0.18, zc);
+            const ps = 0.75 + invHash(tx, tz + 13) * 0.6;
+            pool.scale.set(ps, ps, 1);
+            scene.add(pool);
+            INV_TORCH_SPOTS.push({ x: tx, y: y, z: wz, pool: pool });
+            torchN++;
+          }
+          solid(tx, wz, 0.3, 0.3, y, 1.5);
+          x += step;
         }
         // 【fix578】不再给每道战壕挂固定点光 —— 改由 updateInvTorchLights 的近身光源池统一驱动
       }
@@ -14255,7 +14352,9 @@ function spawnInvasionForce(q) {
   // 直到累计击杀数达到配额。所以场面永远比进度条上的人多。
   // 【fix581】用户："让异族士兵再多一点，攻势再猛一点，杀一个就补一个"
   const CAP = _attack ? (isMobile ? 24 : 34) : (isMobile ? 34 : 50);   // 同屏上限
-  const NEED = _attack ? (isMobile ? 55 : 80) : (isMobile ? 90 : 130); // 累计击杀配额
+  // 【fix587·2026-11-28·用户："把这个任务所需杀的敌人数量变为现在的80%"】
+  // 守城 90/130 → 72/104，反攻 55/80 → 44/64；场上并发上限不变，只是更早打完。
+  const NEED = Math.round((_attack ? (isMobile ? 55 : 80) : (isMobile ? 90 : 130)) * 0.8);
   invasionTotal = NEED;
   invasionKilled = 0;
   invasionSpawned = 0;
