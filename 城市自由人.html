@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>城市自由人</title>
-<meta name="cf-build" content="20261127-fix585-active-assault-flight">
+<meta name="cf-build" content="20261128-fix586-visible-tracers-target-respawn">
 <!-- 【fix492】版本号放在 head 最前面：autoUpdateGuard 只抓文件前 128KB，
      three.js 内联后 BUILD 常量会被推到 600KB 之后，守卫就读不到了。
      现在守卫和运行时都从这里读，升版本只改这一处。 -->
@@ -13828,6 +13828,10 @@ var invWinCutscene = null;   // 【fix576d】胜利后城市旗飘扬定格
 // 【fix580】入侵期间玩家阵亡不从医院/警局复活，而是从城市旗阵地重新投入战斗。
 // 只在 deathCam 结束进 arrest() 时消费一次；普通死亡流程完全不受影响。
 var invRespawnAtFlag = false;
+// 【fix586】阵地复活债务加时间锁：一次阵亡可能在死亡镜头/换旗过场结束后被二次 arrest()，
+// 第一次 arrest 消费掉 invRespawnAtFlag 后，第二次就会掉回医院。这里用 18 秒时间窗兜底，
+// 任务清理/失守时统一清零，避免误伤普通死亡。
+var invRespawnGuardUntil = 0;
 var INVADERS = [], INV_SUPPORT = [], INV_COPS = [];
 var INV_VEHICLES = [];   // 【fix575】外敌装甲火力点（战场上的敌方军车）
 // 【fix575·2026-11-25·用户："外族入侵期间玩家对 NPC/警察/城管/守卫都是没有伤害的，
@@ -14008,6 +14012,8 @@ function nearestNonInvader(x, z, maxD) {
 }
 function cleanupInvasion() {
   invasionActive = false;
+  invRespawnAtFlag = false;
+  invRespawnGuardUntil = 0;
   // 【fix575】入侵结束清掉军方支援载具（直升机/坦克），避免它们失去外敌目标后继续追玩家
   try { if (typeof clearMilHeli === 'function') clearMilHeli(); } catch (e) {}
   try { if (typeof clearMilTank === 'function') clearMilTank(); } catch (e) {}
@@ -14469,6 +14475,7 @@ function failInvByFlagCapture(q) {
   try { PROGRESS.invLost = true; saveGame(); } catch (e) {}
   _invLostOnDeath = false;
   invRespawnAtFlag = false;
+  invRespawnGuardUntil = 0;
   try { abortQuest(q.id); } catch (e) {}
   try { startInvFlagCutscene(true); } catch (e) { return false; }
   return true;
@@ -14514,8 +14521,12 @@ function updateInvasion(dt, q) {
     const _foe = nearestInvFoe(v.x, v.z, 70);
     const _fd = _foe ? Math.hypot(_foe.x - v.x, _foe.z - v.z) : Infinity;
     const _pd = Math.hypot(px - v.x, pz - v.z);
-    const _playerTgt = (_pd < 60 && _pd < _fd + 12);
-    const _engageFoe = !!_foe && _fd <= 60;
+    // 【fix586·2026-11-28·用户："不要让敌人只逮着玩家一个人打，只有玩家进入敌人的
+    //   攻击范围并且这个敌人正好没有攻击目标时才打玩家"】
+    // 原来 _pd < _fd + 12 让外敌即使已经锁定了市民/警察，只要玩家再近 12m 内就改打玩家，
+    // 于是一群敌人追着玩家跑。现在必须**没有正在交战的目标**才允许把玩家当目标。
+    const _engageFoe = !!_foe && _fd <= 70;
+    const _playerTgt = (_pd < 60 && !_engageFoe);
     const tgt = _playerTgt ? { x: px, z: pz, player: true } : (_engageFoe ? _foe : null);
     const _defendFlag = q.invMode !== 'attack' && !(typeof PROGRESS !== 'undefined' && PROGRESS && PROGRESS.invLost);
     const _flag = (INV_FLAGS && INV_FLAGS.cityPos) ? INV_FLAGS.cityPos : { x: 0, z: -311 };
@@ -14634,7 +14645,12 @@ function updateInvasion(dt, q) {
         spawnBurst(tx, tz, 0xff4422, 6);
       } else {
         sfxNear('shoot', v.x, v.z, 60);
-        spawnTracer(v.x + dx / d * 1.2, mzY, v.z + dz / d * 1.2, tx, 1.0, tz, v.ranged);
+        // 【fix586】打玩家用醒目的红色 hostile 弹道 + 更长驻留，避免亮色地面/天空里
+        // 看不见黄色曳光弹却已经掉血；打其他目标保持原来的普通弹道。
+        spawnTracer(v.x + dx / d * 1.2, mzY, v.z + dz / d * 1.2, tx,
+          tgt.player ? (person.position.y + 1.1) : 1.0, tz,
+          tgt.player ? ('hostile:' + (v.ranged || 'rifle')) : v.ranged,
+          tgt.player ? 0.55 : undefined);
         // 枪口火光 + 火箭筒尾焰，让"开枪"一眼看得见
         spawnBurst(v.x + dx / d * 1.3, v.z + dz / d * 1.3,
           (_heavy || v.weaponKey === 'minigun') ? 0xff8833 : 0xffff88, _heavy ? 7 : 4);
@@ -14690,7 +14706,8 @@ function updateInvasion(dt, q) {
       // 重装车：一发炮弹，命中点炸开
       tv.shootCd = 3.0 + Math.random() * 0.8;
       sfxNear('boom', tv.x, tv.z, 110);
-      spawnTracer(tv.x, gy0, tv.z, tgt.x, 1.0, tgt.z, 'rpg');
+      spawnTracer(tv.x, gy0, tv.z, tgt.x, tgt.player ? (person.position.y + 1.1) : 1.0, tgt.z,
+        tgt.player ? 'hostile:rpg' : 'rpg', tgt.player ? 0.55 : undefined);
       spawnBurst(tv.x, tv.z, 0xffaa44, 8);
       try { spawnFireball(tgt.x, terrainHeight(tgt.x, tgt.z) + 1.0, tgt.z, 0.9, 4.0, 0.4, 0xffb066); } catch (e) {}
       if (tgt.player) npcShotPlayer(26, tv.x, tv.z, 'rpg');
@@ -14699,7 +14716,8 @@ function updateInvasion(dt, q) {
     } else {
       tv.shootCd = 1.1 + Math.random() * 0.4;
       sfxNear('shoot', tv.x, tv.z, 55);
-      spawnTracer(tv.x, gy0, tv.z, tgt.x, 1.0, tgt.z, 'rifle');
+      spawnTracer(tv.x, gy0, tv.z, tgt.x, tgt.player ? (person.position.y + 1.1) : 1.0, tgt.z,
+        tgt.player ? 'hostile:rifle' : 'rifle', tgt.player ? 0.55 : undefined);
       spawnBurst(tv.x, tv.z, 0xffff88, 4);
       if (tgt.player) npcShotPlayer(9, tv.x, tv.z, 'rifle');
       else if (tgt.isCop) { try { hitCop(tgt.cop || tgt, 9, 'npc'); } catch (e) {} }
@@ -17673,20 +17691,21 @@ function hurtPlayer(n, byCop, fromUnit) {
     // 【fix68】用户要求：『执行任务的时候死了一次还能执行任务，如果死了就代表任务失败』
     try {
       const _aq = QUESTS.find(v => v.state === 'active');
-      if (_aq) {
-        // 【fix580·2026-11-26·用户："如果玩家在这个过程中死亡的话就从旗帜那里复活，
-        // 可以继续战斗，不然就不好玩了"】
-        // 入侵/反攻不再因为玩家阵亡而判任务失败，也不再触发换旗过场；
-        // 只有「外敌真的摸到旗子」才失守（见 failInvByFlagCapture）。死亡只是从旗位重整旗鼓。
-        if (_aq.id === 'invasion' || invasionActive) {
-          invRespawnAtFlag = true;
-          killedByCop = false;          // 阵地上阵亡不给城管罚款
-          _invLostOnDeath = false;
-          try { setHint('你在阵地上倒下 —— 将从城市旗处复活，继续战斗'); } catch (e) {}
-        } else {
-          abortQuest(_aq.id);
-          setHint('已死亡 —— 任务失败：' + _aq.name);
-        }
+      // 【fix586·2026-11-28·用户："这个任务期间怎么有时候复活还是在医院！？"】
+      // 根因：原来整段判断包在 `if (_aq)` 里。死亡瞬间如果入侵任务刚好不在 active
+      // （打完配额、状态切换、过场抢占等），_aq 为空 → invRespawnAtFlag 根本没置位，
+      // 3.3 秒后 arrest() 只能走医院分支。现在 invasionActive 独立判断，不再依赖 _aq。
+      // 入侵/反攻不再因为玩家阵亡而判任务失败，也不再触发换旗过场；
+      // 只有「外敌真的摸到旗子」才失守（见 failInvByFlagCapture）。死亡只是从旗位重整旗鼓。
+      if (invasionActive || (_aq && _aq.id === 'invasion')) {
+        invRespawnAtFlag = true;
+        invRespawnGuardUntil = performance.now() + 18000;   // 【fix586】二次 arrest 兜底
+        killedByCop = false;          // 阵地上阵亡不给城管罚款
+        _invLostOnDeath = false;
+        try { setHint('你在阵地上倒下 —— 将从城市旗处复活，继续战斗'); } catch (e) {}
+      } else if (_aq) {
+        abortQuest(_aq.id);
+        setHint('已死亡 —— 任务失败：' + _aq.name);
       }
     } catch (e) {}
     // 【fix563】不再立刻 arrest：先定格 1 秒、用第三人称"从下往上"的镜头看清死亡状态，
@@ -17751,10 +17770,16 @@ function arrest() {
   // 复活后跑两步就喘，很别扭）。
   player.hp = player.maxHp;
   player.stamina = player.maxStamina;
-  // 【fix581】只看 invRespawnAtFlag 这个"阵地复活债务"，不再附加 invasionActive：
-  // 用户实测死亡镜头结束前若任务状态被别的流程收掉，旧条件会失效并掉回医院。
-  // 这个标志只在入侵阵亡时置位，消费一次即清，不会误伤普通死亡。
-  if (invRespawnAtFlag) {
+  // 【fix581/586】invRespawnAtFlag 是"阵地复活债务"；fix586 再加三重保险：
+  //   ① 债务标志；② 18 秒时间窗（一次阵亡被死亡镜头 + 换旗过场二次 arrest 时，
+  //      第一次消费掉标志后第二次仍从旗位复活）；③ 任务仍在 active / invasionActive。
+  // 用户："这个任务期间怎么有时候复活还是在医院！？" —— 原实现只在 hurtPlayer 里
+  // 置一次标志，任何二次 arrest 或任务状态抢先变化都会漏成医院。
+  var _invQuestActive586 = false;
+  try {
+    _invQuestActive586 = QUESTS.some(function (q) { return q && q.id === 'invasion' && q.state === 'active'; });
+  } catch (e) {}
+  if (invRespawnAtFlag || invasionActive || _invQuestActive586 || performance.now() < invRespawnGuardUntil) {
     invRespawnAtFlag = false;
     const rp = invFlagRespawnSpot();
     person.position.set(rp.x, rp.y, rp.z); person.visible = true;
@@ -21657,9 +21682,28 @@ const CAR_BULLET_DMG = { fist: 0, pistol: 0.45, revolver: 0.45, shotgun: 1.3, sm
 // 坦克碾压：原来碰一下就 explodeCar（一辆车都扛不住），现在改成双方都掉耐久。
 const CAR_TANK_CRUSH_DMG = 11;   // 被坦克碾压的车每次掉多少耐久
 const CAR_TANK_SELF_DMG = 7;    // 坦克自己每次碾压掉多少耐久（很重，压一辆车代价不小）
+// 【fix586】"玩家掉血却没看到子弹光束"兜底：任何一次 npcShotPlayer 都保证有一条
+// 指向玩家的红色弹道。各分支自己已经画过曳光弹的，用"同一射手 220ms 内不再重复画"去重。
+var _lastHostileTracer = { x: null, z: null, t: 0 };
 function npcShotPlayer(dmg, fromX, fromZ, gun, fromCop, fromUnit) {
   // 【fix580】入侵期间城管/士兵的子弹一律不落到玩家身上（外敌不传 fromUnit，不受影响）
   if (invAllyAttacker(fromUnit)) return;
+  // 【fix586】近战没有弹道；远程统一补一条醒目的红色曳光弹到玩家当前位置
+  if (gun !== 'melee' && typeof fromX === 'number' && typeof fromZ === 'number') {
+    const _now = performance.now();
+    const _same = _lastHostileTracer.x !== null &&
+      Math.hypot(fromX - _lastHostileTracer.x, fromZ - _lastHostileTracer.z) < 2.0;
+    if (!_same || _now - _lastHostileTracer.t > 220) {
+      try {
+        const _py = (state === 'drive' && currentCar && !currentCar.exploded)
+          ? (currentCar.group ? currentCar.group.position.y + 1.0 : 1.0)
+          : (person.position.y + 1.1);
+        spawnTracer(fromX, terrainHeight(fromX, fromZ) + 1.35, fromZ,
+          person.position.x, _py, person.position.z, 'hostile:' + (gun || 'pistol'), 0.55);
+      } catch (e) {}
+      _lastHostileTracer = { x: fromX, z: fromZ, t: _now };
+    }
+  }
   // fromCop：这一枪是不是警察开的 —— 决定玩家被打死后复活在警察局（+罚款）还是医院
   // 敌人打玩家也分部位：10% 爆头(×2.5)、10% 打腿(×0.6)、其余普通
   const zr = Math.random();
@@ -21882,6 +21926,9 @@ const TRACER_CAP = isMobile ? 60 : 100;           // 【fix581】轨迹变长后
 const _tracerPools = { single: [], stream: [], rocket: [], __beads: [] };
 var _tracerGeos = null, _tracerMats = null;
 function tracerKind(w) {
+  // 【fix586】敌人打玩家的弹道独立成 hostile：亮红色 + 更粗 + 停留更久，
+  // 在沙色战场/明亮天空里也能一眼看出"这一枪是冲我来的"。
+  if (typeof w === 'string' && w.indexOf('hostile:') === 0) return 'hostile';
   // 【fix143】载具机枪单独一种弹道：比步枪粗得多，从高空扫射时也看得清
   if (w === 'cannon') return 'cannon';
   if (w === 'rocket' || w === 'rpg' || w === 'rpg4') return 'rocket';
@@ -21893,6 +21940,7 @@ function tracerPalette(kind) {
   // 【fix143】直升机机枪：粗 + 亮（原来是步枪那种细丝，天上打下来几乎看不见）
   // 【fix581】用户："他们的子弹都没有轨迹，没有曳光弹那种效果" —— 原来 stream 只有 0.16s、
   // beamR 0.028，手机上两三帧就没了，看着像瞬发。现在加粗、加亮、延长，并画整段轨迹。
+  if (kind === 'hostile') return { head: 0xff2b2b, halo: 0xff5544, beam: 0xff3322, headSize: 0.13, haloSize: 0.26, beamR: 0.085, op: 1.0, dur: 0.55 };
   if (kind === 'cannon') return { head: 0xfff2a8, halo: 0xffe066, beam: 0xffd24a, headSize: 0.30, haloSize: 0.58, beamR: 0.16, op: 1.0, dur: 0.30 };
   if (kind === 'rocket') return { head: 0xff4400, halo: 0xff6600, beam: 0xff8800, headSize: 0.13, haloSize: 0.24, beamR: 0.065, op: 1.0, dur: 0.35 };
   if (kind === 'stream') return { head: 0xfff27a, halo: 0xfff6b0, beam: 0xfff088, headSize: 0.078, haloSize: 0.16, beamR: 0.045, op: 0.95, dur: 0.30 };
@@ -21994,7 +22042,7 @@ function spawnTracer(fx, fy, fz, tx, ty, tz, weaponType, durOverride) {
   item.head.position.set(fx, fy, fz);
   // 【fix581】子弹/机枪：beam 直接画完整弹道，不再只画"枪口到弹头"那一小段，
   // 否则弹头飞到目标时轨迹已经缩没，看起来就是没有曳光弹。
-  const fullBeam = (kind === 'single' || kind === 'stream' || kind === 'cannon');
+  const fullBeam = (kind === 'single' || kind === 'stream' || kind === 'cannon' || kind === 'hostile');
   const tr = { head: item.head, beam: item.beam, sx: fx, sy: fy, sz: fz, tx, ty, tz, t: 0, dur: p.dur, beads: null, kind, fullBeam: fullBeam, _item: item };
   ensureBeads(tr, kind, p, fx, fy, fz);
   tracers.push(tr);
@@ -29445,13 +29493,13 @@ function updateAlienVehicles(dt) {
     // 玩家正在开：完全交给玩家，AI 停手（和军方坦克一致）
     if (state === 'drive' && currentCar === c) { c._alienAI = false; continue; }
     c._alienAI = true;
-    // 找目标：玩家 140m 内优先，否则最近的友军（市民/军方/警察）
+    // 【fix586】同外敌步兵：只有"射程内没有友军目标"时才把玩家当目标，
+    // 不再因为玩家 140m 内就抢走已经锁定的市民/警察目标。
     const px = person.position.x, pz = person.position.z;
     const pd = Math.hypot(px - c.x, pz - c.z);
-    const foe = nearestInvFoe(c.x, c.z, 320);
-    const fd = foe ? Math.hypot(foe.x - c.x, foe.z - c.z) : Infinity;
+    const foe = nearestInvFoe(c.x, c.z, c.isHelicopter ? 150 : 170);
     let tx, tz, isPlayer = false;
-    if (pd < 140 && pd <= fd) { tx = px; tz = pz; isPlayer = true; }
+    if (pd < 140 && !foe) { tx = px; tz = pz; isPlayer = true; }
     else if (foe) { tx = foe.x; tz = foe.z; }
     else { tx = c.x; tz = c.z + 20; }   // 没目标就往南（城市旗方向）缓缓推进
     const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz) || 1;
@@ -29528,7 +29576,9 @@ function updateAlienVehicles(dt) {
           // 飞行器机枪：0.28s 一发，直接对目标结算伤害 + 曳光
           c.shootCd = 0.28;
           const hy = gy + c.flyHeight + 1.2;
-          spawnTracer(c.x, hy, c.z, tx, terrainHeight(tx, tz) + 1.0, tz, 'minigun');
+          spawnTracer(c.x, hy, c.z, tx,
+            isPlayer ? (person.position.y + 1.1) : (terrainHeight(tx, tz) + 1.0), tz,
+            isPlayer ? 'hostile:minigun' : 'minigun', isPlayer ? 0.5 : undefined);
           spawnBurst(c.x, hy, 0xffe066, 4);
           try { sfxNear('shoot', c.x, c.z, 140); } catch (e) {}
           if (isPlayer) { if (pd < 40) hurtPlayer(7); }
@@ -29544,7 +29594,8 @@ function updateAlienVehicles(dt) {
           const fly = Math.min(1.6, d / 110 + 0.35);
           const ix = tx, iz = tz, iy = terrainHeight(ix, iz) + 0.8;
           const bx = c.x + Math.sin(c.angle) * 6.5, bz = c.z + Math.cos(c.angle) * 6.5;
-          spawnTracer(bx, gy + 2.6, bz, ix, iy, iz, 'rocket');
+          spawnTracer(bx, gy + 2.6, bz, ix, iy, iz,
+            isPlayer ? 'hostile:rocket' : 'rocket', isPlayer ? 0.55 : undefined);
           spawnBurst(bx, bz, 0xffff88, 6, gy + 2.6);
           try { sfxNear('shoot', c.x, c.z, 160); } catch (e) {}
           queueBullet(ix, iy, iz, fly, function () {
